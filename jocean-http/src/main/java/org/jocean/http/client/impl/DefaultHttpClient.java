@@ -20,7 +20,6 @@ import java.net.SocketAddress;
 import java.util.concurrent.Callable;
 
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.HttpClient.Feature;
 import org.jocean.idiom.Features;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +46,6 @@ public class DefaultHttpClient implements HttpClient {
 		@Override
 		public Channel call() throws Exception {
 			final Channel ch = _bootstrap.register().channel();
-			//ch.config().setAllocator(new AlwaysUnpooledHeapByteBufAllocator() );
 			if ( LOG.isDebugEnabled() ) {
 				LOG.debug("create new channel: {}", ch);
 			}
@@ -56,10 +54,10 @@ public class DefaultHttpClient implements HttpClient {
 
 	/* (non-Javadoc)
 	 * @see org.jocean.http.client.HttpClient#sendRequest(java.net.URI, rx.Observable)
+	 * eg: new SocketAddress(this._uri.getHost(), this._uri.getPort()))
 	 */
 	@Override
 	public Observable<HttpObject> sendRequest(
-			// eg: new SocketAddress(this._uri.getHost(), this._uri.getPort()))
 			final SocketAddress remoteAddress,
 			final Observable<HttpObject> request,
 			final Feature... features) {
@@ -67,7 +65,7 @@ public class DefaultHttpClient implements HttpClient {
 		return Observable.create(
 				new OnSubscribeResponse(
 						featuresAsInt, 
-						Features.isEnabled(featuresAsInt, Feature.EnableSSL) ? _sslCtx : null,
+						Features.isEnabled(featuresAsInt, Feature.EnableSSL) ? this._sslCtx : null,
 						NEW_CHANNEL,
 						remoteAddress, 
 						request));

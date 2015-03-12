@@ -50,16 +50,17 @@ final class OnSubscribeResponse implements
 	public void call(final Subscriber<? super HttpObject> responseSubscriber) {
 	    try {
 	        if (!responseSubscriber.isUnsubscribed()) {
-	        	responseSubscriber.add(Subscriptions.from(
-        			createChannel(responseSubscriber)
-        			.connect(this._remoteAddress)
-                    .addListener(new ConnectListener(responseSubscriber))));
+	        	responseSubscriber.add(
+        			Subscriptions.from(
+	        			createChannel(responseSubscriber)
+	        			.connect(this._remoteAddress)
+	                    .addListener(createConnectListener(responseSubscriber))));
 	        }
 	    } catch (final Throwable e) {
 	    	responseSubscriber.onError(e);
 	    }
 	}
-	
+
 	private Channel createChannel(final Subscriber<? super HttpObject> responseSubscriber) 
 			throws Exception {
 		final Channel channel = this._newChannel.call();
@@ -89,72 +90,7 @@ final class OnSubscribeResponse implements
 				pipeline.addLast(new HttpContentDecompressor());
 			}
 		
-			pipeline.addLast(new SimpleChannelInboundHandler<HttpObject>() {
-				@Override
-				public void channelActive(final ChannelHandlerContext ctx)
-						throws Exception {
-					if (LOG.isDebugEnabled()) {
-						LOG.debug("channelActive: ch({})", ctx.channel());
-					}
-		
-					ctx.fireChannelActive();
-		
-					// if ( !this._sslEnabled ) {
-					// this._receiver.acceptEvent(NettyEvents.CHANNEL_ACTIVE, ctx);
-					// }
-				}
-		
-				@Override
-				public void channelInactive(final ChannelHandlerContext ctx)
-						throws Exception {
-					if (LOG.isDebugEnabled()) {
-						LOG.debug("channelInactive: ch({})", ctx.channel());
-					}
-					ctx.fireChannelInactive();
-					// TODO invoke onCompleted or onError dep Connection: close or
-					// not
-				}
-		
-				@Override
-				public void userEventTriggered(final ChannelHandlerContext ctx,
-						final Object evt) throws Exception {
-					if (LOG.isDebugEnabled()) {
-						LOG.debug("userEventTriggered: ch({}) with event:{}",
-								ctx.channel(), evt);
-					}
-		
-					ctx.fireUserEventTriggered(evt);
-		
-					// if ( this._sslEnabled && (evt instanceof
-					// SslHandshakeCompletionEvent)) {
-					// if ( ((SslHandshakeCompletionEvent)evt).isSuccess() ) {
-					// this._receiver.acceptEvent(NettyEvents.CHANNEL_ACTIVE, ctx);
-					// }
-					// }
-					// else {
-					// this._receiver.acceptEvent(NettyEvents.CHANNEL_USEREVENTTRIGGERED,
-					// ctx, evt);
-					// }
-				}
-		
-				@Override
-				public void exceptionCaught(final ChannelHandlerContext ctx,
-						final Throwable cause) throws Exception {
-					channel.close();
-					responseSubscriber.onError(cause);
-				}
-		
-				@Override
-				protected void channelRead0(
-						final ChannelHandlerContext ctx,
-						final HttpObject msg) throws Exception {
-					responseSubscriber.onNext(msg);
-					if (msg instanceof LastHttpContent) {
-						responseSubscriber.onCompleted();
-						// TODO consider Connection: close case
-					}
-				}
-			});
+			pipeline.addLast(createResponseHandler(responseSubscriber, channel));
 			
 			return channel;
 		} catch (Throwable e) {
@@ -164,44 +100,110 @@ final class OnSubscribeResponse implements
 			throw e;
 		}
 	}
-	
-	private final class ConnectListener implements
-			GenericFutureListener<ChannelFuture> {
-		private ConnectListener(final Subscriber<? super HttpObject> responseSubscriber) {
-			this._responseSubscriber = responseSubscriber;
-		}
 
-		@Override
-		public void operationComplete(final ChannelFuture future)
-				throws Exception {
-			final Channel channel = future.channel();
-			if (future.isSuccess()) {
-				this._responseSubscriber.add(
-					_request.subscribe(
-						new RequestSubscriber(
-							_featuresAsInt, 
-							channel, 
-							this._responseSubscriber)));
-				this._responseSubscriber.add(new Subscription() {
-					@Override
-					public void unsubscribe() {
-						channel.close();
-					}
-					@Override
-					public boolean isUnsubscribed() {
-						return channel.isActive();
-					}});
+	private SimpleChannelInboundHandler<HttpObject> createResponseHandler(
+			final Subscriber<? super HttpObject> responseSubscriber,
+			final Channel channel) {
+		return new SimpleChannelInboundHandler<HttpObject>() {
+			@Override
+			public void channelActive(final ChannelHandlerContext ctx)
+					throws Exception {
+				if (LOG.isDebugEnabled()) {
+					LOG.debug("channelActive: ch({})", ctx.channel());
+				}
+
+				ctx.fireChannelActive();
+
+				// if ( !this._sslEnabled ) {
+				// this._receiver.acceptEvent(NettyEvents.CHANNEL_ACTIVE, ctx);
+				// }
 			}
-			else {
-				try {
-					this._responseSubscriber.onError(future.cause());
-				} finally {
-					channel.close();
+
+			@Override
+			public void channelInactive(final ChannelHandlerContext ctx)
+					throws Exception {
+				if (LOG.isDebugEnabled()) {
+					LOG.debug("channelInactive: ch({})", ctx.channel());
+				}
+				ctx.fireChannelInactive();
+				// TODO invoke onCompleted or onError dep Connection: close or
+				// not
+			}
+
+			@Override
+			public void userEventTriggered(final ChannelHandlerContext ctx,
+					final Object evt) throws Exception {
+				if (LOG.isDebugEnabled()) {
+					LOG.debug("userEventTriggered: ch({}) with event:{}",
+							ctx.channel(), evt);
+				}
+
+				ctx.fireUserEventTriggered(evt);
+
+				// if ( this._sslEnabled && (evt instanceof
+				// SslHandshakeCompletionEvent)) {
+				// if ( ((SslHandshakeCompletionEvent)evt).isSuccess() ) {
+				// this._receiver.acceptEvent(NettyEvents.CHANNEL_ACTIVE, ctx);
+				// }
+				// }
+				// else {
+				// this._receiver.acceptEvent(NettyEvents.CHANNEL_USEREVENTTRIGGERED,
+				// ctx, evt);
+				// }
+			}
+
+			@Override
+			public void exceptionCaught(final ChannelHandlerContext ctx,
+					final Throwable cause) throws Exception {
+				channel.close();
+				responseSubscriber.onError(cause);
+			}
+
+			@Override
+			protected void channelRead0(
+					final ChannelHandlerContext ctx,
+					final HttpObject msg) throws Exception {
+				responseSubscriber.onNext(msg);
+				if (msg instanceof LastHttpContent) {
+					responseSubscriber.onCompleted();
+					// TODO consider Connection: close case
 				}
 			}
-		}
-		
-		private final Subscriber<? super HttpObject> _responseSubscriber;
+		};
+	}
+	
+	private GenericFutureListener<ChannelFuture> createConnectListener(
+			final Subscriber<? super HttpObject> responseSubscriber) {
+		return new GenericFutureListener<ChannelFuture>() {
+			@Override
+			public void operationComplete(final ChannelFuture future)
+					throws Exception {
+				final Channel channel = future.channel();
+				if (future.isSuccess()) {
+					responseSubscriber.add(
+						_request.subscribe(
+							new RequestSubscriber(
+								_featuresAsInt, 
+								channel, 
+								responseSubscriber)));
+					responseSubscriber.add(new Subscription() {
+						@Override
+						public void unsubscribe() {
+							channel.close();
+						}
+						@Override
+						public boolean isUnsubscribed() {
+							return channel.isActive();
+						}});
+				} else {
+					try {
+						responseSubscriber.onError(future.cause());
+					} finally {
+						channel.close();
+					}
+				}
+			}
+		};
 	}
 	
 	private final int	_featuresAsInt;
