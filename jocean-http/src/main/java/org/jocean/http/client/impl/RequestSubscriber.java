@@ -16,9 +16,9 @@ import rx.Subscriber;
 final class RequestSubscriber extends Subscriber<HttpObject> {
 
 	RequestSubscriber(
-			final int featuresAsInt, 
-			final Channel channel,
-			final Subscriber<? super HttpObject> responseSubscriber) {
+        final int featuresAsInt, 
+        final Channel channel,
+        final Subscriber<? super HttpObject> responseSubscriber) {
 		this._featuresAsInt = featuresAsInt;
 		this._channel = channel;
 		this._responseSubscriber = responseSubscriber;
@@ -52,8 +52,8 @@ final class RequestSubscriber extends Subscriber<HttpObject> {
 	private void addAcceptEncodingHeaderIfNeed(final HttpObject msg) {
 		if (isCompressEnabled() && msg instanceof HttpRequest) {
 			HttpHeaders.addHeader((HttpRequest) msg,
-					HttpHeaders.Names.ACCEPT_ENCODING, HttpHeaders.Values.GZIP
-							+ "," + HttpHeaders.Values.DEFLATE);
+		        HttpHeaders.Names.ACCEPT_ENCODING, HttpHeaders.Values.GZIP
+					+ "," + HttpHeaders.Values.DEFLATE);
 		}
 	}
 

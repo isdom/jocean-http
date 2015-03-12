@@ -15,7 +15,10 @@
  */
 package org.jocean.http.server;
 
+import java.util.concurrent.Callable;
+
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpContentCompressor;
@@ -25,19 +28,21 @@ import io.netty.handler.ssl.SslContext;
 public class HttpTestServerInitializer extends ChannelInitializer<Channel> {
 
     private final SslContext sslCtx;
-
-    public HttpTestServerInitializer(SslContext sslCtx) {
+    private final Callable<ChannelInboundHandler> newHandler;
+    
+    public HttpTestServerInitializer(final SslContext sslCtx, final Callable<ChannelInboundHandler> newHandler) {
         this.sslCtx = sslCtx;
+        this.newHandler = newHandler;
     }
 
     @Override
-    public void initChannel(Channel ch) {
+    public void initChannel(Channel ch) throws Exception {
         ChannelPipeline p = ch.pipeline();
         if (sslCtx != null) {
             p.addLast(sslCtx.newHandler(ch.alloc()));
         }
         p.addLast(new HttpServerCodec());
         p.addLast(new HttpContentCompressor());
-        p.addLast(new HttpTestServerHandler());
+        p.addLast(newHandler.call());
     }
 }

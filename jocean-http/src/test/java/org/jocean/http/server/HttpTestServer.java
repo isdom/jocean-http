@@ -16,6 +16,7 @@
 package org.jocean.http.server;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
@@ -28,6 +29,7 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.concurrent.Callable;
 
 /**
  * An HTTP server that sends back the content of the received HTTP request
@@ -35,14 +37,29 @@ import java.net.SocketAddress;
  */
 public final class HttpTestServer {
 
+    public static final Callable<ChannelInboundHandler> DEFAULT_NEW_HANDLER = 
+        new Callable<ChannelInboundHandler>() {
+            @Override
+            public ChannelInboundHandler call() throws Exception {
+                return new HttpTestServerHandler();
+        }};
+    
     public HttpTestServer(final boolean enableSSL, final int port) throws Exception {
-    	this(enableSSL, new InetSocketAddress(port), 
-			new NioEventLoopGroup(1), new NioEventLoopGroup(), NioServerSocketChannel.class);
+    	this(enableSSL, 
+	        new InetSocketAddress(port), 
+			new NioEventLoopGroup(1), 
+			new NioEventLoopGroup(), 
+			NioServerSocketChannel.class,
+			DEFAULT_NEW_HANDLER);
     }
     
-    public HttpTestServer(final boolean enableSSL, final SocketAddress localAddress,
-    		final EventLoopGroup bossGroup, final EventLoopGroup workerGroup,
-    		final Class<? extends ServerChannel> serverChannelType) throws Exception {
+    public HttpTestServer(
+            final boolean enableSSL, 
+            final SocketAddress localAddress,
+    		final EventLoopGroup bossGroup, 
+    		final EventLoopGroup workerGroup,
+    		final Class<? extends ServerChannel> serverChannelType,
+    		final Callable<ChannelInboundHandler> newHandler) throws Exception {
         // Configure SSL.
         final SslContext sslCtx;
         if (enableSSL) {
@@ -61,7 +78,7 @@ public final class HttpTestServer {
         b.group(_bossGroup, _workerGroup)
          .channel(serverChannelType)
          .handler(new LoggingHandler(LogLevel.INFO))
-         .childHandler(new HttpTestServerInitializer(sslCtx));
+         .childHandler(new HttpTestServerInitializer(sslCtx, newHandler));
 
         b.bind(localAddress).sync();
 

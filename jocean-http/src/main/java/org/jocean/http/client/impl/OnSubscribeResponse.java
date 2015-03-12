@@ -105,6 +105,7 @@ final class OnSubscribeResponse implements
 			final Subscriber<? super HttpObject> responseSubscriber,
 			final Channel channel) {
 		return new SimpleChannelInboundHandler<HttpObject>() {
+		    private boolean _hasCompleted = false;
 			@Override
 			public void channelActive(final ChannelHandlerContext ctx)
 					throws Exception {
@@ -128,6 +129,9 @@ final class OnSubscribeResponse implements
 				ctx.fireChannelInactive();
 				// TODO invoke onCompleted or onError dep Connection: close or
 				// not
+				if (!_hasCompleted) {
+				    responseSubscriber.onError(new RuntimeException("peer has closed."));
+				}
 			}
 
 			@Override
@@ -166,6 +170,7 @@ final class OnSubscribeResponse implements
 				responseSubscriber.onNext(msg);
 				if (msg instanceof LastHttpContent) {
 					responseSubscriber.onCompleted();
+					_hasCompleted = true;
 					// TODO consider Connection: close case
 				}
 			}
