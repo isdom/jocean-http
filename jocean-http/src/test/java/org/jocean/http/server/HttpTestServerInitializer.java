@@ -15,13 +15,14 @@
  */
 package org.jocean.http.server;
 
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
-import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.ssl.SslContext;
 
-public class HttpTestServerInitializer extends ChannelInitializer<SocketChannel> {
+public class HttpTestServerInitializer extends ChannelInitializer<Channel> {
 
     private final SslContext sslCtx;
 
@@ -30,12 +31,13 @@ public class HttpTestServerInitializer extends ChannelInitializer<SocketChannel>
     }
 
     @Override
-    public void initChannel(SocketChannel ch) {
+    public void initChannel(Channel ch) {
         ChannelPipeline p = ch.pipeline();
         if (sslCtx != null) {
             p.addLast(sslCtx.newHandler(ch.alloc()));
         }
         p.addLast(new HttpServerCodec());
+        p.addLast(new HttpContentCompressor());
         p.addLast(new HttpTestServerHandler());
     }
 }

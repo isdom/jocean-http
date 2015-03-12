@@ -16,15 +16,18 @@
 package org.jocean.http.server;
 
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.ServerChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
+
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 
 /**
  * An HTTP server that sends back the content of the received HTTP request
@@ -33,6 +36,13 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 public final class HttpTestServer {
 
     public HttpTestServer(final boolean enableSSL, final int port) throws Exception {
+    	this(enableSSL, new InetSocketAddress(port), 
+			new NioEventLoopGroup(1), new NioEventLoopGroup(), NioServerSocketChannel.class);
+    }
+    
+    public HttpTestServer(final boolean enableSSL, final SocketAddress localAddress,
+    		final EventLoopGroup bossGroup, final EventLoopGroup workerGroup,
+    		final Class<? extends ServerChannel> serverChannelType) throws Exception {
         // Configure SSL.
         final SslContext sslCtx;
         if (enableSSL) {
@@ -43,20 +53,20 @@ public final class HttpTestServer {
         }
 
         // Configure the server.
-        _bossGroup = new NioEventLoopGroup(1);
-        _workerGroup = new NioEventLoopGroup();
+        _bossGroup = bossGroup;
+        _workerGroup = workerGroup;
         
         ServerBootstrap b = new ServerBootstrap();
         b.option(ChannelOption.SO_BACKLOG, 1024);
         b.group(_bossGroup, _workerGroup)
-         .channel(NioServerSocketChannel.class)
+         .channel(serverChannelType)
          .handler(new LoggingHandler(LogLevel.INFO))
          .childHandler(new HttpTestServerInitializer(sslCtx));
 
-        Channel ch = b.bind(port).sync().channel();
+        b.bind(localAddress).sync();
 
         System.err.println("Open your web browser and navigate to " +
-                (enableSSL? "https" : "http") + "://127.0.0.1:" + port + '/');
+                (enableSSL? "https" : "http") + localAddress);
     }
     
     public void stop() {
