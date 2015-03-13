@@ -9,29 +9,39 @@ import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.GenericFutureListener;
 
 import org.jocean.http.client.HttpClient.Feature;
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Features;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import rx.Subscriber;
+import rx.functions.Action1;
 
 final class RequestSubscriber extends Subscriber<HttpObject> {
 
+    private static final Logger LOG =
+            LoggerFactory.getLogger(RequestSubscriber.class);
 	RequestSubscriber(
         final int featuresAsInt, 
         final Channel channel,
-        final Subscriber<? super HttpObject> responseSubscriber) {
+        final Action1<Throwable> onError) {
 		this._featuresAsInt = featuresAsInt;
 		this._channel = channel;
-		this._responseSubscriber = responseSubscriber;
+		this._onError = onError;
 	}
 
 	@Override
 	public void onCompleted() {
-		// TODO Auto-generated method stub
+	    if (LOG.isDebugEnabled()) {
+	        LOG.debug("RequestSubscriber for channel:({}) onCompleted.", this._channel);
+	    }
 	}
 
 	@Override
 	public void onError(final Throwable e) {
-		this._responseSubscriber.onError(e);
+        LOG.warn("RequestSubscriber for channel:({}) onError:{}.", 
+                this._channel, ExceptionUtils.exception2detail(e));
+		this._onError.call(e);
 	}
 
 	@Override
@@ -43,7 +53,7 @@ final class RequestSubscriber extends Subscriber<HttpObject> {
 				public void operationComplete(final ChannelFuture future)
 						throws Exception {
 					if (!future.isSuccess()) {
-						_responseSubscriber.onError(future.cause());
+						_onError.call(future.cause());
 					}
 				}
 			});
@@ -61,23 +71,7 @@ final class RequestSubscriber extends Subscriber<HttpObject> {
 		return !Features.isEnabled(this._featuresAsInt, Feature.DisableCompress);
 	}
 
-	// private void doOnComplete() {
-	// if (null!=this._subscriber) {
-	// final Subscriber<? super HttpObject> subscriber = this._subscriber;
-	// this._subscriber = null;
-	// subscriber.onCompleted();
-	// }
-	// }
-	//
-	// private void doOnError(final Throwable cause) {
-	// if (null!=this._subscriber) {
-	// final Subscriber<? super HttpObject> subscriber = this._subscriber;
-	// this._subscriber = null;
-	// subscriber.onError(cause);
-	// }
-	// }
-
 	private final int _featuresAsInt;
 	private final Channel _channel;
-	private final Subscriber<? super HttpObject> _responseSubscriber;
+	private final Action1<Throwable> _onError;
 }

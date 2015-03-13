@@ -18,6 +18,7 @@ import java.util.concurrent.Callable;
 
 import org.jocean.http.client.HttpClient.Feature;
 import org.jocean.idiom.Features;
+import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +26,7 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.Subscription;
+import rx.functions.Action1;
 import rx.subscriptions.Subscriptions;
 
 final class OnSubscribeResponse implements
@@ -48,16 +50,18 @@ final class OnSubscribeResponse implements
 		
 	@Override
 	public void call(final Subscriber<? super HttpObject> responseSubscriber) {
+        final Subscriber<? super HttpObject> wrapper = 
+                RxSubscribers.guardUnsubscribed(responseSubscriber);
 	    try {
-	        if (!responseSubscriber.isUnsubscribed()) {
-	        	responseSubscriber.add(
+	        if (!wrapper.isUnsubscribed()) {
+	            wrapper.add(
         			Subscriptions.from(
-	        			createChannel(responseSubscriber)
+	        			createChannel(wrapper)
 	        			.connect(this._remoteAddress)
-	                    .addListener(createConnectListener(responseSubscriber))));
+	                    .addListener(createConnectListener(wrapper))));
 	        }
 	    } catch (final Throwable e) {
-	    	responseSubscriber.onError(e);
+	        wrapper.onError(e);
 	    }
 	}
 
@@ -75,13 +79,6 @@ final class OnSubscribeResponse implements
 			// Enable SSL if necessary.
 			if (null != this._sslCtx) {
 				pipeline.addLast(this._sslCtx.newHandler(channel.alloc()));
-				// final SSLEngine engine =
-				// AndroidSslContextFactory.getClientContext().createSSLEngine();
-				// engine.setUseClientMode(true);
-				//
-				// pipeline.addLast(new SslHandler(
-				// FixNeverReachFINISHEDStateSSLEngine.fixAndroidBug( engine ),
-				// false));
 			}
 		
 			pipeline.addLast(new HttpClientCodec());
@@ -105,7 +102,7 @@ final class OnSubscribeResponse implements
 			final Subscriber<? super HttpObject> responseSubscriber,
 			final Channel channel) {
 		return new SimpleChannelInboundHandler<HttpObject>() {
-		    private boolean _hasCompleted = false;
+
 			@Override
 			public void channelActive(final ChannelHandlerContext ctx)
 					throws Exception {
@@ -114,10 +111,6 @@ final class OnSubscribeResponse implements
 				}
 
 				ctx.fireChannelActive();
-
-				// if ( !this._sslEnabled ) {
-				// this._receiver.acceptEvent(NettyEvents.CHANNEL_ACTIVE, ctx);
-				// }
 			}
 
 			@Override
@@ -127,11 +120,7 @@ final class OnSubscribeResponse implements
 					LOG.debug("channelInactive: ch({})", ctx.channel());
 				}
 				ctx.fireChannelInactive();
-				// TODO invoke onCompleted or onError dep Connection: close or
-				// not
-				if (!_hasCompleted) {
-				    responseSubscriber.onError(new RuntimeException("peer has closed."));
-				}
+			    responseSubscriber.onError(new RuntimeException("peer has closed."));
 			}
 
 			@Override
@@ -143,24 +132,13 @@ final class OnSubscribeResponse implements
 				}
 
 				ctx.fireUserEventTriggered(evt);
-
-				// if ( this._sslEnabled && (evt instanceof
-				// SslHandshakeCompletionEvent)) {
-				// if ( ((SslHandshakeCompletionEvent)evt).isSuccess() ) {
-				// this._receiver.acceptEvent(NettyEvents.CHANNEL_ACTIVE, ctx);
-				// }
-				// }
-				// else {
-				// this._receiver.acceptEvent(NettyEvents.CHANNEL_USEREVENTTRIGGERED,
-				// ctx, evt);
-				// }
 			}
 
 			@Override
 			public void exceptionCaught(final ChannelHandlerContext ctx,
 					final Throwable cause) throws Exception {
 				channel.close();
-				responseSubscriber.onError(cause);
+			    responseSubscriber.onError(cause);
 			}
 
 			@Override
@@ -169,9 +147,19 @@ final class OnSubscribeResponse implements
 					final HttpObject msg) throws Exception {
 				responseSubscriber.onNext(msg);
 				if (msg instanceof LastHttpContent) {
+	                /* netty 参考代码:
+	                 * https://github.com/netty/netty/blob/netty-4.0.26.Final/codec/src/main/java/io/netty/handler/codec/ByteToMessageDecoder.java#L274
+	                 * https://github.com/netty/netty/blob/netty-4.0.26.Final/codec-http/src/main/java/io/netty/handler/codec/http/HttpObjectDecoder.java#L398
+	                 * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件
+	                 * currentState == State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() && !chunked
+	                 * 即没有指定Content-Length头域，也不是CHUNKED传输模式，此情况下，即会自动产生一个LastHttpContent.EMPTY_LAST_CONTENT实例
+	                 * 因此，无需在channelInactive处，针对该情况做特殊处理
+	                 */
+	                if (LOG.isDebugEnabled()) {
+	                    LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
+	                            ctx.channel(), msg);
+	                }
 					responseSubscriber.onCompleted();
-					_hasCompleted = true;
-					// TODO consider Connection: close case
 				}
 			}
 		};
@@ -190,7 +178,11 @@ final class OnSubscribeResponse implements
 							new RequestSubscriber(
 								_featuresAsInt, 
 								channel, 
-								responseSubscriber)));
+								new Action1<Throwable>() {
+                                    @Override
+                                    public void call(final Throwable cause) {
+                                        responseSubscriber.onError(cause);                                        
+                                    }})));
 					responseSubscriber.add(new Subscription() {
 						@Override
 						public void unsubscribe() {
@@ -198,7 +190,7 @@ final class OnSubscribeResponse implements
 						}
 						@Override
 						public boolean isUnsubscribed() {
-							return channel.isActive();
+							return !channel.isActive();
 						}});
 				} else {
 					try {
