@@ -45,21 +45,21 @@ public final class HttpTestServer {
         }};
     
     public HttpTestServer(final boolean enableSSL, final int port) throws Exception {
-    	this(enableSSL, 
-	        new InetSocketAddress(port), 
-			new NioEventLoopGroup(1), 
-			new NioEventLoopGroup(), 
-			NioServerSocketChannel.class,
-			DEFAULT_NEW_HANDLER);
+        this(enableSSL, 
+            new InetSocketAddress(port), 
+            new NioEventLoopGroup(1), 
+            new NioEventLoopGroup(), 
+            NioServerSocketChannel.class,
+            DEFAULT_NEW_HANDLER);
     }
     
     public HttpTestServer(
             final boolean enableSSL, 
             final SocketAddress localAddress,
-    		final EventLoopGroup bossGroup, 
-    		final EventLoopGroup workerGroup,
-    		final Class<? extends ServerChannel> serverChannelType,
-    		final Callable<ChannelInboundHandler> newHandler) throws Exception {
+            final EventLoopGroup bossGroup, 
+            final EventLoopGroup workerGroup,
+            final Class<? extends ServerChannel> serverChannelType,
+            final Callable<ChannelInboundHandler> newHandler) throws Exception {
         // Configure SSL.
         final SslContext sslCtx;
         if (enableSSL) {
@@ -95,7 +95,7 @@ public final class HttpTestServer {
     private final EventLoopGroup _workerGroup;
     
     public static void main(String[] args) throws Exception {
-    	@SuppressWarnings("unused")
-		final HttpTestServer server = new HttpTestServer(false, 8080);
+        @SuppressWarnings("unused")
+        final HttpTestServer server = new HttpTestServer(false, 8080);
     }
 }

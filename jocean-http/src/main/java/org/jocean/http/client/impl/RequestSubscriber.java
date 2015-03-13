@@ -21,57 +21,57 @@ final class RequestSubscriber extends Subscriber<HttpObject> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(RequestSubscriber.class);
-	RequestSubscriber(
+    RequestSubscriber(
         final int featuresAsInt, 
         final Channel channel,
         final Action1<Throwable> onError) {
-		this._featuresAsInt = featuresAsInt;
-		this._channel = channel;
-		this._onError = onError;
-	}
+        this._featuresAsInt = featuresAsInt;
+        this._channel = channel;
+        this._onError = onError;
+    }
 
-	@Override
-	public void onCompleted() {
-	    if (LOG.isDebugEnabled()) {
-	        LOG.debug("RequestSubscriber for channel:({}) onCompleted.", this._channel);
-	    }
-	}
+    @Override
+    public void onCompleted() {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("RequestSubscriber for channel:({}) onCompleted.", this._channel);
+        }
+    }
 
-	@Override
-	public void onError(final Throwable e) {
+    @Override
+    public void onError(final Throwable e) {
         LOG.warn("RequestSubscriber for channel:({}) onError:{}.", 
                 this._channel, ExceptionUtils.exception2detail(e));
-		this._onError.call(e);
-	}
+        this._onError.call(e);
+    }
 
-	@Override
-	public void onNext(final HttpObject msg) {
-		addAcceptEncodingHeaderIfNeed(msg);
-		this._channel.writeAndFlush(ReferenceCountUtil.retain(msg))
-			.addListener(new GenericFutureListener<ChannelFuture>() {
-				@Override
-				public void operationComplete(final ChannelFuture future)
-						throws Exception {
-					if (!future.isSuccess()) {
-						_onError.call(future.cause());
-					}
-				}
-			});
-	}
+    @Override
+    public void onNext(final HttpObject msg) {
+        addAcceptEncodingHeaderIfNeed(msg);
+        this._channel.writeAndFlush(ReferenceCountUtil.retain(msg))
+            .addListener(new GenericFutureListener<ChannelFuture>() {
+                @Override
+                public void operationComplete(final ChannelFuture future)
+                        throws Exception {
+                    if (!future.isSuccess()) {
+                        _onError.call(future.cause());
+                    }
+                }
+            });
+    }
 
-	private void addAcceptEncodingHeaderIfNeed(final HttpObject msg) {
-		if (isCompressEnabled() && msg instanceof HttpRequest) {
-			HttpHeaders.addHeader((HttpRequest) msg,
-		        HttpHeaders.Names.ACCEPT_ENCODING, HttpHeaders.Values.GZIP
-					+ "," + HttpHeaders.Values.DEFLATE);
-		}
-	}
+    private void addAcceptEncodingHeaderIfNeed(final HttpObject msg) {
+        if (isCompressEnabled() && msg instanceof HttpRequest) {
+            HttpHeaders.addHeader((HttpRequest) msg,
+                HttpHeaders.Names.ACCEPT_ENCODING, HttpHeaders.Values.GZIP
+                    + "," + HttpHeaders.Values.DEFLATE);
+        }
+    }
 
-	private boolean isCompressEnabled() {
-		return !Features.isEnabled(this._featuresAsInt, Feature.DisableCompress);
-	}
+    private boolean isCompressEnabled() {
+        return !Features.isEnabled(this._featuresAsInt, Feature.DisableCompress);
+    }
 
-	private final int _featuresAsInt;
-	private final Channel _channel;
-	private final Action1<Throwable> _onError;
+    private final int _featuresAsInt;
+    private final Channel _channel;
+    private final Action1<Throwable> _onError;
 }
