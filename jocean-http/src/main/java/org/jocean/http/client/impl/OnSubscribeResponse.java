@@ -7,7 +7,9 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContentDecompressor;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
@@ -17,6 +19,7 @@ import java.net.SocketAddress;
 import java.util.concurrent.Callable;
 
 import org.jocean.http.client.HttpClient.Feature;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.Features;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
@@ -25,7 +28,6 @@ import org.slf4j.LoggerFactory;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
-import rx.Subscription;
 import rx.functions.Action1;
 import rx.subscriptions.Subscriptions;
 
@@ -165,6 +167,21 @@ final class OnSubscribeResponse implements
         };
     }
     
+    final Action1<HttpObject> ADD_ACCEPTENCODING_HEAD = new Action1<HttpObject> () {
+        @Override
+        public void call(final HttpObject msg) {
+            if (isCompressEnabled() && msg instanceof HttpRequest) {
+                HttpHeaders.addHeader((HttpRequest) msg,
+                    HttpHeaders.Names.ACCEPT_ENCODING, 
+                    HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
+            }
+        }
+        
+        private boolean isCompressEnabled() {
+            return !Features.isEnabled(_featuresAsInt, Feature.DisableCompress);
+        }
+    };
+        
     private GenericFutureListener<ChannelFuture> createConnectListener(
             final Subscriber<? super HttpObject> responseSubscriber) {
         return new GenericFutureListener<ChannelFuture>() {
@@ -173,25 +190,14 @@ final class OnSubscribeResponse implements
                     throws Exception {
                 final Channel channel = future.channel();
                 if (future.isSuccess()) {
-                    responseSubscriber.add(
-                        _request.subscribe(
-                            new RequestSubscriber(
-                                _featuresAsInt, 
-                                channel, 
-                                new Action1<Throwable>() {
-                                    @Override
-                                    public void call(final Throwable cause) {
-                                        responseSubscriber.onError(cause);                                        
-                                    }})));
-                    responseSubscriber.add(new Subscription() {
-                        @Override
-                        public void unsubscribe() {
-                            channel.close();
-                        }
-                        @Override
-                        public boolean isUnsubscribed() {
-                            return !channel.isActive();
-                        }});
+//                    responseSubscriber.add(
+                    // TODO add sending canceled testcase
+                    _request.doOnNext(ADD_ACCEPTENCODING_HEAD)
+                        .map(RxNettys.sendMessage(channel))
+                        .flatMap(RxNettys.checkFuture(ChannelFuture.class, HttpObject.class))
+                        .subscribe(responseSubscriber);
+//                    );
+                    responseSubscriber.add(RxNettys.channelSubscription(channel));
                 } else {
                     try {
                         responseSubscriber.onError(future.cause());
@@ -202,7 +208,7 @@ final class OnSubscribeResponse implements
             }
         };
     }
-    
+
     private final int    _featuresAsInt;
     private final SocketAddress _remoteAddress;
     private final Observable<HttpObject> _request;
