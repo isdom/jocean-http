@@ -26,12 +26,14 @@ public class RxNettys {
             }};
     }
     
-    public static <V, F extends Future<V>,R> Func1<F, Observable<? extends R>> 
-        checkFuture(final Class<F> clsF, final Class<R> clsR) {
+    @SuppressWarnings("rawtypes")
+    public static <F extends Future,R> Func1<F, Observable<? extends R>> 
+        checkFuture() {
         return new Func1<F, Observable<? extends R>>() {
             @Override
             public Observable<? extends R> call(final F future) {
                 return Observable.create(new OnSubscribe<R> () {
+                    @SuppressWarnings("unchecked")
                     @Override
                     public void call(final Subscriber<? super R> subscriber) {
                         subscriber.add(Subscriptions.from(

@@ -2,21 +2,13 @@ package org.jocean.http.client.impl;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelPipeline;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.handler.codec.http.HttpClientCodec;
-import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.handler.logging.LoggingHandler;
-import io.netty.handler.ssl.SslContext;
-import io.netty.util.concurrent.GenericFutureListener;
-
-import java.net.SocketAddress;
-import java.util.concurrent.Callable;
 
 import org.jocean.http.client.HttpClient.Feature;
 import org.jocean.http.util.RxNettys;
@@ -29,7 +21,7 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Action1;
-import rx.subscriptions.Subscriptions;
+import rx.functions.Func1;
 
 final class OnSubscribeResponse implements
     OnSubscribe<HttpObject> {
@@ -39,70 +31,36 @@ final class OnSubscribeResponse implements
     
     OnSubscribeResponse(
         final int featuresAsInt,
-        final SslContext sslCtx,
-        final Callable<Channel> newChannel, 
-        final SocketAddress remoteAddress,
+        final Func1<ChannelHandler, Observable<Channel>> getObservable, 
         final Observable<HttpObject> request) {
-        this._sslCtx = sslCtx;
-        this._newChannel = newChannel;
         this._featuresAsInt = featuresAsInt;
-        this._remoteAddress = remoteAddress;
+        this._getObservable = getObservable;
         this._request = request;
     }
-        
+    
     @Override
     public void call(final Subscriber<? super HttpObject> responseSubscriber) {
         final Subscriber<? super HttpObject> wrapper = 
                 RxSubscribers.guardUnsubscribed(responseSubscriber);
         try {
             if (!wrapper.isUnsubscribed()) {
-                wrapper.add(
-                    Subscriptions.from(
-                        createChannel(wrapper)
-                        .connect(this._remoteAddress)
-                        .addListener(createConnectListener(wrapper))));
+                this._getObservable.call(createResponseHandler(wrapper))
+                .flatMap(new Func1<Channel, Observable<ChannelFuture>> () {
+                    @Override
+                    public Observable<ChannelFuture> call(final Channel channel) {
+                        return _request.doOnNext(ADD_ACCEPTENCODING_HEAD)
+                                .map(RxNettys.<HttpObject>sendMessage(channel));
+                    }})
+                .flatMap(RxNettys.<ChannelFuture, HttpObject>checkFuture())
+                .subscribe(wrapper);
             }
         } catch (final Throwable e) {
             wrapper.onError(e);
         }
     }
 
-    private Channel createChannel(final Subscriber<? super HttpObject> responseSubscriber) 
-            throws Exception {
-        final Channel channel = this._newChannel.call();
-        
-        try {
-            final ChannelPipeline pipeline = channel.pipeline();
-        
-            if (Features.isEnabled(this._featuresAsInt, Feature.EnableLOG)) {
-                pipeline.addLast(new LoggingHandler());
-            }
-        
-            // Enable SSL if necessary.
-            if (null != this._sslCtx) {
-                pipeline.addLast(this._sslCtx.newHandler(channel.alloc()));
-            }
-        
-            pipeline.addLast(new HttpClientCodec());
-        
-            if (!Features.isEnabled(this._featuresAsInt, Feature.DisableCompress)) {
-                pipeline.addLast(new HttpContentDecompressor());
-            }
-        
-            pipeline.addLast(createResponseHandler(responseSubscriber, channel));
-            
-            return channel;
-        } catch (Throwable e) {
-            if (null!=channel) {
-                channel.close();
-            }
-            throw e;
-        }
-    }
-
     private SimpleChannelInboundHandler<HttpObject> createResponseHandler(
-            final Subscriber<? super HttpObject> responseSubscriber,
-            final Channel channel) {
+            final Subscriber<? super HttpObject> responseSubscriber) {
         return new SimpleChannelInboundHandler<HttpObject>() {
 
             @Override
@@ -139,7 +97,7 @@ final class OnSubscribeResponse implements
             @Override
             public void exceptionCaught(final ChannelHandlerContext ctx,
                     final Throwable cause) throws Exception {
-                channel.close();
+                ctx.close();
                 responseSubscriber.onError(cause);
             }
 
@@ -182,6 +140,7 @@ final class OnSubscribeResponse implements
         }
     };
         
+    /*
     private GenericFutureListener<ChannelFuture> createConnectListener(
             final Subscriber<? super HttpObject> responseSubscriber) {
         return new GenericFutureListener<ChannelFuture>() {
@@ -193,8 +152,8 @@ final class OnSubscribeResponse implements
 //                    responseSubscriber.add(
                     // TODO add sending canceled testcase
                     _request.doOnNext(ADD_ACCEPTENCODING_HEAD)
-                        .map(RxNettys.sendMessage(channel))
-                        .flatMap(RxNettys.checkFuture(ChannelFuture.class, HttpObject.class))
+                        .map(RxNettys.<HttpObject>sendMessage(channel))
+                        .flatMap(RxNettys.<ChannelFuture,HttpObject>checkFuture())
                         .subscribe(responseSubscriber);
 //                    );
                     responseSubscriber.add(RxNettys.channelSubscription(channel));
@@ -208,10 +167,9 @@ final class OnSubscribeResponse implements
             }
         };
     }
+    */
 
     private final int    _featuresAsInt;
-    private final SocketAddress _remoteAddress;
     private final Observable<HttpObject> _request;
-    private final Callable<Channel> _newChannel;
-    private final SslContext _sslCtx;
+    private final Func1<ChannelHandler, Observable<Channel>> _getObservable;
 }
