@@ -52,6 +52,7 @@ import rx.Observable;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Func1;
+import rx.observers.TestSubscriber;
 
 public class DefaultHttpClientTestCase {
 
@@ -202,7 +203,6 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpNotConnected() throws Exception {
         final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        
         // mark channel closed
         final class TestLocalChannel extends LocalChannel {
             @Override
@@ -211,7 +211,6 @@ public class DefaultHttpClientTestCase {
                 return super.close();
             }
         }
-        
         final DefaultHttpClient client = new DefaultHttpClient(
                 new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
                     @Override
@@ -219,44 +218,26 @@ public class DefaultHttpClientTestCase {
                         return new TestLocalChannel();
                     }});
         //    NOT setup server for local channel
-        final AtomicBoolean isOnErrorCalled = new AtomicBoolean(false);
-        final AtomicBoolean isOnCompletedCalled = new AtomicBoolean(false);
-        final AtomicBoolean isOnNextCalled = new AtomicBoolean(false);
+        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
-            .subscribe(new Subscriber<HttpObject>() {
-                @Override
-                public void onCompleted() {
-                    isOnCompletedCalled.set(true);
-                    LOG.debug("testHttpNotConnected: onCompleted");
-                }
-                @Override
-                public void onError(Throwable e) {
-                    isOnErrorCalled.set(true);
-                    LOG.debug("testHttpNotConnected: onError, detail:{}",
-                            ExceptionUtils.exception2detail(e));
-                }
-                @Override
-                public void onNext(HttpObject t) {
-                    isOnNextCalled.set(true);
-                    LOG.debug("testHttpNotConnected: onNext");
-                }});
+            .subscribe(testSubscriber);
+            testSubscriber.awaitTerminalEvent();
             clientChannelClosed.await();
         } finally {
             client.close();
             assertEquals(0, client.getActiveChannelCount());
-            assertTrue(isOnErrorCalled.get());
-            assertFalse(isOnCompletedCalled.get());
-            assertFalse(isOnNextCalled.get());
+            assertEquals(0, testSubscriber.getOnNextEvents().size());
+            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(1, testSubscriber.getOnErrorEvents().size());
         }
     }
 
     @Test
     public void testHttpsNotConnected() throws Exception {
         final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        
         // mark channel closed
         final class TestLocalChannel extends LocalChannel {
             @Override
@@ -265,7 +246,6 @@ public class DefaultHttpClientTestCase {
                 return super.close();
             }
         }
-        
         final DefaultHttpClient client = new DefaultHttpClient(
                 new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
                     @Override
@@ -273,38 +253,21 @@ public class DefaultHttpClientTestCase {
                         return new TestLocalChannel();
                     }});
         //  NOT setup server for local channel
-        final AtomicBoolean isOnErrorCalled = new AtomicBoolean(false);
-        final AtomicBoolean isOnCompletedCalled = new AtomicBoolean(false);
-        final AtomicBoolean isOnNextCalled = new AtomicBoolean(false);
+        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
                 Feature.EnableSSL)
-            .subscribe(new Subscriber<HttpObject>() {
-                @Override
-                public void onCompleted() {
-                    isOnCompletedCalled.set(true);
-                    LOG.debug("testHttpsNotConnected: onCompleted");
-                }
-                @Override
-                public void onError(Throwable e) {
-                    isOnErrorCalled.set(true);
-                    LOG.debug("testHttpsNotConnected: onError, detail:{}",
-                            ExceptionUtils.exception2detail(e));
-                }
-                @Override
-                public void onNext(HttpObject t) {
-                    isOnNextCalled.set(true);
-                    LOG.debug("testHttpsNotConnected: onNext");
-                }});
+            .subscribe(testSubscriber);
+            testSubscriber.awaitTerminalEvent();
             clientChannelClosed.await();
         } finally {
             client.close();
             assertEquals(0, client.getActiveChannelCount());
-            assertTrue(isOnErrorCalled.get());
-            assertFalse(isOnCompletedCalled.get());
-            assertFalse(isOnNextCalled.get());
+            assertEquals(0, testSubscriber.getOnNextEvents().size());
+            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(1, testSubscriber.getOnErrorEvents().size());
         }
     }
 
@@ -336,42 +299,23 @@ public class DefaultHttpClientTestCase {
                     public TestLocalChannel newChannel() {
                         return new TestLocalChannel();
                     }});
-        final AtomicBoolean isOnErrorCalled = new AtomicBoolean(false);
-        final AtomicBoolean isOnCompletedCalled = new AtomicBoolean(false);
-        final AtomicBoolean isOnNextCalled = new AtomicBoolean(false);
-        final AtomicReference<Throwable> lastError = new AtomicReference<Throwable>();
+        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
                 Feature.EnableSSL)
-            .subscribe(new Subscriber<HttpObject>() {
-                @Override
-                public void onCompleted() {
-                    isOnCompletedCalled.set(true);
-                    LOG.debug("testHttpsNotShakehand: onCompleted");
-                }
-                @Override
-                public void onError(Throwable e) {
-                    isOnErrorCalled.set(true);
-                    lastError.set(e);
-                    LOG.debug("testHttpsNotShakehand: onError, detail:{}",
-                            ExceptionUtils.exception2detail(e));
-                }
-                @Override
-                public void onNext(HttpObject t) {
-                    isOnNextCalled.set(true);
-                    LOG.debug("testHttpsNotShakehand: onNext");
-                }});
+            .subscribe(testSubscriber);
             clientChannelClosed.await();
         } finally {
             client.close();
             server.stop();
             assertEquals(0, client.getActiveChannelCount());
-            assertEquals(javax.net.ssl.SSLException.class, lastError.get().getClass());
-            assertTrue(isOnErrorCalled.get());
-            assertFalse(isOnCompletedCalled.get());
-            assertFalse(isOnNextCalled.get());
+            assertEquals(0, testSubscriber.getOnNextEvents().size());
+            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(1, testSubscriber.getOnErrorEvents().size());
+            assertEquals(javax.net.ssl.SSLException.class, 
+                    testSubscriber.getOnErrorEvents().get(0).getClass());
         }
     }
     
