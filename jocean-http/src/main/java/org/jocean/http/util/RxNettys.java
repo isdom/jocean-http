@@ -27,8 +27,32 @@ public class RxNettys {
     }
     
     @SuppressWarnings("rawtypes")
+    private final static Func1<Future, Observable<Object>> CHECK_FUTURE = 
+    new Func1<Future, Observable<Object>>() {
+        @Override
+        public Observable<Object> call(final Future future) {
+            return Observable.create(new OnSubscribe<Object> () {
+                @SuppressWarnings("unchecked")
+                @Override
+                public void call(final Subscriber<Object> subscriber) {
+                    subscriber.add(Subscriptions.from(
+                        future.addListener(new GenericFutureListener<Future>() {
+                            @Override
+                            public void operationComplete(final Future future)
+                                    throws Exception {
+                                if (!future.isSuccess()) {
+                                    subscriber.onError(future.cause());
+                                }
+                            }
+                        })));
+                }});
+        }};
+        
+    @SuppressWarnings({ "rawtypes", "unchecked" })
     public static <F extends Future,R> Func1<F, Observable<? extends R>> 
         checkFuture() {
+        return (Func1)CHECK_FUTURE;
+        /* replace by global one instance
         return new Func1<F, Observable<? extends R>>() {
             @Override
             public Observable<? extends R> call(final F future) {
@@ -48,6 +72,7 @@ public class RxNettys {
                             })));
                     }});
             }};
+            */
     }
     
     public static Subscription channelSubscription(final Channel channel) {
