@@ -24,7 +24,7 @@ public interface HttpClient extends Closeable {
      */
     public Observable<HttpObject> sendRequest(
             final SocketAddress remoteAddress, 
-            final Observable<HttpObject> request,
+            final Observable<? extends HttpObject> request,
             final Feature... features);
     
     public enum Feature {

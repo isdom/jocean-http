@@ -542,7 +542,7 @@ public class DefaultHttpClientTestCase {
             final Subscription subscription = 
                 client.sendRequest(
                     new LocalAddress("test"), 
-                    Observable.error(new RuntimeException("test error")))
+                    Observable.<HttpObject>error(new RuntimeException("test error")))
                 .subscribe(new Subscriber<HttpObject>() {
                     @Override
                     public void onCompleted() {

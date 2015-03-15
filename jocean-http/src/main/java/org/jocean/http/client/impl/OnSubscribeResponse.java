@@ -32,7 +32,7 @@ final class OnSubscribeResponse implements
     OnSubscribeResponse(
         final int featuresAsInt,
         final Func1<ChannelHandler, Observable<Channel>> getObservable, 
-        final Observable<HttpObject> request) {
+        final Observable<? extends HttpObject> request) {
         this._featuresAsInt = featuresAsInt;
         this._getObservable = getObservable;
         this._request = request;
@@ -170,6 +170,6 @@ final class OnSubscribeResponse implements
     */
 
     private final int    _featuresAsInt;
-    private final Observable<HttpObject> _request;
+    private final Observable<? extends HttpObject> _request;
     private final Func1<ChannelHandler, Observable<Channel>> _getObservable;
 }

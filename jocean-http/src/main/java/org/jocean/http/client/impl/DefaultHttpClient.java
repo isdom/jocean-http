@@ -78,7 +78,7 @@ public class DefaultHttpClient implements HttpClient {
     @Override
     public Observable<HttpObject> sendRequest(
             final SocketAddress remoteAddress,
-            final Observable<HttpObject> request,
+            final Observable<? extends HttpObject> request,
             final Feature... features) {
         final int featuresAsInt = this._defaultFeaturesAsInt | Features.featuresAsInt(features);
         return Observable.create(
