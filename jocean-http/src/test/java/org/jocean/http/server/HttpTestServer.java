@@ -81,9 +81,6 @@ public final class HttpTestServer {
          .childHandler(new HttpTestServerInitializer(sslCtx, newHandler));
 
         b.bind(localAddress).sync();
-
-        System.err.println("Open your web browser and navigate to " +
-                (enableSSL? "https" : "http") + localAddress);
     }
     
     public void stop() {
