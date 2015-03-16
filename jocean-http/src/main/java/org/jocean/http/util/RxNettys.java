@@ -26,30 +26,28 @@ public class RxNettys {
             }};
     }
     
-    @SuppressWarnings("rawtypes")
-    private final static Func1<Future, Observable<Object>> CHECK_FUTURE = 
-    new Func1<Future, Observable<Object>>() {
+    private final static Func1<Future<Object>, Observable<Object>> CHECK_FUTURE = 
+    new Func1<Future<Object>, Observable<Object>>() {
         @Override
-        public Observable<Object> call(final Future future) {
+        public Observable<Object> call(final Future<Object> future) {
             return Observable.create(new OnSubscribe<Object> () {
-                @SuppressWarnings("unchecked")
                 @Override
                 public void call(final Subscriber<Object> subscriber) {
                     subscriber.add(Subscriptions.from(
-                        future.addListener(new GenericFutureListener<Future>() {
+                        future.addListener(new GenericFutureListener<Future<Object>>() {
                             @Override
-                            public void operationComplete(final Future future)
+                            public void operationComplete(final Future<Object> f)
                                     throws Exception {
-                                if (!future.isSuccess()) {
-                                    subscriber.onError(future.cause());
+                                if (!f.isSuccess()) {
+                                    subscriber.onError(f.cause());
                                 }
                             }
                         })));
                 }});
         }};
         
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    public static <F extends Future,R> Func1<F, Observable<? extends R>> 
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public static <F extends Future<?>,R> Func1<F, Observable<? extends R>> 
         checkFuture() {
         return (Func1)CHECK_FUTURE;
         /* replace by global one instance
