@@ -2,7 +2,9 @@ package org.jocean.http.client.impl;
 
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
@@ -28,6 +30,7 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.ssl.NotSslRecordException;
 import io.netty.util.ReferenceCountUtil;
 
 import java.io.IOException;
@@ -331,9 +334,9 @@ public class DefaultHttpClientTestCase {
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            assertEquals(javax.net.ssl.SSLException.class, 
+            assertEquals(NotSslRecordException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertTrue(requestTransfered.get());
+            assertFalse(requestTransfered.get());
         }
     }
     
@@ -811,4 +814,6 @@ public class DefaultHttpClientTestCase {
             assertFalse(requestTransfered.get());
         }
     }
+    
+    // TODO, 增加 transfer request 时, 调用 response subscriber.unsubscribe 后，write future是否会被正确取消。
 }

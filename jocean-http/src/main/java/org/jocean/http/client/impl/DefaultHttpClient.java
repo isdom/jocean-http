@@ -21,6 +21,7 @@ import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.concurrent.GenericFutureListener;
 import io.netty.util.internal.StringUtil;
@@ -93,13 +94,13 @@ public class DefaultHttpClient implements HttpClient {
                         final Channel channel = newChannel();
                         
                         try {
-                            addHttpClientCodecs(featuresAsInt, channel)
+                            addHttpClientCodecs(featuresAsInt, channel, subscriber)
                                 .addLast(handler);
                         
                             subscriber.add(
                                 Subscriptions.from(
                                 channel.connect(remoteAddress)
-                                    .addListener(createConnectListener(subscriber))));
+                                    .addListener(createConnectListener(featuresAsInt, subscriber))));
                         } catch (Throwable e) {
                             if (null!=channel) {
                                 channel.close();
@@ -123,7 +124,8 @@ public class DefaultHttpClient implements HttpClient {
     
     private ChannelPipeline addHttpClientCodecs(
             final int featuresAsInt,
-            final Channel channel) {
+            final Channel channel,
+            final Subscriber<? super Channel> subscriber) {
         final ChannelPipeline pipeline = channel.pipeline();
                   
         if (Features.isEnabled(featuresAsInt, Feature.EnableLOG)) {
@@ -140,10 +142,31 @@ public class DefaultHttpClient implements HttpClient {
         if (!Features.isEnabled(featuresAsInt, Feature.DisableCompress)) {
             pipeline.addLast(new HttpContentDecompressor());
         }
+        
+        if (Features.isEnabled(featuresAsInt, Feature.EnableSSL)) {
+            pipeline.addLast(new ChannelInboundHandlerAdapter() {
+                public void userEventTriggered(final ChannelHandlerContext ctx, final Object evt) 
+                        throws Exception {
+                    if (evt instanceof SslHandshakeCompletionEvent) {
+                        final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent)evt);
+                        if ( sslComplete.isSuccess() ) {
+                            subscriber.onNext(channel);
+                            subscriber.onCompleted();
+                        }
+                        else {
+                            subscriber.onError(sslComplete.cause());
+                        }
+                    }
+                    ctx.fireUserEventTriggered(evt);
+                }
+            });
+        }
+        
         return pipeline;
     }
 
     private GenericFutureListener<ChannelFuture> createConnectListener(
+            final int featuresAsInt,
             final Subscriber<? super Channel> subscriber) {
         return new GenericFutureListener<ChannelFuture>() {
             @Override
@@ -152,8 +175,10 @@ public class DefaultHttpClient implements HttpClient {
                 final Channel channel = future.channel();
                 if (future.isSuccess()) {
                     subscriber.add(RxNettys.channelSubscription(channel));
-                    subscriber.onNext(channel);
-                    subscriber.onCompleted();
+                    if (!Features.isEnabled(featuresAsInt, Feature.EnableSSL)) {
+                        subscriber.onNext(channel);
+                        subscriber.onCompleted();
+                    }
                 } else {
                     try {
                         subscriber.onError(future.cause());
