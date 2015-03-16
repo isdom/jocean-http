@@ -29,30 +29,47 @@ final class OnSubscribeResponse implements
     private static final Logger LOG =
             LoggerFactory.getLogger(OnSubscribeResponse.class);
     
-    OnSubscribeResponse(
-        final int featuresAsInt,
-        final Func1<ChannelHandler, Observable<Channel>> getObservable, 
-        final Observable<? extends HttpObject> request) {
-        this._featuresAsInt = featuresAsInt;
-        this._getObservable = getObservable;
-        this._request = request;
-    }
+    private final Func1<ChannelHandler, Observable<Channel>> _getObservable;
+    private final Func1<Channel, Observable<ChannelFuture>> _transferRequest;
     
+    OnSubscribeResponse(
+        final Func1<ChannelHandler, Observable<Channel>> getObservable, 
+        final int featuresAsInt,
+        final Observable<? extends HttpObject> request) {
+        this._getObservable = getObservable;
+        this._transferRequest = 
+                new Func1<Channel, Observable<ChannelFuture>> () {
+            @Override
+            public Observable<ChannelFuture> call(final Channel channel) {
+                return request.doOnNext(_ADD_ACCEPTENCODING_HEAD)
+                        .map(RxNettys.<HttpObject>sendMessage(channel));
+            }
+            private final Action1<HttpObject> _ADD_ACCEPTENCODING_HEAD = new Action1<HttpObject> () {
+                @Override
+                public void call(final HttpObject msg) {
+                    if (isCompressEnabled() && msg instanceof HttpRequest) {
+                        HttpHeaders.addHeader((HttpRequest) msg,
+                            HttpHeaders.Names.ACCEPT_ENCODING, 
+                            HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
+                    }
+                }
+                private boolean isCompressEnabled() {
+                    return !Features.isEnabled(featuresAsInt, Feature.DisableCompress);
+                }
+            };
+        };
+    }
+        
     @Override
-    public void call(final Subscriber<? super HttpObject> responseSubscriber) {
+    public void call(final Subscriber<? super HttpObject> response) {
         final Subscriber<? super HttpObject> wrapper = 
-                RxSubscribers.guardUnsubscribed(responseSubscriber);
+                RxSubscribers.guardUnsubscribed(response);
         try {
             if (!wrapper.isUnsubscribed()) {
                 this._getObservable.call(createResponseHandler(wrapper))
-                .flatMap(new Func1<Channel, Observable<ChannelFuture>> () {
-                    @Override
-                    public Observable<ChannelFuture> call(final Channel channel) {
-                        return _request.doOnNext(ADD_ACCEPTENCODING_HEAD)
-                                .map(RxNettys.<HttpObject>sendMessage(channel));
-                    }})
-                .flatMap(RxNettys.<ChannelFuture, HttpObject>checkFuture())
-                .subscribe(wrapper);
+                    .flatMap(this._transferRequest)
+                    .flatMap(RxNettys.<ChannelFuture, HttpObject>checkFuture())
+                    .subscribe(wrapper);
             }
         } catch (final Throwable e) {
             wrapper.onError(e);
@@ -60,52 +77,50 @@ final class OnSubscribeResponse implements
     }
 
     private SimpleChannelInboundHandler<HttpObject> createResponseHandler(
-            final Subscriber<? super HttpObject> responseSubscriber) {
+            final Subscriber<? super HttpObject> response) {
         return new SimpleChannelInboundHandler<HttpObject>() {
 
             @Override
             public void channelActive(final ChannelHandlerContext ctx)
                     throws Exception {
+                ctx.fireChannelActive();
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("channelActive: ch({})", ctx.channel());
                 }
-
-                ctx.fireChannelActive();
             }
 
             @Override
             public void channelInactive(final ChannelHandlerContext ctx)
                     throws Exception {
+                ctx.fireChannelInactive();
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("channelInactive: ch({})", ctx.channel());
                 }
-                ctx.fireChannelInactive();
-                responseSubscriber.onError(new RuntimeException("peer has closed."));
+                response.onError(new RuntimeException("peer has closed."));
             }
 
             @Override
             public void userEventTriggered(final ChannelHandlerContext ctx,
                     final Object evt) throws Exception {
+                ctx.fireUserEventTriggered(evt);
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("userEventTriggered: ch({}) with event:{}",
                             ctx.channel(), evt);
                 }
-
-                ctx.fireUserEventTriggered(evt);
             }
 
             @Override
             public void exceptionCaught(final ChannelHandlerContext ctx,
                     final Throwable cause) throws Exception {
                 ctx.close();
-                responseSubscriber.onError(cause);
+                response.onError(cause);
             }
 
             @Override
             protected void channelRead0(
                     final ChannelHandlerContext ctx,
                     final HttpObject msg) throws Exception {
-                responseSubscriber.onNext(msg);
+                response.onNext(msg);
                 if (msg instanceof LastHttpContent) {
                     /* netty 参考代码:
                      * https://github.com/netty/netty/blob/netty-4.0.26.Final/codec/src/main/java/io/netty/handler/codec/ByteToMessageDecoder.java#L274
@@ -115,31 +130,16 @@ final class OnSubscribeResponse implements
                      * 即没有指定Content-Length头域，也不是CHUNKED传输模式，此情况下，即会自动产生一个LastHttpContent.EMPTY_LAST_CONTENT实例
                      * 因此，无需在channelInactive处，针对该情况做特殊处理
                      */
+                    response.onCompleted();
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
                                 ctx.channel(), msg);
                     }
-                    responseSubscriber.onCompleted();
                 }
             }
         };
     }
     
-    final Action1<HttpObject> ADD_ACCEPTENCODING_HEAD = new Action1<HttpObject> () {
-        @Override
-        public void call(final HttpObject msg) {
-            if (isCompressEnabled() && msg instanceof HttpRequest) {
-                HttpHeaders.addHeader((HttpRequest) msg,
-                    HttpHeaders.Names.ACCEPT_ENCODING, 
-                    HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
-            }
-        }
-        
-        private boolean isCompressEnabled() {
-            return !Features.isEnabled(_featuresAsInt, Feature.DisableCompress);
-        }
-    };
-        
     /*
     private GenericFutureListener<ChannelFuture> createConnectListener(
             final Subscriber<? super HttpObject> responseSubscriber) {
@@ -168,8 +168,4 @@ final class OnSubscribeResponse implements
         };
     }
     */
-
-    private final int    _featuresAsInt;
-    private final Observable<? extends HttpObject> _request;
-    private final Func1<ChannelHandler, Observable<Channel>> _getObservable;
 }

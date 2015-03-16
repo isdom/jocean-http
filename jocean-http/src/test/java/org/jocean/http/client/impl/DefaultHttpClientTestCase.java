@@ -2,8 +2,7 @@ package org.jocean.http.client.impl;
 
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
@@ -14,6 +13,7 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelOutboundBuffer;
+import io.netty.channel.ChannelPromise;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
@@ -32,10 +32,12 @@ import io.netty.util.ReferenceCountUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.SocketAddress;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.client.HttpClient.Feature;
 import org.jocean.http.server.HttpTestServer;
@@ -46,6 +48,7 @@ import org.slf4j.LoggerFactory;
 
 import rx.Observable;
 import rx.Subscription;
+import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.observers.TestSubscriber;
 
@@ -214,10 +217,16 @@ public class DefaultHttpClientTestCase {
                     }});
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
-                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
+                .doOnNext(new Action1<HttpObject>() {
+                    @Override
+                    public void call(HttpObject msg) {
+                        requestTransfered.set(true);
+                    }}))
             .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
             clientChannelClosed.await();
@@ -227,6 +236,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
+            assertFalse(requestTransfered.get());
         }
     }
 
@@ -249,10 +259,16 @@ public class DefaultHttpClientTestCase {
                     }});
         //  NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
-                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
+                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
+                .doOnNext(new Action1<HttpObject>() {
+                    @Override
+                    public void call(HttpObject msg) {
+                        requestTransfered.set(true);
+                    }}),
                 Feature.EnableSSL)
             .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
@@ -263,6 +279,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
+            assertFalse(requestTransfered.get());
         }
     }
 
@@ -287,7 +304,6 @@ public class DefaultHttpClientTestCase {
                 return super.close();
             }
         }
-        
         final DefaultHttpClient client = new DefaultHttpClient(
                 new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
                     @Override
@@ -295,10 +311,16 @@ public class DefaultHttpClientTestCase {
                         return new TestLocalChannel();
                     }});
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
-                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
+                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
+                .doOnNext(new Action1<HttpObject>() {
+                    @Override
+                    public void call(HttpObject msg) {
+                        requestTransfered.set(true);
+                    }}),
                 Feature.EnableSSL)
             .subscribe(testSubscriber);
             clientChannelClosed.await();
@@ -311,6 +333,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(javax.net.ssl.SSLException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
+            assertTrue(requestTransfered.get());
         }
     }
     
@@ -368,10 +391,16 @@ public class DefaultHttpClientTestCase {
                         return new TestLocalChannel();
                     }});
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
-                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
+                .doOnNext(new Action1<HttpObject>() {
+                    @Override
+                    public void call(HttpObject msg) {
+                        requestTransfered.set(true);
+                    }}))
             .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
             clientChannelClosed.await();
@@ -385,6 +414,8 @@ public class DefaultHttpClientTestCase {
                     testSubscriber.getOnErrorEvents().get(0).getClass());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
+            //  channel connected, so message has been send
+            assertTrue(requestTransfered.get());
         }
     }
     
@@ -431,11 +462,17 @@ public class DefaultHttpClientTestCase {
                         return new TestLocalChannel();
                     }});
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
         try {
             final Subscription subscription = 
                 client.sendRequest(
                     new LocalAddress("test"), 
-                    Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
+                    .doOnNext(new Action1<HttpObject>() {
+                        @Override
+                        public void call(HttpObject msg) {
+                            requestTransfered.set(true);
+                        }}))
                 .subscribe(testSubscriber);
             
             serverRecvd.await();
@@ -455,6 +492,8 @@ public class DefaultHttpClientTestCase {
             testSubscriber.assertNoErrors();
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
+            //  channel connected, so message has been send
+            assertTrue(requestTransfered.get());
         }
     }
 
@@ -558,10 +597,16 @@ public class DefaultHttpClientTestCase {
                         return new TestLocalChannel();
                     }});
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
-                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
+                .doOnNext(new Action1<HttpObject>() {
+                    @Override
+                    public void call(HttpObject msg) {
+                        requestTransfered.set(true);
+                    }}))
             .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
             clientChannelClosed.await();
@@ -573,7 +618,10 @@ public class DefaultHttpClientTestCase {
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            //  no response received
             assertEquals(0, testSubscriber.getOnNextEvents().size());
+            //  message has been write to send queue
+            assertTrue(requestTransfered.get());
         }
     }
 
@@ -706,6 +754,61 @@ public class DefaultHttpClientTestCase {
                     testSubscriber.getOnErrorEvents().get(0).getClass());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertTrue(testSubscriber.getOnNextEvents().size()>=1);
+        }
+    }
+
+    @Test
+    public void testHttpEmitExceptionWhenConnecting() throws Exception {
+        final String errorMsg = "connecting failure";
+        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
+        // mark channel closed
+        final class TestLocalChannel extends LocalChannel {
+            @Override
+            protected AbstractUnsafe newUnsafe() {
+                return new AbstractUnsafe() {
+                    @Override
+                    public void connect(SocketAddress remoteAddress,
+                            SocketAddress localAddress, ChannelPromise promise) {
+                        promise.tryFailure(new RuntimeException(errorMsg));
+                    }};
+            }
+            @Override
+            public ChannelFuture close() {
+                clientChannelClosed.countDown();
+                return super.close();
+            }
+        }
+        final DefaultHttpClient client = new DefaultHttpClient(
+                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
+                    @Override
+                    public TestLocalChannel newChannel() {
+                        return new TestLocalChannel();
+                    }});
+        //    NOT setup server for local channel
+        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
+        try {
+            client.sendRequest(
+                new LocalAddress("test"), 
+                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
+                .doOnNext(new Action1<HttpObject>() {
+                    @Override
+                    public void call(HttpObject msg) {
+                        requestTransfered.set(true);
+                    }}))
+            .subscribe(testSubscriber);
+            testSubscriber.awaitTerminalEvent();
+            clientChannelClosed.await();
+        } finally {
+            client.close();
+            assertEquals(0, client.getActiveChannelCount());
+            assertEquals(0, testSubscriber.getOnNextEvents().size());
+            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(1, testSubscriber.getOnErrorEvents().size());
+            assertEquals(errorMsg, 
+                    testSubscriber.getOnErrorEvents().get(0).getMessage());
+            //  channel not connected, so no message send
+            assertFalse(requestTransfered.get());
         }
     }
 }

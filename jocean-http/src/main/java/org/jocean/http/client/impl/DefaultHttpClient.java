@@ -29,7 +29,6 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -61,16 +60,6 @@ public class DefaultHttpClient implements HttpClient {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
     
-    private final Callable<Channel> NEW_CHANNEL = new Callable<Channel>() {
-        @Override
-        public Channel call() throws Exception {
-            final Channel ch = _bootstrap.register().channel();
-            if ( LOG.isDebugEnabled() ) {
-                LOG.debug("create new channel: {}", ch);
-            }
-            return    ch;
-        }};
-
     /* (non-Javadoc)
      * @see org.jocean.http.client.HttpClient#sendRequest(java.net.URI, rx.Observable)
      * eg: new SocketAddress(this._uri.getHost(), this._uri.getPort()))
@@ -82,14 +71,14 @@ public class DefaultHttpClient implements HttpClient {
             final Feature... features) {
         final int featuresAsInt = this._defaultFeaturesAsInt | Features.featuresAsInt(features);
         return Observable.create(
-                new OnSubscribeResponse(
-                        featuresAsInt, 
-                        new Func1<ChannelHandler, Observable<Channel>> () {
-                            @Override
-                            public Observable<Channel> call(final ChannelHandler handler) {
-                                return createChannelObservable(remoteAddress, featuresAsInt, handler);
-                            }},
-                        request));
+            new OnSubscribeResponse(
+                new Func1<ChannelHandler, Observable<Channel>> () {
+                    @Override
+                    public Observable<Channel> call(final ChannelHandler handler) {
+                        return createChannelObservable(remoteAddress, featuresAsInt, handler);
+                    }},
+                featuresAsInt, 
+                request));
     }
     
     private Observable<Channel> createChannelObservable(
@@ -101,28 +90,12 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Subscriber<? super Channel> subscriber) {
                 try {
                     if (!subscriber.isUnsubscribed()) {
-                        final Channel channel =  NEW_CHANNEL.call();
+                        final Channel channel = newChannel();
                         
                         try {
-                            final ChannelPipeline pipeline = channel.pipeline();
+                            addHttpClientCodecs(featuresAsInt, channel)
+                                .addLast(handler);
                         
-                            if (Features.isEnabled(featuresAsInt, Feature.EnableLOG)) {
-                                pipeline.addLast(new LoggingHandler());
-                            }
-                        
-                            // Enable SSL if necessary.
-                            if (Features.isEnabled(featuresAsInt, Feature.EnableSSL)) {
-                                pipeline.addLast(_sslCtx.newHandler(channel.alloc()));
-                            }
-                        
-                            pipeline.addLast(new HttpClientCodec());
-                        
-                            if (!Features.isEnabled(featuresAsInt, Feature.DisableCompress)) {
-                                pipeline.addLast(new HttpContentDecompressor());
-                            }
-                        
-                            pipeline.addLast(handler);
-                          
                             subscriber.add(
                                 Subscriptions.from(
                                 channel.connect(remoteAddress)
@@ -138,6 +111,36 @@ public class DefaultHttpClient implements HttpClient {
                     subscriber.onError(e);
                 }
             }});
+    }
+
+    private Channel newChannel() throws Exception {
+        final Channel ch = _bootstrap.register().channel();
+        if ( LOG.isDebugEnabled() ) {
+            LOG.debug("create new channel: {}", ch);
+        }
+        return ch;
+    }
+    
+    private ChannelPipeline addHttpClientCodecs(
+            final int featuresAsInt,
+            final Channel channel) {
+        final ChannelPipeline pipeline = channel.pipeline();
+                  
+        if (Features.isEnabled(featuresAsInt, Feature.EnableLOG)) {
+            pipeline.addLast(new LoggingHandler());
+        }
+                  
+        // Enable SSL if necessary.
+        if (Features.isEnabled(featuresAsInt, Feature.EnableSSL)) {
+            pipeline.addLast(_sslCtx.newHandler(channel.alloc()));
+        }
+                  
+        pipeline.addLast(new HttpClientCodec());
+                  
+        if (!Features.isEnabled(featuresAsInt, Feature.DisableCompress)) {
+            pipeline.addLast(new HttpContentDecompressor());
+        }
+        return pipeline;
     }
 
     private GenericFutureListener<ChannelFuture> createConnectListener(
