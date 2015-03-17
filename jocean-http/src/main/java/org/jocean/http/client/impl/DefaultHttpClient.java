@@ -92,15 +92,16 @@ public class DefaultHttpClient implements HttpClient {
                 try {
                     if (!subscriber.isUnsubscribed()) {
                         final Channel channel = newChannel();
-                        
+                        final boolean enableSSL = Features.isEnabled(featuresAsInt, Feature.EnableSSL);
                         try {
-                            addHttpClientCodecs(featuresAsInt, channel, subscriber)
+                            addHttpClientCodecs(enableSSL, featuresAsInt, channel, subscriber)
                                 .addLast(handler);
                         
                             subscriber.add(
                                 Subscriptions.from(
                                 channel.connect(remoteAddress)
-                                    .addListener(createConnectListener(featuresAsInt, subscriber))));
+                                    .addListener(
+                                        createConnectListener(enableSSL, featuresAsInt, subscriber))));
                         } catch (Throwable e) {
                             if (null!=channel) {
                                 channel.close();
@@ -123,6 +124,7 @@ public class DefaultHttpClient implements HttpClient {
     }
     
     private ChannelPipeline addHttpClientCodecs(
+            final boolean enableSSL,
             final int featuresAsInt,
             final Channel channel,
             final Subscriber<? super Channel> subscriber) {
@@ -133,7 +135,8 @@ public class DefaultHttpClient implements HttpClient {
         }
                   
         // Enable SSL if necessary.
-        if (Features.isEnabled(featuresAsInt, Feature.EnableSSL)) {
+        
+        if (enableSSL) {
             pipeline.addLast(_sslCtx.newHandler(channel.alloc()));
         }
                   
@@ -143,7 +146,7 @@ public class DefaultHttpClient implements HttpClient {
             pipeline.addLast(new HttpContentDecompressor());
         }
         
-        if (Features.isEnabled(featuresAsInt, Feature.EnableSSL)) {
+        if (enableSSL) {
             pipeline.addLast(new ChannelInboundHandlerAdapter() {
                 public void userEventTriggered(final ChannelHandlerContext ctx, final Object evt) 
                         throws Exception {
@@ -166,6 +169,7 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     private GenericFutureListener<ChannelFuture> createConnectListener(
+            final boolean enableSSL,
             final int featuresAsInt,
             final Subscriber<? super Channel> subscriber) {
         return new GenericFutureListener<ChannelFuture>() {
@@ -175,7 +179,7 @@ public class DefaultHttpClient implements HttpClient {
                 final Channel channel = future.channel();
                 if (future.isSuccess()) {
                     subscriber.add(RxNettys.channelSubscription(channel));
-                    if (!Features.isEnabled(featuresAsInt, Feature.EnableSSL)) {
+                    if (!enableSSL) {
                         subscriber.onNext(channel);
                         subscriber.onCompleted();
                     }
