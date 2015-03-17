@@ -23,6 +23,7 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.GenericFutureListener;
 import io.netty.util.internal.StringUtil;
 import io.netty.util.internal.logging.InternalLoggerFactory;
@@ -30,11 +31,15 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.Features;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +47,8 @@ import org.slf4j.LoggerFactory;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
+import rx.Subscription;
+import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
@@ -51,6 +58,7 @@ import rx.subscriptions.Subscriptions;
  */
 public class DefaultHttpClient implements HttpClient {
     
+    private static final String RESPONSE_HANDLER = "RESPONSE";
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
         if (!(InternalLoggerFactory.getDefaultFactory() instanceof Slf4JLoggerFactory)) {
@@ -60,6 +68,9 @@ public class DefaultHttpClient implements HttpClient {
     
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
+    
+    public static final AttributeKey<Object> REUSE = AttributeKey.valueOf("REUSE");
+    private static final Object OK = new Object();
     
     /* (non-Javadoc)
      * @see org.jocean.http.client.HttpClient#sendRequest(java.net.URI, rx.Observable)
@@ -78,8 +89,23 @@ public class DefaultHttpClient implements HttpClient {
                     public Observable<Channel> call(final ChannelHandler handler) {
                         return createChannelObservable(remoteAddress, featuresAsInt, handler);
                     }},
+                markChannelReused,
                 featuresAsInt, 
                 request));
+    }
+    
+    private final static Action1<Channel> markChannelReused = new Action1<Channel>() {
+        @Override
+        public void call(final Channel channel) {
+            channel.attr(REUSE).set(OK);
+        }};
+        
+    static boolean isChannelReused(final Channel channel) {
+        return null != channel.attr(REUSE).get();
+    }
+    
+    static void resetChannelReused(final Channel channel) {
+        channel.attr(REUSE).remove();
     }
     
     private Observable<Channel> createChannelObservable(
@@ -91,28 +117,59 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Subscriber<? super Channel> subscriber) {
                 try {
                     if (!subscriber.isUnsubscribed()) {
-                        final Channel channel = newChannel();
-                        final boolean enableSSL = Features.isEnabled(featuresAsInt, Feature.EnableSSL);
-                        try {
-                            addHttpClientCodecs(enableSSL, featuresAsInt, channel, subscriber)
-                                .addLast(handler);
-                        
-                            subscriber.add(
-                                Subscriptions.from(
-                                channel.connect(remoteAddress)
-                                    .addListener(
-                                        createConnectListener(enableSSL, featuresAsInt, subscriber))));
-                        } catch (Throwable e) {
-                            if (null!=channel) {
-                                channel.close();
-                            }
-                            throw e;
+                        if (!reuseChannel(remoteAddress, handler, subscriber) ) {
+                            createChannel(remoteAddress, featuresAsInt, handler,
+                                    subscriber);
                         }
                     }
                 } catch (Throwable e) {
                     subscriber.onError(e);
                 }
             }});
+    }
+
+    private boolean reuseChannel(
+            final SocketAddress remoteAddress,
+            final ChannelHandler handler,
+            final Subscriber<? super Channel> subscriber) {
+        Channel channel = null;
+        do {
+            channel = retainChannelFromPool(remoteAddress);
+        } while (null != channel && !channel.isActive());
+        if (null!=channel) {
+            channel.pipeline().addLast(RESPONSE_HANDLER, handler);
+            subscriber.add(channelReleaser(remoteAddress, channel));
+            subscriber.onNext(channel);
+            subscriber.onCompleted();
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    private void createChannel(
+            final SocketAddress remoteAddress,
+            final int featuresAsInt, 
+            final ChannelHandler handler,
+            final Subscriber<? super Channel> subscriber) throws Throwable {
+        final Channel channel = newChannel();
+        final boolean enableSSL = Features.isEnabled(featuresAsInt, Feature.EnableSSL);
+        try {
+            addHttpClientCodecs(enableSSL, featuresAsInt, channel, subscriber)
+                .addLast(RESPONSE_HANDLER, handler);
+        
+            subscriber.add(
+                Subscriptions.from(
+                channel.connect(remoteAddress)
+                    .addListener(
+                        createConnectListener(remoteAddress, enableSSL, featuresAsInt, subscriber))));
+        } catch (Throwable e) {
+            if (null!=channel) {
+                channel.close();
+            }
+            throw e;
+        }
     }
 
     private Channel newChannel() throws Exception {
@@ -135,7 +192,6 @@ public class DefaultHttpClient implements HttpClient {
         }
                   
         // Enable SSL if necessary.
-        
         if (enableSSL) {
             pipeline.addLast(_sslCtx.newHandler(channel.alloc()));
         }
@@ -169,6 +225,7 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     private GenericFutureListener<ChannelFuture> createConnectListener(
+            final SocketAddress remoteAddress, 
             final boolean enableSSL,
             final int featuresAsInt,
             final Subscriber<? super Channel> subscriber) {
@@ -178,7 +235,7 @@ public class DefaultHttpClient implements HttpClient {
                     throws Exception {
                 final Channel channel = future.channel();
                 if (future.isSuccess()) {
-                    subscriber.add(RxNettys.channelSubscription(channel));
+                    subscriber.add(channelReleaser(remoteAddress, channel));
                     if (!enableSSL) {
                         subscriber.onNext(channel);
                         subscriber.onCompleted();
@@ -192,6 +249,55 @@ public class DefaultHttpClient implements HttpClient {
                 }
             }
         };
+    }
+    
+    private Subscription channelReleaser(
+            final SocketAddress remoteAddress,
+            final Channel channel) {
+        return new Subscription() {
+            final AtomicBoolean _isUnsubscribed = new AtomicBoolean(false);
+            @Override
+            public void unsubscribe() {
+                if (_isUnsubscribed.compareAndSet(false, true)) {
+                    if (isChannelReused(channel)) {
+                        channel.pipeline().remove(RESPONSE_HANDLER);
+                        resetChannelReused(channel);
+                        releaseChannelToPool(remoteAddress, channel);
+                    }
+                    else {
+                        channel.close();
+                    }
+                }
+            }
+            @Override
+            public boolean isUnsubscribed() {
+                return _isUnsubscribed.get();
+            }};
+    }
+
+    private Channel retainChannelFromPool(final SocketAddress address) {
+        final Queue<Channel> channels = getChannels(address);
+        return (null!=channels) ? channels.poll() : null;
+    }
+    
+    private void releaseChannelToPool(final SocketAddress address, final Channel channel) {
+        getOrCreateChannels(address).add(channel);
+    }
+
+    private Queue<Channel> getOrCreateChannels(final SocketAddress address) {
+        final Queue<Channel> channels = this._channels.get(address);
+        if (null == channels) {
+            final Queue<Channel> newChannels = new ConcurrentLinkedQueue<Channel>();
+            final Queue<Channel> previous = this._channels.putIfAbsent(address, newChannels);
+            return  null!=previous ? previous : newChannels;
+        }
+        else {
+            return channels;
+        }
+    }
+    
+    private Queue<Channel> getChannels(final SocketAddress address) {
+        return this._channels.get(address);
     }
     
     public DefaultHttpClient() throws Exception {
@@ -280,4 +386,6 @@ public class DefaultHttpClient implements HttpClient {
     private final Bootstrap _bootstrap;
     private final SslContext _sslCtx;
     private final int _defaultFeaturesAsInt;
+    private final ConcurrentMap<SocketAddress, Queue<Channel>> _channels = 
+            new ConcurrentHashMap<>();
 }

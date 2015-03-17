@@ -6,9 +6,11 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.util.AttributeKey;
 
 import org.jocean.http.client.HttpClient.Feature;
 import org.jocean.http.util.RxNettys;
@@ -29,34 +31,44 @@ final class OnSubscribeResponse implements
     private static final Logger LOG =
             LoggerFactory.getLogger(OnSubscribeResponse.class);
     
+    private static final AttributeKey<Boolean> KEEPALIVE = AttributeKey.valueOf("KEEPALIVE");
+    
     private final Func1<ChannelHandler, Observable<Channel>> _getObservable;
     private final Func1<Channel, Observable<ChannelFuture>> _transferRequest;
+    private final Action1<Channel> _markReuse;
     
     OnSubscribeResponse(
         final Func1<ChannelHandler, Observable<Channel>> getObservable, 
+        final Action1<Channel> markReuse,
         final int featuresAsInt,
         final Observable<? extends HttpObject> request) {
         this._getObservable = getObservable;
+        this._markReuse = markReuse;
         this._transferRequest = 
                 new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
             public Observable<ChannelFuture> call(final Channel channel) {
-                return request.doOnNext(_ADD_ACCEPTENCODING_HEAD)
+                return request.doOnNext(createAddAcceptEncodingHead(channel))
                         .map(RxNettys.<HttpObject>sendMessage(channel));
             }
-            private final Action1<HttpObject> _ADD_ACCEPTENCODING_HEAD = new Action1<HttpObject> () {
-                @Override
-                public void call(final HttpObject msg) {
-                    if (isCompressEnabled() && msg instanceof HttpRequest) {
-                        HttpHeaders.addHeader((HttpRequest) msg,
-                            HttpHeaders.Names.ACCEPT_ENCODING, 
-                            HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
+            private final Action1<HttpObject> createAddAcceptEncodingHead(final Channel channel) {
+                return new Action1<HttpObject> () {
+                    @Override
+                    public void call(final HttpObject msg) {
+                        if (msg instanceof HttpRequest) {
+                            setKeepAlive(channel, HttpHeaders.isKeepAlive((HttpMessage)msg));
+                            if (isCompressEnabled()) {
+                                HttpHeaders.addHeader((HttpRequest) msg,
+                                    HttpHeaders.Names.ACCEPT_ENCODING, 
+                                    HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
+                            }
+                        }
                     }
-                }
-                private boolean isCompressEnabled() {
-                    return !Features.isEnabled(featuresAsInt, Feature.DisableCompress);
-                }
-            };
+                    private boolean isCompressEnabled() {
+                        return !Features.isEnabled(featuresAsInt, Feature.DisableCompress);
+                    }
+                };
+            }
         };
     }
         
@@ -130,6 +142,9 @@ final class OnSubscribeResponse implements
                      * 即没有指定Content-Length头域，也不是CHUNKED传输模式，此情况下，即会自动产生一个LastHttpContent.EMPTY_LAST_CONTENT实例
                      * 因此，无需在channelInactive处，针对该情况做特殊处理
                      */
+                    if (isKeepAlive(ctx.channel())) {
+                        _markReuse.call(ctx.channel());
+                    }
                     response.onCompleted();
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
@@ -139,33 +154,12 @@ final class OnSubscribeResponse implements
             }
         };
     }
-    
-    /*
-    private GenericFutureListener<ChannelFuture> createConnectListener(
-            final Subscriber<? super HttpObject> responseSubscriber) {
-        return new GenericFutureListener<ChannelFuture>() {
-            @Override
-            public void operationComplete(final ChannelFuture future)
-                    throws Exception {
-                final Channel channel = future.channel();
-                if (future.isSuccess()) {
-//                    responseSubscriber.add(
-                    // TODO add sending canceled testcase
-                    _request.doOnNext(ADD_ACCEPTENCODING_HEAD)
-                        .map(RxNettys.<HttpObject>sendMessage(channel))
-                        .flatMap(RxNettys.<ChannelFuture,HttpObject>checkFuture())
-                        .subscribe(responseSubscriber);
-//                    );
-                    responseSubscriber.add(RxNettys.channelSubscription(channel));
-                } else {
-                    try {
-                        responseSubscriber.onError(future.cause());
-                    } finally {
-                        channel.close();
-                    }
-                }
-            }
-        };
+
+    private static void setKeepAlive(final Channel channel, final boolean isKeepAlive) {
+        channel.attr(KEEPALIVE).set(isKeepAlive);
     }
-    */
+    
+    private static boolean isKeepAlive(final Channel channel) {
+        return channel.attr(KEEPALIVE).get();
+    }
 }
