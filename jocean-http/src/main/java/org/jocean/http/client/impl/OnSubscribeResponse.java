@@ -95,10 +95,10 @@ final class OnSubscribeResponse implements
             @Override
             public void channelActive(final ChannelHandlerContext ctx)
                     throws Exception {
-                ctx.fireChannelActive();
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("channelActive: ch({})", ctx.channel());
                 }
+                ctx.fireChannelActive();
             }
 
             @Override
@@ -114,11 +114,11 @@ final class OnSubscribeResponse implements
             @Override
             public void userEventTriggered(final ChannelHandlerContext ctx,
                     final Object evt) throws Exception {
-                ctx.fireUserEventTriggered(evt);
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("userEventTriggered: ch({}) with event:{}",
                             ctx.channel(), evt);
                 }
+                ctx.fireUserEventTriggered(evt);
             }
 
             @Override
@@ -142,14 +142,14 @@ final class OnSubscribeResponse implements
                      * 即没有指定Content-Length头域，也不是CHUNKED传输模式，此情况下，即会自动产生一个LastHttpContent.EMPTY_LAST_CONTENT实例
                      * 因此，无需在channelInactive处，针对该情况做特殊处理
                      */
-                    if (isKeepAlive(ctx.channel())) {
-                        _markReuse.call(ctx.channel());
-                    }
-                    response.onCompleted();
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
                                 ctx.channel(), msg);
                     }
+                    if (isKeepAlive(ctx.channel())) {
+                        _markReuse.call(ctx.channel());
+                    }
+                    response.onCompleted();
                 }
             }
         };

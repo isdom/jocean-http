@@ -841,7 +841,87 @@ public class DefaultHttpClientTestCase {
                     @Override
                     public TestLocalChannel newChannel() {
                         return new TestLocalChannel();
-                    }});
+                    }},
+                    Feature.EnableLOG,
+                    Feature.DisableCompress);
+                    
+        try {
+            // first 
+            {
+                final Iterator<HttpObject> itr = 
+                    client.sendRequest(
+                        new LocalAddress("test"), 
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    .map(new Func1<HttpObject, HttpObject>() {
+                        @Override
+                        public HttpObject call(final HttpObject obj) {
+                            //    retain obj for blocking
+                            return ReferenceCountUtil.retain(obj);
+                        }})
+                    .toBlocking().toIterable().iterator();
+                
+                final byte[] bytes = responseAsBytes(itr);
+                
+                assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+            }
+            assertEquals(1, clientChannelClosed.getCount());
+            // second
+            {
+                final Iterator<HttpObject> itr = 
+                    client.sendRequest(
+                        new LocalAddress("test"), 
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    .map(new Func1<HttpObject, HttpObject>() {
+                        @Override
+                        public HttpObject call(final HttpObject obj) {
+                            //    retain obj for blocking
+                            return ReferenceCountUtil.retain(obj);
+                        }})
+                    .toBlocking().toIterable().iterator();
+                
+                final byte[] bytes = responseAsBytes(itr);
+                
+                assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+            }
+            assertEquals(1, clientChannelClosed.getCount());
+        } finally {
+            client.close();
+//            assertEquals(0, clientChannelClosed.getCount());
+            server.stop();
+            assertEquals(0, client.getActiveChannelCount());
+        }
+    }
+    
+    @Test
+    public void testHttpsHappyPathKeepAliveReuseConnection() throws Exception {
+        final HttpTestServer server = new HttpTestServer(
+                true, 
+                new LocalAddress("test"), 
+                new LocalEventLoopGroup(1), 
+                new LocalEventLoopGroup(),
+                LocalServerChannel.class,
+                HttpTestServer.DEFAULT_NEW_HANDLER);
+
+        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
+        
+        // mark channel closed
+        final class TestLocalChannel extends LocalChannel {
+            @Override
+            public ChannelFuture close() {
+                clientChannelClosed.countDown();
+                return super.close();
+            }
+        }
+        
+        final DefaultHttpClient client = new DefaultHttpClient(
+                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
+                    @Override
+                    public TestLocalChannel newChannel() {
+                        return new TestLocalChannel();
+                    }},
+                    Feature.EnableSSL,
+                    Feature.EnableLOG,
+                    Feature.DisableCompress);
         try {
             // first 
             {
