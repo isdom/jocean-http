@@ -1,12 +1,11 @@
 package org.jocean.http.client.impl;
 
-import java.net.SocketAddress;
-
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
+
+import java.net.SocketAddress;
 
 public class DefaultChannelReuser extends AbstractChannelReuser {
 
@@ -27,15 +26,9 @@ public class DefaultChannelReuser extends AbstractChannelReuser {
     }
 
     @Override
-    public boolean recycleChannel(
-            final SocketAddress address, 
-            final Channel channel,
-            final ChannelHandler[] removeables) {
+    public boolean recycleChannel(final SocketAddress address, final Channel channel) {
         if (null != channel.attr(REUSE).get()) {
             channel.attr(REUSE).remove();
-            for (ChannelHandler handler : removeables) {
-                channel.pipeline().remove(handler);
-            }
             getOrCreateChannels(address).add(channel);
             return true;
         }

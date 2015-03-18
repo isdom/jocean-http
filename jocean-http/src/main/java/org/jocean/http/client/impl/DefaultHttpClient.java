@@ -265,8 +265,10 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public void unsubscribe() {
                 if (_isUnsubscribed.compareAndSet(false, true)) {
-                    if (!_channelReuser.recycleChannel(
-                            remoteAddress, channel, removeables)) {
+                    for (ChannelHandler handler : removeables) {
+                        channel.pipeline().remove(handler);
+                    }
+                    if (!_channelReuser.recycleChannel(remoteAddress, channel)) {
                         channel.close();
                     }
                 }
