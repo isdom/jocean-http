@@ -6,7 +6,6 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
@@ -53,8 +52,7 @@ final class OnSubscribeResponse implements
                     @Override
                     public void call(final HttpObject msg) {
                         if (msg instanceof HttpRequest) {
-                            _channelReuser.setChannelKeepAlive(
-                                    channel, HttpHeaders.isKeepAlive((HttpMessage)msg));
+                            _channelReuser.beforeSendRequest(channel, (HttpRequest)msg);
                             if (isCompressEnabled()) {
                                 HttpHeaders.addHeader((HttpRequest) msg,
                                     HttpHeaders.Names.ACCEPT_ENCODING, 
@@ -144,20 +142,10 @@ final class OnSubscribeResponse implements
                         LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
                                 ctx.channel(), msg);
                     }
-                    if (_channelReuser.isChannelKeepAlive(ctx.channel())) {
-                        _channelReuser.markChannelReused(ctx.channel());
-                    }
+                    _channelReuser.afterReceiveLastContent(ctx.channel());
                     response.onCompleted();
                 }
             }
         };
     }
-
-//    private static void setKeepAlive(final Channel channel, final boolean isKeepAlive) {
-//        channel.attr(KEEPALIVE).set(isKeepAlive);
-//    }
-//    
-//    private static boolean isKeepAlive(final Channel channel) {
-//        return channel.attr(KEEPALIVE).get();
-//    }
 }

@@ -33,6 +33,7 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -97,7 +98,7 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Subscriber<? super Channel> subscriber) {
                 try {
                     if (!subscriber.isUnsubscribed()) {
-                        if (!reuseChannel(remoteAddress, featuresAsInt, handler, subscriber) ) {
+                        if (!reuseChannel(remoteAddress, featuresAsInt, handler, subscriber)) {
                             createChannel(remoteAddress, featuresAsInt, handler, subscriber);
                         }
                     }
@@ -114,7 +115,7 @@ public class DefaultHttpClient implements HttpClient {
             final Subscriber<? super Channel> subscriber) {
         Channel channel = null;
         do {
-            channel = this._channelReuser.retainChannelFromPool(remoteAddress);
+            channel = this._channelReuser.retainChannel(remoteAddress);
         } while (null != channel && !channel.isActive());
         if (null!=channel) {
             final List<ChannelHandler> removeables = new ArrayList<>();
@@ -150,17 +151,46 @@ public class DefaultHttpClient implements HttpClient {
         
             subscriber.add(
                 Subscriptions.from(
-                channel.connect(remoteAddress)
-                    .addListener(
-                        createConnectListener(
-                            remoteAddress, enableSSL, featuresAsInt, subscriber, 
-                            removeables.toArray(new ChannelHandler[0])))));
+                    doConnect(remoteAddress, channel, enableSSL, featuresAsInt, subscriber, 
+                        removeables.toArray(new ChannelHandler[0]))));
+               
         } catch (Throwable e) {
             if (null!=channel) {
                 channel.close();
             }
             throw e;
         }
+    }
+
+    private Future<?> doConnect(
+            final SocketAddress remoteAddress, 
+            final Channel channel, 
+            final boolean enableSSL,
+            final int featuresAsInt, 
+            final Subscriber<? super Channel> subscriber,
+            final ChannelHandler[] removeables) {
+        return channel.connect(remoteAddress)
+            .addListener(
+                new GenericFutureListener<ChannelFuture>() {
+                    @Override
+                    public void operationComplete(final ChannelFuture future)
+                            throws Exception {
+                        if (future.isSuccess()) {
+                            subscriber.add(channelReleaser(remoteAddress, channel, removeables));
+                            if (!enableSSL) {
+                                subscriber.onNext(channel);
+                                subscriber.onCompleted();
+                            }
+                        } else {
+                            try {
+                                subscriber.onError(future.cause());
+                            } finally {
+                                channel.close();
+                            }
+                        }
+                    }
+                }
+            );
     }
 
     private Channel newChannel() throws Exception {
@@ -226,34 +256,6 @@ public class DefaultHttpClient implements HttpClient {
         return pipeline;
     }
 
-    private GenericFutureListener<ChannelFuture> createConnectListener(
-            final SocketAddress remoteAddress, 
-            final boolean enableSSL,
-            final int featuresAsInt,
-            final Subscriber<? super Channel> subscriber,
-            final ChannelHandler[] removeables) {
-        return new GenericFutureListener<ChannelFuture>() {
-            @Override
-            public void operationComplete(final ChannelFuture future)
-                    throws Exception {
-                final Channel channel = future.channel();
-                if (future.isSuccess()) {
-                    subscriber.add(channelReleaser(remoteAddress, channel, removeables));
-                    if (!enableSSL) {
-                        subscriber.onNext(channel);
-                        subscriber.onCompleted();
-                    }
-                } else {
-                    try {
-                        subscriber.onError(future.cause());
-                    } finally {
-                        channel.close();
-                    }
-                }
-            }
-        };
-    }
-    
     private Subscription channelReleaser(
             final SocketAddress remoteAddress,
             final Channel channel, 
@@ -263,14 +265,8 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public void unsubscribe() {
                 if (_isUnsubscribed.compareAndSet(false, true)) {
-                    if (_channelReuser.isChannelReused(channel)) {
-                        for (ChannelHandler handler : removeables) {
-                            channel.pipeline().remove(handler);
-                        }
-                        _channelReuser.resetChannelReused(channel);
-                        _channelReuser.releaseChannelToPool(remoteAddress, channel);
-                    }
-                    else {
+                    if (!_channelReuser.recycleChannel(
+                            remoteAddress, channel, removeables)) {
                         channel.close();
                     }
                 }

@@ -11,17 +11,12 @@ import java.util.concurrent.ConcurrentMap;
 public abstract class AbstractChannelReuser implements ChannelReuser {
 
     @Override
-    public Channel retainChannelFromPool(SocketAddress address) {
+    public Channel retainChannel(final SocketAddress address) {
         final Queue<Channel> channels = getChannels(address);
         return (null!=channels) ? channels.poll() : null;
     }
 
-    @Override
-    public void releaseChannelToPool(SocketAddress address, Channel channel) {
-        getOrCreateChannels(address).add(channel);
-    }
-
-    private Queue<Channel> getOrCreateChannels(final SocketAddress address) {
+    protected Queue<Channel> getOrCreateChannels(final SocketAddress address) {
         final Queue<Channel> channels = this._channels.get(address);
         if (null == channels) {
             final Queue<Channel> newChannels = new ConcurrentLinkedQueue<Channel>();
@@ -33,7 +28,7 @@ public abstract class AbstractChannelReuser implements ChannelReuser {
         }
     }
     
-    private Queue<Channel> getChannels(final SocketAddress address) {
+    protected Queue<Channel> getChannels(final SocketAddress address) {
         return this._channels.get(address);
     }
     
