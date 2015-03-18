@@ -10,7 +10,6 @@ import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.AttributeKey;
 
 import org.jocean.http.client.HttpClient.Feature;
 import org.jocean.http.util.RxNettys;
@@ -31,19 +30,17 @@ final class OnSubscribeResponse implements
     private static final Logger LOG =
             LoggerFactory.getLogger(OnSubscribeResponse.class);
     
-    private static final AttributeKey<Boolean> KEEPALIVE = AttributeKey.valueOf("KEEPALIVE");
-    
     private final Func1<ChannelHandler, Observable<Channel>> _getObservable;
     private final Func1<Channel, Observable<ChannelFuture>> _transferRequest;
-    private final Action1<Channel> _markReuse;
+    private final ChannelReuser _channelReuser;
     
     OnSubscribeResponse(
         final Func1<ChannelHandler, Observable<Channel>> getObservable, 
-        final Action1<Channel> markReuse,
+        final ChannelReuser channelReuser,
         final int featuresAsInt,
         final Observable<? extends HttpObject> request) {
         this._getObservable = getObservable;
-        this._markReuse = markReuse;
+        this._channelReuser = channelReuser;
         this._transferRequest = 
                 new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
@@ -56,7 +53,8 @@ final class OnSubscribeResponse implements
                     @Override
                     public void call(final HttpObject msg) {
                         if (msg instanceof HttpRequest) {
-                            setKeepAlive(channel, HttpHeaders.isKeepAlive((HttpMessage)msg));
+                            _channelReuser.setChannelKeepAlive(
+                                    channel, HttpHeaders.isKeepAlive((HttpMessage)msg));
                             if (isCompressEnabled()) {
                                 HttpHeaders.addHeader((HttpRequest) msg,
                                     HttpHeaders.Names.ACCEPT_ENCODING, 
@@ -146,8 +144,8 @@ final class OnSubscribeResponse implements
                         LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
                                 ctx.channel(), msg);
                     }
-                    if (isKeepAlive(ctx.channel())) {
-                        _markReuse.call(ctx.channel());
+                    if (_channelReuser.isChannelKeepAlive(ctx.channel())) {
+                        _channelReuser.markChannelReused(ctx.channel());
                     }
                     response.onCompleted();
                 }
@@ -155,11 +153,11 @@ final class OnSubscribeResponse implements
         };
     }
 
-    private static void setKeepAlive(final Channel channel, final boolean isKeepAlive) {
-        channel.attr(KEEPALIVE).set(isKeepAlive);
-    }
-    
-    private static boolean isKeepAlive(final Channel channel) {
-        return channel.attr(KEEPALIVE).get();
-    }
+//    private static void setKeepAlive(final Channel channel, final boolean isKeepAlive) {
+//        channel.attr(KEEPALIVE).set(isKeepAlive);
+//    }
+//    
+//    private static boolean isKeepAlive(final Channel channel) {
+//        return channel.attr(KEEPALIVE).get();
+//    }
 }

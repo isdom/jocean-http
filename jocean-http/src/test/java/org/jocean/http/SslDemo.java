@@ -5,6 +5,7 @@ import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
@@ -55,22 +56,53 @@ public class SslDemo {
     public static void main(String[] args) throws Exception {
         
 //        https://github.com/isdom
+//        final String host = "www.alipay.com";
+        final String host = "www.csdn.net";
+        final String cs = "UTF-8";
             
+        final DefaultFullHttpRequest request = 
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+        HttpHeaders.setKeepAlive(request, true);
+        HttpHeaders.setHost(request, host);
+        
+        LOG.debug("send request:{}", request);
         try (final HttpClient client = new DefaultHttpClient()) {
-            final Iterator<HttpObject> itr = 
-                client.sendRequest(new InetSocketAddress("www.alipay.com", 443), 
-                    Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/")),
-                    Feature.EnableLOG,
-                    Feature.EnableSSL)
-                .map(new Func1<HttpObject, HttpObject>() {
-                    @Override
-                    public HttpObject call(final HttpObject obj) {
-                        //    retain obj for blocking
-                        return ReferenceCountUtil.retain(obj);
-                    }})
-                .toBlocking().toIterable().iterator();
-            
-            LOG.info("recv:{}", new String(responseAsBytes(itr), "GBK"));
+            {
+                final Iterator<HttpObject> itr = 
+                    client.sendRequest(
+                        new InetSocketAddress(host, 443), 
+//                        new InetSocketAddress("58.215.107.207", 443), 
+                        Observable.just(request),
+                        Feature.EnableLOG,
+                        Feature.EnableSSL)
+                    .map(new Func1<HttpObject, HttpObject>() {
+                        @Override
+                        public HttpObject call(final HttpObject obj) {
+                            //    retain obj for blocking
+                            return ReferenceCountUtil.retain(obj);
+                        }})
+                    .toBlocking().toIterable().iterator();
+                
+                LOG.info("recv:{}", new String(responseAsBytes(itr), cs));
+            }
+            {
+                final Iterator<HttpObject> itr = 
+                    client.sendRequest(
+                        new InetSocketAddress(host, 443), 
+//                        new InetSocketAddress("58.215.107.207", 443), 
+                        Observable.just(request),
+                        Feature.EnableLOG,
+                        Feature.EnableSSL)
+                    .map(new Func1<HttpObject, HttpObject>() {
+                        @Override
+                        public HttpObject call(final HttpObject obj) {
+                            //    retain obj for blocking
+                            return ReferenceCountUtil.retain(obj);
+                        }})
+                    .toBlocking().toIterable().iterator();
+                
+                LOG.info("recv 2nd:{}", new String(responseAsBytes(itr), cs));
+            }
         }
     }
 

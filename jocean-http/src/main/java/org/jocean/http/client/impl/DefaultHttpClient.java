@@ -23,7 +23,6 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.GenericFutureListener;
 import io.netty.util.internal.StringUtil;
 import io.netty.util.internal.logging.InternalLoggerFactory;
@@ -34,10 +33,6 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,7 +46,6 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.Subscription;
-import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
@@ -72,9 +66,6 @@ public class DefaultHttpClient implements HttpClient {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
     
-    public static final AttributeKey<Object> REUSE = AttributeKey.valueOf("REUSE");
-    private static final Object OK = new Object();
-    
     /* (non-Javadoc)
      * @see org.jocean.http.client.HttpClient#sendRequest(java.net.URI, rx.Observable)
      * eg: new SocketAddress(this._uri.getHost(), this._uri.getPort()))
@@ -92,23 +83,9 @@ public class DefaultHttpClient implements HttpClient {
                     public Observable<Channel> call(final ChannelHandler handler) {
                         return createChannelObservable(remoteAddress, featuresAsInt, handler);
                     }},
-                markChannelReused,
+                this._channelReuser,
                 featuresAsInt, 
                 request));
-    }
-    
-    private final static Action1<Channel> markChannelReused = new Action1<Channel>() {
-        @Override
-        public void call(final Channel channel) {
-            channel.attr(REUSE).set(OK);
-        }};
-        
-    static boolean isChannelReused(final Channel channel) {
-        return null != channel.attr(REUSE).get();
-    }
-    
-    static void resetChannelReused(final Channel channel) {
-        channel.attr(REUSE).remove();
     }
     
     private Observable<Channel> createChannelObservable(
@@ -137,7 +114,7 @@ public class DefaultHttpClient implements HttpClient {
             final Subscriber<? super Channel> subscriber) {
         Channel channel = null;
         do {
-            channel = retainChannelFromPool(remoteAddress);
+            channel = this._channelReuser.retainChannelFromPool(remoteAddress);
         } while (null != channel && !channel.isActive());
         if (null!=channel) {
             final List<ChannelHandler> removeables = new ArrayList<>();
@@ -286,12 +263,12 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public void unsubscribe() {
                 if (_isUnsubscribed.compareAndSet(false, true)) {
-                    if (isChannelReused(channel)) {
+                    if (_channelReuser.isChannelReused(channel)) {
                         for (ChannelHandler handler : removeables) {
                             channel.pipeline().remove(handler);
                         }
-                        resetChannelReused(channel);
-                        releaseChannelToPool(remoteAddress, channel);
+                        _channelReuser.resetChannelReused(channel);
+                        _channelReuser.releaseChannelToPool(remoteAddress, channel);
                     }
                     else {
                         channel.close();
@@ -304,37 +281,14 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
 
-    private Channel retainChannelFromPool(final SocketAddress address) {
-        final Queue<Channel> channels = getChannels(address);
-        return (null!=channels) ? channels.poll() : null;
-    }
-    
-    private void releaseChannelToPool(final SocketAddress address, final Channel channel) {
-        getOrCreateChannels(address).add(channel);
-    }
-
-    private Queue<Channel> getOrCreateChannels(final SocketAddress address) {
-        final Queue<Channel> channels = this._channels.get(address);
-        if (null == channels) {
-            final Queue<Channel> newChannels = new ConcurrentLinkedQueue<Channel>();
-            final Queue<Channel> previous = this._channels.putIfAbsent(address, newChannels);
-            return  null!=previous ? previous : newChannels;
-        }
-        else {
-            return channels;
-        }
-    }
-    
-    private Queue<Channel> getChannels(final SocketAddress address) {
-        return this._channels.get(address);
-    }
-    
     public DefaultHttpClient() throws Exception {
         this(1);
     }
     
     public DefaultHttpClient(final int processThreadNumber) throws Exception {
-        this(new NioEventLoopGroup(processThreadNumber), NioSocketChannel.class);
+        this(new DefaultChannelReuser(), 
+            new NioEventLoopGroup(processThreadNumber), 
+            NioSocketChannel.class);
     }
     
     private static final class BootstrapChannelFactory<T extends Channel> implements ChannelFactory<T> {
@@ -363,7 +317,8 @@ public class DefaultHttpClient implements HttpClient {
             final EventLoopGroup eventLoopGroup,
             final Class<? extends Channel> channelType,
             final Feature... defaultFeatures) throws Exception { 
-        this(eventLoopGroup, 
+        this(new DefaultChannelReuser(),
+            eventLoopGroup, 
             new BootstrapChannelFactory<Channel>(channelType), 
             defaultFeatures);
     }
@@ -372,6 +327,29 @@ public class DefaultHttpClient implements HttpClient {
             final EventLoopGroup eventLoopGroup,
             final ChannelFactory<? extends Channel> channelFactory,
             final Feature... defaultFeatures) throws Exception { 
+        this(new DefaultChannelReuser(), 
+            eventLoopGroup, 
+            channelFactory, 
+            defaultFeatures);
+    }
+    
+    public DefaultHttpClient(
+            final ChannelReuser channelReuser,
+            final EventLoopGroup eventLoopGroup,
+            final Class<? extends Channel> channelType,
+            final Feature... defaultFeatures) throws Exception { 
+        this(channelReuser,
+            eventLoopGroup, 
+            new BootstrapChannelFactory<Channel>(channelType), 
+            defaultFeatures);
+    }
+    
+    public DefaultHttpClient(
+            final ChannelReuser channelReuser,
+            final EventLoopGroup eventLoopGroup,
+            final ChannelFactory<? extends Channel> channelFactory,
+            final Feature... defaultFeatures) throws Exception { 
+        this._channelReuser = channelReuser;
         this._defaultFeaturesAsInt = Features.featuresAsInt(defaultFeatures);
         // Configure the client.
         this._bootstrap = new Bootstrap()
@@ -414,7 +392,6 @@ public class DefaultHttpClient implements HttpClient {
     private final AtomicInteger _activeChannelCount = new AtomicInteger(0);
     private final Bootstrap _bootstrap;
     private final SslContext _sslCtx;
+    private final ChannelReuser _channelReuser;
     private final int _defaultFeaturesAsInt;
-    private final ConcurrentMap<SocketAddress, Queue<Channel>> _channels = 
-            new ConcurrentHashMap<>();
 }
