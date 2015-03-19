@@ -82,10 +82,10 @@ public class DefaultHttpClient implements HttpClient {
                         return createChannelObservable(remoteAddress, featuresAsInt, handler);
                     }},
                 this._channelPool,
-                !Features.isEnabled(featuresAsInt, Feature.DisableCompress), 
+                Feature.isCompressEnabled(featuresAsInt), 
                 request));
     }
-    
+
     private Observable<Channel> createChannelObservable(
             final SocketAddress remoteAddress, 
             final int featuresAsInt,
@@ -172,7 +172,7 @@ public class DefaultHttpClient implements HttpClient {
                 handlersClosure.call(new LoggingHandler()));
         }
                   
-        if (!Features.isEnabled(featuresAsInt, Feature.DisableCompress)) {
+        if (Feature.isCompressEnabled(featuresAsInt)) {
             //  add last
             pipeline.addLast("decompressor", 
                 handlersClosure.call(new HttpContentDecompressor()));
