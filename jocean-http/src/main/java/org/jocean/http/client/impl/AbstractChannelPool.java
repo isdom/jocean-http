@@ -8,12 +8,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 
-public abstract class AbstractChannelReuser implements ChannelReuser {
+public abstract class AbstractChannelPool implements ChannelPool {
 
     @Override
     public Channel retainChannel(final SocketAddress address) {
         final Queue<Channel> channels = getChannels(address);
-        return (null!=channels) ? channels.poll() : null;
+        if (null == channels) {
+            return null;
+        }
+        Channel channel = null;
+        do {
+            channel = channels.poll();
+        } while (null != channel && !channel.isActive());
+        return channel;
     }
 
     protected Queue<Channel> getOrCreateChannels(final SocketAddress address) {

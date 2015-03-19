@@ -7,7 +7,7 @@ import io.netty.util.AttributeKey;
 
 import java.net.SocketAddress;
 
-public class DefaultChannelReuser extends AbstractChannelReuser {
+public class DefaultChannelPool extends AbstractChannelPool {
 
     private static final AttributeKey<Object> REUSE = AttributeKey.valueOf("REUSE");
     private static final Object OK = new Object();

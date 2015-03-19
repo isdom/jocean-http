@@ -7,7 +7,7 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelException;
-import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -23,22 +23,19 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import io.netty.util.concurrent.GenericFutureListener;
 import io.netty.util.internal.StringUtil;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.client.HttpClient;
+import org.jocean.http.util.HandlersClosure;
+import org.jocean.http.util.Nettys;
 import org.jocean.idiom.Features;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,8 +81,8 @@ public class DefaultHttpClient implements HttpClient {
                     public Observable<Channel> call(final ChannelHandler handler) {
                         return createChannelObservable(remoteAddress, featuresAsInt, handler);
                     }},
-                this._channelReuser,
-                featuresAsInt, 
+                this._channelPool,
+                !Features.isEnabled(featuresAsInt, Feature.DisableCompress), 
                 request));
     }
     
@@ -113,19 +110,14 @@ public class DefaultHttpClient implements HttpClient {
             final int featuresAsInt, 
             final ChannelHandler handler,
             final Subscriber<? super Channel> subscriber) {
-        Channel channel = null;
-        do {
-            channel = this._channelReuser.retainChannel(remoteAddress);
-        } while (null != channel && !channel.isActive());
+        final Channel channel = this._channelPool.retainChannel(remoteAddress);
         if (null!=channel) {
-            final List<ChannelHandler> removeables = new ArrayList<>();
-            addFeatureCodecs(channel, featuresAsInt, removeables)
-                .addLast(RESPONSE_HANDLER, handler);
-            removeables.add(handler);
+            final HandlersClosure handlersClosure = 
+                    Nettys.channelHandlersClosure(channel);
+            addFeatureCodecs(channel, featuresAsInt, handlersClosure)
+                .addLast(RESPONSE_HANDLER, handlersClosure.call(handler));
             
-            subscriber.add(
-                channelReleaser(remoteAddress, channel, 
-                    removeables.toArray(new ChannelHandler[0])));
+            subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
             subscriber.onNext(channel);
             subscriber.onCompleted();
             return true;
@@ -143,54 +135,22 @@ public class DefaultHttpClient implements HttpClient {
         final Channel channel = newChannel();
         final boolean enableSSL = Features.isEnabled(featuresAsInt, Feature.EnableSSL);
         try {
-            final List<ChannelHandler> removeables = new ArrayList<>();
-            addHttpClientCodecs(channel, enableSSL, subscriber, removeables);
-            addFeatureCodecs(channel, featuresAsInt, removeables)
-                .addLast(RESPONSE_HANDLER, handler);
-            removeables.add(handler);
+            final HandlersClosure handlersClosure = 
+                    Nettys.channelHandlersClosure(channel);
+            addHttpClientCodecs(channel, enableSSL, subscriber, handlersClosure);
+            addFeatureCodecs(channel, featuresAsInt, handlersClosure)
+                .addLast(RESPONSE_HANDLER, handlersClosure.call(handler));
         
-            subscriber.add(
-                Subscriptions.from(
-                    doConnect(remoteAddress, channel, enableSSL, featuresAsInt, subscriber, 
-                        removeables.toArray(new ChannelHandler[0]))));
-               
+            subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
+            subscriber.add(Subscriptions.from(
+                channel.connect(remoteAddress)
+                .addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE)));
         } catch (Throwable e) {
             if (null!=channel) {
                 channel.close();
             }
             throw e;
         }
-    }
-
-    private Future<?> doConnect(
-            final SocketAddress remoteAddress, 
-            final Channel channel, 
-            final boolean enableSSL,
-            final int featuresAsInt, 
-            final Subscriber<? super Channel> subscriber,
-            final ChannelHandler[] removeables) {
-        return channel.connect(remoteAddress)
-            .addListener(
-                new GenericFutureListener<ChannelFuture>() {
-                    @Override
-                    public void operationComplete(final ChannelFuture future)
-                            throws Exception {
-                        if (future.isSuccess()) {
-                            subscriber.add(channelReleaser(remoteAddress, channel, removeables));
-                            if (!enableSSL) {
-                                subscriber.onNext(channel);
-                                subscriber.onCompleted();
-                            }
-                        } else {
-                            try {
-                                subscriber.onError(future.cause());
-                            } finally {
-                                channel.close();
-                            }
-                        }
-                    }
-                }
-            );
     }
 
     private Channel newChannel() throws Exception {
@@ -204,20 +164,18 @@ public class DefaultHttpClient implements HttpClient {
     private ChannelPipeline addFeatureCodecs(
             final Channel channel,
             final int featuresAsInt,
-            final Collection<ChannelHandler> removeables) {
+            final HandlersClosure handlersClosure) {
         final ChannelPipeline pipeline = channel.pipeline();
         if (Features.isEnabled(featuresAsInt, Feature.EnableLOG)) {
             //  add first
-            final ChannelHandler handler = new LoggingHandler();
-            pipeline.addFirst("log", handler);
-            removeables.add(handler);
+            pipeline.addFirst("log", 
+                handlersClosure.call(new LoggingHandler()));
         }
                   
         if (!Features.isEnabled(featuresAsInt, Feature.DisableCompress)) {
             //  add last
-            final ChannelHandler handler = new HttpContentDecompressor();
-            pipeline.addLast("decompressor", handler);
-            removeables.add(handler);
+            pipeline.addLast("decompressor", 
+                handlersClosure.call(new HttpContentDecompressor()));
         }
         
         return pipeline;
@@ -227,15 +185,30 @@ public class DefaultHttpClient implements HttpClient {
             final Channel channel,
             final boolean enableSSL,
             final Subscriber<? super Channel> subscriber,
-            final Collection<ChannelHandler> removeables) {
+            final HandlersClosure handlersClosure) {
         final ChannelPipeline pipeline = channel.pipeline();
+        
         // Enable SSL if necessary.
         if (enableSSL) {
             pipeline.addLast("ssl", _sslCtx.newHandler(channel.alloc()));
-            final ChannelHandler handler = new ChannelInboundHandlerAdapter() {
-                public void userEventTriggered(final ChannelHandlerContext ctx,
-                        final Object evt) throws Exception {
-                    if (evt instanceof SslHandshakeCompletionEvent) {
+        }
+        
+        pipeline.addLast("completeOrErrorNotifier", 
+                handlersClosure.call(new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                    if (!enableSSL) {
+                        subscriber.onNext(channel);
+                        subscriber.onCompleted();
+                    }
+                    ctx.fireChannelActive();
+                }
+                
+                @Override
+                public void userEventTriggered(
+                    final ChannelHandlerContext ctx,
+                    final Object evt) throws Exception {
+                    if (enableSSL && evt instanceof SslHandshakeCompletionEvent) {
                         final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
                         if (sslComplete.isSuccess()) {
                             subscriber.onNext(channel);
@@ -246,29 +219,27 @@ public class DefaultHttpClient implements HttpClient {
                     }
                     ctx.fireUserEventTriggered(evt);
                 }
-            };
-            pipeline.addLast("sslNotifier", handler);
-            removeables.add(handler);
-        }
-                  
+            }));
+            
         pipeline.addLast("clientCodec", new HttpClientCodec());
                   
         return pipeline;
     }
 
-    private Subscription channelReleaser(
+    private Subscription channelClosure(
             final SocketAddress remoteAddress,
             final Channel channel, 
-            final ChannelHandler[] removeables) {
+            final HandlersClosure handlersClosure) {
         return new Subscription() {
             final AtomicBoolean _isUnsubscribed = new AtomicBoolean(false);
             @Override
             public void unsubscribe() {
                 if (_isUnsubscribed.compareAndSet(false, true)) {
-                    for (ChannelHandler handler : removeables) {
-                        channel.pipeline().remove(handler);
+                    try {
+                        handlersClosure.close();
+                    } catch (IOException e) {
                     }
-                    if (!_channelReuser.recycleChannel(remoteAddress, channel)) {
+                    if (!_channelPool.recycleChannel(remoteAddress, channel)) {
                         channel.close();
                     }
                 }
@@ -284,7 +255,7 @@ public class DefaultHttpClient implements HttpClient {
     }
     
     public DefaultHttpClient(final int processThreadNumber) throws Exception {
-        this(new DefaultChannelReuser(), 
+        this(new DefaultChannelPool(), 
             new NioEventLoopGroup(processThreadNumber), 
             NioSocketChannel.class);
     }
@@ -315,7 +286,7 @@ public class DefaultHttpClient implements HttpClient {
             final EventLoopGroup eventLoopGroup,
             final Class<? extends Channel> channelType,
             final Feature... defaultFeatures) throws Exception { 
-        this(new DefaultChannelReuser(),
+        this(new DefaultChannelPool(),
             eventLoopGroup, 
             new BootstrapChannelFactory<Channel>(channelType), 
             defaultFeatures);
@@ -325,29 +296,29 @@ public class DefaultHttpClient implements HttpClient {
             final EventLoopGroup eventLoopGroup,
             final ChannelFactory<? extends Channel> channelFactory,
             final Feature... defaultFeatures) throws Exception { 
-        this(new DefaultChannelReuser(), 
+        this(new DefaultChannelPool(), 
             eventLoopGroup, 
             channelFactory, 
             defaultFeatures);
     }
     
     public DefaultHttpClient(
-            final ChannelReuser channelReuser,
+            final ChannelPool channelPool,
             final EventLoopGroup eventLoopGroup,
             final Class<? extends Channel> channelType,
             final Feature... defaultFeatures) throws Exception { 
-        this(channelReuser,
+        this(channelPool,
             eventLoopGroup, 
             new BootstrapChannelFactory<Channel>(channelType), 
             defaultFeatures);
     }
     
     public DefaultHttpClient(
-            final ChannelReuser channelReuser,
+            final ChannelPool channelPool,
             final EventLoopGroup eventLoopGroup,
             final ChannelFactory<? extends Channel> channelFactory,
             final Feature... defaultFeatures) throws Exception { 
-        this._channelReuser = channelReuser;
+        this._channelPool = channelPool;
         this._defaultFeaturesAsInt = Features.featuresAsInt(defaultFeatures);
         // Configure the client.
         this._bootstrap = new Bootstrap()
@@ -390,6 +361,6 @@ public class DefaultHttpClient implements HttpClient {
     private final AtomicInteger _activeChannelCount = new AtomicInteger(0);
     private final Bootstrap _bootstrap;
     private final SslContext _sslCtx;
-    private final ChannelReuser _channelReuser;
+    private final ChannelPool _channelPool;
     private final int _defaultFeaturesAsInt;
 }

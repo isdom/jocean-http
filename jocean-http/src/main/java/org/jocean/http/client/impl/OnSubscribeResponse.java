@@ -10,9 +10,8 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 
-import org.jocean.http.client.HttpClient.Feature;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.Features;
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,15 +30,15 @@ final class OnSubscribeResponse implements
     
     private final Func1<ChannelHandler, Observable<Channel>> _getObservable;
     private final Func1<Channel, Observable<ChannelFuture>> _transferRequest;
-    private final ChannelReuser _channelReuser;
+    private final ChannelPool _channelPool;
     
     OnSubscribeResponse(
         final Func1<ChannelHandler, Observable<Channel>> getObservable, 
-        final ChannelReuser channelReuser,
-        final int featuresAsInt,
+        final ChannelPool channelPool,
+        final boolean isCompressEnabled,
         final Observable<? extends HttpObject> request) {
         this._getObservable = getObservable;
-        this._channelReuser = channelReuser;
+        this._channelPool = channelPool;
         this._transferRequest = 
                 new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
@@ -52,16 +51,13 @@ final class OnSubscribeResponse implements
                     @Override
                     public void call(final HttpObject msg) {
                         if (msg instanceof HttpRequest) {
-                            _channelReuser.beforeSendRequest(channel, (HttpRequest)msg);
-                            if (isCompressEnabled()) {
+                            _channelPool.beforeSendRequest(channel, (HttpRequest)msg);
+                            if (isCompressEnabled) {
                                 HttpHeaders.addHeader((HttpRequest) msg,
                                     HttpHeaders.Names.ACCEPT_ENCODING, 
                                     HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
                             }
                         }
-                    }
-                    private boolean isCompressEnabled() {
-                        return !Features.isEnabled(featuresAsInt, Feature.DisableCompress);
                     }
                 };
             }
@@ -89,37 +85,22 @@ final class OnSubscribeResponse implements
         return new SimpleChannelInboundHandler<HttpObject>() {
 
             @Override
-            public void channelActive(final ChannelHandlerContext ctx)
-                    throws Exception {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("channelActive: ch({})", ctx.channel());
-                }
-                ctx.fireChannelActive();
-            }
-
-            @Override
             public void channelInactive(final ChannelHandlerContext ctx)
                     throws Exception {
-                ctx.fireChannelInactive();
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("channelInactive: ch({})", ctx.channel());
                 }
+                ctx.fireChannelInactive();
                 response.onError(new RuntimeException("peer has closed."));
-            }
-
-            @Override
-            public void userEventTriggered(final ChannelHandlerContext ctx,
-                    final Object evt) throws Exception {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("userEventTriggered: ch({}) with event:{}",
-                            ctx.channel(), evt);
-                }
-                ctx.fireUserEventTriggered(evt);
             }
 
             @Override
             public void exceptionCaught(final ChannelHandlerContext ctx,
                     final Throwable cause) throws Exception {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("exceptionCaught: ch({}), detail:{}", 
+                            ctx.channel(), ExceptionUtils.exception2detail(cause));
+                }
                 ctx.close();
                 response.onError(cause);
             }
@@ -142,7 +123,7 @@ final class OnSubscribeResponse implements
                         LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
                                 ctx.channel(), msg);
                     }
-                    _channelReuser.afterReceiveLastContent(ctx.channel());
+                    _channelPool.afterReceiveLastContent(ctx.channel());
                     response.onCompleted();
                 }
             }
