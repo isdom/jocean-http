@@ -15,6 +15,9 @@ public class DefaultChannelPool extends AbstractChannelPool {
     
     @Override
     public void beforeSendRequest(final Channel channel, final HttpRequest request) {
+        //  当Channel被重用，但由于source cancel等情况，没有发送过request
+        //  则此时仍然可以被再次回收
+        channel.attr(REUSE).remove();
         channel.attr(KEEPALIVE).set(HttpHeaders.isKeepAlive(request));
     }
 
@@ -28,7 +31,6 @@ public class DefaultChannelPool extends AbstractChannelPool {
     @Override
     public boolean recycleChannel(final SocketAddress address, final Channel channel) {
         if (null != channel.attr(REUSE).get()) {
-            channel.attr(REUSE).remove();
             getOrCreateChannels(address).add(channel);
             return true;
         }

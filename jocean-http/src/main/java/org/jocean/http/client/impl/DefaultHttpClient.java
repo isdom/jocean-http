@@ -76,33 +76,32 @@ public class DefaultHttpClient implements HttpClient {
         final int featuresAsInt = this._defaultFeaturesAsInt | Features.featuresAsInt(features);
         return Observable.create(
             new OnSubscribeResponse(
-                new Func1<ChannelHandler, Observable<Channel>> () {
-                    @Override
-                    public Observable<Channel> call(final ChannelHandler handler) {
-                        return createChannelObservable(remoteAddress, featuresAsInt, handler);
-                    }},
+                createChannelObservable(remoteAddress, featuresAsInt),
                 this._channelPool,
                 Feature.isCompressEnabled(featuresAsInt), 
                 request));
     }
 
-    private Observable<Channel> createChannelObservable(
+    private Func1<ChannelHandler, Observable<Channel>> createChannelObservable(
             final SocketAddress remoteAddress, 
-            final int featuresAsInt,
-            final ChannelHandler handler) {
-        return Observable.create(new OnSubscribe<Channel>() {
+            final int featuresAsInt) {
+        return new Func1<ChannelHandler, Observable<Channel>> () {
             @Override
-            public void call(final Subscriber<? super Channel> subscriber) {
-                try {
-                    if (!subscriber.isUnsubscribed()) {
-                        if (!reuseChannel(remoteAddress, featuresAsInt, handler, subscriber)) {
-                            createChannel(remoteAddress, featuresAsInt, handler, subscriber);
+            public Observable<Channel> call(final ChannelHandler handler) {
+                return Observable.create(new OnSubscribe<Channel>() {
+                    @Override
+                    public void call(final Subscriber<? super Channel> subscriber) {
+                        try {
+                            if (!subscriber.isUnsubscribed()) {
+                                if (!reuseChannel(remoteAddress, featuresAsInt, handler, subscriber)) {
+                                    createChannel(remoteAddress, featuresAsInt, handler, subscriber);
+                                }
+                            }
+                        } catch (Throwable e) {
+                            subscriber.onError(e);
                         }
-                    }
-                } catch (Throwable e) {
-                    subscriber.onError(e);
-                }
-            }});
+                    }});
+            }};
     }
 
     private boolean reuseChannel(
