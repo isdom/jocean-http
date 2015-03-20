@@ -6,12 +6,10 @@ package org.jocean.http.client.impl;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelException;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -23,15 +21,12 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import io.netty.util.internal.StringUtil;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.util.HandlersClosure;
@@ -61,6 +56,7 @@ public class DefaultHttpClient implements HttpClient {
         }
     }
     
+    @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
     
@@ -131,7 +127,7 @@ public class DefaultHttpClient implements HttpClient {
             final int featuresAsInt, 
             final ChannelHandler handler,
             final Subscriber<? super Channel> subscriber) throws Throwable {
-        final Channel channel = newChannel();
+        final Channel channel = this._channelCreator.newChannel();
         final boolean enableSSL = Features.isEnabled(featuresAsInt, Feature.EnableSSL);
         try {
             final HandlersClosure handlersClosure = 
@@ -152,14 +148,6 @@ public class DefaultHttpClient implements HttpClient {
         }
     }
 
-    private Channel newChannel() throws Exception {
-        final Channel ch = _bootstrap.register().channel();
-        if ( LOG.isDebugEnabled() ) {
-            LOG.debug("create new channel: {}", ch);
-        }
-        return ch;
-    }
-    
     private ChannelPipeline addFeatureCodecs(
             final Channel channel,
             final int featuresAsInt,
@@ -255,30 +243,13 @@ public class DefaultHttpClient implements HttpClient {
     
     public DefaultHttpClient(final int processThreadNumber) throws Exception {
         this(new DefaultChannelPool(), 
-            new NioEventLoopGroup(processThreadNumber), 
-            NioSocketChannel.class);
-    }
-    
-    private static final class BootstrapChannelFactory<T extends Channel> implements ChannelFactory<T> {
-        private final Class<? extends T> clazz;
-
-        BootstrapChannelFactory(Class<? extends T> clazz) {
-            this.clazz = clazz;
-        }
-
-        @Override
-        public T newChannel() {
-            try {
-                return clazz.newInstance();
-            } catch (Throwable t) {
-                throw new ChannelException("Unable to create Channel from class " + clazz, t);
-            }
-        }
-
-        @Override
-        public String toString() {
-            return StringUtil.simpleClassName(clazz) + ".class";
-        }
+            new AbstractChannelCreator() {
+                @Override
+                protected void initializeBootstrap(final Bootstrap bootstrap) {
+                    bootstrap
+                    .group(new NioEventLoopGroup(processThreadNumber))
+                    .channel(NioSocketChannel.class);
+                }});
     }
     
     public DefaultHttpClient(
@@ -286,61 +257,34 @@ public class DefaultHttpClient implements HttpClient {
             final Class<? extends Channel> channelType,
             final Feature... defaultFeatures) throws Exception { 
         this(new DefaultChannelPool(),
-            eventLoopGroup, 
-            new BootstrapChannelFactory<Channel>(channelType), 
-            defaultFeatures);
-    }
-    
-    public DefaultHttpClient(
-            final EventLoopGroup eventLoopGroup,
-            final ChannelFactory<? extends Channel> channelFactory,
-            final Feature... defaultFeatures) throws Exception { 
-        this(new DefaultChannelPool(), 
-            eventLoopGroup, 
-            channelFactory, 
-            defaultFeatures);
-    }
-    
-    public DefaultHttpClient(
-            final ChannelPool channelPool,
-            final EventLoopGroup eventLoopGroup,
-            final Class<? extends Channel> channelType,
-            final Feature... defaultFeatures) throws Exception { 
-        this(channelPool,
-            eventLoopGroup, 
-            new BootstrapChannelFactory<Channel>(channelType), 
-            defaultFeatures);
-    }
-    
-    public DefaultHttpClient(
-            final ChannelPool channelPool,
-            final EventLoopGroup eventLoopGroup,
-            final ChannelFactory<? extends Channel> channelFactory,
-            final Feature... defaultFeatures) throws Exception { 
-        this._channelPool = channelPool;
-        this._defaultFeaturesAsInt = Features.featuresAsInt(defaultFeatures);
-        // Configure the client.
-        this._bootstrap = new Bootstrap()
-            .group(eventLoopGroup)
-            .channelFactory(channelFactory)
-            .handler(new ChannelInitializer<Channel>() {
+            new AbstractChannelCreator() {
                 @Override
-                protected void initChannel(final Channel channel) throws Exception {
-                    channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
-                        @Override
-                        public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                            ctx.fireChannelActive();
-                            _activeChannelCount.incrementAndGet();
-                        }
-
-                        @Override
-                        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-                            ctx.fireChannelInactive();
-                            _activeChannelCount.decrementAndGet();
-                        }
-                    });
-                }})
-            ;
+                protected void initializeBootstrap(final Bootstrap bootstrap) {
+                    bootstrap.group(eventLoopGroup).channel(channelType);
+                }},
+            defaultFeatures);
+    }
+    
+    public DefaultHttpClient(
+            final EventLoopGroup eventLoopGroup,
+            final ChannelFactory<? extends Channel> channelFactory,
+            final Feature... defaultFeatures) throws Exception { 
+        this(new DefaultChannelPool(),
+            new AbstractChannelCreator() {
+                @Override
+                protected void initializeBootstrap(final Bootstrap bootstrap) {
+                    bootstrap.group(eventLoopGroup).channelFactory(channelFactory);
+                }},
+            defaultFeatures);
+    }
+    
+    public DefaultHttpClient(
+            final ChannelPool channelPool,
+            final ChannelCreator channelCreator,
+            final Feature... defaultFeatures) throws Exception {
+        this._channelPool = channelPool;
+        this._channelCreator = channelCreator;
+        this._defaultFeaturesAsInt = Features.featuresAsInt(defaultFeatures);
         this._sslCtx = SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
     }
     
@@ -350,16 +294,11 @@ public class DefaultHttpClient implements HttpClient {
     @Override
     public void close() throws IOException {
         // Shut down executor threads to exit.
-        this._bootstrap.group().shutdownGracefully(100, 1000, TimeUnit.MILLISECONDS).syncUninterruptibly();
+        this._channelCreator.close();
     }
     
-    public int getActiveChannelCount() {
-        return this._activeChannelCount.get();
-    }
-    
-    private final AtomicInteger _activeChannelCount = new AtomicInteger(0);
-    private final Bootstrap _bootstrap;
     private final SslContext _sslCtx;
     private final ChannelPool _channelPool;
+    private final ChannelCreator _channelCreator;
     private final int _defaultFeaturesAsInt;
 }
