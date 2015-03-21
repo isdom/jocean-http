@@ -28,25 +28,25 @@ final class OnSubscribeResponse implements
     private static final Logger LOG =
             LoggerFactory.getLogger(OnSubscribeResponse.class);
     
-    private final Func1<ChannelHandler, Observable<Channel>> _getObservable;
+    private final Func1<ChannelHandler, Observable<Channel>> _channelObservable;
     private final Func1<Channel, Observable<ChannelFuture>> _transferRequest;
     private final ChannelPool _channelPool;
     
     OnSubscribeResponse(
-        final Func1<ChannelHandler, Observable<Channel>> getObservable, 
+        final Func1<ChannelHandler, Observable<Channel>> channelObservable, 
         final ChannelPool channelPool,
         final boolean isCompressEnabled,
         final Observable<? extends HttpObject> request) {
-        this._getObservable = getObservable;
+        this._channelObservable = channelObservable;
         this._channelPool = channelPool;
         this._transferRequest = 
                 new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
             public Observable<ChannelFuture> call(final Channel channel) {
-                return request.doOnNext(createAddAcceptEncodingHead(channel))
+                return request.doOnNext(addAcceptEncodingHead(channel))
                         .map(RxNettys.<HttpObject>sendMessage(channel));
             }
-            private final Action1<HttpObject> createAddAcceptEncodingHead(final Channel channel) {
+            private final Action1<HttpObject> addAcceptEncodingHead(final Channel channel) {
                 return new Action1<HttpObject> () {
                     @Override
                     public void call(final HttpObject msg) {
@@ -70,7 +70,7 @@ final class OnSubscribeResponse implements
                 RxSubscribers.guardUnsubscribed(response);
         try {
             if (!wrapper.isUnsubscribed()) {
-                this._getObservable.call(createResponseHandler(wrapper))
+                this._channelObservable.call(createResponseHandler(wrapper))
                     .flatMap(this._transferRequest)
                     .flatMap(RxNettys.<ChannelFuture, HttpObject>checkFuture())
                     .subscribe(wrapper);

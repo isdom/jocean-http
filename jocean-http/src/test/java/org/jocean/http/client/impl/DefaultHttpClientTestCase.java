@@ -83,15 +83,47 @@ public class DefaultHttpClientTestCase {
         }
     }
 
-    @Test
-    public void testHttpHappyPath() throws Exception {
-        final HttpTestServer server = new HttpTestServer(
-                false, 
-                new LocalAddress("test"), 
+    private HttpTestServer createTestServerWithDefaultHandler(
+            final boolean enableSSL, 
+            final String acceptId) 
+            throws Exception {
+        return new HttpTestServer(
+                enableSSL, 
+                new LocalAddress(acceptId), 
                 new LocalEventLoopGroup(1), 
                 new LocalEventLoopGroup(),
                 LocalServerChannel.class,
                 HttpTestServer.DEFAULT_NEW_HANDLER);
+    }
+
+    private static final Func1<HttpObject, HttpObject> RETAIN_HTTP_OBJ = 
+            new Func1<HttpObject, HttpObject>() {
+        @Override
+        public HttpObject call(final HttpObject obj) {
+            //    retain obj for blocking
+            return ReferenceCountUtil.retain(obj);
+        }};
+        
+    static class OnNextSensor<T> implements Action1<T> {
+        
+        @Override
+        public void call(final T t) {
+            this._onNextCalled.set(true);
+        }
+        
+        private final AtomicBoolean _onNextCalled = 
+                new AtomicBoolean(false);
+        
+        public void assertNotCalled() {
+            if (this._onNextCalled.get()) {
+                throw new AssertionError("On Next called");
+            }
+        }
+    };
+        
+    @Test
+    public void testHttpHappyPathOnce() throws Exception {
+        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
         final DefaultHttpClient client = new DefaultHttpClient(
                 new LocalEventLoopGroup(1), LocalChannel.class);
@@ -101,12 +133,7 @@ public class DefaultHttpClientTestCase {
                 client.sendRequest(
                     new LocalAddress("test"), 
                     Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
-                .map(new Func1<HttpObject, HttpObject>() {
-                    @Override
-                    public HttpObject call(final HttpObject obj) {
-                        //    retain obj for blocking
-                        return ReferenceCountUtil.retain(obj);
-                    }})
+                .map(RETAIN_HTTP_OBJ)
                 .toBlocking().toIterable().iterator();
             
             final byte[] bytes = responseAsBytes(itr);
@@ -120,14 +147,8 @@ public class DefaultHttpClientTestCase {
     }
 
     @Test
-    public void testHttpHappyPathAndCheckRefCount() throws Exception {
-        final HttpTestServer server = new HttpTestServer(
-                false, 
-                new LocalAddress("test"), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
-                HttpTestServer.DEFAULT_NEW_HANDLER);
+    public void testHttpHappyPathOnceAndCheckRefCount() throws Exception {
+        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
         final ByteBuf content = Unpooled.buffer(0);
         content.writeBytes("test content".getBytes("UTF-8"));
@@ -142,12 +163,7 @@ public class DefaultHttpClientTestCase {
                 client.sendRequest(
                     new LocalAddress("test"), 
                     Observable.just(request))
-                .map(new Func1<HttpObject, HttpObject>() {
-                    @Override
-                    public HttpObject call(final HttpObject obj) {
-                        //  retain obj for blocking
-                        return ReferenceCountUtil.retain(obj);
-                    }})
+                .map(RETAIN_HTTP_OBJ)
                 .toBlocking().toIterable().iterator();
             
             final byte[] bytes = responseAsBytes(itr);
@@ -165,14 +181,8 @@ public class DefaultHttpClientTestCase {
     }
     
     @Test
-    public void testHttpsHappyPath() throws Exception {
-        final HttpTestServer server = new HttpTestServer(
-                true, 
-                new LocalAddress("test"), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
-                HttpTestServer.DEFAULT_NEW_HANDLER);
+    public void testHttpsHappyPathOnce() throws Exception {
+        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
 
         final DefaultHttpClient client = new DefaultHttpClient(
                 new LocalEventLoopGroup(1), LocalChannel.class);
@@ -183,12 +193,7 @@ public class DefaultHttpClientTestCase {
                     new LocalAddress("test"), 
                     Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
                     Feature.EnableSSL)
-                .map(new Func1<HttpObject, HttpObject>() {
-                    @Override
-                    public HttpObject call(final HttpObject obj) {
-                        //    retain obj for blocking
-                        return ReferenceCountUtil.retain(obj);
-                    }})
+                .map(RETAIN_HTTP_OBJ)
                 .toBlocking().toIterable().iterator();
             
             final byte[] bytes = responseAsBytes(itr);
@@ -202,9 +207,9 @@ public class DefaultHttpClientTestCase {
     }
     
     @Test
-    public void testHttpNotConnected() throws Exception {
+    public void testHttpForNotConnected() throws Exception {
         final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        // mark channel closed
+        
         final class TestLocalChannel extends LocalChannel {
             @Override
             public ChannelFuture close() {
@@ -220,16 +225,12 @@ public class DefaultHttpClientTestCase {
                     }});
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
+        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(new Action1<HttpObject>() {
-                    @Override
-                    public void call(HttpObject msg) {
-                        requestTransfered.set(true);
-                    }}))
+                .doOnNext(nextSensor))
             .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
             clientChannelClosed.await();
@@ -239,7 +240,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            assertFalse(requestTransfered.get());
+            nextSensor.assertNotCalled();
         }
     }
 
@@ -289,13 +290,7 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpsNotShakehand() throws Exception {
         // http server
-        final HttpTestServer server = new HttpTestServer(
-                false, 
-                new LocalAddress("test"), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
-                HttpTestServer.DEFAULT_NEW_HANDLER);
+        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
         final CountDownLatch clientChannelClosed = new CountDownLatch(1);
         
@@ -908,13 +903,7 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttpHappyPathKeepAliveReuseConnection() throws Exception {
-        final HttpTestServer server = new HttpTestServer(
-                false, 
-                new LocalAddress("test"), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
-                HttpTestServer.DEFAULT_NEW_HANDLER);
+        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
         final CountDownLatch clientChannelClosed = new CountDownLatch(1);
         
@@ -1062,13 +1051,7 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttpOnError1stAnd2ndHappyPathKeepAliveReuseConnection() throws Exception {
-        final HttpTestServer server = new HttpTestServer(
-                false, 
-                new LocalAddress("test"), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
-                HttpTestServer.DEFAULT_NEW_HANDLER);
+        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
         final CountDownLatch clientChannelClosed = new CountDownLatch(1);
         

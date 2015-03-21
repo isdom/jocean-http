@@ -6,6 +6,7 @@ package org.jocean.http.client.impl;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -144,7 +145,14 @@ public class DefaultHttpClient implements HttpClient {
             subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
             subscriber.add(Subscriptions.from(
                 channel.connect(remoteAddress)
-                .addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE)));
+                .addListener(new ChannelFutureListener() {
+                    @Override
+                    public void operationComplete(final ChannelFuture future) {
+                        if (!future.isSuccess()) {
+                            subscriber.onError(future.cause());
+                        }
+                    }
+                })));
         } catch (Throwable e) {
             if (null!=channel) {
                 channel.close();

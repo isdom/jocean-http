@@ -9,9 +9,9 @@ import java.net.SocketAddress;
 
 public class DefaultChannelPool extends AbstractChannelPool {
 
-    private static final AttributeKey<Object> TRANSACTIONING = AttributeKey.valueOf("TRANSACTIONING");
+    private static final AttributeKey<Object> TRANSACTIONING = AttributeKey.valueOf("__TRANSACTIONING");
     private static final Object OK = new Object();
-    private static final AttributeKey<Boolean> KEEPALIVE = AttributeKey.valueOf("KEEPALIVE");
+    private static final AttributeKey<Boolean> KEEPALIVE = AttributeKey.valueOf("__KEEPALIVE");
     
     @Override
     public void beforeSendRequest(final Channel channel, final HttpRequest request) {
