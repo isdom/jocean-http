@@ -32,14 +32,14 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
                     channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
                         @Override
                         public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                            ctx.fireChannelActive();
                             _activeChannelCount.incrementAndGet();
+                            ctx.fireChannelActive();
                         }
     
                         @Override
                         public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-                            ctx.fireChannelInactive();
                             _activeChannelCount.decrementAndGet();
+                            ctx.fireChannelInactive();
                         }
                     });
                 }});

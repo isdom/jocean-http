@@ -21,6 +21,7 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.util.AttributeKey;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
@@ -48,6 +49,8 @@ import rx.subscriptions.Subscriptions;
  */
 public class DefaultHttpClient implements HttpClient {
     
+    private static final Object OK = new Object();
+
     private static final String RESPONSE_HANDLER = "RESPONSE";
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
@@ -55,6 +58,8 @@ public class DefaultHttpClient implements HttpClient {
             InternalLoggerFactory.setDefaultFactory(new Slf4JLoggerFactory());
         }
     }
+    
+    private static final AttributeKey<Object> VALID = AttributeKey.valueOf("__ISVALID");
     
     @SuppressWarnings("unused")
     private static final Logger LOG =
@@ -183,8 +188,10 @@ public class DefaultHttpClient implements HttpClient {
         pipeline.addLast("completeOrErrorNotifier", 
                 handlersClosure.call(new ChannelInboundHandlerAdapter() {
                 @Override
-                public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                public void channelActive(final ChannelHandlerContext ctx) 
+                        throws Exception {
                     if (!enableSSL) {
+                        markChannelValid(channel);
                         subscriber.onNext(channel);
                         subscriber.onCompleted();
                     }
@@ -192,12 +199,12 @@ public class DefaultHttpClient implements HttpClient {
                 }
                 
                 @Override
-                public void userEventTriggered(
-                    final ChannelHandlerContext ctx,
-                    final Object evt) throws Exception {
+                public void userEventTriggered(final ChannelHandlerContext ctx, final Object evt) 
+                        throws Exception {
                     if (enableSSL && evt instanceof SslHandshakeCompletionEvent) {
                         final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
                         if (sslComplete.isSuccess()) {
+                            markChannelValid(channel);
                             subscriber.onNext(channel);
                             subscriber.onCompleted();
                         } else {
@@ -213,27 +220,36 @@ public class DefaultHttpClient implements HttpClient {
         return pipeline;
     }
 
+    private static void markChannelValid(final Channel channel) {
+        channel.attr(VALID).set(OK);
+    }
+
+    private static boolean isChannelValid(final Channel channel) {
+        return null != channel.attr(VALID).get();
+    }
+    
     private Subscription channelClosure(
             final SocketAddress remoteAddress,
             final Channel channel, 
             final HandlersClosure handlersClosure) {
+        final AtomicBoolean isUnsubscribed = new AtomicBoolean(false);
         return new Subscription() {
-            final AtomicBoolean _isUnsubscribed = new AtomicBoolean(false);
             @Override
             public void unsubscribe() {
-                if (_isUnsubscribed.compareAndSet(false, true)) {
+                if (isUnsubscribed.compareAndSet(false, true)) {
                     try {
                         handlersClosure.close();
                     } catch (IOException e) {
                     }
-                    if (!_channelPool.recycleChannel(remoteAddress, channel)) {
+                    if (!channel.isActive() || !isChannelValid(channel)
+                        || !_channelPool.recycleChannel(remoteAddress, channel)) {
                         channel.close();
                     }
                 }
             }
             @Override
             public boolean isUnsubscribed() {
-                return _isUnsubscribed.get();
+                return isUnsubscribed.get();
             }};
     }
 

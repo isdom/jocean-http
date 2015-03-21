@@ -501,7 +501,7 @@ public class DefaultHttpClientTestCase {
     }
 
     @Test
-    public void testEmitErrorAfterConnected() throws Exception {
+    public void testEmitErrorWhenSendingRequestAfterConnected() throws Exception {
         final HttpTestServer server = new HttpTestServer(
                 false, 
                 new LocalAddress("test"), 
@@ -515,6 +515,7 @@ public class DefaultHttpClientTestCase {
                             @Override
                             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
                                     throws Exception {
+                                // not response
                             }
                         };
                     }});
@@ -545,10 +546,8 @@ public class DefaultHttpClientTestCase {
                     Observable.<HttpObject>error(new RuntimeException("test error")))
                 .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
-            clientChannelClosed.await();
+            assertEquals(1, clientChannelClosed.getCount());
         } finally {
-            // 注意: 一个 try-with-resources 语句可以像普通的 try 语句那样有 catch 和 finally 块。
-            //  在try-with-resources 语句中, 任意的 catch 或者 finally 块都是在声明的资源被关闭以后才运行。
             client.close();
             server.stop();
 //            assertEquals(0, client.getActiveChannelCount());
@@ -766,6 +765,97 @@ public class DefaultHttpClientTestCase {
         final CountDownLatch clientChannelClosed = new CountDownLatch(1);
         // mark channel closed
         final class TestLocalChannel extends LocalChannel {
+//            public TestLocalChannel() {
+//                super();
+//                try {
+//                    final Field unsafeField = this.getClass().getDeclaredField("unsafe");
+//                    unsafeField.setAccessible(true);
+//                    unsafeField.set(this, _unsafe);
+//                } catch (Exception e) {
+//                }
+//            }
+//            private final AbstractUnsafe _unsafe0 = new AbstractUnsafe() {
+//                @Override
+//                public void connect(SocketAddress remoteAddress,
+//                        SocketAddress localAddress, ChannelPromise promise) {
+//                }
+//            };
+//            private final Unsafe _unsafe = new Unsafe() {
+//
+//                @Override
+//                public SocketAddress localAddress() {
+//                    return _unsafe0.localAddress();
+//                }
+//
+//                @Override
+//                public SocketAddress remoteAddress() {
+//                    return _unsafe0.remoteAddress();
+//                }
+//
+//                @Override
+//                public void register(EventLoop eventLoop, ChannelPromise promise) {
+//                    _unsafe0.register(eventLoop, promise);
+//                }
+//
+//                @Override
+//                public void bind(SocketAddress localAddress,
+//                        ChannelPromise promise) {
+//                    _unsafe0.bind(localAddress, promise);
+//                }
+//
+//                @Override
+//                public void connect(SocketAddress remoteAddress,
+//                        SocketAddress localAddress, ChannelPromise promise) {
+//                    promise.tryFailure(new RuntimeException(errorMsg));
+//                }
+//
+//                @Override
+//                public void disconnect(ChannelPromise promise) {
+//                    _unsafe0.disconnect(promise);
+//                }
+//
+//                @Override
+//                public void close(ChannelPromise promise) {
+//                    clientChannelClosed.countDown();
+//                    _unsafe0.close(promise);
+//                }
+//
+//                @Override
+//                public void closeForcibly() {
+//                    _unsafe0.closeForcibly();
+//                }
+//
+//                @Override
+//                public void deregister(ChannelPromise promise) {
+//                    _unsafe0.deregister(promise);
+//                }
+//
+//                @Override
+//                public void beginRead() {
+//                    _unsafe0.beginRead();
+//                }
+//
+//                @Override
+//                public void write(Object msg, ChannelPromise promise) {
+//                    _unsafe0.write(msg, promise);
+//                }
+//
+//                @Override
+//                public void flush() {
+//                    _unsafe0.flush();
+//                }
+//
+//                @Override
+//                public ChannelPromise voidPromise() {
+//                    return _unsafe0.voidPromise();
+//                }
+//
+//                @Override
+//                public ChannelOutboundBuffer outboundBuffer() {
+//                    return _unsafe0.outboundBuffer();
+//                }
+//            };
+            
             @Override
             protected AbstractUnsafe newUnsafe() {
                 return new AbstractUnsafe() {
@@ -775,6 +865,7 @@ public class DefaultHttpClientTestCase {
                         promise.tryFailure(new RuntimeException(errorMsg));
                     }};
             }
+            
             @Override
             public ChannelFuture close() {
                 clientChannelClosed.countDown();
@@ -942,6 +1033,92 @@ public class DefaultHttpClientTestCase {
                 assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
             }
             assertEquals(1, clientChannelClosed.getCount());
+            // second
+            {
+                final Iterator<HttpObject> itr = 
+                    client.sendRequest(
+                        new LocalAddress("test"), 
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    .map(new Func1<HttpObject, HttpObject>() {
+                        @Override
+                        public HttpObject call(final HttpObject obj) {
+                            //    retain obj for blocking
+                            return ReferenceCountUtil.retain(obj);
+                        }})
+                    .toBlocking().toIterable().iterator();
+                
+                final byte[] bytes = responseAsBytes(itr);
+                
+                assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+            }
+            assertEquals(1, clientChannelClosed.getCount());
+        } finally {
+            client.close();
+//            assertEquals(0, clientChannelClosed.getCount());
+            server.stop();
+//            assertEquals(0, client.getActiveChannelCount());
+        }
+    }
+    
+    @Test
+    public void testHttpOnError1stAnd2ndHappyPathKeepAliveReuseConnection() throws Exception {
+        final HttpTestServer server = new HttpTestServer(
+                false, 
+                new LocalAddress("test"), 
+                new LocalEventLoopGroup(1), 
+                new LocalEventLoopGroup(),
+                LocalServerChannel.class,
+                HttpTestServer.DEFAULT_NEW_HANDLER);
+
+        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
+        
+        // mark channel closed
+        final class TestLocalChannel extends LocalChannel {
+            @Override
+            public ChannelFuture close() {
+                clientChannelClosed.countDown();
+                return super.close();
+            }
+        }
+        
+        final DefaultHttpClient client = new DefaultHttpClient(
+                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
+                    @Override
+                    public TestLocalChannel newChannel() {
+                        return new TestLocalChannel();
+                    }},
+                    Feature.EnableLOG,
+                    Feature.DisableCompress);
+                    
+        try {
+            // first 
+            {
+                final CountDownLatch unsubscribed = new CountDownLatch(1);
+                final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+                try {
+                    client.sendRequest(
+                        new LocalAddress("test"), 
+                        Observable.<HttpObject>error(new RuntimeException("test error")))
+                    .subscribe(testSubscriber);
+                    testSubscriber.add(new Subscription() {
+                        @Override
+                        public void unsubscribe() {
+                            unsubscribed.countDown();
+                        }
+                        @Override
+                        public boolean isUnsubscribed() {
+                            return unsubscribed.getCount()==0;
+                        }});
+                    unsubscribed.await();
+                    assertEquals(1, clientChannelClosed.getCount());
+                } finally {
+                    assertEquals(1, testSubscriber.getOnErrorEvents().size());
+                    assertEquals(RuntimeException.class, 
+                            testSubscriber.getOnErrorEvents().get(0).getClass());
+                    assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+                    assertEquals(0, testSubscriber.getOnNextEvents().size());
+                }
+            }
             // second
             {
                 final Iterator<HttpObject> itr = 
