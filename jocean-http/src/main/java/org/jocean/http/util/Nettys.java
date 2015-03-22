@@ -7,7 +7,14 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jocean.idiom.ExceptionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class Nettys {
+    private static final Logger LOG =
+            LoggerFactory.getLogger(Nettys.class);
+
     private Nettys() {
         throw new IllegalStateException("No instances!");
     }
@@ -25,7 +32,13 @@ public class Nettys {
             @Override
             public void close() throws IOException {
                 for (ChannelHandler handler : handlers) {
-                    channel.pipeline().remove(handler);
+                    try {
+                        channel.pipeline().remove(handler);
+                    } catch (Exception e) {
+                        LOG.warn("exception when invoke pipeline.remove, detail:{}", 
+                                ExceptionUtils.exception2detail(e));
+                    }
+                    
                 }
             }};
     }

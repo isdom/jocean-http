@@ -3,7 +3,6 @@ package org.jocean.http.client.impl;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.buffer.ByteBuf;
@@ -15,7 +14,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelOutboundBuffer;
-import io.netty.channel.ChannelPromise;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
@@ -35,7 +33,6 @@ import io.netty.util.ReferenceCountUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.SocketAddress;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
@@ -126,7 +123,8 @@ public class DefaultHttpClientTestCase {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
         final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), LocalChannel.class);
+                new DefaultChannelPool(),
+                new TestChannelCreator());
         try {
         
             final Iterator<HttpObject> itr = 
@@ -142,7 +140,6 @@ public class DefaultHttpClientTestCase {
         } finally {
             client.close();
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
         }
     }
 
@@ -156,7 +153,8 @@ public class DefaultHttpClientTestCase {
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
         
         final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), LocalChannel.class);
+                new DefaultChannelPool(),
+                new TestChannelCreator());
         try {
             
             final Iterator<HttpObject> itr = 
@@ -185,7 +183,8 @@ public class DefaultHttpClientTestCase {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
 
         final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), LocalChannel.class);
+                new DefaultChannelPool(),
+                new TestChannelCreator());
         try {
         
             final Iterator<HttpObject> itr = 
@@ -208,21 +207,10 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttpForNotConnected() throws Exception {
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        
-        final class TestLocalChannel extends LocalChannel {
-            @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
+        final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
-                    @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }});
+                new DefaultChannelPool(),
+                creator);
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -233,10 +221,10 @@ public class DefaultHttpClientTestCase {
                 .doOnNext(nextSensor))
             .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
-            clientChannelClosed.await();
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed();
         } finally {
             client.close();
-//            assertEquals(0, client.getActiveChannelCount());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
@@ -246,44 +234,29 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttpsNotConnected() throws Exception {
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        // mark channel closed
-        final class TestLocalChannel extends LocalChannel {
-            @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
+        final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
-                    @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }});
+                new DefaultChannelPool(),
+                creator);
         //  NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
+        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(new Action1<HttpObject>() {
-                    @Override
-                    public void call(HttpObject msg) {
-                        requestTransfered.set(true);
-                    }}),
+                .doOnNext(nextSensor),
                 Feature.EnableSSL)
             .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
-            clientChannelClosed.await();
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed();
         } finally {
             client.close();
-//            assertEquals(0, client.getActiveChannelCount());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            assertFalse(requestTransfered.get());
+            nextSensor.assertNotCalled();
         }
     }
 
@@ -292,46 +265,30 @@ public class DefaultHttpClientTestCase {
         // http server
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        
-        // mark channel closed
-        final class TestLocalChannel extends LocalChannel {
-            @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
+        final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
-                    @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }});
+                new DefaultChannelPool(),
+                creator);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
+        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(new Action1<HttpObject>() {
-                    @Override
-                    public void call(HttpObject msg) {
-                        requestTransfered.set(true);
-                    }}),
+                .doOnNext(nextSensor),
                 Feature.EnableSSL)
             .subscribe(testSubscriber);
-            clientChannelClosed.await();
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed();
         } finally {
             client.close();
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(NotSslRecordException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertFalse(requestTransfered.get());
+            nextSensor.assertNotCalled();
         }
     }
     
@@ -757,147 +714,33 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpEmitExceptionWhenConnecting() throws Exception {
         final String errorMsg = "connecting failure";
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        // mark channel closed
-        final class TestLocalChannel extends LocalChannel {
-//            public TestLocalChannel() {
-//                super();
-//                try {
-//                    final Field unsafeField = this.getClass().getDeclaredField("unsafe");
-//                    unsafeField.setAccessible(true);
-//                    unsafeField.set(this, _unsafe);
-//                } catch (Exception e) {
-//                }
-//            }
-//            private final AbstractUnsafe _unsafe0 = new AbstractUnsafe() {
-//                @Override
-//                public void connect(SocketAddress remoteAddress,
-//                        SocketAddress localAddress, ChannelPromise promise) {
-//                }
-//            };
-//            private final Unsafe _unsafe = new Unsafe() {
-//
-//                @Override
-//                public SocketAddress localAddress() {
-//                    return _unsafe0.localAddress();
-//                }
-//
-//                @Override
-//                public SocketAddress remoteAddress() {
-//                    return _unsafe0.remoteAddress();
-//                }
-//
-//                @Override
-//                public void register(EventLoop eventLoop, ChannelPromise promise) {
-//                    _unsafe0.register(eventLoop, promise);
-//                }
-//
-//                @Override
-//                public void bind(SocketAddress localAddress,
-//                        ChannelPromise promise) {
-//                    _unsafe0.bind(localAddress, promise);
-//                }
-//
-//                @Override
-//                public void connect(SocketAddress remoteAddress,
-//                        SocketAddress localAddress, ChannelPromise promise) {
-//                    promise.tryFailure(new RuntimeException(errorMsg));
-//                }
-//
-//                @Override
-//                public void disconnect(ChannelPromise promise) {
-//                    _unsafe0.disconnect(promise);
-//                }
-//
-//                @Override
-//                public void close(ChannelPromise promise) {
-//                    clientChannelClosed.countDown();
-//                    _unsafe0.close(promise);
-//                }
-//
-//                @Override
-//                public void closeForcibly() {
-//                    _unsafe0.closeForcibly();
-//                }
-//
-//                @Override
-//                public void deregister(ChannelPromise promise) {
-//                    _unsafe0.deregister(promise);
-//                }
-//
-//                @Override
-//                public void beginRead() {
-//                    _unsafe0.beginRead();
-//                }
-//
-//                @Override
-//                public void write(Object msg, ChannelPromise promise) {
-//                    _unsafe0.write(msg, promise);
-//                }
-//
-//                @Override
-//                public void flush() {
-//                    _unsafe0.flush();
-//                }
-//
-//                @Override
-//                public ChannelPromise voidPromise() {
-//                    return _unsafe0.voidPromise();
-//                }
-//
-//                @Override
-//                public ChannelOutboundBuffer outboundBuffer() {
-//                    return _unsafe0.outboundBuffer();
-//                }
-//            };
-            
-            @Override
-            protected AbstractUnsafe newUnsafe() {
-                return new AbstractUnsafe() {
-                    @Override
-                    public void connect(SocketAddress remoteAddress,
-                            SocketAddress localAddress, ChannelPromise promise) {
-                        promise.tryFailure(new RuntimeException(errorMsg));
-                    }};
-            }
-            
-            @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
+        final TestChannelCreator creator = new TestChannelCreator();
+        creator.setConnectException(new RuntimeException(errorMsg));
+        
         final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
-                    @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }});
+                new DefaultChannelPool(),
+                creator);
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
+        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(new Action1<HttpObject>() {
-                    @Override
-                    public void call(HttpObject msg) {
-                        requestTransfered.set(true);
-                    }}))
+                .doOnNext(nextSensor))
             .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
-            clientChannelClosed.await();
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed();
         } finally {
             client.close();
-//            assertEquals(0, client.getActiveChannelCount());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(errorMsg, 
                     testSubscriber.getOnErrorEvents().get(0).getMessage());
             //  channel not connected, so no message send
-            assertFalse(requestTransfered.get());
+            nextSensor.assertNotCalled();
         }
     }
     
