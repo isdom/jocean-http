@@ -15,13 +15,28 @@
  */
 package org.jocean.http.server;
 
+import static io.netty.handler.codec.http.HttpHeaders.Names.CONNECTION;
+import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
+import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
+import static io.netty.handler.codec.http.HttpResponseStatus.CONTINUE;
+import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpHeaders.Values;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
@@ -37,11 +52,37 @@ import java.util.concurrent.Callable;
  */
 public final class HttpTestServer {
 
+    public static final byte[] CONTENT = { 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd' };
+    
     public static final Callable<ChannelInboundHandler> DEFAULT_NEW_HANDLER = 
         new Callable<ChannelInboundHandler>() {
             @Override
             public ChannelInboundHandler call() throws Exception {
-                return new HttpTestServerHandler();
+                return new HttpTestServerHandler() {
+                    @Override
+                    protected void channelRead0(
+                            final ChannelHandlerContext ctx,
+                            final HttpObject msg) throws Exception {
+                        if (msg instanceof HttpRequest) {
+                            HttpRequest req = (HttpRequest) msg;
+
+                            if (HttpHeaders.is100ContinueExpected(req)) {
+                                ctx.write(new DefaultFullHttpResponse(HTTP_1_1, CONTINUE));
+                            }
+                            boolean keepAlive = HttpHeaders.isKeepAlive(req);
+                            FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
+                                    Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                            response.headers().set(CONTENT_TYPE, "text/plain");
+                            response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+
+                            if (!keepAlive) {
+                                ctx.write(response).addListener(ChannelFutureListener.CLOSE);
+                            } else {
+                                response.headers().set(CONNECTION, Values.KEEP_ALIVE);
+                                ctx.write(response);
+                            }
+                        }
+                    }};
         }};
     
     public HttpTestServer(final boolean enableSSL, final int port) throws Exception {

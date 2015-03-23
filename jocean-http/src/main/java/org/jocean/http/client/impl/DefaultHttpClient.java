@@ -303,6 +303,12 @@ public class DefaultHttpClient implements HttpClient {
     }
     
     public DefaultHttpClient(
+            final ChannelCreator channelCreator,
+            final Feature... defaultFeatures) throws Exception {
+        this(new DefaultChannelPool(), channelCreator, defaultFeatures);
+    }
+    
+    public DefaultHttpClient(
             final ChannelPool channelPool,
             final ChannelCreator channelCreator,
             final Feature... defaultFeatures) throws Exception {

@@ -4,25 +4,17 @@ import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import io.netty.bootstrap.ChannelFactory;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufInputStream;
-import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
-import io.netty.channel.ChannelOutboundBuffer;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.local.LocalAddress;
-import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
@@ -31,24 +23,21 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.NotSslRecordException;
 import io.netty.util.ReferenceCountUtil;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.client.HttpClient.Feature;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
+import org.jocean.http.util.RxNettys;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import rx.Observable;
 import rx.Subscription;
-import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.observers.TestSubscriber;
 
@@ -56,29 +45,6 @@ public class DefaultHttpClientTestCase {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClientTestCase.class);
-
-    private byte[] responseAsBytes(final Iterator<HttpObject> itr)
-            throws IOException {
-        final CompositeByteBuf composite = Unpooled.compositeBuffer();
-        try {
-            while (itr.hasNext()) {
-                final HttpObject obj = itr.next();
-                if (obj instanceof HttpContent) {
-                    composite.addComponent(((HttpContent)obj).content());
-                }
-                System.out.println(obj);
-            }
-            composite.setIndex(0, composite.capacity());
-            
-            @SuppressWarnings("resource")
-            final InputStream is = new ByteBufInputStream(composite);
-            final byte[] bytes = new byte[is.available()];
-            is.read(bytes);
-            return bytes;
-        } finally {
-            ReferenceCountUtil.release(composite);
-        }
-    }
 
     private HttpTestServer createTestServerWithDefaultHandler(
             final boolean enableSSL, 
@@ -93,50 +59,37 @@ public class DefaultHttpClientTestCase {
                 HttpTestServer.DEFAULT_NEW_HANDLER);
     }
 
-    private static final Func1<HttpObject, HttpObject> RETAIN_HTTP_OBJ = 
-            new Func1<HttpObject, HttpObject>() {
-        @Override
-        public HttpObject call(final HttpObject obj) {
-            //    retain obj for blocking
-            return ReferenceCountUtil.retain(obj);
-        }};
-        
-    static class OnNextSensor<T> implements Action1<T> {
-        
-        @Override
-        public void call(final T t) {
-            this._onNextCalled.set(true);
-        }
-        
-        private final AtomicBoolean _onNextCalled = 
-                new AtomicBoolean(false);
-        
-        public void assertNotCalled() {
-            if (this._onNextCalled.get()) {
-                throw new AssertionError("On Next called");
-            }
-        }
-    };
-        
+    private HttpTestServer createTestServerWith(
+            final boolean enableSSL, 
+            final String acceptId,
+            final Callable<ChannelInboundHandler> newHandler) 
+            throws Exception {
+        return new HttpTestServer(
+                enableSSL, 
+                new LocalAddress(acceptId), 
+                new LocalEventLoopGroup(1), 
+                new LocalEventLoopGroup(),
+                LocalServerChannel.class,
+                newHandler);
+    }
+    
     @Test
     public void testHttpHappyPathOnce() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new DefaultChannelPool(),
-                new TestChannelCreator());
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
         try {
         
             final Iterator<HttpObject> itr = 
                 client.sendRequest(
                     new LocalAddress("test"), 
                     Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
-                .map(RETAIN_HTTP_OBJ)
+                .map(RxNettys.<HttpObject>retainMap())
                 .toBlocking().toIterable().iterator();
             
-            final byte[] bytes = responseAsBytes(itr);
+            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
         } finally {
             client.close();
             server.stop();
@@ -152,27 +105,24 @@ public class DefaultHttpClientTestCase {
         final DefaultFullHttpRequest request = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
         
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new DefaultChannelPool(),
-                new TestChannelCreator());
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
         try {
             
             final Iterator<HttpObject> itr = 
                 client.sendRequest(
                     new LocalAddress("test"), 
                     Observable.just(request))
-                .map(RETAIN_HTTP_OBJ)
+                .map(RxNettys.<HttpObject>retainMap())
                 .toBlocking().toIterable().iterator();
             
-            final byte[] bytes = responseAsBytes(itr);
+            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
             ReferenceCountUtil.release(request);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
         } finally {
             client.close();
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
         }
         
         assertEquals(0, request.refCnt());
@@ -182,9 +132,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpsHappyPathOnce() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
 
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new DefaultChannelPool(),
-                new TestChannelCreator());
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
         try {
         
             final Iterator<HttpObject> itr = 
@@ -192,25 +140,22 @@ public class DefaultHttpClientTestCase {
                     new LocalAddress("test"), 
                     Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
                     Feature.EnableSSL)
-                .map(RETAIN_HTTP_OBJ)
+                .map(RxNettys.<HttpObject>retainMap())
                 .toBlocking().toIterable().iterator();
             
-            final byte[] bytes = responseAsBytes(itr);
+            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
         } finally {
             client.close();
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
         }
     }
     
     @Test
     public void testHttpForNotConnected() throws Exception {
         final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new DefaultChannelPool(),
-                creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator);
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -235,9 +180,7 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpsNotConnected() throws Exception {
         final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new DefaultChannelPool(),
-                creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator);
         //  NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -266,9 +209,7 @@ public class DefaultHttpClientTestCase {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
         final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new DefaultChannelPool(),
-                creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -292,32 +233,13 @@ public class DefaultHttpClientTestCase {
         }
     }
     
-    abstract class TestHandler extends SimpleChannelInboundHandler<HttpObject> {
-
-        @Override
-        public void channelReadComplete(ChannelHandlerContext ctx) {
-            ctx.flush();
-        }
-
-        @Override
-        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            cause.printStackTrace();
-            ctx.close();
-        }
-    }    
-    
     @Test
     public void testHttpDisconnectAfterConnected() throws Exception {
-        final HttpTestServer server = new HttpTestServer(
-                false, 
-                new LocalAddress("test"), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
+        final HttpTestServer server = createTestServerWith(false, "test",
                 new Callable<ChannelInboundHandler> () {
                     @Override
                     public ChannelInboundHandler call() throws Exception {
-                        return new TestHandler() {
+                        return new HttpTestServerHandler() {
                             @Override
                             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
                                     throws Exception {
@@ -328,41 +250,22 @@ public class DefaultHttpClientTestCase {
                         };
                     }});
         
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        
-        // mark channel closed
-        final class TestLocalChannel extends LocalChannel {
-            @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
-        
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
-                    @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }});
+        final TestChannelCreator creator = new TestChannelCreator();
+        final DefaultHttpClient client = new DefaultHttpClient(creator);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
+        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(new Action1<HttpObject>() {
-                    @Override
-                    public void call(HttpObject msg) {
-                        requestTransfered.set(true);
-                    }}))
+                .doOnNext(nextSensor))
             .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
-            clientChannelClosed.await();
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed();
         } finally {
             client.close();
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
             testSubscriber.assertTerminalEvent();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
@@ -370,23 +273,18 @@ public class DefaultHttpClientTestCase {
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             //  channel connected, so message has been send
-            assertTrue(requestTransfered.get());
+            nextSensor.assertCalled();
         }
     }
     
     @Test
     public void testHttpClientCanceledAfterConnected() throws Exception {
         final CountDownLatch serverRecvd = new CountDownLatch(1);
-        final HttpTestServer server = new HttpTestServer(
-                false, 
-                new LocalAddress("test"), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
+        final HttpTestServer server = createTestServerWith(false, "test",
                 new Callable<ChannelInboundHandler> () {
                     @Override
                     public ChannelInboundHandler call() throws Exception {
-                        return new TestHandler() {
+                        return new HttpTestServerHandler() {
                             @Override
                             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
                                     throws Exception {
@@ -399,35 +297,17 @@ public class DefaultHttpClientTestCase {
                         };
                     }});
         
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
+        final TestChannelCreator creator = new TestChannelCreator();
+        final DefaultHttpClient client = new DefaultHttpClient(creator);
         
-        // mark channel closed
-        final class TestLocalChannel extends LocalChannel {
-            @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
-        
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
-                    @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }});
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
+        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             final Subscription subscription = 
                 client.sendRequest(
                     new LocalAddress("test"), 
                     Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                    .doOnNext(new Action1<HttpObject>() {
-                        @Override
-                        public void call(HttpObject msg) {
-                            requestTransfered.set(true);
-                        }}))
+                    .doOnNext(nextSensor))
                 .subscribe(testSubscriber);
             
             serverRecvd.await();
@@ -437,7 +317,8 @@ public class DefaultHttpClientTestCase {
             subscription.unsubscribe();
             
             // test if close method has been called.
-            assertEquals(0, clientChannelClosed.getCount());
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertClosed();
         } finally {
             // 注意: 一个 try-with-resources 语句可以像普通的 try 语句那样有 catch 和 finally 块。
             //  在try-with-resources 语句中, 任意的 catch 或者 finally 块都是在声明的资源被关闭以后才运行。
@@ -448,22 +329,17 @@ public class DefaultHttpClientTestCase {
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             //  channel connected, so message has been send
-            assertTrue(requestTransfered.get());
+            nextSensor.assertCalled();
         }
     }
 
     @Test
     public void testEmitErrorWhenSendingRequestAfterConnected() throws Exception {
-        final HttpTestServer server = new HttpTestServer(
-                false, 
-                new LocalAddress("test"), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
+        final HttpTestServer server = createTestServerWith(false, "test",
                 new Callable<ChannelInboundHandler> () {
                     @Override
                     public ChannelInboundHandler call() throws Exception {
-                        return new TestHandler() {
+                        return new HttpTestServerHandler() {
                             @Override
                             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
                                     throws Exception {
@@ -472,37 +348,20 @@ public class DefaultHttpClientTestCase {
                         };
                     }});
         
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        
-        // mark channel closed
-        final class TestLocalChannel extends LocalChannel {
-            @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
-        
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
-                    @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }});
+        final TestChannelCreator creator = new TestChannelCreator();
+        final DefaultHttpClient client = new DefaultHttpClient(creator);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
-            @SuppressWarnings("unused")
-            final Subscription subscription = 
-                client.sendRequest(
-                    new LocalAddress("test"), 
-                    Observable.<HttpObject>error(new RuntimeException("test error")))
-                .subscribe(testSubscriber);
+            client.sendRequest(
+                new LocalAddress("test"), 
+                Observable.<HttpObject>error(new RuntimeException("test error")))
+            .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
-            assertEquals(1, clientChannelClosed.getCount());
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
@@ -513,61 +372,37 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttpClientWriteAndFlushExceptionAfterConnected() throws Exception {
-        final HttpTestServer server = new HttpTestServer(
-                false, 
-                new LocalAddress("test"), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
+        final HttpTestServer server = createTestServerWith(false, "test",
                 new Callable<ChannelInboundHandler> () {
                     @Override
                     public ChannelInboundHandler call() throws Exception {
-                        return new TestHandler() {
+                        return new HttpTestServerHandler() {
                             @Override
                             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
                                     throws Exception {
+                                // not response
                             }
                         };
                     }});
         
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        
-        // mark channel closed
-        final class TestLocalChannel extends LocalChannel {
-            @Override
-            protected void doWrite(ChannelOutboundBuffer in) throws Exception {
-                throw new RuntimeException("doWrite Error for test");
-            }
-            @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
-                    @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }});
+        @SuppressWarnings("resource")
+        final TestChannelCreator creator = new TestChannelCreator()
+            .setWriteException(new RuntimeException("doWrite Error for test"));
+        final DefaultHttpClient client = new DefaultHttpClient(creator);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final AtomicBoolean requestTransfered = new AtomicBoolean(false);
+        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(new Action1<HttpObject>() {
-                    @Override
-                    public void call(HttpObject msg) {
-                        requestTransfered.set(true);
-                    }}))
+                .doOnNext(nextSensor))
             .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
-            clientChannelClosed.await();
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed();
         } finally {
             client.close();
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
@@ -575,42 +410,37 @@ public class DefaultHttpClientTestCase {
             //  no response received
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             //  message has been write to send queue
-            assertTrue(requestTransfered.get());
+            nextSensor.assertCalled();
         }
     }
 
     @Test
     public void testHttp10ConnectionCloseHappyPath() throws Exception {
-        final HttpTestServer server = new HttpTestServer(
-            false, 
-            new LocalAddress("test"), 
-            new LocalEventLoopGroup(1), 
-            new LocalEventLoopGroup(),
-            LocalServerChannel.class,
-            new Callable<ChannelInboundHandler> () {
-                @Override
-                public ChannelInboundHandler call() throws Exception {
-                    return new TestHandler() {
-                        @Override
-                        protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-                                throws Exception {
-                            if (msg instanceof HttpRequest) {
-                                //  for HTTP 1.0 Connection: Close response behavior
-                                final FullHttpResponse response = new DefaultFullHttpResponse(
-                                        HttpVersion.HTTP_1_0, OK, 
-                                        Unpooled.wrappedBuffer(HttpTestServerHandler.CONTENT));
-                                response.headers().set(CONTENT_TYPE, "text/plain");
-                                //  missing Content-Length
-//                                response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                                response.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
-                                ctx.write(response).addListener(ChannelFutureListener.CLOSE);
-                            }
+        final HttpTestServer server = createTestServerWith(false, "test",
+                new Callable<ChannelInboundHandler> () {
+            @Override
+            public ChannelInboundHandler call() throws Exception {
+                return new HttpTestServerHandler() {
+                    @Override
+                    protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
+                            throws Exception {
+                        if (msg instanceof HttpRequest) {
+                            //  for HTTP 1.0 Connection: Close response behavior
+                            final FullHttpResponse response = new DefaultFullHttpResponse(
+                                    HttpVersion.HTTP_1_0, OK, 
+                                    Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                            response.headers().set(CONTENT_TYPE, "text/plain");
+                            //  missing Content-Length
+//                            response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                            response.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
+                            ctx.write(response).addListener(ChannelFutureListener.CLOSE);
                         }
-                    };
-                }});
+                    }
+                };
+            }});
 
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), LocalChannel.class);
+        final TestChannelCreator creator = new TestChannelCreator();
+        final DefaultHttpClient client = new DefaultHttpClient(creator);
         try {
             final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
             request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
@@ -621,72 +451,48 @@ public class DefaultHttpClientTestCase {
                     Observable.just(request),
                     Feature.EnableLOG,
                     Feature.DisableCompress)
-                .map(new Func1<HttpObject, HttpObject>() {
-                    @Override
-                    public HttpObject call(final HttpObject obj) {
-                        //  retain obj for blocking
-                        return ReferenceCountUtil.retain(obj);
-                    }})
+                .map(RxNettys.<HttpObject>retainMap())
                 .toBlocking().toIterable().iterator();
             
-            final byte[] bytes = responseAsBytes(itr);
+            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed();
         } finally {
             client.close();
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
         }
     }
 
     @Test
     public void testHttp10ConnectionCloseBadCaseMissingPartContent() throws Exception {
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        
-        // mark channel closed
-        final class TestLocalChannel extends LocalChannel {
+        final HttpTestServer server = createTestServerWith(false, "test",
+                new Callable<ChannelInboundHandler> () {
             @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
-        
-        final HttpTestServer server = new HttpTestServer(
-            false, 
-            new LocalAddress("test"), 
-            new LocalEventLoopGroup(1), 
-            new LocalEventLoopGroup(),
-            LocalServerChannel.class,
-            new Callable<ChannelInboundHandler> () {
-                @Override
-                public ChannelInboundHandler call() throws Exception {
-                    return new TestHandler() {
-                        @Override
-                        protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-                                throws Exception {
-                            if (msg instanceof HttpRequest) {
-                                //  for HTTP 1.0 Connection: Close response behavior
-                                final FullHttpResponse response = new DefaultFullHttpResponse(
-                                        HttpVersion.HTTP_1_0, OK, 
-                                        Unpooled.wrappedBuffer(HttpTestServerHandler.CONTENT));
-                                response.headers().set(CONTENT_TYPE, "text/plain");
-                                //  BAD Content-Length, actual length + 1
-                                response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, 
-                                        response.content().readableBytes() + 1);
-                                response.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
-                                ctx.write(response).addListener(ChannelFutureListener.CLOSE);
-                            }
-                        }
-                    };
-                }});
-
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
+            public ChannelInboundHandler call() throws Exception {
+                return new HttpTestServerHandler() {
                     @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }});
+                    protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
+                            throws Exception {
+                        if (msg instanceof HttpRequest) {
+                            //  for HTTP 1.0 Connection: Close response behavior
+                            final FullHttpResponse response = new DefaultFullHttpResponse(
+                                    HttpVersion.HTTP_1_0, OK, 
+                                    Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                            response.headers().set(CONTENT_TYPE, "text/plain");
+                            //  BAD Content-Length, actual length + 1
+                            response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, 
+                                    response.content().readableBytes() + 1);
+                            response.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
+                            ctx.write(response).addListener(ChannelFutureListener.CLOSE);
+                        }
+                    }
+                };
+            }});
+        
+        final TestChannelCreator creator = new TestChannelCreator();
+        final DefaultHttpClient client = new DefaultHttpClient(creator);
         final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
         request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
         
@@ -698,11 +504,11 @@ public class DefaultHttpClientTestCase {
                 Feature.DisableCompress)
             .subscribe(testSubscriber);
             testSubscriber.awaitTerminalEvent();
-            clientChannelClosed.await();
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed();
         } finally {
             client.close();
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
@@ -714,12 +520,12 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpEmitExceptionWhenConnecting() throws Exception {
         final String errorMsg = "connecting failure";
-        final TestChannelCreator creator = new TestChannelCreator();
-        creator.setConnectException(new RuntimeException(errorMsg));
         
-        final DefaultHttpClient client = new DefaultHttpClient(
-                new DefaultChannelPool(),
-                creator);
+        @SuppressWarnings("resource")
+        final TestChannelCreator creator = new TestChannelCreator()
+            .setConnectException(new RuntimeException(errorMsg));
+        
+        final DefaultHttpClient client = new DefaultHttpClient(creator);
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -748,25 +554,12 @@ public class DefaultHttpClientTestCase {
     public void testHttpHappyPathKeepAliveReuseConnection() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        
-        // mark channel closed
-        final class TestLocalChannel extends LocalChannel {
-            @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
-        
+        final TestChannelCreator creator = new TestChannelCreator();
+    
         final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
-                    @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }},
-                    Feature.EnableLOG,
-                    Feature.DisableCompress);
+                creator,
+                Feature.EnableLOG,
+                Feature.DisableCompress);
                     
         try {
             // first 
@@ -775,76 +568,48 @@ public class DefaultHttpClientTestCase {
                     client.sendRequest(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
-                    .map(new Func1<HttpObject, HttpObject>() {
-                        @Override
-                        public HttpObject call(final HttpObject obj) {
-                            //    retain obj for blocking
-                            return ReferenceCountUtil.retain(obj);
-                        }})
+                    .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
-                final byte[] bytes = responseAsBytes(itr);
+                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
-            assertEquals(1, clientChannelClosed.getCount());
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertNotClose();
             // second
             {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
-                    .map(new Func1<HttpObject, HttpObject>() {
-                        @Override
-                        public HttpObject call(final HttpObject obj) {
-                            //    retain obj for blocking
-                            return ReferenceCountUtil.retain(obj);
-                        }})
+                    .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
-                final byte[] bytes = responseAsBytes(itr);
+                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
-            assertEquals(1, clientChannelClosed.getCount());
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
-//            assertEquals(0, clientChannelClosed.getCount());
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
         }
     }
     
     @Test
     public void testHttpsHappyPathKeepAliveReuseConnection() throws Exception {
-        final HttpTestServer server = new HttpTestServer(
-                true, 
-                new LocalAddress("test"), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
-                HttpTestServer.DEFAULT_NEW_HANDLER);
+        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
 
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        
-        // mark channel closed
-        final class TestLocalChannel extends LocalChannel {
-            @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
+        final TestChannelCreator creator = new TestChannelCreator();
         
         final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
-                    @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }},
-                    Feature.EnableSSL,
-                    Feature.EnableLOG,
-                    Feature.DisableCompress);
+                creator,
+                Feature.EnableSSL,
+                Feature.EnableLOG,
+                Feature.DisableCompress);
+        
         try {
             // first 
             {
@@ -852,43 +617,33 @@ public class DefaultHttpClientTestCase {
                     client.sendRequest(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
-                    .map(new Func1<HttpObject, HttpObject>() {
-                        @Override
-                        public HttpObject call(final HttpObject obj) {
-                            //    retain obj for blocking
-                            return ReferenceCountUtil.retain(obj);
-                        }})
+                    .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
-                final byte[] bytes = responseAsBytes(itr);
+                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
-            assertEquals(1, clientChannelClosed.getCount());
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertNotClose();
             // second
             {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
-                    .map(new Func1<HttpObject, HttpObject>() {
-                        @Override
-                        public HttpObject call(final HttpObject obj) {
-                            //    retain obj for blocking
-                            return ReferenceCountUtil.retain(obj);
-                        }})
+                    .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
-                final byte[] bytes = responseAsBytes(itr);
+                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
-            assertEquals(1, clientChannelClosed.getCount());
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
-//            assertEquals(0, clientChannelClosed.getCount());
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
         }
     }
     
@@ -896,47 +651,27 @@ public class DefaultHttpClientTestCase {
     public void testHttpOnError1stAnd2ndHappyPathKeepAliveReuseConnection() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
-        final CountDownLatch clientChannelClosed = new CountDownLatch(1);
-        
-        // mark channel closed
-        final class TestLocalChannel extends LocalChannel {
-            @Override
-            public ChannelFuture close() {
-                clientChannelClosed.countDown();
-                return super.close();
-            }
-        }
+        final TestChannelCreator creator = new TestChannelCreator();
         
         final DefaultHttpClient client = new DefaultHttpClient(
-                new LocalEventLoopGroup(1), new ChannelFactory<TestLocalChannel>() {
-                    @Override
-                    public TestLocalChannel newChannel() {
-                        return new TestLocalChannel();
-                    }},
-                    Feature.EnableLOG,
-                    Feature.DisableCompress);
-                    
+                creator,
+                Feature.EnableLOG,
+                Feature.DisableCompress);
+        
         try {
             // first 
             {
-                final CountDownLatch unsubscribed = new CountDownLatch(1);
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+                final TestSubscription testSubscription = new TestSubscription();
                 try {
                     client.sendRequest(
                         new LocalAddress("test"), 
                         Observable.<HttpObject>error(new RuntimeException("test error")))
                     .subscribe(testSubscriber);
-                    testSubscriber.add(new Subscription() {
-                        @Override
-                        public void unsubscribe() {
-                            unsubscribed.countDown();
-                        }
-                        @Override
-                        public boolean isUnsubscribed() {
-                            return unsubscribed.getCount()==0;
-                        }});
-                    unsubscribed.await();
-                    assertEquals(1, clientChannelClosed.getCount());
+                    testSubscriber.add(testSubscription);
+                    testSubscription.awaitUnsubscribed();
+                    assertEquals(1, creator.getChannels().size());
+                    creator.getChannels().get(0).assertNotClose();
                 } finally {
                     assertEquals(1, testSubscriber.getOnErrorEvents().size());
                     assertEquals(RuntimeException.class, 
@@ -959,16 +694,15 @@ public class DefaultHttpClientTestCase {
                         }})
                     .toBlocking().toIterable().iterator();
                 
-                final byte[] bytes = responseAsBytes(itr);
+                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServerHandler.CONTENT));
+                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
-            assertEquals(1, clientChannelClosed.getCount());
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
-//            assertEquals(0, clientChannelClosed.getCount());
             server.stop();
-//            assertEquals(0, client.getActiveChannelCount());
         }
     }
     

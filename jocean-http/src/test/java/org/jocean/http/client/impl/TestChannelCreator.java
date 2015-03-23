@@ -64,7 +64,13 @@ public class TestChannelCreator implements ChannelCreator {
         
         public void assertClosed() {
             if (!this._isClosed.get()) {
-                throw new AssertionError("Channel Not Closed");
+                throw new AssertionError("Channel Not Close");
+            }
+        }
+        
+        public void assertNotClose() {
+            if (this._isClosed.get()) {
+                throw new AssertionError("Channel Closed");
             }
         }
         
