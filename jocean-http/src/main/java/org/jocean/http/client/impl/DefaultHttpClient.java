@@ -62,7 +62,6 @@ public class DefaultHttpClient implements HttpClient {
     
     private static final AttributeKey<Object> VALID = AttributeKey.valueOf("__ISVALID");
     
-    @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
     
@@ -153,6 +152,9 @@ public class DefaultHttpClient implements HttpClient {
                         }
                     }
                 })));
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("createChannel and add codecs success for channel:{}/remoteAddress:{}",channel,remoteAddress);
+            }
         } catch (Throwable e) {
             if (null!=channel) {
                 channel.close();

@@ -27,19 +27,28 @@ public class TestChannelCreator implements ChannelCreator {
     
     final class TestChannel extends LocalChannel {
         
+        private final AbstractUnsafe _unsafe0 = super.newUnsafe();
         @Override
         protected AbstractUnsafe newUnsafe() {
-            if (null!=_connectException) {
-                return new AbstractUnsafe() {
-                    @Override
-                    public void connect(SocketAddress remoteAddress,
-                            SocketAddress localAddress, ChannelPromise promise) {
+            return new AbstractUnsafe() {
+                @Override
+                public void connect(SocketAddress remoteAddress,
+                        SocketAddress localAddress, ChannelPromise promise) {
+                    if (null != _pauseConnecting) {
+                        try {
+                            LOG.info("before pause connecting for channel:{}", TestChannel.this);
+                            _pauseConnecting.await();
+                            LOG.info("after pause connecting for channel:{}", TestChannel.this);
+                        } catch (InterruptedException e) {
+                        }
+                    }
+                    if (null!=_connectException) {
                         promise.tryFailure(_connectException);
-                    }};
-            }
-            else {
-                return super.newUnsafe();
-            }
+                    }
+                    else {
+                        _unsafe0.connect(remoteAddress, localAddress, promise);
+                    }
+                }};
         }
         
         @Override
@@ -107,8 +116,14 @@ public class TestChannelCreator implements ChannelCreator {
         return this;
     }
     
+    public TestChannelCreator setPauseConnecting(final CountDownLatch pauseConnecting) {
+        this._pauseConnecting = pauseConnecting;
+        return this;
+    }
+    
     private Exception _writeException = null;
     private Exception _connectException = null;
+    private CountDownLatch _pauseConnecting = null;
     
     private final Bootstrap _bootstrap = new Bootstrap()
         .group(new LocalEventLoopGroup(1))
