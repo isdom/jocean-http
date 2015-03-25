@@ -34,6 +34,8 @@ import org.jocean.http.client.HttpClient.Feature;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.rx.OnNextSensor;
+import org.jocean.idiom.rx.TestSubscription;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
