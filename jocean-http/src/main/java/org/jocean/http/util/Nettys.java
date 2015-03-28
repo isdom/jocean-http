@@ -2,6 +2,7 @@ package org.jocean.http.util;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpRequest;
 
 import java.io.IOException;
@@ -34,9 +35,12 @@ public class Nettys {
 
             @Override
             public void close() throws IOException {
+                final ChannelPipeline pipeline = channel.pipeline();
                 for (ChannelHandler handler : handlers) {
                     try {
-                        channel.pipeline().remove(handler);
+                        if (pipeline.context(handler) != null) {
+                            pipeline.remove(handler);
+                        }
                     } catch (Exception e) {
                         LOG.warn("exception when invoke pipeline.remove, detail:{}", 
                                 ExceptionUtils.exception2detail(e));
