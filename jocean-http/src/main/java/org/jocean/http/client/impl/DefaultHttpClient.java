@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.jocean.http.HttpFeature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.util.HandlersClosure;
 import org.jocean.http.util.Nettys;
@@ -73,13 +74,13 @@ public class DefaultHttpClient implements HttpClient {
     public Observable<HttpObject> sendRequest(
             final SocketAddress remoteAddress,
             final Observable<? extends HttpObject> request,
-            final Feature... features) {
+            final HttpFeature... features) {
         final int featuresAsInt = this._defaultFeaturesAsInt | Features.featuresAsInt(features);
         return Observable.create(
             new OnSubscribeResponse(
                 createChannelObservable(remoteAddress, featuresAsInt),
                 this._channelPool,
-                Feature.isCompressEnabled(featuresAsInt), 
+                HttpFeature.isCompressEnabled(featuresAsInt), 
                 request));
     }
 
@@ -133,7 +134,7 @@ public class DefaultHttpClient implements HttpClient {
             final ChannelHandler handler,
             final Subscriber<? super Channel> subscriber) throws Throwable {
         final Channel channel = this._channelCreator.newChannel();
-        final boolean enableSSL = Features.isEnabled(featuresAsInt, Feature.EnableSSL);
+        final boolean enableSSL = Features.isEnabled(featuresAsInt, HttpFeature.EnableSSL);
         try {
             final HandlersClosure handlersClosure = 
                     Nettys.channelHandlersClosure(channel);
@@ -168,13 +169,13 @@ public class DefaultHttpClient implements HttpClient {
             final int featuresAsInt,
             final HandlersClosure handlersClosure) {
         final ChannelPipeline pipeline = channel.pipeline();
-        if (Features.isEnabled(featuresAsInt, Feature.EnableLOG)) {
+        if (Features.isEnabled(featuresAsInt, HttpFeature.EnableLOG)) {
             //  add first
             pipeline.addFirst("log", 
                 handlersClosure.call(new LoggingHandler()));
         }
                   
-        if (Feature.isCompressEnabled(featuresAsInt)) {
+        if (HttpFeature.isCompressEnabled(featuresAsInt)) {
             //  add last
             pipeline.addLast("decompressor", 
                 handlersClosure.call(new HttpContentDecompressor()));
@@ -281,7 +282,7 @@ public class DefaultHttpClient implements HttpClient {
     public DefaultHttpClient(
             final EventLoopGroup eventLoopGroup,
             final Class<? extends Channel> channelType,
-            final Feature... defaultFeatures) throws Exception { 
+            final HttpFeature... defaultFeatures) throws Exception { 
         this(new DefaultChannelPool(),
             new AbstractChannelCreator() {
                 @Override
@@ -294,7 +295,7 @@ public class DefaultHttpClient implements HttpClient {
     public DefaultHttpClient(
             final EventLoopGroup eventLoopGroup,
             final ChannelFactory<? extends Channel> channelFactory,
-            final Feature... defaultFeatures) throws Exception { 
+            final HttpFeature... defaultFeatures) throws Exception { 
         this(new DefaultChannelPool(),
             new AbstractChannelCreator() {
                 @Override
@@ -306,14 +307,14 @@ public class DefaultHttpClient implements HttpClient {
     
     public DefaultHttpClient(
             final ChannelCreator channelCreator,
-            final Feature... defaultFeatures) throws Exception {
+            final HttpFeature... defaultFeatures) throws Exception {
         this(new DefaultChannelPool(), channelCreator, defaultFeatures);
     }
     
     public DefaultHttpClient(
             final ChannelPool channelPool,
             final ChannelCreator channelCreator,
-            final Feature... defaultFeatures) throws Exception {
+            final HttpFeature... defaultFeatures) throws Exception {
         this._channelPool = channelPool;
         this._channelCreator = channelCreator;
         this._defaultFeaturesAsInt = Features.featuresAsInt(defaultFeatures);

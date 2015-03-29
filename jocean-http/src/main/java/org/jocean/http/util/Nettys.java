@@ -4,6 +4,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.util.ReferenceCounted;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -12,6 +13,7 @@ import java.util.List;
 
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.PairedVisitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,4 +75,22 @@ public class Nettys {
     public static ChannelPool unpoolChannels() {
         return UNPOOL;
     }
+    
+    public static PairedVisitor<Object> _NETTY_REFCOUNTED_GUARD = new PairedVisitor<Object>() {
+        @Override
+        public void visitBegin(final Object obj) {
+            if ( obj instanceof ReferenceCounted ) {
+                ((ReferenceCounted)obj).retain();
+            }
+        }
+        @Override
+        public void visitEnd(final Object obj) {
+            if ( obj instanceof ReferenceCounted ) {
+                ((ReferenceCounted)obj).release();
+            }
+        }
+        @Override
+        public String toString() {
+            return "NettyUtils._NETTY_REFCOUNTED_GUARD";
+        }};
 }

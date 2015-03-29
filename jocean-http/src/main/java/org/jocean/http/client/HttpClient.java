@@ -8,7 +8,7 @@ import io.netty.handler.codec.http.HttpObject;
 import java.io.Closeable;
 import java.net.SocketAddress;
 
-import org.jocean.idiom.Features;
+import org.jocean.http.HttpFeature;
 
 import rx.Observable;
 
@@ -27,16 +27,5 @@ public interface HttpClient extends Closeable {
     public Observable<HttpObject> sendRequest(
             final SocketAddress remoteAddress, 
             final Observable<? extends HttpObject> request,
-            final Feature... features);
-    
-    public enum Feature {
-        EnableSSL,
-        EnableLOG,
-        DisableCompress;
-        
-        public static boolean isCompressEnabled(final int featuresAsInt) {
-            return !Features.isEnabled(featuresAsInt, Feature.DisableCompress);
-        }
-        
-    }
+            final HttpFeature... features);
 }

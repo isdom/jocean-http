@@ -13,7 +13,7 @@ import io.netty.handler.codec.http.HttpVersion;
 import java.util.Arrays;
 import java.util.Iterator;
 
-import org.jocean.http.client.HttpClient.Feature;
+import org.jocean.http.HttpFeature;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
@@ -46,8 +46,8 @@ public class UnpoolHttpClientTestCase {
         final DefaultHttpClient client = new DefaultHttpClient(
                 Nettys.unpoolChannels(),
                 creator,
-                Feature.EnableLOG,
-                Feature.DisableCompress);
+                HttpFeature.EnableLOG,
+                HttpFeature.DisableCompress);
         try {
             // first 
             {
@@ -94,9 +94,9 @@ public class UnpoolHttpClientTestCase {
         final DefaultHttpClient client = new DefaultHttpClient(
                 Nettys.unpoolChannels(),
                 creator,
-                Feature.EnableSSL,
-                Feature.EnableLOG,
-                Feature.DisableCompress);
+                HttpFeature.EnableSSL,
+                HttpFeature.EnableLOG,
+                HttpFeature.DisableCompress);
         
         try {
             // first 

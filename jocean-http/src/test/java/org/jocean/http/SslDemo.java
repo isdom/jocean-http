@@ -17,7 +17,6 @@ import java.net.InetSocketAddress;
 import java.util.Iterator;
 
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.HttpClient.Feature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,8 +72,8 @@ public class SslDemo {
                         new InetSocketAddress(host, 443), 
 //                        new InetSocketAddress("58.215.107.207", 443), 
                         Observable.just(request),
-                        Feature.EnableLOG,
-                        Feature.EnableSSL)
+                        HttpFeature.EnableLOG,
+                        HttpFeature.EnableSSL)
                     .map(new Func1<HttpObject, HttpObject>() {
                         @Override
                         public HttpObject call(final HttpObject obj) {
@@ -91,8 +90,8 @@ public class SslDemo {
                         new InetSocketAddress(host, 443), 
 //                        new InetSocketAddress("58.215.107.207", 443), 
                         Observable.just(request),
-                        Feature.EnableLOG,
-                        Feature.EnableSSL)
+                        HttpFeature.EnableLOG,
+                        HttpFeature.EnableSSL)
                     .map(new Func1<HttpObject, HttpObject>() {
                         @Override
                         public HttpObject call(final HttpObject obj) {
