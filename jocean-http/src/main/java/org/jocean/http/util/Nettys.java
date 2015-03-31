@@ -9,7 +9,10 @@ import io.netty.util.ReferenceCounted;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
 
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.idiom.ExceptionUtils;
@@ -93,4 +96,39 @@ public class Nettys {
         public String toString() {
             return "NettyUtils._NETTY_REFCOUNTED_GUARD";
         }};
+        
+    public static ChannelHandler insertHandler(
+            final ChannelPipeline pipeline, final ChannelHandler handler,
+            final String name, final Comparator<String> comparator) {
+        final Iterator<Entry<String,ChannelHandler>> itr = pipeline.iterator();
+        while (itr.hasNext()) {
+            final Entry<String,ChannelHandler> entry = itr.next();
+            final int order = comparator.compare(entry.getKey(), name);
+            if (order==0) {
+                //  equals, handler already added, just ignore
+                //  NOT added
+                return null;
+            }
+            if (order < 0) {
+                // current handler's name less than name, continue comapre
+                continue;
+            }
+            if (order > 0) {
+                //  OK, add handler before current handler
+                pipeline.addBefore(entry.getKey(), name, handler);
+                return handler;
+            }
+        }
+        pipeline.addLast(name, handler);
+        return handler;
+    }
+    
+    public static <E extends Enum<E>> Comparator<String> comparator(final Class<E> cls) {
+        return new Comparator<String>() {
+            @Override
+            public int compare(final String o1, final String o2) {
+                return Enum.valueOf(cls, o1).ordinal() - Enum.valueOf(cls, o2).ordinal();
+            }};
+    }
+    
 }
