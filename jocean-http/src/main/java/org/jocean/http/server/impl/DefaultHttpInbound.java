@@ -127,7 +127,7 @@ public class DefaultHttpInbound implements HttpInbound {
                     if (LOG.isInfoEnabled()) {
                         LOG.info("channelIdle:{} , close channel[{}]", evt.state().name(), ctx.channel());
                     }
-                    _channel.close();
+                    ctx.channel().close();
                 }
             });
         }
