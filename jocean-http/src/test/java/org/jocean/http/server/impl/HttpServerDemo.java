@@ -13,8 +13,6 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.util.SelfSignedCertificate;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -22,7 +20,6 @@ import java.util.Iterator;
 import org.jocean.event.api.EventEngine;
 import org.jocean.event.extend.Runners;
 import org.jocean.event.extend.Services;
-import org.jocean.http.HttpFeature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
@@ -31,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import rx.Observable;
+import rx.Subscription;
 import rx.functions.Action1;
 
 public class HttpServerDemo {
@@ -39,8 +37,8 @@ public class HttpServerDemo {
             LoggerFactory.getLogger(HttpServerDemo.class);
 
     public static void main(final String[] args) throws Exception {
-        SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx = SslContext.newServerContext(ssc.certificate(), ssc.privateKey());
+//        SelfSignedCertificate ssc = new SelfSignedCertificate();
+//        final SslContext sslCtx = SslContext.newServerContext(ssc.certificate(), ssc.privateKey());
 
         final EventEngine engine = 
                 Runners.build(new Runners.Config()
@@ -60,13 +58,14 @@ public class HttpServerDemo {
                 bootstrap.channel(LocalServerChannel.class);
             }});
         
+        final Subscription subscription = 
         server.create(new LocalAddress("test"))
             .doOnNext(new Action1<Channel>() {
                 @Override
                 public void call(final Channel channel) {
                     InboundFeature.CONTENT_COMPRESSOR.applyTo(channel);
-                    InboundFeature.ENABLE_SSL.applyTo(channel, sslCtx);
-                    InboundFeature.CLOSE_ON_IDLE.applyTo(channel, 1);
+//                    InboundFeature.ENABLE_SSL.applyTo(channel, sslCtx);
+                    InboundFeature.CLOSE_ON_IDLE.applyTo(channel, 10);
                     InboundFeature.LOGGING.applyTo(channel);
                 }})
             .subscribe(new Action1<Channel>() {
@@ -89,6 +88,12 @@ public class HttpServerDemo {
                     }}).start();
                 }});
         
+        Services.lookupOrCreateTimerService("demo").schedule(new Runnable() {
+            @Override
+            public void run() {
+                subscription.unsubscribe();
+            }}, 10 * 1000);
+        
         while (true) {
             final ByteBuf content = Unpooled.buffer(0);
             content.writeBytes("test content".getBytes("UTF-8"));
@@ -100,9 +105,10 @@ public class HttpServerDemo {
             final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
             client.sendRequest(
                 new LocalAddress("test"), 
-                Observable.just(request),
-                HttpFeature.EnableLOG,
-                HttpFeature.EnableSSL)
+                Observable.just(request)
+//                HttpFeature.EnableLOG,
+//                HttpFeature.EnableSSL
+                )
                 .subscribe();
             Thread.sleep(1000);
         }
