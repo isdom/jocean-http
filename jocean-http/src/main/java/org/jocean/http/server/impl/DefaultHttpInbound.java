@@ -8,14 +8,9 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.handler.logging.LoggingHandler;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.timeout.IdleStateEvent;
-import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
@@ -29,11 +24,10 @@ import org.jocean.event.api.EventEngine;
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.PairedGuardEventable;
 import org.jocean.event.api.annotation.OnEvent;
-import org.jocean.http.HttpFeature;
 import org.jocean.http.server.HttpInbound;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.Features;
+import org.jocean.idiom.Ordered;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,11 +77,9 @@ public class DefaultHttpInbound implements HttpInbound {
     
     public DefaultHttpInbound(
             final Channel channel, 
-            final EventEngine engine,
-            final SslContext sslCtx, 
-            final HttpFeature... features) {
+            final EventEngine engine) {
         this._channel = channel;
-        initChannel(sslCtx, Features.featuresAsInt(features));
+        initChannel();
         this._receiver = engine.create(this.toString(), this.ACTIVED);
     }
     
@@ -112,41 +104,24 @@ public class DefaultHttpInbound implements HttpInbound {
         }
     }
 
-    private void initChannel(final SslContext sslCtx, final int featuresAsInt) {
+    private void initChannel() {
         final ChannelPipeline pipeline = this._channel.pipeline();
         
-        if (Features.isEnabled(featuresAsInt, HttpFeature.EnableLOG)) {
-            //  add first
-            pipeline.addFirst("log", new LoggingHandler());
-        }
-        
-        if (Features.isEnabled(featuresAsInt, HttpFeature.CloseOnIdle)) {
-            pipeline.addLast("closeOnIdle", new IdleStateHandler(0, 0, 180) {
-                @Override
-                protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
-                    if (LOG.isInfoEnabled()) {
-                        LOG.info("channelIdle:{} , close channel[{}]", evt.state().name(), ctx.channel());
-                    }
-                    ctx.channel().close();
-                }
-            });
-        }
-        
-        if (Features.isEnabled(featuresAsInt, HttpFeature.EnableSSL)) {
-            pipeline.addLast(sslCtx.newHandler(this._channel.alloc()));
-        }
-        
-        pipeline.addLast(new HttpServerCodec());
-        
-        if (HttpFeature.isCompressEnabled(featuresAsInt)) {
-            //  add last
-            pipeline.addLast("deflater", new HttpContentCompressor());
-        }
-        
-        pipeline.addLast(new WorkHandler());
+        Nettys.insertHandler(
+                pipeline,
+                InboundFeature.HTTPSERVER_CODEC.name(), 
+                new HttpServerCodec(),
+                InboundFeature.TO_ORDINAL);
+        pipeline.addLast("work", new WorkHandler());
     }
     
-    private final class WorkHandler extends ChannelInboundHandlerAdapter{
+    private final class WorkHandler extends ChannelInboundHandlerAdapter 
+        implements Ordered {
+        @Override
+        public int ordinal() {
+            return InboundFeature.LAST_FEATURE.ordinal() + 1;
+        }
+        
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
             LOG.warn("exceptionCaught {}, detail:{}", 
@@ -191,7 +166,7 @@ public class DefaultHttpInbound implements HttpInbound {
             private final List<HttpObject> _httpObjects = new ArrayList<>();
             private final List<Subscriber<? super HttpObject>> _subscribers = new ArrayList<>();
             
-            private void callOnCompleteWhenFully(
+            private void callOnCompletedWhenFully(
                     final Subscriber<? super HttpObject> subscriber) {
                 if (this._isFully) {
                     subscriber.onCompleted();
@@ -205,7 +180,7 @@ public class DefaultHttpInbound implements HttpInbound {
                     for (HttpObject obj : this._httpObjects) {
                         subscriber.onNext(obj);
                     }
-                    callOnCompleteWhenFully(subscriber);
+                    callOnCompletedWhenFully(subscriber);
                 }
                 
                 return BizStep.CURRENT_BIZSTEP;
@@ -220,7 +195,7 @@ public class DefaultHttpInbound implements HttpInbound {
                 this._httpObjects.add(ReferenceCountUtil.retain(httpObj));
                 for (Subscriber<? super HttpObject> subscriber : this._subscribers) {
                     subscriber.onNext(httpObj);
-                    callOnCompleteWhenFully(subscriber);
+                    callOnCompletedWhenFully(subscriber);
                 }
                 
                 return BizStep.CURRENT_BIZSTEP;

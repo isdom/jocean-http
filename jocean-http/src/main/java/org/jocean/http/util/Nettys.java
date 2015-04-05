@@ -2,23 +2,31 @@ package org.jocean.http.util;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
+import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.timeout.IdleStateEvent;
+import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.ReferenceCounted;
 
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.Ordered;
 import org.jocean.idiom.PairedVisitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import rx.functions.Func2;
+import rx.functions.FuncN;
 
 public class Nettys {
     private static final Logger LOG =
@@ -97,13 +105,19 @@ public class Nettys {
             return "NettyUtils._NETTY_REFCOUNTED_GUARD";
         }};
         
+    public static interface ToOrdinal extends Func2<String,ChannelHandler,Integer> {}
+    
     public static ChannelHandler insertHandler(
-            final ChannelPipeline pipeline, final ChannelHandler handler,
-            final String name, final Comparator<String> comparator) {
+            final ChannelPipeline pipeline, 
+            final String name, 
+            final ChannelHandler handler,
+            final ToOrdinal toOrdinal) {
+        final int toInsertOrdinal = toOrdinal.call(name, handler);
         final Iterator<Entry<String,ChannelHandler>> itr = pipeline.iterator();
         while (itr.hasNext()) {
             final Entry<String,ChannelHandler> entry = itr.next();
-            final int order = comparator.compare(entry.getKey(), name);
+            final int order = toOrdinal.call(entry.getKey(), entry.getValue())
+                    - toInsertOrdinal;
             if (order==0) {
                 //  equals, handler already added, just ignore
                 //  NOT added
@@ -123,12 +137,51 @@ public class Nettys {
         return handler;
     }
     
-    public static <E extends Enum<E>> Comparator<String> comparator(final Class<E> cls) {
-        return new Comparator<String>() {
+    public static <E extends Enum<E>> ToOrdinal ordinal(final Class<E> cls) {
+        return new ToOrdinal() {
             @Override
-            public int compare(final String o1, final String o2) {
-                return Enum.valueOf(cls, o1).ordinal() - Enum.valueOf(cls, o2).ordinal();
+            public Integer call(final String name, final ChannelHandler handler) {
+                if (handler instanceof Ordered) {
+                    return ((Ordered)handler).ordinal();
+                }
+                else {
+                    try {
+                        return Enum.valueOf(cls, name).ordinal();
+                    } catch (IllegalArgumentException e) {
+                        // No enum constant for name
+                        LOG.warn("No enum constant {}.{}", cls.getCanonicalName(), name);
+                        return Integer.MIN_VALUE;
+                    }
+                }
             }};
     }
     
+    public static final FuncN<ChannelHandler> CONTENT_COMPRESSOR_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new HttpContentCompressor();
+        }};
+
+    public static final Func2<Channel,SslContext,ChannelHandler> SSL_FUNC2 = 
+            new Func2<Channel,SslContext,ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Channel channel, final SslContext ctx) {
+            return ctx.newHandler(channel.alloc());
+        }};
+        
+    public static final Func2<Channel,Integer,ChannelHandler> CLOSE_ON_IDLE_FUNC2 = 
+            new Func2<Channel,Integer,ChannelHandler>() {
+                @Override
+                public ChannelHandler call(final Channel channel, Integer allIdleTimeout) {
+                  return new IdleStateHandler(0, 0, allIdleTimeout) {
+                      @Override
+                      protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
+                          if (LOG.isInfoEnabled()) {
+                              LOG.info("channelIdle:{} , close channel[{}]", evt.state().name(), ctx.channel());
+                          }
+                          ctx.channel().close();
+                      }
+                  };
+              }
+    };
 }
