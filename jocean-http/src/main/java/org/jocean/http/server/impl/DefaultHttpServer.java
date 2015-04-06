@@ -17,6 +17,7 @@ import org.jocean.http.util.RxNettys;
 
 import rx.Observable;
 import rx.Observable.OnSubscribe;
+import rx.subscriptions.Subscriptions;
 import rx.Subscriber;
 
 /**
@@ -41,7 +42,8 @@ public class DefaultHttpServer implements HttpServer {
                             subscriber.onNext(ch);
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
-                    subscriber.add(RxNettys.channelSubscription(future.channel()));
+                    subscriber.add(Subscriptions.from(future));
+                    subscriber.add(RxNettys.subscriptionFrom(future.channel()));
                     future.addListener(new ChannelFutureListener() {
                         @Override
                         public void operationComplete(final ChannelFuture future)

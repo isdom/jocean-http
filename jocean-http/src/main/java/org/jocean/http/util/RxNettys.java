@@ -95,7 +95,7 @@ public class RxNettys {
             */
     }
     
-    public static Subscription channelSubscription(final Channel channel) {
+    public static Subscription subscriptionFrom(final Channel channel) {
         return new Subscription() {
             @Override
             public void unsubscribe() {
