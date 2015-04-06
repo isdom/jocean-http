@@ -5,8 +5,8 @@ package org.jocean.http.server.impl;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
+import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpServerCodec;
@@ -115,7 +115,7 @@ public class DefaultHttpInbound implements HttpInbound {
         pipeline.addLast("work", new WorkHandler());
     }
     
-    private final class WorkHandler extends ChannelInboundHandlerAdapter 
+    private final class WorkHandler extends SimpleChannelInboundHandler<HttpObject> 
         implements Ordered {
         @Override
         public int ordinal() {
@@ -136,24 +136,14 @@ public class DefaultHttpInbound implements HttpInbound {
 //        }
         
         @Override
-        public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
-            try {
-                if (msg instanceof HttpObject) {
-                    _receiver.acceptEvent(ONHTTPOBJ_EVENT, msg);
-                }
-                else {
-                    LOG.warn("messageReceived:{} unhandled msg [{}]",ctx.channel(),msg);
-                    return;
-                }
-            }
-            finally {
-                ReferenceCountUtil.release(msg);
-            }
-        }
-        
-        @Override
         public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
             _receiver.acceptEvent(ON_CHANNEL_ERROR, new RuntimeException("channelInactive"));
+        }
+
+        @Override
+        protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg)
+                throws Exception {
+            _receiver.acceptEvent(ONHTTPOBJ_EVENT, msg);
         }
 
 //        @Override
