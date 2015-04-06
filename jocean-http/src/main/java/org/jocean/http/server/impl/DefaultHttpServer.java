@@ -8,6 +8,8 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
+import io.netty.util.internal.logging.InternalLoggerFactory;
+import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -26,6 +28,13 @@ import rx.Subscriber;
  */
 public class DefaultHttpServer implements HttpServer {
 
+    //放在最顶上，以让NETTY默认使用SLF4J
+    static {
+        if (!(InternalLoggerFactory.getDefaultFactory() instanceof Slf4JLoggerFactory)) {
+            InternalLoggerFactory.setDefaultFactory(new Slf4JLoggerFactory());
+        }
+    }
+    
     /* (non-Javadoc)
      * @see org.jocean.http.server.HttpServer#create(java.net.SocketAddress)
      */

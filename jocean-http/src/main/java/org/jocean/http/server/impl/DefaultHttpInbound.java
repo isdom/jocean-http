@@ -12,8 +12,6 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
-import io.netty.util.internal.logging.InternalLoggerFactory;
-import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,13 +43,6 @@ public class DefaultHttpInbound implements HttpInbound {
     private static final String ADD_SUBSCRIBER = "addSubscriber";
     private static final String ON_HTTP_OBJECT = "onHttpObject";
     private static final String ON_CHANNEL_ERROR = "onChannelError";
-    
-    //放在最顶上，以让NETTY默认使用SLF4J
-    static {
-        if (!(InternalLoggerFactory.getDefaultFactory() instanceof Slf4JLoggerFactory)) {
-            InternalLoggerFactory.setDefaultFactory(new Slf4JLoggerFactory());
-        }
-    }
     
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpInbound.class);
@@ -93,10 +84,7 @@ public class DefaultHttpInbound implements HttpInbound {
         public void call(final Subscriber<? super HttpObject> subscriber) {
             if (!subscriber.isUnsubscribed()) {
                 if (_channel.isActive()) {
-                    try {
-                        _receiver.acceptEvent(ADDSUBSCRIBER_EVENT, subscriber);
-                    } catch (Exception e) {
-                    }
+                    _receiver.acceptEvent(ADDSUBSCRIBER_EVENT, subscriber);
                 } else {
                     subscriber.onError(REQUEST_EXPIRED);
                 }
