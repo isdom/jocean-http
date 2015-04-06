@@ -60,14 +60,10 @@ public class HttpServerDemo {
         
         final Subscription subscription = 
         server.create(new LocalAddress("test"))
-            .doOnNext(new Action1<Channel>() {
-                @Override
-                public void call(final Channel channel) {
-                    InboundFeature.CONTENT_COMPRESSOR.applyTo(channel);
-//                    InboundFeature.ENABLE_SSL.applyTo(channel, sslCtx);
-                    InboundFeature.CLOSE_ON_IDLE.applyTo(channel, 10);
-                    InboundFeature.LOGGING.applyTo(channel);
-                }})
+            .doOnNext(InboundFeature.APPLY_CONTENT_COMPRESSOR)
+            .doOnNext(InboundFeature.APPLY_LOGGING)
+            .doOnNext(new InboundFeature.APPLY_CLOSE_ON_IDLE(10))
+//            .doOnNext(new InboundFeature.APPLY_SSL(sslCtx))
             .subscribe(new Action1<Channel>() {
                 @Override
                 public void call(final Channel channel) {
