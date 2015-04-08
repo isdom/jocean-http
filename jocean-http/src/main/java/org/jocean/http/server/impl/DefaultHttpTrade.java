@@ -11,7 +11,6 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 
@@ -129,12 +128,6 @@ public class DefaultHttpTrade implements HttpTrade {
 
     private void initChannel() {
         final ChannelPipeline pipeline = this._channel.pipeline();
-        
-        Nettys.insertHandler(
-                pipeline,
-                InboundFeature.HTTPSERVER_CODEC.name(), 
-                new HttpServerCodec(),
-                InboundFeature.TO_ORDINAL);
         pipeline.addLast("work", new WorkHandler());
     }
     
