@@ -107,21 +107,12 @@ public class DefaultHttpServer implements HttpServer {
                 //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
                 //
                 // See https://github.com/netty/netty/issues/2983 for more information.
-                channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
-                    .addListener(isKeepAlive ? createOnNextListener(subscriber) : ChannelFutureListener.CLOSE);
-            }};
-    }
-    
-    private ChannelFutureListener createOnNextListener(
-            final Subscriber<? super HttpTrade> subscriber) {
-        return new ChannelFutureListener() {
-            @Override
-            public void operationComplete(
-                    final ChannelFuture future)
-                    throws Exception {
-                if (!subscriber.isUnsubscribed()) {
-                    subscriber.onNext(
-                        createHttpTrade(future.channel(), subscriber));
+                if (isKeepAlive && !subscriber.isUnsubscribed()) {
+                    subscriber.onNext(createHttpTrade(channel, subscriber));
+                    channel.flush();
+                } else {
+                    channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
+                        .addListener(ChannelFutureListener.CLOSE);
                 }
             }};
     }

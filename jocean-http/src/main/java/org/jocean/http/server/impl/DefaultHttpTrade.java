@@ -5,7 +5,6 @@ package org.jocean.http.server.impl;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelPipeline;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -27,6 +26,7 @@ import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.http.server.HttpTrade;
 import org.jocean.http.server.InboundFeature;
 import org.jocean.http.server.impl.DefaultHttpServer.ChannelRecycler;
+import org.jocean.http.util.HandlersClosure;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Ordered;
@@ -68,6 +68,7 @@ public class DefaultHttpTrade implements HttpTrade {
     };
     
     private final Channel _channel;
+    private final HandlersClosure _closure;
     private final EventReceiver _receiver;
     private volatile boolean _isKeepAlive = false;
     private final ChannelRecycler _channelRecycler;
@@ -78,7 +79,9 @@ public class DefaultHttpTrade implements HttpTrade {
             final ChannelRecycler channelRecycler) {
         this._channelRecycler = channelRecycler;
         this._channel = channel;
-        initChannel();
+        this._closure = Nettys.channelHandlersClosure(this._channel);
+        this._channel.pipeline().addLast(
+                "work", this._closure.call(new WorkHandler()));
         this._receiver = engine.create(this.toString(), this.ACTIVED);
     }
     
@@ -92,6 +95,11 @@ public class DefaultHttpTrade implements HttpTrade {
         response.subscribe(new Subscriber<HttpObject>() {
             @Override
             public void onCompleted() {
+                try {
+                    _closure.close();
+                } catch (IOException e) {
+                }
+                //  TODO disable continue call response
                 _channelRecycler.onResponseCompleted(_channel, _isKeepAlive);
             }
 
@@ -126,11 +134,6 @@ public class DefaultHttpTrade implements HttpTrade {
         }
     }
 
-    private void initChannel() {
-        final ChannelPipeline pipeline = this._channel.pipeline();
-        pipeline.addLast("work", new WorkHandler());
-    }
-    
     private final class WorkHandler extends SimpleChannelInboundHandler<HttpObject> 
         implements Ordered {
         @Override
