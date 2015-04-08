@@ -4,6 +4,7 @@
 package org.jocean.http.server.impl;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -14,13 +15,15 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import java.io.IOException;
 import java.net.SocketAddress;
 
+import org.jocean.event.api.EventEngine;
 import org.jocean.http.server.HttpServer;
+import org.jocean.http.server.HttpTrade;
 import org.jocean.http.util.RxNettys;
 
 import rx.Observable;
 import rx.Observable.OnSubscribe;
-import rx.subscriptions.Subscriptions;
 import rx.Subscriber;
+import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -35,20 +38,24 @@ public class DefaultHttpServer implements HttpServer {
         }
     }
     
+    public interface ChannelRecycler {
+        public void onResponseCompleted(final Channel channel, final boolean isKeepAlive);
+    }
+    
     /* (non-Javadoc)
      * @see org.jocean.http.server.HttpServer#create(java.net.SocketAddress)
      */
     @Override
-    public Observable<Channel> create(final SocketAddress localAddress) {
-        return Observable.create(new OnSubscribe<Channel>() {
+    public Observable<HttpTrade> create(final SocketAddress localAddress) {
+        return Observable.create(new OnSubscribe<HttpTrade>() {
             @Override
-            public void call(final Subscriber<? super Channel> subscriber) {
+            public void call(final Subscriber<? super HttpTrade> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final ServerBootstrap bootstrap = _creator.newBootstrap();
                     bootstrap.childHandler(new ChannelInitializer<Channel>() {
                         @Override
                         protected void initChannel(final Channel ch) throws Exception {
-                            subscriber.onNext(ch);
+                            subscriber.onNext(createHttpTrade(ch, subscriber));
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
                     subscriber.add(Subscriptions.from(future));
@@ -65,7 +72,45 @@ public class DefaultHttpServer implements HttpServer {
             }});
     }
 
-    public DefaultHttpServer(final BootstrapCreator creator) {
+    private DefaultHttpTrade createHttpTrade(
+            final Channel channel, final Subscriber<? super HttpTrade> subscriber) {
+        return new DefaultHttpTrade(channel, this._engine, 
+                createChannelRecycler(subscriber));
+    }
+
+    private ChannelRecycler createChannelRecycler(final Subscriber<? super HttpTrade> subscriber) {
+        return new ChannelRecycler() {
+            @Override
+            public void onResponseCompleted(
+                    final Channel channel, final boolean isKeepAlive) {
+                //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
+                //  Detail:
+                //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
+                //
+                //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+                //
+                // See https://github.com/netty/netty/issues/2983 for more information.
+                channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
+                    .addListener(isKeepAlive ? createOnNextListener(subscriber) : ChannelFutureListener.CLOSE);
+            }};
+    }
+    
+    private ChannelFutureListener createOnNextListener(
+            final Subscriber<? super HttpTrade> subscriber) {
+        return new ChannelFutureListener() {
+            @Override
+            public void operationComplete(
+                    final ChannelFuture future)
+                    throws Exception {
+                if (!subscriber.isUnsubscribed()) {
+                    subscriber.onNext(
+                        createHttpTrade(future.channel(), subscriber));
+                }
+            }};
+    }
+
+    public DefaultHttpServer(final EventEngine engine, final BootstrapCreator creator) {
+        this._engine = engine;
         this._creator = creator;
     }
 
@@ -75,4 +120,5 @@ public class DefaultHttpServer implements HttpServer {
     }
     
     private final BootstrapCreator _creator;
+    private final EventEngine _engine;
 }

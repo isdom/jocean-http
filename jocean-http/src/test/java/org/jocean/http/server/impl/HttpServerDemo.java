@@ -3,7 +3,6 @@ package org.jocean.http.server.impl;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalEventLoopGroup;
@@ -23,6 +22,7 @@ import org.jocean.event.extend.Services;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
+import org.jocean.http.server.HttpTrade;
 import org.jocean.http.util.RxNettys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +50,9 @@ public class HttpServerDemo {
         
         //  create for LocalChannel
         @SuppressWarnings("resource")
-        final HttpServer server = new DefaultHttpServer(new AbstractBootstrapCreator(
+        final HttpServer server = new DefaultHttpServer(
+                engine,
+                new AbstractBootstrapCreator(
                 new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
             @Override
             protected void initializeBootstrap(final ServerBootstrap bootstrap) {
@@ -60,15 +62,14 @@ public class HttpServerDemo {
         
         final Subscription subscription = 
         server.create(new LocalAddress("test"))
-            .doOnNext(InboundFeature.APPLY_CONTENT_COMPRESSOR)
-            .doOnNext(InboundFeature.APPLY_LOGGING)
-            .doOnNext(new InboundFeature.APPLY_CLOSE_ON_IDLE(10))
+//            .doOnNext(InboundFeature.APPLY_CONTENT_COMPRESSOR)
+//            .doOnNext(InboundFeature.APPLY_LOGGING)
+//            .doOnNext(new InboundFeature.APPLY_CLOSE_ON_IDLE(10))
 //            .doOnNext(new InboundFeature.APPLY_SSL(sslCtx))
-            .subscribe(new Action1<Channel>() {
+            .subscribe(new Action1<HttpTrade>() {
                 @Override
-                public void call(final Channel channel) {
-                  final Iterator<HttpObject> itr = 
-                    new DefaultHttpInbound(channel, engine).request()
+                public void call(final HttpTrade trade) {
+                  final Iterator<HttpObject> itr = trade.request()
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                   

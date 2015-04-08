@@ -3,8 +3,6 @@
  */
 package org.jocean.http.server;
 
-import io.netty.channel.Channel;
-
 import java.io.Closeable;
 import java.net.SocketAddress;
 
@@ -15,5 +13,5 @@ import rx.Observable;
  *
  */
 public interface HttpServer extends Closeable {
-    public Observable<Channel> create(final SocketAddress localAddress);
+    public Observable<HttpTrade> create(final SocketAddress localAddress);
 }

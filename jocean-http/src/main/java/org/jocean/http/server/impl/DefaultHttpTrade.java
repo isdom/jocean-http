@@ -8,11 +8,14 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,7 +25,8 @@ import org.jocean.event.api.EventEngine;
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.PairedGuardEventable;
 import org.jocean.event.api.annotation.OnEvent;
-import org.jocean.http.server.HttpInbound;
+import org.jocean.http.server.HttpTrade;
+import org.jocean.http.server.impl.DefaultHttpServer.ChannelRecycler;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Ordered;
@@ -37,7 +41,7 @@ import rx.Subscriber;
  * @author isdom
  *
  */
-public class DefaultHttpInbound implements HttpInbound {
+public class DefaultHttpTrade implements HttpTrade {
     private static final Throwable REQUEST_EXPIRED = 
             new RuntimeException("request expired");
     private static final String ADD_SUBSCRIBER = "addSubscriber";
@@ -45,7 +49,7 @@ public class DefaultHttpInbound implements HttpInbound {
     private static final String ON_CHANNEL_ERROR = "onChannelError";
     
     private static final Logger LOG =
-            LoggerFactory.getLogger(DefaultHttpInbound.class);
+            LoggerFactory.getLogger(DefaultHttpTrade.class);
     
     private static final PairedGuardEventable ONHTTPOBJ_EVENT = 
             new PairedGuardEventable(Nettys._NETTY_REFCOUNTED_GUARD, ON_HTTP_OBJECT);
@@ -65,13 +69,43 @@ public class DefaultHttpInbound implements HttpInbound {
     
     private final Channel _channel;
     private final EventReceiver _receiver;
+    private volatile boolean _isKeepAlive = false;
+    private final ChannelRecycler _channelRecycler;
     
-    public DefaultHttpInbound(
+    public DefaultHttpTrade(
             final Channel channel, 
-            final EventEngine engine) {
+            final EventEngine engine,
+            final ChannelRecycler channelRecycler) {
+        this._channelRecycler = channelRecycler;
         this._channel = channel;
         initChannel();
         this._receiver = engine.create(this.toString(), this.ACTIVED);
+    }
+    
+    @Override
+    public void close() throws IOException {
+        this._channel.close();
+    }
+    
+    @Override
+    public void response(final Observable<HttpObject> response) {
+        response.subscribe(new Subscriber<HttpObject>() {
+            @Override
+            public void onCompleted() {
+                _channelRecycler.onResponseCompleted(_channel, _isKeepAlive);
+            }
+
+            @Override
+            public void onError(final Throwable e) {
+                LOG.warn("channel:{} 's response onError:{}", 
+                        _channel, ExceptionUtils.exception2detail(e));
+            }
+
+            @Override
+            public void onNext(final HttpObject msg) {
+                _channel.write(ReferenceCountUtil.retain(msg));
+                //  TODO check write future's isSuccess
+            }});
     }
     
     @Override
@@ -131,6 +165,9 @@ public class DefaultHttpInbound implements HttpInbound {
         @Override
         protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg)
                 throws Exception {
+            if (msg instanceof HttpRequest) {
+                _isKeepAlive = HttpHeaders.isKeepAlive((HttpRequest)msg);
+            }
             _receiver.acceptEvent(ONHTTPOBJ_EVENT, msg);
         }
 
