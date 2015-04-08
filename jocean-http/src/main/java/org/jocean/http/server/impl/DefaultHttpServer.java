@@ -9,6 +9,8 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelPipeline;
+import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
@@ -18,11 +20,14 @@ import java.net.SocketAddress;
 import org.jocean.event.api.EventEngine;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpTrade;
+import org.jocean.http.server.InboundFeature;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
+import rx.functions.Action1;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -46,7 +51,10 @@ public class DefaultHttpServer implements HttpServer {
      * @see org.jocean.http.server.HttpServer#create(java.net.SocketAddress)
      */
     @Override
-    public Observable<HttpTrade> create(final SocketAddress localAddress) {
+    public Observable<HttpTrade> create(
+            final SocketAddress localAddress,
+            @SuppressWarnings("unchecked") 
+            final Action1<Channel> ... actions) {
         return Observable.create(new OnSubscribe<HttpTrade>() {
             @Override
             public void call(final Subscriber<? super HttpTrade> subscriber) {
@@ -55,6 +63,15 @@ public class DefaultHttpServer implements HttpServer {
                     bootstrap.childHandler(new ChannelInitializer<Channel>() {
                         @Override
                         protected void initChannel(final Channel ch) throws Exception {
+                            final ChannelPipeline pipeline = ch.pipeline();
+                            for (Action1<Channel> action : actions) {
+                                action.call(ch);
+                            }
+                            Nettys.insertHandler(
+                                    pipeline,
+                                    InboundFeature.HTTPSERVER_CODEC.name(), 
+                                    new HttpServerCodec(),
+                                    InboundFeature.TO_ORDINAL);
                             subscriber.onNext(createHttpTrade(ch, subscriber));
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);

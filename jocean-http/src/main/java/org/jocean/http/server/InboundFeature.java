@@ -1,4 +1,4 @@
-package org.jocean.http.server.impl;
+package org.jocean.http.server;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;

@@ -8,7 +8,7 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 
 import java.util.List;
 
-import org.jocean.http.server.impl.InboundFeature;
+import org.jocean.http.server.InboundFeature;
 import org.junit.Test;
 
 public class InsertHandlerTestCase {
