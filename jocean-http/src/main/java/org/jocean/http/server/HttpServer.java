@@ -19,5 +19,5 @@ public interface HttpServer extends Closeable {
     public Observable<HttpTrade> create(
             final SocketAddress localAddress, 
             @SuppressWarnings("unchecked") 
-            final Action1<Channel> ... actions);
+            final Action1<Channel> ... features);
 }

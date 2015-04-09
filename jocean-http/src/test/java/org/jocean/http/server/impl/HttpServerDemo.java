@@ -1,5 +1,9 @@
 package org.jocean.http.server.impl;
 
+import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
+import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
+import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -8,6 +12,8 @@ import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
@@ -19,10 +25,12 @@ import java.util.Iterator;
 import org.jocean.event.api.EventEngine;
 import org.jocean.event.extend.Runners;
 import org.jocean.event.extend.Services;
+import org.jocean.http.HttpFeature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpTrade;
+import org.jocean.http.server.InboundFeature;
 import org.jocean.http.util.RxNettys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,8 +68,10 @@ public class HttpServerDemo {
                 bootstrap.channel(LocalServerChannel.class);
             }});
         
+        @SuppressWarnings("unchecked")
         final Subscription subscription = 
-        server.create(new LocalAddress("test"))
+        server.create(new LocalAddress("test"),
+                InboundFeature.APPLY_LOGGING)
 //            .doOnNext(InboundFeature.APPLY_CONTENT_COMPRESSOR)
 //            .doOnNext(InboundFeature.APPLY_LOGGING)
 //            .doOnNext(new InboundFeature.APPLY_CLOSE_ON_IDLE(10))
@@ -78,18 +88,27 @@ public class HttpServerDemo {
                     public void run() {
                         try {
                             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                            LOG.info("recv {}", new String(bytes, "UTF-8"));
+//                            LOG.info("recv {}", new String(bytes, "UTF-8"));
+                            final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
+                                    Unpooled.wrappedBuffer(bytes));
+                            response.headers().set(CONTENT_TYPE, "text/plain");
+                            response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                            trade.response(
+                                Observable.<HttpObject>just(response));
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
                     }}).start();
                 }});
         
-        Services.lookupOrCreateTimerService("demo").schedule(new Runnable() {
-            @Override
-            public void run() {
-                subscription.unsubscribe();
-            }}, 10 * 1000);
+//        Services.lookupOrCreateTimerService("demo").schedule(new Runnable() {
+//            @Override
+//            public void run() {
+//                subscription.unsubscribe();
+//            }}, 10 * 1000);
+        
+        @SuppressWarnings("resource")
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
         
         while (true) {
             final ByteBuf content = Unpooled.buffer(0);
@@ -98,15 +117,19 @@ public class HttpServerDemo {
                     new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
             HttpHeaders.setContentLength(request, content.readableBytes());
             
-            @SuppressWarnings("resource")
-            final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
-            client.sendRequest(
+            final Iterator<HttpObject> itr =
+                client.sendRequest(
                 new LocalAddress("test"), 
-                Observable.just(request)
-//                HttpFeature.EnableLOG,
+                Observable.just(request),
+                HttpFeature.EnableLOG
 //                HttpFeature.EnableSSL
                 )
-                .subscribe();
+                .map(RxNettys.<HttpObject>retainMap())
+                .toBlocking().toIterable().iterator();
+            
+            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
+            LOG.info("recv Response: {}", new String(bytes, "UTF-8"));
+            
             Thread.sleep(1000);
         }
     }
