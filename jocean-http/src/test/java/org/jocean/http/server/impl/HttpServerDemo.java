@@ -6,6 +6,7 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.local.LocalAddress;
@@ -13,6 +14,7 @@ import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
@@ -20,6 +22,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Iterator;
 
 import org.jocean.event.api.EventEngine;
@@ -36,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import rx.Observable;
+import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action1;
 
@@ -79,26 +83,34 @@ public class HttpServerDemo {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                  final Iterator<HttpObject> itr = trade.request()
-                    .map(RxNettys.<HttpObject>retainMap())
-                    .toBlocking().toIterable().iterator();
-                  
-                  new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-//                            LOG.info("recv {}", new String(bytes, "UTF-8"));
-                            final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
-                                    Unpooled.wrappedBuffer(bytes));
-                            response.headers().set(CONTENT_TYPE, "text/plain");
-                            response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                            trade.response(
-                                Observable.<HttpObject>just(response));
-                        } catch (IOException e) {
-                            e.printStackTrace();
+                    trade.request().subscribe(new Subscriber<HttpObject>() {
+                        @Override
+                        public void onCompleted() {
+                            final FullHttpRequest req = trade.retainFullHttpRequest();
+                            if (null!=req) {
+                                try {
+                                    final InputStream is = new ByteBufInputStream(req.content());
+                                    final byte[] bytes = new byte[is.available()];
+                                    is.read(bytes);
+                                    final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
+                                            Unpooled.wrappedBuffer(bytes));
+                                    response.headers().set(CONTENT_TYPE, "text/plain");
+                                    response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                                    trade.response(
+                                        Observable.<HttpObject>just(response));
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                } finally {
+                                    req.release();
+                                }
+                            }
                         }
-                    }}).start();
+                        @Override
+                        public void onError(Throwable e) {
+                        }
+                        @Override
+                        public void onNext(final HttpObject msg) {
+                        }});
                 }});
         
 //        Services.lookupOrCreateTimerService("demo").schedule(new Runnable() {
