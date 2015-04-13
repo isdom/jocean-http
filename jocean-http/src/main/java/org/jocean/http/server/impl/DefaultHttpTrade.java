@@ -26,6 +26,7 @@ import org.jocean.event.api.AbstractUnhandleAware;
 import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventEngine;
 import org.jocean.event.api.EventReceiver;
+import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.event.api.PairedGuardEventable;
 import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.event.api.internal.DefaultInvoker;
@@ -90,6 +91,16 @@ public class DefaultHttpTrade implements HttpTrade {
     private final List<HttpObject> _httpObjects = new ArrayList<>();
     private final List<Subscriber<? super HttpObject>> _subscribers = new ArrayList<>();
     
+    private final FlowLifecycleListener _lifecycleListener = new FlowLifecycleListener() {
+        @Override
+        public void afterEventReceiverCreated(EventReceiver receiver)
+                throws Exception {
+        }
+        @Override
+        public void afterFlowDestroy() throws Exception {
+            detachAll();
+        }};
+    
     public DefaultHttpTrade(
             final Channel channel, 
             final EventEngine engine,
@@ -99,9 +110,14 @@ public class DefaultHttpTrade implements HttpTrade {
         this._closure = Nettys.channelHandlersClosure(channel);
         channel.pipeline().addLast(
             "work", this._closure.call(new WorkHandler()));
-        this._requestReceiver = engine.create(this.toString(), this.REQ_ACTIVED);
+        this._requestReceiver = engine.create(this.toString(), 
+            this.REQ_ACTIVED, 
+            this._lifecycleListener);
         this._responseReceiver = engine.create(this.toString(),
-            new WAIT_RESP(_currentResponseId.updateIdAndGet()).freeze());
+            new WAIT_RESP(_currentResponseId.updateIdAndGet())
+                .handler(DefaultInvoker.invokers(DETACHABLE))
+                .freeze(),
+            this._lifecycleListener);
     }
 
     private boolean isChannelActived() {
@@ -121,6 +137,11 @@ public class DefaultHttpTrade implements HttpTrade {
         return channel;
     }
 
+    public void detachAll() {
+        this._requestReceiver.acceptEvent("detach");
+        this._responseReceiver.acceptEvent("detach");
+    }
+    
     public void doClose() {
         final Channel channel = detachChannelAndReleaseRequest();
         if (null!=channel) {
@@ -132,6 +153,7 @@ public class DefaultHttpTrade implements HttpTrade {
     public void close() throws IOException {
         doClose();
         //  TODO stop all receiver
+        detachAll();
     }
     
     @Override
@@ -216,6 +238,13 @@ public class DefaultHttpTrade implements HttpTrade {
 //        }
     }
     
+    private Object DETACHABLE = new Object() {
+        @OnEvent(event = "detach") 
+        private BizStep detach() {
+            return null;
+        }
+    };
+    
     private final BizStep REQ_ACTIVED = new BizStep("httptrade.REQ_ACTIVED") {
         private void callOnCompletedWhenFully(
                 final Subscriber<? super HttpObject> subscriber) {
@@ -263,6 +292,7 @@ public class DefaultHttpTrade implements HttpTrade {
             return null;
         }
     }
+    .handler(DefaultInvoker.invokers(DETACHABLE))
     .freeze();
             
     @Override
@@ -360,8 +390,10 @@ public class DefaultHttpTrade implements HttpTrade {
                 .handler(buildOnResponse(
                             new BizStep("httptrade.LOCK_RESP" + suffix)
                             .handler(buildOnResponse(BizStep.CURRENT_BIZSTEP, suffix))
+                            .handler(DefaultInvoker.invokers(DETACHABLE))
                             .freeze(), 
                         suffix))
+                .handler(DefaultInvoker.invokers(DETACHABLE))
                 .freeze();
         }
 
