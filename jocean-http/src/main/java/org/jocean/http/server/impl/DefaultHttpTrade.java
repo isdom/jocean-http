@@ -63,7 +63,6 @@ public class DefaultHttpTrade implements HttpTrade {
     private static final String ON_HTTP_OBJECT = "onHttpObject";
     private static final String ON_CHANNEL_ERROR = "onChannelError";
     
-    
     private static final PairedGuardEventable ONHTTPOBJ_EVENT = 
             new PairedGuardEventable(Nettys._NETTY_REFCOUNTED_GUARD, ON_HTTP_OBJECT);
     
@@ -114,8 +113,8 @@ public class DefaultHttpTrade implements HttpTrade {
             this.REQ_ACTIVED, 
             this._lifecycleListener);
         this._responseReceiver = engine.create(this.toString(),
-            new WAIT_RESP(_currentResponseId.updateIdAndGet())
-                .handler(DefaultInvoker.invokers(DETACHABLE))
+            new WAIT_RESP(_responseIdx.updateIdAndGet())
+                .handler(DefaultInvoker.invokers(RESP_DETACHABLE))
                 .freeze(),
             this._lifecycleListener);
     }
@@ -138,7 +137,7 @@ public class DefaultHttpTrade implements HttpTrade {
     }
 
     public void detachAll() {
-        this._requestReceiver.acceptEvent("detach");
+        this._requestReceiver.acceptEvent(ON_CHANNEL_ERROR, REQUEST_EXPIRED);
         this._responseReceiver.acceptEvent("detach");
     }
     
@@ -152,7 +151,6 @@ public class DefaultHttpTrade implements HttpTrade {
     @Override
     public void close() throws IOException {
         doClose();
-        //  TODO stop all receiver
         detachAll();
     }
     
@@ -238,13 +236,6 @@ public class DefaultHttpTrade implements HttpTrade {
 //        }
     }
     
-    private Object DETACHABLE = new Object() {
-        @OnEvent(event = "detach") 
-        private BizStep detach() {
-            return null;
-        }
-    };
-    
     private final BizStep REQ_ACTIVED = new BizStep("httptrade.REQ_ACTIVED") {
         private void callOnCompletedWhenFully(
                 final Subscriber<? super HttpObject> subscriber) {
@@ -292,7 +283,6 @@ public class DefaultHttpTrade implements HttpTrade {
             return null;
         }
     }
-    .handler(DefaultInvoker.invokers(DETACHABLE))
     .freeze();
             
     @Override
@@ -305,7 +295,7 @@ public class DefaultHttpTrade implements HttpTrade {
     private static final String ON_RESPONSE_COMPLETED = "onResponseCompleted";
     private static final String ON_RESPONSE_ERROR = "onResponseError";
     
-    private final ValidationId _currentResponseId = new ValidationId();
+    private final ValidationId _responseIdx = new ValidationId();
     
     private final class ON_RESPONSE {
         private final BizStep _onNextStep;
@@ -352,6 +342,18 @@ public class DefaultHttpTrade implements HttpTrade {
         return "." + idx;
     }
     
+    private Object RESP_DETACHABLE = new Object() {
+        @OnEvent(event = "detach") 
+        private BizStep detach() {
+            //  unsubscribe current subscribe for response
+            if (null!=_subscriptionResponse) {
+                _subscriptionResponse.unsubscribe();
+                _subscriptionResponse = null;
+            }
+            return null;
+        }
+    };
+    
     private final class WAIT_RESP extends BizStep {
         final int _idx;
         public WAIT_RESP(final int idx) {
@@ -386,14 +388,14 @@ public class DefaultHttpTrade implements HttpTrade {
                     }})
                 );
             
-            return new WAIT_RESP(_currentResponseId.updateIdAndGet())
+            return new WAIT_RESP(_responseIdx.updateIdAndGet())
                 .handler(buildOnResponse(
                             new BizStep("httptrade.LOCK_RESP" + suffix)
                             .handler(buildOnResponse(BizStep.CURRENT_BIZSTEP, suffix))
-                            .handler(DefaultInvoker.invokers(DETACHABLE))
+                            .handler(DefaultInvoker.invokers(RESP_DETACHABLE))
                             .freeze(), 
                         suffix))
-                .handler(DefaultInvoker.invokers(DETACHABLE))
+                .handler(DefaultInvoker.invokers(RESP_DETACHABLE))
                 .freeze();
         }
 
