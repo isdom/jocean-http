@@ -61,7 +61,7 @@ public class DefaultHttpTrade implements HttpTrade {
             new RuntimeException("request expired");
     private static final String ADD_SUBSCRIBER = "addSubscriber";
     private static final String ON_HTTP_OBJECT = "onHttpObject";
-    private static final String ON_CHANNEL_ERROR = "onChannelError";
+    private static final String ON_REQUEST_ERROR = "onChannelError";
     
     private static final PairedGuardEventable ONHTTPOBJ_EVENT = 
             new PairedGuardEventable(Nettys._NETTY_REFCOUNTED_GUARD, ON_HTTP_OBJECT);
@@ -79,6 +79,19 @@ public class DefaultHttpTrade implements HttpTrade {
         }
     };
     
+    private OnSubscribe<HttpObject> _onSubscribeRequest = new OnSubscribe<HttpObject>() {
+        @Override
+        public void call(final Subscriber<? super HttpObject> subscriber) {
+            if (!subscriber.isUnsubscribed()) {
+                if (isChannelActived()) {
+                    _requestReceiver.acceptEvent(ADDSUBSCRIBER_EVENT, subscriber);
+                } else {
+                    subscriber.onError(REQUEST_EXPIRED);
+                }
+            }
+        }
+    };
+
     private final AtomicReference<Channel> _channelRef = new AtomicReference<>(null);
     private final HandlersClosure _closure;
     private final EventReceiver _requestReceiver;
@@ -86,19 +99,9 @@ public class DefaultHttpTrade implements HttpTrade {
     private volatile boolean _isKeepAlive = false;
     private final ChannelRecycler _channelRecycler;
     
-    private volatile boolean _isFully = false;
-    private final List<HttpObject> _httpObjects = new ArrayList<>();
-    private final List<Subscriber<? super HttpObject>> _subscribers = new ArrayList<>();
-    
-    private final FlowLifecycleListener _lifecycleListener = new FlowLifecycleListener() {
-        @Override
-        public void afterEventReceiverCreated(EventReceiver receiver)
-                throws Exception {
-        }
-        @Override
-        public void afterFlowDestroy() throws Exception {
-            detachAll();
-        }};
+    private volatile boolean _isReqFully = false;
+    private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
+    private final List<Subscriber<? super HttpObject>> _reqSubscribers = new ArrayList<>();
     
     public DefaultHttpTrade(
             final Channel channel, 
@@ -109,14 +112,35 @@ public class DefaultHttpTrade implements HttpTrade {
         this._closure = Nettys.channelHandlersClosure(channel);
         channel.pipeline().addLast(
             "work", this._closure.call(new WorkHandler()));
-        this._requestReceiver = engine.create(this.toString(), 
+        this._requestReceiver = engine.create(this.toString() + ".req", 
             this.REQ_ACTIVED, 
-            this._lifecycleListener);
-        this._responseReceiver = engine.create(this.toString(),
+            new FlowLifecycleListener() {
+                @Override
+                public void afterEventReceiverCreated(EventReceiver receiver)
+                        throws Exception {
+                }
+                @Override
+                public void afterFlowDestroy() throws Exception {
+                    // release all HttpObjects
+                    for (HttpObject obj : _reqHttpObjects) {
+                        ReferenceCountUtil.release(obj);
+                    }
+                    _reqHttpObjects.clear();
+                    detachAll();
+                }});
+        this._responseReceiver = engine.create(this.toString() + ".resp",
             new WAIT_RESP(_responseIdx.updateIdAndGet())
                 .handler(DefaultInvoker.invokers(RESP_DETACHABLE))
                 .freeze(),
-            this._lifecycleListener);
+            new FlowLifecycleListener() {
+                @Override
+                public void afterEventReceiverCreated(EventReceiver receiver)
+                        throws Exception {
+                }
+                @Override
+                public void afterFlowDestroy() throws Exception {
+                    detachAll();
+                }});
     }
 
     private boolean isChannelActived() {
@@ -124,55 +148,48 @@ public class DefaultHttpTrade implements HttpTrade {
         return null!=channel ? channel.isActive() : false;
     }
 
-    private Channel detachChannelAndReleaseRequest() {
-        final Channel channel = this._channelRef.getAndSet(null);
-        if (null!=channel) {
-            // release all HttpObjects
-            for (HttpObject obj : this._httpObjects) {
-                ReferenceCountUtil.release(obj);
-            }
-            this._httpObjects.clear();
-        }
-        return channel;
-    }
-
-    public void detachAll() {
-        this._requestReceiver.acceptEvent(ON_CHANNEL_ERROR, REQUEST_EXPIRED);
-        this._responseReceiver.acceptEvent("detach");
+    private Channel detachChannel() {
+       return this._channelRef.getAndSet(null);
     }
     
-    public void doClose() {
-        final Channel channel = detachChannelAndReleaseRequest();
+    private void detachAll() {
+        final Channel channel = detachChannel();
         if (null!=channel) {
             channel.close();
         }
+        this._requestReceiver.acceptEvent(ON_REQUEST_ERROR, REQUEST_EXPIRED);
+        this._responseReceiver.acceptEvent("detach");
     }
-
+    
     @Override
     public void close() throws IOException {
-        doClose();
         detachAll();
     }
     
     @Override
     public Observable<HttpObject> request() {
-        return Observable.create(new OnSubscribeRequest());
+        return Observable.create(this._onSubscribeRequest);
     }
 
     @Override
+    public void response(final Observable<HttpObject> response) {
+        this._responseReceiver.acceptEvent(SET_RESPONSE, response);
+    }
+    
+    @Override
     public FullHttpRequest retainFullHttpRequest() {
-        if (!this._isFully) {
+        if (!this._isReqFully) {
             return null;
         }
-        if (this._httpObjects.size()>0) {
-            if (this._httpObjects.get(0) instanceof FullHttpRequest) {
-                return ((FullHttpRequest)this._httpObjects.get(0)).retain();
+        if (this._reqHttpObjects.size()>0) {
+            if (this._reqHttpObjects.get(0) instanceof FullHttpRequest) {
+                return ((FullHttpRequest)this._reqHttpObjects.get(0)).retain();
             }
             
-            final HttpRequest req = (HttpRequest)this._httpObjects.get(0);
-            final ByteBuf[] bufs = new ByteBuf[this._httpObjects.size()-1];
-            for (int idx = 1; idx<this._httpObjects.size(); idx++) {
-                bufs[idx-1] = ((HttpContent)this._httpObjects.get(idx)).content().retain();
+            final HttpRequest req = (HttpRequest)this._reqHttpObjects.get(0);
+            final ByteBuf[] bufs = new ByteBuf[this._reqHttpObjects.size()-1];
+            for (int idx = 1; idx<this._reqHttpObjects.size(); idx++) {
+                bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
             }
             return new DefaultFullHttpRequest(
                     req.getProtocolVersion(), 
@@ -184,19 +201,6 @@ public class DefaultHttpTrade implements HttpTrade {
         }
     }
     
-    private class OnSubscribeRequest implements OnSubscribe<HttpObject> {
-        @Override
-        public void call(final Subscriber<? super HttpObject> subscriber) {
-            if (!subscriber.isUnsubscribed()) {
-                if (isChannelActived()) {
-                    _requestReceiver.acceptEvent(ADDSUBSCRIBER_EVENT, subscriber);
-                } else {
-                    subscriber.onError(REQUEST_EXPIRED);
-                }
-            }
-        }
-    }
-
     private final class WorkHandler extends SimpleChannelInboundHandler<HttpObject> 
         implements Ordered {
         @Override
@@ -208,7 +212,7 @@ public class DefaultHttpTrade implements HttpTrade {
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
             LOG.warn("exceptionCaught {}, detail:{}", 
                     ctx.channel(), ExceptionUtils.exception2detail(cause));
-            _requestReceiver.acceptEvent(ON_CHANNEL_ERROR, cause);
+            _requestReceiver.acceptEvent(ON_REQUEST_ERROR, cause);
             ctx.close();
         }
 
@@ -219,7 +223,7 @@ public class DefaultHttpTrade implements HttpTrade {
         
         @Override
         public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
-            _requestReceiver.acceptEvent(ON_CHANNEL_ERROR, new RuntimeException("channelInactive"));
+            _requestReceiver.acceptEvent(ON_REQUEST_ERROR, new RuntimeException("channelInactive"));
         }
 
         @Override
@@ -239,7 +243,7 @@ public class DefaultHttpTrade implements HttpTrade {
     private final BizStep REQ_ACTIVED = new BizStep("httptrade.REQ_ACTIVED") {
         private void callOnCompletedWhenFully(
                 final Subscriber<? super HttpObject> subscriber) {
-            if (_isFully) {
+            if (_isReqFully) {
                 subscriber.onCompleted();
             }
         }
@@ -247,8 +251,8 @@ public class DefaultHttpTrade implements HttpTrade {
         @OnEvent(event = ADD_SUBSCRIBER)
         private BizStep doRegisterSubscriber(final Subscriber<? super HttpObject> subscriber) {
             if (!subscriber.isUnsubscribed()) {
-                _subscribers.add(subscriber);
-                for (HttpObject obj : _httpObjects) {
+                _reqSubscribers.add(subscriber);
+                for (HttpObject obj : _reqHttpObjects) {
                     subscriber.onNext(obj);
                 }
                 callOnCompletedWhenFully(subscriber);
@@ -261,10 +265,10 @@ public class DefaultHttpTrade implements HttpTrade {
         private BizStep doCacheHttpObject(final HttpObject httpObj) {
             if ( (httpObj instanceof FullHttpRequest) 
                 || (httpObj instanceof LastHttpContent)) {
-                _isFully = true;
+                _isReqFully = true;
             }
-            _httpObjects.add(ReferenceCountUtil.retain(httpObj));
-            for (Subscriber<? super HttpObject> subscriber : _subscribers) {
+            _reqHttpObjects.add(ReferenceCountUtil.retain(httpObj));
+            for (Subscriber<? super HttpObject> subscriber : _reqSubscribers) {
                 subscriber.onNext(httpObj);
                 callOnCompletedWhenFully(subscriber);
             }
@@ -272,24 +276,18 @@ public class DefaultHttpTrade implements HttpTrade {
             return BizStep.CURRENT_BIZSTEP;
         }
         
-        @OnEvent(event = ON_CHANNEL_ERROR)
-        private BizStep notifyChannelErrorAndEndFlow(final Throwable cause) {
-            if ( !_isFully ) {
-                for (Subscriber<? super HttpObject> subscriber : _subscribers) {
+        @OnEvent(event = ON_REQUEST_ERROR)
+        private BizStep notifyRequestErrorAndEndFlow(final Throwable cause) {
+            if ( !_isReqFully ) {
+                for (Subscriber<? super HttpObject> subscriber : _reqSubscribers) {
                     subscriber.onError(cause);
                 }
             }
-            doClose();
             return null;
         }
     }
     .freeze();
             
-    @Override
-    public void response(final Observable<HttpObject> response) {
-        this._responseReceiver.acceptEvent(SET_RESPONSE, response);
-    }
-    
     private static final String SET_RESPONSE = "setResponse";
     private static final String ON_RESPONSE_NEXT = "onResponseNext";
     private static final String ON_RESPONSE_COMPLETED = "onResponseCompleted";
@@ -322,7 +320,7 @@ public class DefaultHttpTrade implements HttpTrade {
             }
             //  TODO disable continue call response
             _channelRecycler.onResponseCompleted(
-                    detachChannelAndReleaseRequest(), 
+                    detachChannel(), 
                     _isKeepAlive);
             return null;
         }
@@ -331,7 +329,6 @@ public class DefaultHttpTrade implements HttpTrade {
         private BizStep onError(final Throwable e) {
             LOG.warn("channel:{} 's response onError:{}", 
                     _channelRef.get(), ExceptionUtils.exception2detail(e));
-            doClose();
             return null;
         }
     };
