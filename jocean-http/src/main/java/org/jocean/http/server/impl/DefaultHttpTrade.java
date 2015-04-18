@@ -38,7 +38,6 @@ import org.jocean.http.util.HandlersClosure;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Ordered;
-import org.jocean.idiom.ValidationId;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,8 +75,8 @@ public class DefaultHttpTrade implements HttpTrade {
         this._requestReceiver = engine.create(this.toString() + ".req", 
             this.REQ_ACTIVED, this.REQ_ACTIVED);
         this._responseReceiver = engine.create(this.toString() + ".resp",
-            new WAIT_RESP(_responseIdx.updateIdAndGet())
-                .handler(DefaultInvoker.invokers(RESP_DETACHABLE))
+            new WAIT_RESP(0, null)
+                .handler(DefaultInvoker.invokers(new RESP_DETACHABLE(null)))
                 .freeze(),
             new FlowLifecycleListener() {
                 @Override
@@ -202,7 +201,8 @@ public class DefaultHttpTrade implements HttpTrade {
 //        }
     }
     
-    private final class CLS_REQ_ACTIVED extends BizStep implements FlowLifecycleListener {
+    private final class CLS_REQ_ACTIVED extends BizStep 
+        implements FlowLifecycleListener {
         private volatile boolean _isReqFully = false;
         private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
         private final List<Subscriber<? super HttpObject>> _reqSubscribers = new ArrayList<>();
@@ -305,7 +305,21 @@ public class DefaultHttpTrade implements HttpTrade {
     private static final String ON_RESPONSE_COMPLETED = "onResponseCompleted";
     private static final String ON_RESPONSE_ERROR = "onResponseError";
     
-    private final ValidationId _responseIdx = new ValidationId();
+    private final class RESP_DETACHABLE {
+        private final Subscription _mySubscription;
+        
+        RESP_DETACHABLE(final Subscription subscription) {
+            this._mySubscription = subscription;
+        }
+        
+        @OnEvent(event = "detach") 
+        private BizStep detach() {
+            if (null!=this._mySubscription) {
+                this._mySubscription.unsubscribe();
+            }
+            return null;
+        }
+    }
     
     private final class ON_RESPONSE {
         private final BizStep _onNextStep;
@@ -345,39 +359,28 @@ public class DefaultHttpTrade implements HttpTrade {
         }
     };
     
-    private Subscription _subscriptionResponse = null;
-    
-    private static String genSuffix(final int idx) {
-        return "." + idx;
-    }
-    
-    private Object RESP_DETACHABLE = new Object() {
-        @OnEvent(event = "detach") 
-        private BizStep detach() {
-            //  unsubscribe current subscribe for response
-            if (null!=_subscriptionResponse) {
-                _subscriptionResponse.unsubscribe();
-                _subscriptionResponse = null;
-            }
-            return null;
-        }
-    };
-    
     private final class WAIT_RESP extends BizStep {
-        final int _idx;
-        public WAIT_RESP(final int idx) {
+        private String genSuffix(final int idx) {
+            return "." + idx;
+        }
+        
+        private final int _idx;
+        private final Subscription _lastSubscription;
+        
+        public WAIT_RESP(final int idx, final Subscription subscription) {
             super(("httptrade.WAIT_RESP." + idx));
             this._idx = idx;
+            this._lastSubscription = subscription;
         }
 
         @OnEvent(event = SET_RESPONSE)
         private BizStep setResponse(final Observable<HttpObject> response) {
             //  unsubscribe current subscribe for response
-            if (null!=_subscriptionResponse) {
-                _subscriptionResponse.unsubscribe();
+            if (null!=this._lastSubscription) {
+                this._lastSubscription.unsubscribe();
             }
             final String suffix = genSuffix(this._idx);
-            _subscriptionResponse = response.subscribe(
+            final Subscription subscription = response.subscribe(
                 RxSubscribers.guardUnsubscribed(
                     new Subscriber<HttpObject>() {
                     @Override
@@ -397,17 +400,17 @@ public class DefaultHttpTrade implements HttpTrade {
                     }})
                 );
             
-            return new WAIT_RESP(_responseIdx.updateIdAndGet())
+            return new WAIT_RESP(this._idx+1, subscription)
                 .handler(buildOnResponse(
                             new BizStep("httptrade.LOCK_RESP" + suffix)
                             .handler(buildOnResponse(BizStep.CURRENT_BIZSTEP, suffix))
-                            .handler(DefaultInvoker.invokers(RESP_DETACHABLE))
+                            .handler(DefaultInvoker.invokers(new RESP_DETACHABLE(subscription)))
                             .freeze(), 
                         suffix))
-                .handler(DefaultInvoker.invokers(RESP_DETACHABLE))
+                .handler(DefaultInvoker.invokers(new RESP_DETACHABLE(subscription)))
                 .freeze();
         }
-
+        
         private EventInvoker[] buildOnResponse(final BizStep onNextStep, final String suffix) {
             return DefaultInvoker.invokers(new ON_RESPONSE(onNextStep), suffix);
         }
