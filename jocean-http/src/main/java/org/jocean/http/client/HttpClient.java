@@ -8,8 +8,6 @@ import io.netty.handler.codec.http.HttpObject;
 import java.io.Closeable;
 import java.net.SocketAddress;
 
-import org.jocean.http.HttpFeature;
-
 import rx.Observable;
 
 /**
@@ -27,5 +25,5 @@ public interface HttpClient extends Closeable {
     public Observable<HttpObject> sendRequest(
             final SocketAddress remoteAddress, 
             final Observable<? extends HttpObject> request,
-            final HttpFeature... features);
+            final OutboundFeature.Applicable... features);
 }

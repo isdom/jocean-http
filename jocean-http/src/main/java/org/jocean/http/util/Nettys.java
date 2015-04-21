@@ -5,6 +5,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpContentCompressor;
+import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.timeout.IdleStateEvent;
@@ -160,6 +161,12 @@ public class Nettys {
         @Override
         public ChannelHandler call(final Object... args) {
             return new HttpContentCompressor();
+        }};
+        
+    public static final FuncN<ChannelHandler> CONTENT_DECOMPRESSOR_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new HttpContentDecompressor();
         }};
 
     public static final Func2<Channel,SslContext,ChannelHandler> SSL_FUNC2 = 

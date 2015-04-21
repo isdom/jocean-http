@@ -16,9 +16,7 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpClientCodec;
-import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
@@ -32,9 +30,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.HttpFeature;
 import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.util.HandlersClosure;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.Features;
+import org.jocean.idiom.InterfaceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,19 +74,20 @@ public class DefaultHttpClient implements HttpClient {
     public Observable<HttpObject> sendRequest(
             final SocketAddress remoteAddress,
             final Observable<? extends HttpObject> request,
-            final HttpFeature... features) {
-        final int featuresAsInt = this._defaultFeaturesAsInt | Features.featuresAsInt(features);
+            final OutboundFeature.Applicable... features) {
+//        final int featuresAsInt = this._defaultFeaturesAsInt | Features.featuresAsInt(features);
         return Observable.create(
             new OnSubscribeResponse(
-                createChannelObservable(remoteAddress, featuresAsInt),
+                createChannelObservable(remoteAddress, features),
                 this._channelPool,
-                HttpFeature.isCompressEnabled(featuresAsInt), 
+                InterfaceUtils.compositeByType(features, OutboundFeature.ApplyToRequest.class),
+//                HttpFeature.isCompressEnabled(featuresAsInt), 
                 request));
     }
 
     private Func1<ChannelHandler, Observable<Channel>> createChannelObservable(
             final SocketAddress remoteAddress, 
-            final int featuresAsInt) {
+            final OutboundFeature.Applicable[] features) {
         return new Func1<ChannelHandler, Observable<Channel>> () {
             @Override
             public Observable<Channel> call(final ChannelHandler handler) {
@@ -95,8 +96,8 @@ public class DefaultHttpClient implements HttpClient {
                     public void call(final Subscriber<? super Channel> subscriber) {
                         try {
                             if (!subscriber.isUnsubscribed()) {
-                                if (!reuseChannel(remoteAddress, featuresAsInt, handler, subscriber)) {
-                                    createChannel(remoteAddress, featuresAsInt, handler, subscriber);
+                                if (!reuseChannel(remoteAddress, features, handler, subscriber)) {
+                                    createChannel(remoteAddress, features, handler, subscriber);
                                 }
                             }
                         } catch (Throwable e) {
@@ -108,14 +109,14 @@ public class DefaultHttpClient implements HttpClient {
 
     private boolean reuseChannel(
             final SocketAddress remoteAddress,
-            final int featuresAsInt, 
+            final OutboundFeature.Applicable[] features, 
             final ChannelHandler handler,
             final Subscriber<? super Channel> subscriber) {
         final Channel channel = this._channelPool.retainChannel(remoteAddress);
         if (null!=channel) {
             final HandlersClosure handlersClosure = 
                     Nettys.channelHandlersClosure(channel);
-            addFeatureCodecs(channel, featuresAsInt, handlersClosure)
+            addFeatureCodecs(channel, features, handlersClosure)
                 .addLast(RESPONSE_HANDLER, handlersClosure.call(handler));
             
             subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
@@ -130,16 +131,16 @@ public class DefaultHttpClient implements HttpClient {
 
     private void createChannel(
             final SocketAddress remoteAddress,
-            final int featuresAsInt, 
+            final OutboundFeature.Applicable[] features, 
             final ChannelHandler handler,
             final Subscriber<? super Channel> subscriber) throws Throwable {
         final Channel channel = this._channelCreator.newChannel();
-        final boolean enableSSL = Features.isEnabled(featuresAsInt, HttpFeature.EnableSSL);
+//        final boolean enableSSL = Features.isEnabled(features, HttpFeature.EnableSSL);
         try {
             final HandlersClosure handlersClosure = 
                     Nettys.channelHandlersClosure(channel);
-            addHttpClientCodecs(channel, enableSSL, subscriber, handlersClosure);
-            addFeatureCodecs(channel, featuresAsInt, handlersClosure)
+            addHttpClientCodecs(channel, features, subscriber, handlersClosure);
+            addFeatureCodecs(channel, features, handlersClosure)
                 .addLast(RESPONSE_HANDLER, handlersClosure.call(handler));
         
             subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
@@ -166,36 +167,48 @@ public class DefaultHttpClient implements HttpClient {
 
     private ChannelPipeline addFeatureCodecs(
             final Channel channel,
-            final int featuresAsInt,
+            final OutboundFeature.Applicable[] features,
             final HandlersClosure handlersClosure) {
-        final ChannelPipeline pipeline = channel.pipeline();
-        if (Features.isEnabled(featuresAsInt, HttpFeature.EnableLOG)) {
-            //  add first
-            pipeline.addFirst("log", 
-                handlersClosure.call(new LoggingHandler()));
+        for ( OutboundFeature.Applicable applicable : features) {
+            if (applicable.isRemovable()) {
+                handlersClosure.call(applicable.call(channel));
+            }
         }
-                  
-        if (HttpFeature.isCompressEnabled(featuresAsInt)) {
-            //  add last
-            pipeline.addLast("decompressor", 
-                handlersClosure.call(new HttpContentDecompressor()));
-        }
+//        final ChannelPipeline pipeline = channel.pipeline();
+//        if (Features.isEnabled(featuresAsInt, HttpFeature.EnableLOG)) {
+//            //  add first
+//            pipeline.addFirst("log", 
+//                handlersClosure.call(new LoggingHandler()));
+//        }
+//                  
+//        if (HttpFeature.isCompressEnabled(featuresAsInt)) {
+//            //  add last
+//            pipeline.addLast("decompressor", 
+//                handlersClosure.call(new HttpContentDecompressor()));
+//        }
         
-        return pipeline;
+        return channel.pipeline();
     }
     
     private ChannelPipeline addHttpClientCodecs(
             final Channel channel,
-            final boolean enableSSL,
+            final OutboundFeature.Applicable[] features, 
             final Subscriber<? super Channel> subscriber,
             final HandlersClosure handlersClosure) {
         final ChannelPipeline pipeline = channel.pipeline();
         
         // Enable SSL if necessary.
-        if (enableSSL) {
-            pipeline.addLast("ssl", _sslCtx.newHandler(channel.alloc()));
+        for ( OutboundFeature.Applicable applicable : features) {
+            if (!applicable.isRemovable()) {
+                applicable.call(channel);
+            }
         }
+//        if (enableSSL) {
+//            pipeline.addLast("ssl", _sslCtx.newHandler(channel.alloc()));
+//        }
         
+        //  TODO for modify later, how to notify
+        final boolean enableSSL = false;
         pipeline.addLast("completeOrErrorNotifier", 
                 handlersClosure.call(new ChannelInboundHandlerAdapter() {
                 @Override

@@ -5,11 +5,11 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 
+import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.RxSubscribers;
@@ -35,7 +35,7 @@ final class OnSubscribeResponse implements
     OnSubscribeResponse(
         final Func1<ChannelHandler, Observable<Channel>> channelObservable, 
         final ChannelPool channelPool,
-        final boolean isCompressEnabled,
+        final OutboundFeature.ApplyToRequest applyToRequest,
         final Observable<? extends HttpObject> request) {
         this._channelObservable = channelObservable;
         this._channelPool = channelPool;
@@ -52,10 +52,11 @@ final class OnSubscribeResponse implements
                     public void call(final HttpObject msg) {
                         if (msg instanceof HttpRequest) {
                             _channelPool.beforeSendRequest(channel, (HttpRequest)msg);
-                            if (isCompressEnabled) {
-                                HttpHeaders.addHeader((HttpRequest) msg,
-                                    HttpHeaders.Names.ACCEPT_ENCODING, 
-                                    HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
+                            if (null!=applyToRequest) {
+                                applyToRequest.applyToRequest((HttpRequest) msg);
+//                                HttpHeaders.addHeader((HttpRequest) msg,
+//                                    HttpHeaders.Names.ACCEPT_ENCODING, 
+//                                    HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
                             }
                         }
                     }
