@@ -75,13 +75,11 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress,
             final Observable<? extends HttpObject> request,
             final OutboundFeature.Applicable... features) {
-//        final int featuresAsInt = this._defaultFeaturesAsInt | Features.featuresAsInt(features);
         return Observable.create(
             new OnSubscribeResponse(
                 createChannelObservable(remoteAddress, features),
                 this._channelPool,
                 InterfaceUtils.compositeByType(features, OutboundFeature.ApplyToRequest.class),
-//                HttpFeature.isCompressEnabled(featuresAsInt), 
                 request));
     }
 
@@ -294,44 +292,36 @@ public class DefaultHttpClient implements HttpClient {
     
     public DefaultHttpClient(
             final EventLoopGroup eventLoopGroup,
-            final Class<? extends Channel> channelType,
-            final HttpFeature... defaultFeatures) throws Exception { 
+            final Class<? extends Channel> channelType) throws Exception { 
         this(new DefaultChannelPool(),
             new AbstractChannelCreator() {
                 @Override
                 protected void initializeBootstrap(final Bootstrap bootstrap) {
                     bootstrap.group(eventLoopGroup).channel(channelType);
-                }},
-            defaultFeatures);
+                }});
     }
     
     public DefaultHttpClient(
             final EventLoopGroup eventLoopGroup,
-            final ChannelFactory<? extends Channel> channelFactory,
-            final HttpFeature... defaultFeatures) throws Exception { 
+            final ChannelFactory<? extends Channel> channelFactory) throws Exception { 
         this(new DefaultChannelPool(),
             new AbstractChannelCreator() {
                 @Override
                 protected void initializeBootstrap(final Bootstrap bootstrap) {
                     bootstrap.group(eventLoopGroup).channelFactory(channelFactory);
-                }},
-            defaultFeatures);
+                }});
     }
     
     public DefaultHttpClient(
-            final ChannelCreator channelCreator,
-            final HttpFeature... defaultFeatures) throws Exception {
-        this(new DefaultChannelPool(), channelCreator, defaultFeatures);
+            final ChannelCreator channelCreator) throws Exception {
+        this(new DefaultChannelPool(), channelCreator);
     }
     
     public DefaultHttpClient(
             final ChannelPool channelPool,
-            final ChannelCreator channelCreator,
-            final HttpFeature... defaultFeatures) throws Exception {
+            final ChannelCreator channelCreator) throws Exception {
         this._channelPool = channelPool;
         this._channelCreator = channelCreator;
-        this._defaultFeaturesAsInt = Features.featuresAsInt(defaultFeatures);
-        this._sslCtx = SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
     }
     
     /* (non-Javadoc)
@@ -343,8 +333,6 @@ public class DefaultHttpClient implements HttpClient {
         this._channelCreator.close();
     }
     
-    private final SslContext _sslCtx;
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
-    private final int _defaultFeaturesAsInt;
 }
