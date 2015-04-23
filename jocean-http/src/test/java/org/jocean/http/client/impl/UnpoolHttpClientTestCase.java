@@ -9,11 +9,13 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 
 import java.util.Arrays;
 import java.util.Iterator;
 
-import org.jocean.http.HttpFeature;
+import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
@@ -45,16 +47,16 @@ public class UnpoolHttpClientTestCase {
     
         final DefaultHttpClient client = new DefaultHttpClient(
                 Nettys.unpoolChannels(),
-                creator,
-                HttpFeature.EnableLOG,
-                HttpFeature.DisableCompress);
+                creator);
         try {
             // first 
             {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
+                        OutboundFeature.APPLY_LOGGING
+                        )
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -87,16 +89,15 @@ public class UnpoolHttpClientTestCase {
     
     @Test
     public void testHttpsHappyPathKeepAliveNOTReuseConnection() throws Exception {
+        final SslContext sslCtx = SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
+        
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
 
         final TestChannelCreator creator = new TestChannelCreator();
         
         final DefaultHttpClient client = new DefaultHttpClient(
                 Nettys.unpoolChannels(),
-                creator,
-                HttpFeature.EnableSSL,
-                HttpFeature.EnableLOG,
-                HttpFeature.DisableCompress);
+                creator);
         
         try {
             // first 
@@ -104,7 +105,10 @@ public class UnpoolHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
+                        OutboundFeature.APPLY_LOGGING,
+                        new OutboundFeature.APPLY_SSL(sslCtx)
+                        )
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -119,7 +123,10 @@ public class UnpoolHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
+                        OutboundFeature.APPLY_LOGGING,
+                        new OutboundFeature.APPLY_SSL(sslCtx)
+                        )
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
