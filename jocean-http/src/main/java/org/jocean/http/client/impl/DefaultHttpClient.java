@@ -11,7 +11,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -156,7 +155,11 @@ public class DefaultHttpClient implements HttpClient {
         if (null!=channel) {
             final HandlersClosure handlersClosure = 
                     Nettys.channelHandlersClosure(channel);
-            addFeatureCodecs(channel, features, handlersClosure);
+            for ( OutboundFeature.Applicable applicable : features) {
+                if (applicable.isRemovable()) {
+                    handlersClosure.call(applicable.call(channel));
+                }
+            }
             Nettys.insertHandler(
                 channel.pipeline(),
                 RESPONSE_HANDLER,
@@ -182,8 +185,29 @@ public class DefaultHttpClient implements HttpClient {
         try {
             final HandlersClosure handlersClosure = 
                     Nettys.channelHandlersClosure(channel);
-            addHttpClientCodecs(channel, features, subscriber, handlersClosure);
-            addFeatureCodecs(channel, features, handlersClosure);
+            
+            for ( OutboundFeature.Applicable applicable : features) {
+                if (applicable.isRemovable()) {
+                    handlersClosure.call(applicable.call(channel));
+                } else {
+                    applicable.call(channel);
+                }
+            }
+            
+            Nettys.insertHandler(
+                channel.pipeline(),
+                OutboundFeature.HTTPCLIENT_CODEC.name(),
+                new HttpClientCodec(),
+                OutboundFeature.TO_ORDINAL);
+            
+            Nettys.insertHandler(
+                channel.pipeline(),
+                "completeOrErrorNotifier",
+                handlersClosure.call(
+                    new CompleteOrErrorNotifier(subscriber, 
+                        OutboundFeature.isSSLEnabled(channel.pipeline()))),
+                OutboundFeature.TO_ORDINAL);
+            
             Nettys.insertHandler(
                 channel.pipeline(),
                 RESPONSE_HANDLER,
@@ -210,46 +234,6 @@ public class DefaultHttpClient implements HttpClient {
             }
             throw e;
         }
-    }
-
-    private void addFeatureCodecs(
-            final Channel channel,
-            final OutboundFeature.Applicable[] features,
-            final HandlersClosure handlersClosure) {
-        for ( OutboundFeature.Applicable applicable : features) {
-            if (applicable.isRemovable()) {
-                handlersClosure.call(applicable.call(channel));
-            }
-        }
-    }
-    
-    private void addHttpClientCodecs(
-            final Channel channel,
-            final OutboundFeature.Applicable[] features, 
-            final Subscriber<? super Channel> subscriber,
-            final HandlersClosure handlersClosure) {
-        // Enable SSL if necessary.
-        for ( OutboundFeature.Applicable applicable : features) {
-            if (!applicable.isRemovable()) {
-                applicable.call(channel);
-            }
-        }
-        
-        final ChannelPipeline pipeline = channel.pipeline();
-        
-        Nettys.insertHandler(
-            pipeline,
-            OutboundFeature.HTTPCLIENT_CODEC.name(),
-            new HttpClientCodec(),
-            OutboundFeature.TO_ORDINAL);
-        
-        Nettys.insertHandler(
-            pipeline,
-            "completeOrErrorNotifier",
-            handlersClosure.call(
-                new CompleteOrErrorNotifier(subscriber, 
-                    OutboundFeature.isSSLEnabled(pipeline))),
-            OutboundFeature.TO_ORDINAL);
     }
 
     private static void markChannelValid(final Channel channel) {
