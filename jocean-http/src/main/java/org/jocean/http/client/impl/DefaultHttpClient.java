@@ -17,9 +17,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.AttributeKey;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
@@ -28,13 +26,12 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.jocean.http.HttpFeature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.util.HandlersClosure;
 import org.jocean.http.util.Nettys;
-import org.jocean.idiom.Features;
 import org.jocean.idiom.InterfaceUtils;
+import org.jocean.idiom.Ordered;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +47,51 @@ import rx.subscriptions.Subscriptions;
  *
  */
 public class DefaultHttpClient implements HttpClient {
+    
+    private final class CompleteOrErrorNotifier extends ChannelInboundHandlerAdapter 
+        implements Ordered {
+        @Override
+        public int ordinal() {
+            return OutboundFeature.LAST_FEATURE.ordinal() + 1;
+        }
+        
+        private final Subscriber<? super Channel> _subscriber;
+        private final boolean _enableSSL;
+
+        private CompleteOrErrorNotifier(
+                final Subscriber<? super Channel> subscriber,
+                final boolean enableSSL) {
+            this._subscriber = subscriber;
+            this._enableSSL = enableSSL;
+        }
+
+        @Override
+        public void channelActive(final ChannelHandlerContext ctx) 
+                throws Exception {
+            if (!_enableSSL) {
+                markChannelValid(ctx.channel());
+                _subscriber.onNext(ctx.channel());
+                _subscriber.onCompleted();
+            }
+            ctx.fireChannelActive();
+        }
+
+        @Override
+        public void userEventTriggered(final ChannelHandlerContext ctx, final Object evt) 
+                throws Exception {
+            if (_enableSSL && evt instanceof SslHandshakeCompletionEvent) {
+                final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
+                if (sslComplete.isSuccess()) {
+                    markChannelValid(ctx.channel());
+                    _subscriber.onNext(ctx.channel());
+                    _subscriber.onCompleted();
+                } else {
+                    _subscriber.onError(sslComplete.cause());
+                }
+            }
+            ctx.fireUserEventTriggered(evt);
+        }
+    }
     
     private static final Object OK = new Object();
 
@@ -114,8 +156,12 @@ public class DefaultHttpClient implements HttpClient {
         if (null!=channel) {
             final HandlersClosure handlersClosure = 
                     Nettys.channelHandlersClosure(channel);
-            addFeatureCodecs(channel, features, handlersClosure)
-                .addLast(RESPONSE_HANDLER, handlersClosure.call(handler));
+            addFeatureCodecs(channel, features, handlersClosure);
+            Nettys.insertHandler(
+                channel.pipeline(),
+                RESPONSE_HANDLER,
+                handlersClosure.call(handler),
+                OutboundFeature.TO_ORDINAL);
             
             subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
             subscriber.onNext(channel);
@@ -133,13 +179,16 @@ public class DefaultHttpClient implements HttpClient {
             final ChannelHandler handler,
             final Subscriber<? super Channel> subscriber) throws Throwable {
         final Channel channel = this._channelCreator.newChannel();
-//        final boolean enableSSL = Features.isEnabled(features, HttpFeature.EnableSSL);
         try {
             final HandlersClosure handlersClosure = 
                     Nettys.channelHandlersClosure(channel);
             addHttpClientCodecs(channel, features, subscriber, handlersClosure);
-            addFeatureCodecs(channel, features, handlersClosure)
-                .addLast(RESPONSE_HANDLER, handlersClosure.call(handler));
+            addFeatureCodecs(channel, features, handlersClosure);
+            Nettys.insertHandler(
+                channel.pipeline(),
+                RESPONSE_HANDLER,
+                handlersClosure.call(handler),
+                OutboundFeature.TO_ORDINAL);
         
             subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
             subscriber.add(Subscriptions.from(
@@ -163,7 +212,7 @@ public class DefaultHttpClient implements HttpClient {
         }
     }
 
-    private ChannelPipeline addFeatureCodecs(
+    private void addFeatureCodecs(
             final Channel channel,
             final OutboundFeature.Applicable[] features,
             final HandlersClosure handlersClosure) {
@@ -172,74 +221,35 @@ public class DefaultHttpClient implements HttpClient {
                 handlersClosure.call(applicable.call(channel));
             }
         }
-//        final ChannelPipeline pipeline = channel.pipeline();
-//        if (Features.isEnabled(featuresAsInt, HttpFeature.EnableLOG)) {
-//            //  add first
-//            pipeline.addFirst("log", 
-//                handlersClosure.call(new LoggingHandler()));
-//        }
-//                  
-//        if (HttpFeature.isCompressEnabled(featuresAsInt)) {
-//            //  add last
-//            pipeline.addLast("decompressor", 
-//                handlersClosure.call(new HttpContentDecompressor()));
-//        }
-        
-        return channel.pipeline();
     }
     
-    private ChannelPipeline addHttpClientCodecs(
+    private void addHttpClientCodecs(
             final Channel channel,
             final OutboundFeature.Applicable[] features, 
             final Subscriber<? super Channel> subscriber,
             final HandlersClosure handlersClosure) {
-        final ChannelPipeline pipeline = channel.pipeline();
-        
         // Enable SSL if necessary.
         for ( OutboundFeature.Applicable applicable : features) {
             if (!applicable.isRemovable()) {
                 applicable.call(channel);
             }
         }
-//        if (enableSSL) {
-//            pipeline.addLast("ssl", _sslCtx.newHandler(channel.alloc()));
-//        }
         
-        //  TODO for modify later, how to notify
-        final boolean enableSSL = false;
-        pipeline.addLast("completeOrErrorNotifier", 
-                handlersClosure.call(new ChannelInboundHandlerAdapter() {
-                @Override
-                public void channelActive(final ChannelHandlerContext ctx) 
-                        throws Exception {
-                    if (!enableSSL) {
-                        markChannelValid(channel);
-                        subscriber.onNext(channel);
-                        subscriber.onCompleted();
-                    }
-                    ctx.fireChannelActive();
-                }
-                
-                @Override
-                public void userEventTriggered(final ChannelHandlerContext ctx, final Object evt) 
-                        throws Exception {
-                    if (enableSSL && evt instanceof SslHandshakeCompletionEvent) {
-                        final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
-                        if (sslComplete.isSuccess()) {
-                            markChannelValid(channel);
-                            subscriber.onNext(channel);
-                            subscriber.onCompleted();
-                        } else {
-                            subscriber.onError(sslComplete.cause());
-                        }
-                    }
-                    ctx.fireUserEventTriggered(evt);
-                }
-            }));
-            
-        pipeline.addLast("clientCodec", new HttpClientCodec());
-                  
-        return pipeline;
+        final ChannelPipeline pipeline = channel.pipeline();
+        
+        Nettys.insertHandler(
+            pipeline,
+            OutboundFeature.HTTPCLIENT_CODEC.name(),
+            new HttpClientCodec(),
+            OutboundFeature.TO_ORDINAL);
+        
+        Nettys.insertHandler(
+            pipeline,
+            "completeOrErrorNotifier",
+            handlersClosure.call(
+                new CompleteOrErrorNotifier(subscriber, 
+                    OutboundFeature.isSSLEnabled(pipeline))),
+            OutboundFeature.TO_ORDINAL);
     }
 
     private static void markChannelValid(final Channel channel) {

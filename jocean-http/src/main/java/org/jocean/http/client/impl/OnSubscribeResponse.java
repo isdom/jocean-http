@@ -12,6 +12,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.Ordered;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,53 +82,72 @@ final class OnSubscribeResponse implements
         }
     }
 
+    private final class WorkHandler extends SimpleChannelInboundHandler<HttpObject>         
+        implements Ordered {
+        @Override
+        public int ordinal() {
+            return OutboundFeature.LAST_FEATURE.ordinal() + 2;
+        }
+
+        private final Subscriber<? super HttpObject> _response;
+
+        private WorkHandler(Subscriber<? super HttpObject> response) {
+            this._response = response;
+        }
+
+        @Override
+        public void channelInactive(final ChannelHandlerContext ctx)
+                throws Exception {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("channelInactive: ch({})", ctx.channel());
+            }
+            ctx.fireChannelInactive();
+            _response.onError(new RuntimeException("peer has closed."));
+        }
+
+        @Override
+        public void exceptionCaught(final ChannelHandlerContext ctx,
+                final Throwable cause) throws Exception {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("exceptionCaught: ch({}), detail:{}", ctx.channel(),
+                        ExceptionUtils.exception2detail(cause));
+            }
+            ctx.close();
+            _response.onError(cause);
+        }
+
+        @Override
+        protected void channelRead0(final ChannelHandlerContext ctx,
+                final HttpObject msg) throws Exception {
+            _response.onNext(msg);
+            if (msg instanceof LastHttpContent) {
+                /*
+                 * netty 参考代码:
+                 * https://github.com/netty/netty/blob/netty-4.0.26.Final
+                 * /codec/src
+                 * /main/java/io/netty/handler/codec/ByteToMessageDecoder
+                 * .java#L274
+                 * https://github.com/netty/netty/blob/netty-4.0.26.Final
+                 * /codec-http
+                 * /src/main/java/io/netty/handler/codec/http/HttpObjectDecoder
+                 * .java#L398 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件 currentState
+                 * == State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() &&
+                 * !chunked
+                 * 即没有指定Content-Length头域，也不是CHUNKED传输模式，此情况下，即会自动产生一个LastHttpContent
+                 * .EMPTY_LAST_CONTENT实例 因此，无需在channelInactive处，针对该情况做特殊处理
+                 */
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
+                            ctx.channel(), msg);
+                }
+                _channelPool.afterReceiveLastContent(ctx.channel());
+                _response.onCompleted();
+            }
+        }
+    }
+
     private SimpleChannelInboundHandler<HttpObject> createResponseHandler(
             final Subscriber<? super HttpObject> response) {
-        return new SimpleChannelInboundHandler<HttpObject>() {
-
-            @Override
-            public void channelInactive(final ChannelHandlerContext ctx)
-                    throws Exception {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("channelInactive: ch({})", ctx.channel());
-                }
-                ctx.fireChannelInactive();
-                response.onError(new RuntimeException("peer has closed."));
-            }
-
-            @Override
-            public void exceptionCaught(final ChannelHandlerContext ctx,
-                    final Throwable cause) throws Exception {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("exceptionCaught: ch({}), detail:{}", 
-                            ctx.channel(), ExceptionUtils.exception2detail(cause));
-                }
-                ctx.close();
-                response.onError(cause);
-            }
-
-            @Override
-            protected void channelRead0(
-                    final ChannelHandlerContext ctx,
-                    final HttpObject msg) throws Exception {
-                response.onNext(msg);
-                if (msg instanceof LastHttpContent) {
-                    /* netty 参考代码:
-                     * https://github.com/netty/netty/blob/netty-4.0.26.Final/codec/src/main/java/io/netty/handler/codec/ByteToMessageDecoder.java#L274
-                     * https://github.com/netty/netty/blob/netty-4.0.26.Final/codec-http/src/main/java/io/netty/handler/codec/http/HttpObjectDecoder.java#L398
-                     * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件
-                     * currentState == State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() && !chunked
-                     * 即没有指定Content-Length头域，也不是CHUNKED传输模式，此情况下，即会自动产生一个LastHttpContent.EMPTY_LAST_CONTENT实例
-                     * 因此，无需在channelInactive处，针对该情况做特殊处理
-                     */
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
-                                ctx.channel(), msg);
-                    }
-                    _channelPool.afterReceiveLastContent(ctx.channel());
-                    response.onCompleted();
-                }
-            }
-        };
+        return new WorkHandler(response);
     }
 }

@@ -70,8 +70,11 @@ public class DefaultHttpTrade implements HttpTrade {
         this._channelRecycler = channelRecycler;
         this._channelRef.set(channel);
         this._closure = Nettys.channelHandlersClosure(channel);
-        channel.pipeline().addLast(
-            "work", this._closure.call(new WorkHandler()));
+        Nettys.insertHandler(
+            channel.pipeline(),
+            "work",
+            this._closure.call(new WorkHandler()),
+            InboundFeature.TO_ORDINAL);
         this._requestReceiver = engine.create(this.toString() + ".req", 
             this.REQ_ACTIVED, this.REQ_ACTIVED);
         this._responseReceiver = engine.create(this.toString() + ".resp",

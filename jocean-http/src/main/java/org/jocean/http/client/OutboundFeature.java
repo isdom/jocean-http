@@ -2,6 +2,7 @@ package org.jocean.http.client;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.logging.LoggingHandler;
@@ -24,6 +25,10 @@ public enum OutboundFeature {
     CONTENT_DECOMPRESSOR(Nettys.CONTENT_DECOMPRESSOR_FUNCN),
     LAST_FEATURE(null)
     ;
+    
+    public static boolean isSSLEnabled(final ChannelPipeline pipeline) {
+        return (pipeline.names().indexOf(ENABLE_SSL.name()) > -1);
+    }
     
     public interface Applicable extends Func1<Channel, ChannelHandler> {
         public boolean isRemovable();
