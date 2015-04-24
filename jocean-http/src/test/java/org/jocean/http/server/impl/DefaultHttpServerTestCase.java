@@ -30,7 +30,7 @@ import java.util.Iterator;
 import org.jocean.event.api.EventEngine;
 import org.jocean.event.extend.Runners;
 import org.jocean.event.extend.Services;
-import org.jocean.http.HttpFeature;
+import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
@@ -120,7 +120,7 @@ public class DefaultHttpServerTestCase {
                 client.sendRequest(
                     new LocalAddress("test"), 
                     Observable.just(request),
-                    HttpFeature.EnableLOG)
+                    OutboundFeature.APPLY_LOGGING)
                 .map(RxNettys.<HttpObject>retainMap())
                 .toBlocking().toIterable().iterator();
             

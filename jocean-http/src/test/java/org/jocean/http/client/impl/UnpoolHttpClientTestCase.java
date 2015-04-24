@@ -15,6 +15,8 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import java.util.Arrays;
 import java.util.Iterator;
 
+import javax.net.ssl.SSLException;
+
 import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.util.Nettys;
@@ -25,6 +27,19 @@ import rx.Observable;
 
 public class UnpoolHttpClientTestCase {
 
+    final static SslContext sslCtx;
+    static {
+        sslCtx = initSslCtx();
+    }
+
+    private static SslContext initSslCtx() {
+        try {
+            return SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
+        } catch (SSLException e) {
+            return null;
+        }
+    }
+    
     private HttpTestServer createTestServerWithDefaultHandler(
             final boolean enableSSL, 
             final String acceptId) 
@@ -89,8 +104,6 @@ public class UnpoolHttpClientTestCase {
     
     @Test
     public void testHttpsHappyPathKeepAliveNOTReuseConnection() throws Exception {
-        final SslContext sslCtx = SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
-        
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
 
         final TestChannelCreator creator = new TestChannelCreator();

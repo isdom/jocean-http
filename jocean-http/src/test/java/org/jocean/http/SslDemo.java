@@ -9,6 +9,8 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.ReferenceCountUtil;
 
 import java.io.IOException;
@@ -17,6 +19,7 @@ import java.net.InetSocketAddress;
 import java.util.Iterator;
 
 import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,6 +57,7 @@ public class SslDemo {
     
     public static void main(String[] args) throws Exception {
         
+        final SslContext sslCtx = SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
 //        https://github.com/isdom
 //        final String host = "www.alipay.com";
         final String host = "www.csdn.net";
@@ -72,8 +76,9 @@ public class SslDemo {
                         new InetSocketAddress(host, 443), 
 //                        new InetSocketAddress("58.215.107.207", 443), 
                         Observable.just(request),
-                        HttpFeature.EnableLOG,
-                        HttpFeature.EnableSSL)
+                        OutboundFeature.APPLY_LOGGING,
+                        new OutboundFeature.APPLY_SSL(sslCtx)
+                        )
                     .map(new Func1<HttpObject, HttpObject>() {
                         @Override
                         public HttpObject call(final HttpObject obj) {
@@ -90,8 +95,9 @@ public class SslDemo {
                         new InetSocketAddress(host, 443), 
 //                        new InetSocketAddress("58.215.107.207", 443), 
                         Observable.just(request),
-                        HttpFeature.EnableLOG,
-                        HttpFeature.EnableSSL)
+                        OutboundFeature.APPLY_LOGGING,
+                        new OutboundFeature.APPLY_SSL(sslCtx)
+                        )
                     .map(new Func1<HttpObject, HttpObject>() {
                         @Override
                         public HttpObject call(final HttpObject obj) {
