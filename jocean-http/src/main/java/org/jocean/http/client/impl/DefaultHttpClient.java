@@ -92,17 +92,13 @@ public class DefaultHttpClient implements HttpClient {
         }
     }
     
-    private static final Object OK = new Object();
-
-    private static final String RESPONSE_HANDLER = "RESPONSE";
+    private static final String WORK_HANDLER = "WORK";
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
         if (!(InternalLoggerFactory.getDefaultFactory() instanceof Slf4JLoggerFactory)) {
             InternalLoggerFactory.setDefaultFactory(new Slf4JLoggerFactory());
         }
     }
-    
-    private static final AttributeKey<Object> VALID = AttributeKey.valueOf("__ISVALID");
     
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
@@ -129,23 +125,124 @@ public class DefaultHttpClient implements HttpClient {
             final OutboundFeature.Applicable[] features) {
         return new Func1<ChannelHandler, Observable<Channel>> () {
             @Override
-            public Observable<Channel> call(final ChannelHandler handler) {
+            public Observable<Channel> call(final ChannelHandler workHandler) {
                 return Observable.create(new OnSubscribe<Channel>() {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {
                         try {
                             if (!subscriber.isUnsubscribed()) {
-                                if (!reuseChannel(remoteAddress, features, handler, subscriber)) {
-                                    createChannel(remoteAddress, features, handler, subscriber);
+                                final Channel channel = _channelPool.retainChannel(remoteAddress);
+                                if (null!=channel) {
+                                    onChannelCreated(
+                                            channel, 
+                                            remoteAddress,
+                                            features, 
+                                            workHandler, 
+                                            subscriber);
+                                } else {
+                                    _channelCreator.newChannel()
+                                    .addListener(new ChannelFutureListener() {
+                                        @Override
+                                        public void operationComplete(
+                                                final ChannelFuture future)
+                                                throws Exception {
+                                            if (future.isSuccess()) {
+                                                onChannelCreated(
+                                                        future.channel(),
+                                                        remoteAddress,
+                                                        features, 
+                                                        workHandler, 
+                                                        subscriber);
+                                            } else {
+                                                subscriber.onError(future.cause());
+                                            }
+                                            
+                                        }});
                                 }
                             }
                         } catch (Throwable e) {
                             subscriber.onError(e);
                         }
-                    }});
+                }});
             }};
     }
 
+    private void onChannelCreated(
+            final Channel channel,
+            final SocketAddress remoteAddress,
+            final OutboundFeature.Applicable[] features,
+            final ChannelHandler workHandler,
+            final Subscriber<? super Channel> subscriber) {
+        final HandlersClosure handlersClosure = 
+                Nettys.channelHandlersClosure(channel);
+        
+        for ( OutboundFeature.Applicable applicable : features) {
+            if (applicable.isRemovable()) {
+                handlersClosure.call(applicable.call(channel));
+            }
+        }
+        Nettys.insertHandler(
+            channel.pipeline(),
+            WORK_HANDLER,
+            handlersClosure.call(workHandler),
+            OutboundFeature.TO_ORDINAL);
+        
+        subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
+        
+        if (isChannelValid(channel)) {
+            subscriber.onNext(channel);
+            subscriber.onCompleted();
+        } else {
+            initAndDoConnect(channel, 
+                    remoteAddress,
+                    features, 
+                    subscriber,
+                    handlersClosure);
+        }
+    }
+    
+    private void initAndDoConnect(
+            final Channel channel,
+            final SocketAddress remoteAddress,
+            final OutboundFeature.Applicable[] features,
+            final Subscriber<? super Channel> subscriber,
+            final HandlersClosure handlersClosure) {
+        for ( OutboundFeature.Applicable applicable : features) {
+            if (!applicable.isRemovable()) {
+                applicable.call(channel);
+            }
+        }
+        
+        Nettys.insertHandler(
+            channel.pipeline(),
+            OutboundFeature.HTTPCLIENT_CODEC.name(),
+            new HttpClientCodec(),
+            OutboundFeature.TO_ORDINAL);
+        
+        Nettys.insertHandler(
+            channel.pipeline(),
+            "completeOrErrorNotifier",
+            handlersClosure.call(
+                new CompleteOrErrorNotifier(subscriber, 
+                    OutboundFeature.isSSLEnabled(channel.pipeline()))),
+            OutboundFeature.TO_ORDINAL);
+        
+        subscriber.add(Subscriptions.from(
+                channel.connect(remoteAddress)
+                .addListener(new ChannelFutureListener() {
+                    @Override
+                    public void operationComplete(final ChannelFuture future) {
+                        if (!future.isSuccess()) {
+                            subscriber.onError(future.cause());
+                        }
+                    }
+                })));
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("createChannel and add codecs success for channel:{}/remoteAddress:{}",channel,remoteAddress);
+        }
+    }
+
+    /*
     private boolean reuseChannel(
             final SocketAddress remoteAddress,
             final OutboundFeature.Applicable[] features, 
@@ -235,7 +332,11 @@ public class DefaultHttpClient implements HttpClient {
             throw e;
         }
     }
+    */
 
+    private static final Object OK = new Object();
+    private static final AttributeKey<Object> VALID = AttributeKey.valueOf("__ISVALID");
+    
     private static void markChannelValid(final Channel channel) {
         channel.attr(VALID).set(OK);
     }
@@ -326,7 +427,7 @@ public class DefaultHttpClient implements HttpClient {
         // Shut down executor threads to exit.
         this._channelCreator.close();
     }
-    
+
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
 }

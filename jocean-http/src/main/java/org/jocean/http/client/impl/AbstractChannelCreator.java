@@ -5,6 +5,7 @@ package org.jocean.http.client.impl;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
@@ -63,12 +64,12 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
      * @see org.jocean.http.client.impl.ChannelCreator#newChannel()
      */
     @Override
-    public Channel newChannel() {
-        final Channel ch = this._bootstrap.register().channel();
+    public ChannelFuture newChannel() {
+        final ChannelFuture future = this._bootstrap.register();
         if ( LOG.isDebugEnabled() ) {
-            LOG.debug("create new channel: {}", ch);
+            LOG.debug("create new channel: {}", future.channel());
         }
-        return ch;
+        return future;
     }
     
     public int getActiveChannelCount() {

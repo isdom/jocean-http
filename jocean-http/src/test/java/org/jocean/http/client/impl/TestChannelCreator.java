@@ -93,13 +93,13 @@ public class TestChannelCreator implements ChannelCreator {
     }
 
     @Override
-    public Channel newChannel() {
-        final Channel ch = this._bootstrap.register().channel();
+    public ChannelFuture newChannel() {
+        final ChannelFuture future = this._bootstrap.register();
         if ( LOG.isDebugEnabled() ) {
-            LOG.debug("create new test channel: {}", ch);
+            LOG.debug("create new test channel: {}", future.channel());
         }
-        _channels.add((TestChannel)ch);
-        return ch;
+        _channels.add((TestChannel)future.channel());
+        return future;
     }
     
     public List<TestChannel> getChannels() {
@@ -135,6 +135,7 @@ public class TestChannelCreator implements ChannelCreator {
         .handler(new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(final Channel channel) throws Exception {
+                LOG.info("processing initChannel for {}", channel);
             }});
     
     private final List<TestChannel> _channels = new ArrayList<>();

@@ -1,9 +1,9 @@
 package org.jocean.http.client.impl;
 
-import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 
 import java.io.Closeable;
 
 public interface ChannelCreator extends Closeable {
-    public Channel newChannel();
+    public ChannelFuture newChannel();
 }
