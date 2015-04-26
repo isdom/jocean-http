@@ -27,7 +27,6 @@ import org.jocean.http.util.RxNettys;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
-import rx.functions.Action1;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -53,8 +52,7 @@ public class DefaultHttpServer implements HttpServer {
     @Override
     public Observable<HttpTrade> create(
             final SocketAddress localAddress,
-            @SuppressWarnings("unchecked") 
-            final Action1<Channel> ... features) {
+            final InboundFeature.Applicable... features) {
         return Observable.create(new OnSubscribe<HttpTrade>() {
             @Override
             public void call(final Subscriber<? super HttpTrade> subscriber) {
@@ -64,7 +62,7 @@ public class DefaultHttpServer implements HttpServer {
                         @Override
                         protected void initChannel(final Channel ch) throws Exception {
                             final ChannelPipeline pipeline = ch.pipeline();
-                            for (Action1<Channel> feature : features) {
+                            for (InboundFeature.Applicable feature : features) {
                                 feature.call(ch);
                             }
                             Nettys.insertHandler(
