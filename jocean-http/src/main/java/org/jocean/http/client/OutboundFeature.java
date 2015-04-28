@@ -34,6 +34,8 @@ public enum OutboundFeature {
         public boolean isRemovable();
     };
     
+    public static final Applicable[] EMPTY_APPLICABLES = new Applicable[0];
+
     public interface ApplyToRequest {
         public void applyToRequest(final HttpRequest request);
     }

@@ -112,11 +112,13 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress,
             final Observable<? extends HttpObject> request,
             final OutboundFeature.Applicable... features) {
+        final OutboundFeature.Applicable[] applyFeatures = 
+                features.length > 0 ? features : this._defaultFeatures;
         return Observable.create(
             new OnSubscribeResponse(
-                createChannelObservable(remoteAddress, features),
+                createChannelObservable(remoteAddress, applyFeatures),
                 this._channelPool,
-                InterfaceUtils.compositeByType(features, OutboundFeature.ApplyToRequest.class),
+                InterfaceUtils.compositeByType(applyFeatures, OutboundFeature.ApplyToRequest.class),
                 request));
     }
 
@@ -370,11 +372,12 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
 
-    public DefaultHttpClient() throws Exception {
-        this(1);
+    public DefaultHttpClient(final OutboundFeature.Applicable... defaultFeatures) {
+        this(1, defaultFeatures);
     }
     
-    public DefaultHttpClient(final int processThreadNumber) throws Exception {
+    public DefaultHttpClient(final int processThreadNumber,
+            final OutboundFeature.Applicable... defaultFeatures) {
         this(new DefaultChannelPool(), 
             new AbstractChannelCreator() {
                 @Override
@@ -382,41 +385,49 @@ public class DefaultHttpClient implements HttpClient {
                     bootstrap
                     .group(new NioEventLoopGroup(processThreadNumber))
                     .channel(NioSocketChannel.class);
-                }});
+                }},
+            defaultFeatures);
     }
     
     public DefaultHttpClient(
             final EventLoopGroup eventLoopGroup,
-            final Class<? extends Channel> channelType) throws Exception { 
+            final Class<? extends Channel> channelType,
+            final OutboundFeature.Applicable... defaultFeatures) { 
         this(new DefaultChannelPool(),
             new AbstractChannelCreator() {
                 @Override
                 protected void initializeBootstrap(final Bootstrap bootstrap) {
                     bootstrap.group(eventLoopGroup).channel(channelType);
-                }});
+                }},
+            defaultFeatures);
     }
     
     public DefaultHttpClient(
             final EventLoopGroup eventLoopGroup,
-            final ChannelFactory<? extends Channel> channelFactory) throws Exception { 
+            final ChannelFactory<? extends Channel> channelFactory,
+            final OutboundFeature.Applicable... defaultFeatures) { 
         this(new DefaultChannelPool(),
             new AbstractChannelCreator() {
                 @Override
                 protected void initializeBootstrap(final Bootstrap bootstrap) {
                     bootstrap.group(eventLoopGroup).channelFactory(channelFactory);
-                }});
+                }},
+            defaultFeatures);
     }
     
     public DefaultHttpClient(
-            final ChannelCreator channelCreator) throws Exception {
-        this(new DefaultChannelPool(), channelCreator);
+            final ChannelCreator channelCreator,
+            final OutboundFeature.Applicable... defaultFeatures) {
+        this(new DefaultChannelPool(), channelCreator, defaultFeatures);
     }
     
     public DefaultHttpClient(
             final ChannelPool channelPool,
-            final ChannelCreator channelCreator) throws Exception {
+            final ChannelCreator channelCreator,
+            final OutboundFeature.Applicable... defaultFeatures) {
         this._channelPool = channelPool;
         this._channelCreator = channelCreator;
+        this._defaultFeatures = defaultFeatures;
     }
     
     /* (non-Javadoc)
@@ -430,4 +441,5 @@ public class DefaultHttpClient implements HttpClient {
 
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
+    private final OutboundFeature.Applicable[] _defaultFeatures;
 }

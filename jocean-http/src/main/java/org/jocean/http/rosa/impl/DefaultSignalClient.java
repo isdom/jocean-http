@@ -90,8 +90,8 @@ public class DefaultSignalClient implements SignalClient {
                     final HttpRequest httpRequest =
                             _converter.processHttpRequest(request,
                                     genHttpRequest(uri));
-                    // TODO
-                    _httpClient.sendRequest(remoteAddress, Observable.just(httpRequest), OutboundFeature.APPLY_LOGGING)
+                    
+                    _httpClient.sendRequest(remoteAddress, Observable.just(httpRequest), safeGetRequestFeatures(request))
                     .subscribe(new Subscriber<HttpObject>() {
                         private final List<HttpObject> _respObjects = new ArrayList<>();
 
@@ -127,8 +127,9 @@ public class DefaultSignalClient implements SignalClient {
                                     subscriber.onNext((RESPONSE)resp);
                                     subscriber.onCompleted();
                                 } catch (Exception e) {
-                                    // TODO Auto-generated catch block
-                                    e.printStackTrace();
+                                    LOG.warn("exception when parse response {}, detail:{}",
+                                            httpResp, ExceptionUtils.exception2detail(e));
+                                    subscriber.onError(e);
                                 } finally {
                                     httpResp.release();
                                 }
@@ -138,8 +139,7 @@ public class DefaultSignalClient implements SignalClient {
 
                         @Override
                         public void onError(final Throwable e) {
-                            // TODO Auto-generated method stub
-                            
+                            subscriber.onError(e);
                         }
 
                         @Override
@@ -152,8 +152,14 @@ public class DefaultSignalClient implements SignalClient {
         });
     }
 
-    public void registerRequestType(final Class<?> reqCls, final String pathPrefix) {
-        this._req2pathPrefix.put(reqCls, Pair.of(pathPrefix, 0) );
+    public void registerRequestType(final Class<?> reqCls, final String pathPrefix, 
+            final OutboundFeature.Applicable... features) {
+        this._req2pathPrefix.put(reqCls, Pair.of(pathPrefix, features) );
+    }
+    
+    private OutboundFeature.Applicable[] safeGetRequestFeatures(final Object request) {
+        final Pair<String, OutboundFeature.Applicable[]> pair = _req2pathPrefix.get(request.getClass());
+        return (null != pair ? pair.second : OutboundFeature.EMPTY_APPLICABLES);
     }
     
     private static DefaultFullHttpRequest genHttpRequest(final URI uri) {
@@ -163,14 +169,12 @@ public class DefaultSignalClient implements SignalClient {
         final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
                 HttpVersion.HTTP_1_1, HttpMethod.GET, uri.getRawPath());
         request.headers().set(HttpHeaders.Names.HOST, host);
-//        request.headers().set(HttpHeaders.Names.ACCEPT_ENCODING,
-//                HttpHeaders.Values.GZIP);
 
         return request;
     }
     
-    private final Map<Class<?>, Pair<String, Integer>> _req2pathPrefix = 
-            new ConcurrentHashMap<Class<?>, Pair<String, Integer>>();
+    private final Map<Class<?>, Pair<String, OutboundFeature.Applicable[]>> _req2pathPrefix = 
+            new ConcurrentHashMap<Class<?>, Pair<String, OutboundFeature.Applicable[]>>();
     
     private final SignalConverter _converter = new SignalConverter() {
 
@@ -253,37 +257,26 @@ public class DefaultSignalClient implements SignalClient {
          * @return
          */
         private String safeGetPathPrefix(final Object request) {
-            final Pair<String, Integer> pair = _req2pathPrefix.get(request.getClass());
+            final Pair<String, OutboundFeature.Applicable[]> pair = _req2pathPrefix.get(request.getClass());
             return (null != pair ? pair.first : null);
         }
         
         @Override
         public void visit(final Object request, final DefaultFullHttpRequest httpRequest) 
                 throws Exception {
-            final int features = safeGetRequestFeatures(request);
             final Class<?> httpMethod = getHttpMethod(request);
             if ( null == httpMethod 
                 || GET.class.equals(httpMethod)) {
                 genGetRequest(request, httpRequest);
             }
             else if (POST.class.equals(httpMethod)) {
-                genPostRequest(request, httpRequest, features);
+                genPostRequest(request, httpRequest);
             }
         }
 
-        /**
-         * @param request
-         * @return
-         */
-        private int safeGetRequestFeatures(final Object request) {
-            final Pair<String, Integer> pair = _req2pathPrefix.get(request.getClass());
-            return (null != pair ? pair.second : 0);
-        }
-        
         private void genPostRequest(
                 final Object request,
-                final DefaultFullHttpRequest httpRequest,
-                final int features) {
+                final DefaultFullHttpRequest httpRequest) {
             final byte[] jsonBytes = JSON.toJSONBytes(request);
             
 //            if ( RequestFeature.isEnabled(features, RequestFeature.EnableJsonCompress)) {

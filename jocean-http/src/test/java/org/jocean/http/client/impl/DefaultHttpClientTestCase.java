@@ -95,7 +95,7 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpHappyPathOnce() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), OutboundFeature.APPLY_LOGGING);
         try {
         
             final Iterator<HttpObject> itr = 
@@ -123,7 +123,8 @@ public class DefaultHttpClientTestCase {
         final DefaultFullHttpRequest request = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
         
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
+                OutboundFeature.APPLY_LOGGING);
         try {
             final Iterator<HttpObject> itr = 
                 client.sendRequest(
@@ -149,13 +150,14 @@ public class DefaultHttpClientTestCase {
     public void testHttpsHappyPathOnce() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
 
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         try {
             final Iterator<HttpObject> itr = 
                 client.sendRequest(
                     new LocalAddress("test"), 
-                    Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                    new OutboundFeature.APPLY_SSL(sslCtx))
+                    Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                 .map(RxNettys.<HttpObject>retainMap())
                 .toBlocking().toIterable().iterator();
             
@@ -174,15 +176,15 @@ public class DefaultHttpClientTestCase {
 
         final TestChannelCreator creator = new TestChannelCreator();
     
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING);
         try {
             // first 
             {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        OutboundFeature.APPLY_LOGGING)
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -197,8 +199,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        OutboundFeature.APPLY_LOGGING)
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -220,7 +221,9 @@ public class DefaultHttpClientTestCase {
 
         final TestChannelCreator creator = new TestChannelCreator();
         
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         
         try {
             // first 
@@ -228,10 +231,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        OutboundFeature.APPLY_LOGGING,
-                        new OutboundFeature.APPLY_SSL(sslCtx)
-                        )
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -246,10 +246,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        OutboundFeature.APPLY_LOGGING,
-                        new OutboundFeature.APPLY_SSL(sslCtx)
-                        )
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -274,7 +271,8 @@ public class DefaultHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
         
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING);
         
         try {
             // first 
@@ -283,9 +281,7 @@ public class DefaultHttpClientTestCase {
                 try {
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.<HttpObject>error(new RuntimeException("test error")),
-                        OutboundFeature.APPLY_LOGGING
-                        )
+                        Observable.<HttpObject>error(new RuntimeException("test error")))
                     .subscribe(testSubscriber);
                     // await for unsubscribed
                     new TestSubscription() {{
@@ -307,9 +303,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        OutboundFeature.APPLY_LOGGING
-                        )
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -335,7 +329,8 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting)
             .setWriteException(new RuntimeException("write error"));
         
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING);
         
         try {
             // first 
@@ -344,9 +339,7 @@ public class DefaultHttpClientTestCase {
                 try {
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        OutboundFeature.APPLY_LOGGING
-                        )
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .subscribe(testSubscriber);
                     // await for unsubscribed
                     new TestSubscription() {{
@@ -371,9 +364,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        OutboundFeature.APPLY_LOGGING
-                        )
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -398,7 +389,7 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = 
                 new TestChannelCreator().setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator, OutboundFeature.APPLY_LOGGING);
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -432,16 +423,16 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         //  NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             client.sendRequest(new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor),
-                new OutboundFeature.APPLY_SSL(sslCtx)
-            )
+                .doOnNext(nextSensor))
             .subscribe(testSubscriber);
             // await for unsubscribed
             new TestSubscription() {{
@@ -470,15 +461,15 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor),
-                new OutboundFeature.APPLY_SSL(sslCtx))
+                .doOnNext(nextSensor))
             .subscribe(testSubscriber);
             new TestSubscription() {{
                 testSubscriber.add(this);
@@ -548,7 +539,8 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting)
             .setConnectException(new RuntimeException(errorMsg));
         
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -556,9 +548,7 @@ public class DefaultHttpClientTestCase {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor),
-                new OutboundFeature.APPLY_SSL(sslCtx)
-                )
+                .doOnNext(nextSensor))
             .subscribe(testSubscriber);
             new TestSubscription() {{
                 testSubscriber.add(this);
@@ -603,7 +593,7 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator, OutboundFeature.APPLY_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -654,15 +644,16 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor),
-                new OutboundFeature.APPLY_SSL(sslCtx))
+                .doOnNext(nextSensor))
             .subscribe(testSubscriber);
             new TestSubscription() {{
                 testSubscriber.add(this);
@@ -758,7 +749,9 @@ public class DefaultHttpClientTestCase {
                     }});
         
         final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -767,8 +760,7 @@ public class DefaultHttpClientTestCase {
                 client.sendRequest(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                    .doOnNext(nextSensor),
-                    new OutboundFeature.APPLY_SSL(sslCtx))
+                    .doOnNext(nextSensor))
                 .subscribe(testSubscriber);
             
             serverRecvd.await();
@@ -802,7 +794,8 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             client.sendRequest(
@@ -835,13 +828,14 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
-                Observable.<HttpObject>error(new RuntimeException("test error")),
-                new OutboundFeature.APPLY_SSL(sslCtx))
+                Observable.<HttpObject>error(new RuntimeException("test error")))
             .subscribe(testSubscriber);
             new TestSubscription() {{
                 testSubscriber.add(this);
@@ -869,7 +863,8 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             //  first
@@ -920,16 +915,16 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             //  first
             {
                 client.sendRequest(
                     new LocalAddress("test"), 
-                    Observable.<HttpObject>error(new RuntimeException("test error")),
-                    new OutboundFeature.APPLY_SSL(sslCtx)
-                    )
+                    Observable.<HttpObject>error(new RuntimeException("test error")))
                 .subscribe(testSubscriber);
                 new TestSubscription() {{
                     testSubscriber.add(this);
@@ -949,9 +944,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        new OutboundFeature.APPLY_SSL(sslCtx)
-                            )
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -977,7 +970,8 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting)
             .setWriteException(new RuntimeException("doWrite Error for test"));
         
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -1017,17 +1011,16 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting)
             .setWriteException(new RuntimeException("doWrite Error for test"));
         
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor),
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx)
-                )
+                .doOnNext(nextSensor))
             .subscribe(testSubscriber);
             new TestSubscription() {{
                 testSubscriber.add(this);
@@ -1060,8 +1053,9 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting)
             .setWriteException(new RuntimeException("doWrite Error for test"));
         
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
-        try {
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING);
+            try {
             {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
                 final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -1120,7 +1114,9 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting)
             .setWriteException(new RuntimeException("doWrite Error for test"));
         
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         try {
             {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
@@ -1128,10 +1124,7 @@ public class DefaultHttpClientTestCase {
                 client.sendRequest(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                    .doOnNext(nextSensor),
-                    OutboundFeature.APPLY_LOGGING,
-                    new OutboundFeature.APPLY_SSL(sslCtx)
-                    )
+                    .doOnNext(nextSensor))
                 .subscribe(testSubscriber);
                 new TestSubscription() {{
                     testSubscriber.add(this);
@@ -1156,10 +1149,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        OutboundFeature.APPLY_LOGGING,
-                        new OutboundFeature.APPLY_SSL(sslCtx)
-                        )
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -1201,7 +1191,8 @@ public class DefaultHttpClientTestCase {
             }});
 
         final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING);
         try {
             final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
             request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
@@ -1209,9 +1200,7 @@ public class DefaultHttpClientTestCase {
             final Iterator<HttpObject> itr = 
                 client.sendRequest(
                     new LocalAddress("test"), 
-                    Observable.just(request),
-                    OutboundFeature.APPLY_LOGGING
-                    )
+                    Observable.just(request))
                 .map(RxNettys.<HttpObject>retainMap())
                 .toBlocking().toIterable().iterator();
             
@@ -1256,7 +1245,8 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING);
         final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
         request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
         
@@ -1310,7 +1300,9 @@ public class DefaultHttpClientTestCase {
             }});
 
         final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         try {
             final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
             request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
@@ -1318,9 +1310,7 @@ public class DefaultHttpClientTestCase {
             final Iterator<HttpObject> itr = 
                 client.sendRequest(
                     new LocalAddress("test"), 
-                    Observable.just(request),
-                    OutboundFeature.APPLY_LOGGING,
-                    new OutboundFeature.APPLY_SSL(sslCtx))
+                    Observable.just(request))
                 .map(RxNettys.<HttpObject>retainMap())
                 .toBlocking().toIterable().iterator();
             
@@ -1365,7 +1355,9 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
+        final DefaultHttpClient client = new DefaultHttpClient(creator,
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx));
         final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
         request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
         
@@ -1373,8 +1365,7 @@ public class DefaultHttpClientTestCase {
         try {
             client.sendRequest(
                 new LocalAddress("test"), 
-                Observable.<HttpObject>just(request),
-                new OutboundFeature.APPLY_SSL(sslCtx))
+                Observable.<HttpObject>just(request))
             .subscribe(testSubscriber);
             new TestSubscription() {{
                 testSubscriber.add(this);

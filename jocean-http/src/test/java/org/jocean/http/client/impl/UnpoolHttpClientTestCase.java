@@ -62,7 +62,8 @@ public class UnpoolHttpClientTestCase {
     
         final DefaultHttpClient client = new DefaultHttpClient(
                 Nettys.unpoolChannels(),
-                creator);
+                creator,
+                OutboundFeature.APPLY_LOGGING);
         try {
             // first 
             {
@@ -70,8 +71,7 @@ public class UnpoolHttpClientTestCase {
                     client.sendRequest(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        OutboundFeature.APPLY_LOGGING
-                        )
+                        OutboundFeature.APPLY_LOGGING)
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -110,7 +110,10 @@ public class UnpoolHttpClientTestCase {
         
         final DefaultHttpClient client = new DefaultHttpClient(
                 Nettys.unpoolChannels(),
-                creator);
+                creator,
+                OutboundFeature.APPLY_LOGGING,
+                new OutboundFeature.APPLY_SSL(sslCtx)
+                );
         
         try {
             // first 
@@ -118,10 +121,7 @@ public class UnpoolHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        OutboundFeature.APPLY_LOGGING,
-                        new OutboundFeature.APPLY_SSL(sslCtx)
-                        )
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -136,10 +136,7 @@ public class UnpoolHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.sendRequest(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        OutboundFeature.APPLY_LOGGING,
-                        new OutboundFeature.APPLY_SSL(sslCtx)
-                        )
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
