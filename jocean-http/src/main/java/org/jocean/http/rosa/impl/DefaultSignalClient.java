@@ -1,12 +1,22 @@
 package org.jocean.http.rosa.impl;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
-import io.netty.channel.Channel;
+import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpVersion;
+import io.netty.util.ReferenceCountUtil;
 
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -14,7 +24,9 @@ import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,27 +37,25 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 
 import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.PropertyPlaceholderHelper;
+import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.SimpleCache;
 import org.jocean.idiom.Visitor2;
-import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.alibaba.fastjson.JSON;
-import com.jcraft.jzlib.Deflater;
-import com.jcraft.jzlib.DeflaterOutputStream;
-import com.jcraft.jzlib.JZlib;
 
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
+
+import com.alibaba.fastjson.JSON;
 
 public class DefaultSignalClient implements SignalClient {
 
@@ -65,23 +75,100 @@ public class DefaultSignalClient implements SignalClient {
     }
     
     @Override
-    public <REQUEST, RESPONSE> Observable<RESPONSE> start(final REQUEST request) {
+    public <REQUEST, RESPONSE> Observable<RESPONSE> start(final REQUEST request, 
+            final Class<RESPONSE> respCls) {
         return Observable.create(new OnSubscribe<RESPONSE>() {
 
             @Override
             public void call(final Subscriber<? super RESPONSE> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final URI uri = _converter.req2uri(request);
-                    final InetSocketAddress remoteAddress = new InetSocketAddress(uri.getHost(), uri.getPort());
                     
+                    final int port = -1 == uri.getPort() ? ( "https".equals(uri.getScheme()) ? 443 : 80 ) : uri.getPort();
+                    final InetSocketAddress remoteAddress = new InetSocketAddress(uri.getHost(), port);
+                    
+                    final HttpRequest httpRequest =
+                            _converter.processHttpRequest(request,
+                                    genHttpRequest(uri));
                     // TODO
-//                    _httpClient.sendRequest(remoteAddress, request);
+                    _httpClient.sendRequest(remoteAddress, Observable.just(httpRequest), OutboundFeature.APPLY_LOGGING)
+                    .subscribe(new Subscriber<HttpObject>() {
+                        private final List<HttpObject> _respObjects = new ArrayList<>();
+
+                        private FullHttpResponse retainFullHttpResponse() {
+                            if (this._respObjects.size()>0) {
+                                if (this._respObjects.get(0) instanceof FullHttpResponse) {
+                                    return ((FullHttpResponse)this._respObjects.get(0)).retain();
+                                }
+                                
+                                final HttpResponse resp = (HttpResponse)this._respObjects.get(0);
+                                final ByteBuf[] bufs = new ByteBuf[this._respObjects.size()-1];
+                                for (int idx = 1; idx<this._respObjects.size(); idx++) {
+                                    bufs[idx-1] = ((HttpContent)this._respObjects.get(idx)).content().retain();
+                                }
+                                return new DefaultFullHttpResponse(
+                                        resp.getProtocolVersion(), 
+                                        resp.getStatus(),
+                                        Unpooled.wrappedBuffer(bufs));
+                            } else {
+                                return null;
+                            }
+                        }
+                        
+                        @Override
+                        public void onCompleted() {
+                            final FullHttpResponse httpResp = retainFullHttpResponse();
+                            if (null!=httpResp) {
+                                try {
+                                    final InputStream is = new ByteBufInputStream(httpResp.content());
+                                    final byte[] bytes = new byte[is.available()];
+                                    final int readed = is.read(bytes);
+                                    final Object resp = JSON.parseObject(bytes, respCls);
+                                    subscriber.onNext((RESPONSE)resp);
+                                    subscriber.onCompleted();
+                                } catch (Exception e) {
+                                    // TODO Auto-generated catch block
+                                    e.printStackTrace();
+                                } finally {
+                                    httpResp.release();
+                                }
+                            }
+                            
+                        }
+
+                        @Override
+                        public void onError(final Throwable e) {
+                            // TODO Auto-generated method stub
+                            
+                        }
+
+                        @Override
+                        public void onNext(final HttpObject httpObj) {
+                            this._respObjects.add(ReferenceCountUtil.retain(httpObj));
+                        }});
                 }
             }
             
         });
     }
 
+    public void registerRequestType(final Class<?> reqCls, final String pathPrefix) {
+        this._req2pathPrefix.put(reqCls, Pair.of(pathPrefix, 0) );
+    }
+    
+    private static DefaultFullHttpRequest genHttpRequest(final URI uri) {
+        // Prepare the HTTP request.
+        final String host = uri.getHost() == null ? "localhost" : uri.getHost();
+
+        final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
+                HttpVersion.HTTP_1_1, HttpMethod.GET, uri.getRawPath());
+        request.headers().set(HttpHeaders.Names.HOST, host);
+//        request.headers().set(HttpHeaders.Names.ACCEPT_ENCODING,
+//                HttpHeaders.Values.GZIP);
+
+        return request;
+    }
+    
     private final Map<Class<?>, Pair<String, Integer>> _req2pathPrefix = 
             new ConcurrentHashMap<Class<?>, Pair<String, Integer>>();
     
@@ -214,32 +301,32 @@ public class DefaultSignalClient implements SignalClient {
          * @param httpRequest
          * @param jsonBytes
          */
-        private void genContentAsCJSON(
-                final DefaultFullHttpRequest httpRequest,
-                final byte[] jsonBytes) {
-            final OutputStream os = new ByteBufOutputStream(httpRequest.content());
-            DeflaterOutputStream zos = null;
-            
-            try {
-                zos = new DeflaterOutputStream(os, new Deflater(JZlib.Z_BEST_COMPRESSION));
-                zos.write(jsonBytes);
-                zos.finish();
-                HttpHeaders.setContentLength(httpRequest, zos.getTotalOut());
-            }
-            catch (Throwable e) {
-                LOG.warn("exception when compress json, detail:{}", 
-                        ExceptionUtils.exception2detail(e));
-            }
-            finally {
-                if ( null != zos ) {
-                    try {
-                        zos.close();
-                    } catch (Exception e) {
-                    }
-                }
-            }
-            httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/cjson");
-        }
+//        private void genContentAsCJSON(
+//                final DefaultFullHttpRequest httpRequest,
+//                final byte[] jsonBytes) {
+//            final OutputStream os = new ByteBufOutputStream(httpRequest.content());
+//            DeflaterOutputStream zos = null;
+//            
+//            try {
+//                zos = new DeflaterOutputStream(os, new Deflater(JZlib.Z_BEST_COMPRESSION));
+//                zos.write(jsonBytes);
+//                zos.finish();
+//                HttpHeaders.setContentLength(httpRequest, zos.getTotalOut());
+//            }
+//            catch (Throwable e) {
+//                LOG.warn("exception when compress json, detail:{}", 
+//                        ExceptionUtils.exception2detail(e));
+//            }
+//            finally {
+//                if ( null != zos ) {
+//                    try {
+//                        zos.close();
+//                    } catch (Exception e) {
+//                    }
+//                }
+//            }
+//            httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/cjson");
+//        }
 
         private void genContentAsJSON(
                 final DefaultFullHttpRequest httpRequest,
