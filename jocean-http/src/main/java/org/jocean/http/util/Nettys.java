@@ -117,21 +117,28 @@ public class Nettys {
         final Iterator<Entry<String,ChannelHandler>> itr = pipeline.iterator();
         while (itr.hasNext()) {
             final Entry<String,ChannelHandler> entry = itr.next();
-            final int order = toOrdinal.call(entry.getKey(), entry.getValue())
-                    - toInsertOrdinal;
-            if (order==0) {
-                //  equals, handler already added, just ignore
-                //  NOT added
-                return null;
-            }
-            if (order < 0) {
-                // current handler's name less than name, continue comapre
+            try {
+                final int order = toOrdinal.call(entry.getKey(), entry.getValue())
+                        - toInsertOrdinal;
+                if (order==0) {
+                    //  equals, handler already added, just ignore
+                    //  NOT added
+                    return null;
+                }
+                if (order < 0) {
+                    // current handler's name less than name, continue comapre
+                    continue;
+                }
+                if (order > 0) {
+                    //  OK, add handler before current handler
+                    pipeline.addBefore(entry.getKey(), name, handler);
+                    return handler;
+                }
+            } catch (IllegalArgumentException e) {
+                // throw by toOrdinal.call, so just ignore this entry and continue
+                LOG.warn("insert handler named({}), meet handler entry:{}, which is !NOT! ordinal, just ignore", 
+                        name, entry);
                 continue;
-            }
-            if (order > 0) {
-                //  OK, add handler before current handler
-                pipeline.addBefore(entry.getKey(), name, handler);
-                return handler;
             }
         }
         pipeline.addLast(name, handler);
@@ -146,13 +153,7 @@ public class Nettys {
                     return ((Ordered)handler).ordinal();
                 }
                 else {
-                    try {
-                        return Enum.valueOf(cls, name).ordinal();
-                    } catch (IllegalArgumentException e) {
-                        // No enum constant for name
-                        LOG.warn("No enum constant {}.{}", cls.getCanonicalName(), name);
-                        return Integer.MIN_VALUE;
-                    }
+                    return Enum.valueOf(cls, name).ordinal();
                 }
             }};
     }
