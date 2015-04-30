@@ -50,9 +50,11 @@ public class DefaultHttpServer implements HttpServer {
      * @see org.jocean.http.server.HttpServer#create(java.net.SocketAddress)
      */
     @Override
-    public Observable<HttpTrade> create(
+    public Observable<? extends HttpTrade> create(
             final SocketAddress localAddress,
             final InboundFeature.Applicable... features) {
+        final InboundFeature.Applicable[] applyFeatures = 
+                features.length > 0 ? features : this._defaultFeatures;
         return Observable.create(new OnSubscribe<HttpTrade>() {
             @Override
             public void call(final Subscriber<? super HttpTrade> subscriber) {
@@ -62,7 +64,7 @@ public class DefaultHttpServer implements HttpServer {
                         @Override
                         protected void initChannel(final Channel ch) throws Exception {
                             final ChannelPipeline pipeline = ch.pipeline();
-                            for (InboundFeature.Applicable feature : features) {
+                            for (InboundFeature.Applicable feature : applyFeatures) {
                                 feature.call(ch);
                             }
                             Nettys.insertHandler(
@@ -115,9 +117,13 @@ public class DefaultHttpServer implements HttpServer {
             }};
     }
 
-    public DefaultHttpServer(final EventEngine engine, final BootstrapCreator creator) {
+    public DefaultHttpServer(
+            final EventEngine engine, 
+            final BootstrapCreator creator,
+            final InboundFeature.Applicable... defaultFeatures) {
         this._engine = engine;
         this._creator = creator;
+        this._defaultFeatures = defaultFeatures;
     }
 
     @Override
@@ -127,4 +133,5 @@ public class DefaultHttpServer implements HttpServer {
     
     private final BootstrapCreator _creator;
     private final EventEngine _engine;
+    private final InboundFeature.Applicable[] _defaultFeatures;
 }
