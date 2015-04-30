@@ -27,7 +27,9 @@ public class SignalTest {
         final DefaultSignalClient client = new DefaultSignalClient(httpClient);
         
         client.registerRequestType(FetchPatientsRequest.class, 
-                "http://jumpbox.medtap.cn:8888", OutboundFeature.APPLY_LOGGING);
+                "http://jumpbox.medtap.cn:8888", 
+                OutboundFeature.APPLY_LOGGING, 
+                OutboundFeature.APPLY_CONTENT_DECOMPRESSOR);
         
         final FetchPatientsRequest req = new FetchPatientsRequest();
         req.setAccountId("2");
