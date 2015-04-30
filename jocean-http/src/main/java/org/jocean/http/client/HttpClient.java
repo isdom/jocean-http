@@ -22,7 +22,7 @@ public interface HttpClient extends Closeable {
      * @return Observable<HttpObject> response: Observable of HttpObject, 
      * 推送内容为 HttpResponse + 0~N (HttpContent)
      */
-    public Observable<HttpObject> sendRequest(
+    public Observable<? extends HttpObject> sendRequest(
             final SocketAddress remoteAddress, 
             final Observable<? extends HttpObject> request,
             final OutboundFeature.Applicable... features);

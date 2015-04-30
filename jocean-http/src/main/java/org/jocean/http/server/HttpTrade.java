@@ -14,7 +14,7 @@ import rx.Observable;
  *
  */
 public interface HttpTrade extends Closeable {
-    public Observable<HttpObject> request();
+    public Observable<? extends HttpObject> request();
     public FullHttpRequest retainFullHttpRequest();
-    public void response(final Observable<HttpObject> response);
+    public void response(final Observable<? extends HttpObject> response);
 }

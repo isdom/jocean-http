@@ -129,12 +129,12 @@ public class DefaultHttpTrade implements HttpTrade {
     };
 
     @Override
-    public Observable<HttpObject> request() {
+    public Observable<? extends HttpObject> request() {
         return Observable.create(this._onSubscribeRequest);
     }
 
     @Override
-    public void response(final Observable<HttpObject> response) {
+    public void response(final Observable<? extends HttpObject> response) {
         this._responseReceiver.acceptEvent(SET_RESPONSE, response);
     }
     
