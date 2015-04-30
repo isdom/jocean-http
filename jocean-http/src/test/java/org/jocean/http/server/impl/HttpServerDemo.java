@@ -70,16 +70,13 @@ public class HttpServerDemo {
             protected void initializeBootstrap(final ServerBootstrap bootstrap) {
                 bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
                 bootstrap.channel(LocalServerChannel.class);
-            }});
+            }},
+            InboundFeature.APPLY_LOGGING
+            );
         
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings("unused")
         final Subscription subscription = 
-        server.create(new LocalAddress("test"),
-                InboundFeature.APPLY_LOGGING)
-//            .doOnNext(InboundFeature.APPLY_CONTENT_COMPRESSOR)
-//            .doOnNext(InboundFeature.APPLY_LOGGING)
-//            .doOnNext(new InboundFeature.APPLY_CLOSE_ON_IDLE(10))
-//            .doOnNext(new InboundFeature.APPLY_SSL(sslCtx))
+        server.create(new LocalAddress("test"))
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
@@ -120,7 +117,8 @@ public class HttpServerDemo {
 //            }}, 10 * 1000);
         
         @SuppressWarnings("resource")
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(),
+                OutboundFeature.APPLY_LOGGING);
         
         while (true) {
             final ByteBuf content = Unpooled.buffer(0);
@@ -132,10 +130,7 @@ public class HttpServerDemo {
             final Iterator<HttpObject> itr =
                 client.sendRequest(
                 new LocalAddress("test"), 
-                Observable.just(request),
-                OutboundFeature.APPLY_LOGGING
-//                HttpFeature.EnableSSL
-                )
+                Observable.just(request))
                 .map(RxNettys.<HttpObject>retainMap())
                 .toBlocking().toIterable().iterator();
             
