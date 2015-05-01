@@ -68,7 +68,7 @@ public class DefaultHttpClient implements HttpClient {
         public void channelActive(final ChannelHandlerContext ctx) 
                 throws Exception {
             if (!_enableSSL) {
-                markChannelValid(ctx.channel());
+                markChannelConnected(ctx.channel());
                 _subscriber.onNext(ctx.channel());
                 _subscriber.onCompleted();
             }
@@ -81,7 +81,7 @@ public class DefaultHttpClient implements HttpClient {
             if (_enableSSL && evt instanceof SslHandshakeCompletionEvent) {
                 final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
                 if (sslComplete.isSuccess()) {
-                    markChannelValid(ctx.channel());
+                    markChannelConnected(ctx.channel());
                     _subscriber.onNext(ctx.channel());
                     _subscriber.onCompleted();
                 } else {
@@ -135,7 +135,7 @@ public class DefaultHttpClient implements HttpClient {
                             if (!subscriber.isUnsubscribed()) {
                                 final Channel channel = _channelPool.retainChannel(remoteAddress);
                                 if (null!=channel) {
-                                    onChannelCreated(
+                                    addHanldersAndCheckConnect(
                                             channel, 
                                             remoteAddress,
                                             features, 
@@ -149,7 +149,7 @@ public class DefaultHttpClient implements HttpClient {
                                                 final ChannelFuture future)
                                                 throws Exception {
                                             if (future.isSuccess()) {
-                                                onChannelCreated(
+                                                addHanldersAndCheckConnect(
                                                         future.channel(),
                                                         remoteAddress,
                                                         features, 
@@ -169,7 +169,7 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
 
-    private void onChannelCreated(
+    private void addHanldersAndCheckConnect(
             final Channel channel,
             final SocketAddress remoteAddress,
             final OutboundFeature.Applicable[] features,
@@ -191,11 +191,11 @@ public class DefaultHttpClient implements HttpClient {
         
         subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
         
-        if (isChannelValid(channel)) {
+        if (isChannelConnected(channel)) {
             subscriber.onNext(channel);
             subscriber.onCompleted();
         } else {
-            initAndDoConnect(channel, 
+            startToConnect(channel, 
                     remoteAddress,
                     features, 
                     subscriber,
@@ -203,7 +203,7 @@ public class DefaultHttpClient implements HttpClient {
         }
     }
     
-    private void initAndDoConnect(
+    private void startToConnect(
             final Channel channel,
             final SocketAddress remoteAddress,
             final OutboundFeature.Applicable[] features,
@@ -337,14 +337,14 @@ public class DefaultHttpClient implements HttpClient {
     */
 
     private static final Object OK = new Object();
-    private static final AttributeKey<Object> VALID = AttributeKey.valueOf("__ISVALID");
+    private static final AttributeKey<Object> CONNECTED = AttributeKey.valueOf("__CONNECTED");
     
-    private static void markChannelValid(final Channel channel) {
-        channel.attr(VALID).set(OK);
+    private static void markChannelConnected(final Channel channel) {
+        channel.attr(CONNECTED).set(OK);
     }
 
-    private static boolean isChannelValid(final Channel channel) {
-        return null != channel.attr(VALID).get();
+    private static boolean isChannelConnected(final Channel channel) {
+        return null != channel.attr(CONNECTED).get();
     }
     
     private Subscription channelClosure(
@@ -360,7 +360,7 @@ public class DefaultHttpClient implements HttpClient {
                         handlersClosure.close();
                     } catch (IOException e) {
                     }
-                    if (!channel.isActive() || !isChannelValid(channel)
+                    if (!channel.isActive() || !isChannelConnected(channel)
                         || !_channelPool.recycleChannel(remoteAddress, channel)) {
                         channel.close();
                     }
