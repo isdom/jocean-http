@@ -9,6 +9,10 @@ import java.net.SocketAddress;
 
 public class DefaultChannelPool extends AbstractChannelPool {
 
+    public DefaultChannelPool(final ChannelCreator channelCreator) {
+        super(channelCreator);
+    }
+
     private static final AttributeKey<Object> TRANSACTIONING = AttributeKey.valueOf("__TRANSACTIONING");
     private static final Object OK = new Object();
     private static final AttributeKey<Boolean> KEEPALIVE = AttributeKey.valueOf("__KEEPALIVE");

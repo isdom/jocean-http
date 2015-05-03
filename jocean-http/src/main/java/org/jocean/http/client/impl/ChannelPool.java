@@ -5,9 +5,11 @@ import io.netty.handler.codec.http.HttpRequest;
 
 import java.net.SocketAddress;
 
+import rx.Observable;
+
 public interface ChannelPool {
     
-    public Channel retainChannel(final SocketAddress address);
+    public Observable<? extends Channel> retainChannel(final SocketAddress address);
     
     public boolean recycleChannel(final SocketAddress address, final Channel channel);
     

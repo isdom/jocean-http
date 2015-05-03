@@ -29,12 +29,12 @@ final class OnSubscribeResponse implements
     private static final Logger LOG =
             LoggerFactory.getLogger(OnSubscribeResponse.class);
     
-    private final Func1<ChannelHandler, Observable<Channel>> _channelObservable;
+    private final Func1<ChannelHandler, Observable<? extends Channel>> _channelObservable;
     private final Func1<Channel, Observable<ChannelFuture>> _transferRequest;
     private final ChannelPool _channelPool;
     
     OnSubscribeResponse(
-        final Func1<ChannelHandler, Observable<Channel>> channelObservable, 
+        final Func1<ChannelHandler, Observable<? extends Channel>> channelObservable, 
         final ChannelPool channelPool,
         final OutboundFeature.ApplyToRequest applyToRequest,
         final Observable<? extends HttpObject> request) {
@@ -44,10 +44,10 @@ final class OnSubscribeResponse implements
                 new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
             public Observable<ChannelFuture> call(final Channel channel) {
-                return request.doOnNext(addAcceptEncodingHead(channel))
+                return request.doOnNext(applyToRequest(channel))
                         .map(RxNettys.<HttpObject>sendMessage(channel));
             }
-            private final Action1<HttpObject> addAcceptEncodingHead(final Channel channel) {
+            private final Action1<HttpObject> applyToRequest(final Channel channel) {
                 return new Action1<HttpObject> () {
                     @Override
                     public void call(final HttpObject msg) {
@@ -55,9 +55,6 @@ final class OnSubscribeResponse implements
                             _channelPool.beforeSendRequest(channel, (HttpRequest)msg);
                             if (null!=applyToRequest) {
                                 applyToRequest.applyToRequest((HttpRequest) msg);
-//                                HttpHeaders.addHeader((HttpRequest) msg,
-//                                    HttpHeaders.Names.ACCEPT_ENCODING, 
-//                                    HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
                             }
                         }
                     }
@@ -74,7 +71,7 @@ final class OnSubscribeResponse implements
             if (!wrapper.isUnsubscribed()) {
                 this._channelObservable.call(createResponseHandler(wrapper))
                     .flatMap(this._transferRequest)
-                    .flatMap(RxNettys.<ChannelFuture, HttpObject>checkFuture())
+                    .flatMap(RxNettys.<ChannelFuture, HttpObject>emitErrorOnFailure())
                     .subscribe(wrapper);
             }
         } catch (final Throwable e) {

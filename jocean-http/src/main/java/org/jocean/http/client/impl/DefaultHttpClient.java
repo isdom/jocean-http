@@ -7,14 +7,12 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.util.AttributeKey;
@@ -29,6 +27,7 @@ import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.util.HandlersClosure;
 import org.jocean.http.util.Nettys;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.Ordered;
 import org.slf4j.Logger;
@@ -38,8 +37,8 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.Subscription;
+import rx.functions.Action1;
 import rx.functions.Func1;
-import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -122,87 +121,59 @@ public class DefaultHttpClient implements HttpClient {
                 request));
     }
 
-    private Func1<ChannelHandler, Observable<Channel>> createChannelObservable(
+    private Func1<ChannelHandler, Observable<? extends Channel>> createChannelObservable(
             final SocketAddress remoteAddress, 
             final OutboundFeature.Applicable[] features) {
-        return new Func1<ChannelHandler, Observable<Channel>> () {
+        return new Func1<ChannelHandler, Observable<? extends Channel>> () {
             @Override
-            public Observable<Channel> call(final ChannelHandler workHandler) {
+            public Observable<? extends Channel> call(final ChannelHandler workHandler) {
+//                return _channelPool.retainChannel(remoteAddress);
                 return Observable.create(new OnSubscribe<Channel>() {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {
-                        try {
-                            if (!subscriber.isUnsubscribed()) {
-                                final Channel channel = _channelPool.retainChannel(remoteAddress);
-                                if (null!=channel) {
-                                    addHanldersAndCheckConnect(
-                                            channel, 
-                                            remoteAddress,
-                                            features, 
-                                            workHandler, 
-                                            subscriber);
-                                } else {
-                                    _channelCreator.newChannel()
-                                    .addListener(new ChannelFutureListener() {
-                                        @Override
-                                        public void operationComplete(
-                                                final ChannelFuture future)
-                                                throws Exception {
-                                            if (future.isSuccess()) {
-                                                addHanldersAndCheckConnect(
-                                                        future.channel(),
-                                                        remoteAddress,
-                                                        features, 
-                                                        workHandler, 
-                                                        subscriber);
-                                            } else {
-                                                subscriber.onError(future.cause());
-                                            }
-                                            
-                                        }});
-                                }
-                            }
-                        } catch (Throwable e) {
-                            subscriber.onError(e);
-                        }
+                        _channelPool.retainChannel(remoteAddress)
+                        .subscribe(
+                            new Action1<Channel>() {
+                                @Override
+                                public void call(final Channel channel) {
+                                    final HandlersClosure handlersClosure = 
+                                            Nettys.channelHandlersClosure(channel);
+                                    for (OutboundFeature.Applicable applicable : features) {
+                                        if (applicable.isRemovable()) {
+                                            handlersClosure.call(applicable.call(channel));
+                                        }
+                                    }
+                                    
+                                    handlersClosure.call(
+                                        Nettys.insertHandler(
+                                            channel.pipeline(),
+                                            WORK_HANDLER,
+                                            workHandler,
+                                            OutboundFeature.TO_ORDINAL)
+                                        );
+                                    
+                                    subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
+                                    
+                                    if (isChannelConnected(channel)) {
+                                        subscriber.onNext(channel);
+                                        subscriber.onCompleted();
+                                    } else {
+                                        startToConnect(channel, 
+                                                remoteAddress,
+                                                features, 
+                                                subscriber,
+                                                handlersClosure);
+                                    }
+                                }}, 
+                            new Action1<Throwable>() {
+                                @Override
+                                public void call(Throwable e) {
+                                    subscriber.onError(e);
+                                }});
                 }});
             }};
     }
 
-    private void addHanldersAndCheckConnect(
-            final Channel channel,
-            final SocketAddress remoteAddress,
-            final OutboundFeature.Applicable[] features,
-            final ChannelHandler workHandler,
-            final Subscriber<? super Channel> subscriber) {
-        final HandlersClosure handlersClosure = 
-                Nettys.channelHandlersClosure(channel);
-        
-        for ( OutboundFeature.Applicable applicable : features) {
-            if (applicable.isRemovable()) {
-                handlersClosure.call(applicable.call(channel));
-            }
-        }
-        Nettys.insertHandler(
-            channel.pipeline(),
-            WORK_HANDLER,
-            handlersClosure.call(workHandler),
-            OutboundFeature.TO_ORDINAL);
-        
-        subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
-        
-        if (isChannelConnected(channel)) {
-            subscriber.onNext(channel);
-            subscriber.onCompleted();
-        } else {
-            startToConnect(channel, 
-                    remoteAddress,
-                    features, 
-                    subscriber,
-                    handlersClosure);
-        }
-    }
-    
     private void startToConnect(
             final Channel channel,
             final SocketAddress remoteAddress,
@@ -215,20 +186,21 @@ public class DefaultHttpClient implements HttpClient {
             }
         }
         
-        Nettys.insertHandler(
-            channel.pipeline(),
-            OutboundFeature.HTTPCLIENT_CODEC.name(),
-            new HttpClientCodec(),
-            OutboundFeature.TO_ORDINAL);
+        OutboundFeature.HTTPCLIENT_CODEC.applyTo(channel);
         
-        Nettys.insertHandler(
-            channel.pipeline(),
-            "completeOrErrorNotifier",
-            handlersClosure.call(
+        handlersClosure.call(
+            Nettys.insertHandler(
+                channel.pipeline(),
+                "completeOrErrorNotifier",
                 new CompleteOrErrorNotifier(subscriber, 
-                    OutboundFeature.isSSLEnabled(channel.pipeline()))),
-            OutboundFeature.TO_ORDINAL);
+                    OutboundFeature.isSSLEnabled(channel.pipeline())),
+                OutboundFeature.TO_ORDINAL)
+        );
         
+        RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
+            .call(channel.connect(remoteAddress))
+            .subscribe(subscriber);
+        /*
         subscriber.add(Subscriptions.from(
                 channel.connect(remoteAddress)
                 .addListener(new ChannelFutureListener() {
@@ -239,102 +211,11 @@ public class DefaultHttpClient implements HttpClient {
                         }
                     }
                 })));
+        */
         if (LOG.isDebugEnabled()) {
             LOG.debug("createChannel and add codecs success for channel:{}/remoteAddress:{}",channel,remoteAddress);
         }
     }
-
-    /*
-    private boolean reuseChannel(
-            final SocketAddress remoteAddress,
-            final OutboundFeature.Applicable[] features, 
-            final ChannelHandler handler,
-            final Subscriber<? super Channel> subscriber) {
-        final Channel channel = this._channelPool.retainChannel(remoteAddress);
-        if (null!=channel) {
-            final HandlersClosure handlersClosure = 
-                    Nettys.channelHandlersClosure(channel);
-            for ( OutboundFeature.Applicable applicable : features) {
-                if (applicable.isRemovable()) {
-                    handlersClosure.call(applicable.call(channel));
-                }
-            }
-            Nettys.insertHandler(
-                channel.pipeline(),
-                RESPONSE_HANDLER,
-                handlersClosure.call(handler),
-                OutboundFeature.TO_ORDINAL);
-            
-            subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
-            subscriber.onNext(channel);
-            subscriber.onCompleted();
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-
-    private void createChannel(
-            final SocketAddress remoteAddress,
-            final OutboundFeature.Applicable[] features, 
-            final ChannelHandler handler,
-            final Subscriber<? super Channel> subscriber) throws Throwable {
-        final Channel channel = this._channelCreator.newChannel();
-        try {
-            final HandlersClosure handlersClosure = 
-                    Nettys.channelHandlersClosure(channel);
-            
-            for ( OutboundFeature.Applicable applicable : features) {
-                if (applicable.isRemovable()) {
-                    handlersClosure.call(applicable.call(channel));
-                } else {
-                    applicable.call(channel);
-                }
-            }
-            
-            Nettys.insertHandler(
-                channel.pipeline(),
-                OutboundFeature.HTTPCLIENT_CODEC.name(),
-                new HttpClientCodec(),
-                OutboundFeature.TO_ORDINAL);
-            
-            Nettys.insertHandler(
-                channel.pipeline(),
-                "completeOrErrorNotifier",
-                handlersClosure.call(
-                    new CompleteOrErrorNotifier(subscriber, 
-                        OutboundFeature.isSSLEnabled(channel.pipeline()))),
-                OutboundFeature.TO_ORDINAL);
-            
-            Nettys.insertHandler(
-                channel.pipeline(),
-                RESPONSE_HANDLER,
-                handlersClosure.call(handler),
-                OutboundFeature.TO_ORDINAL);
-        
-            subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
-            subscriber.add(Subscriptions.from(
-                channel.connect(remoteAddress)
-                .addListener(new ChannelFutureListener() {
-                    @Override
-                    public void operationComplete(final ChannelFuture future) {
-                        if (!future.isSuccess()) {
-                            subscriber.onError(future.cause());
-                        }
-                    }
-                })));
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("createChannel and add codecs success for channel:{}/remoteAddress:{}",channel,remoteAddress);
-            }
-        } catch (Throwable e) {
-            if (null!=channel) {
-                channel.close();
-            }
-            throw e;
-        }
-    }
-    */
 
     private static final Object OK = new Object();
     private static final AttributeKey<Object> CONNECTED = AttributeKey.valueOf("__CONNECTED");
@@ -378,14 +259,13 @@ public class DefaultHttpClient implements HttpClient {
     
     public DefaultHttpClient(final int processThreadNumber,
             final OutboundFeature.Applicable... defaultFeatures) {
-        this(new DefaultChannelPool(), 
-            new AbstractChannelCreator() {
-                @Override
-                protected void initializeBootstrap(final Bootstrap bootstrap) {
-                    bootstrap
-                    .group(new NioEventLoopGroup(processThreadNumber))
-                    .channel(NioSocketChannel.class);
-                }},
+        this(new DefaultChannelPool(new AbstractChannelCreator() {
+            @Override
+            protected void initializeBootstrap(final Bootstrap bootstrap) {
+                bootstrap
+                .group(new NioEventLoopGroup(processThreadNumber))
+                .channel(NioSocketChannel.class);
+            }}), 
             defaultFeatures);
     }
     
@@ -393,12 +273,11 @@ public class DefaultHttpClient implements HttpClient {
             final EventLoopGroup eventLoopGroup,
             final Class<? extends Channel> channelType,
             final OutboundFeature.Applicable... defaultFeatures) { 
-        this(new DefaultChannelPool(),
-            new AbstractChannelCreator() {
-                @Override
-                protected void initializeBootstrap(final Bootstrap bootstrap) {
-                    bootstrap.group(eventLoopGroup).channel(channelType);
-                }},
+        this(new DefaultChannelPool(new AbstractChannelCreator() {
+            @Override
+            protected void initializeBootstrap(final Bootstrap bootstrap) {
+                bootstrap.group(eventLoopGroup).channel(channelType);
+            }}),
             defaultFeatures);
     }
     
@@ -406,27 +285,24 @@ public class DefaultHttpClient implements HttpClient {
             final EventLoopGroup eventLoopGroup,
             final ChannelFactory<? extends Channel> channelFactory,
             final OutboundFeature.Applicable... defaultFeatures) { 
-        this(new DefaultChannelPool(),
-            new AbstractChannelCreator() {
-                @Override
-                protected void initializeBootstrap(final Bootstrap bootstrap) {
-                    bootstrap.group(eventLoopGroup).channelFactory(channelFactory);
-                }},
+        this(new DefaultChannelPool(new AbstractChannelCreator() {
+            @Override
+            protected void initializeBootstrap(final Bootstrap bootstrap) {
+                bootstrap.group(eventLoopGroup).channelFactory(channelFactory);
+            }}),
             defaultFeatures);
     }
     
     public DefaultHttpClient(
             final ChannelCreator channelCreator,
             final OutboundFeature.Applicable... defaultFeatures) {
-        this(new DefaultChannelPool(), channelCreator, defaultFeatures);
+        this(new DefaultChannelPool(channelCreator), defaultFeatures);
     }
     
     public DefaultHttpClient(
             final ChannelPool channelPool,
-            final ChannelCreator channelCreator,
             final OutboundFeature.Applicable... defaultFeatures) {
         this._channelPool = channelPool;
-        this._channelCreator = channelCreator;
         this._defaultFeatures = defaultFeatures;
     }
     
@@ -436,10 +312,10 @@ public class DefaultHttpClient implements HttpClient {
     @Override
     public void close() throws IOException {
         // Shut down executor threads to exit.
-        this._channelCreator.close();
+        //  TODO
+//        this._channelCreator.close();
     }
 
     private final ChannelPool _channelPool;
-    private final ChannelCreator _channelCreator;
     private final OutboundFeature.Applicable[] _defaultFeatures;
 }

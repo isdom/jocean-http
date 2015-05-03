@@ -1,12 +1,16 @@
 package org.jocean.http.util;
 
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
+import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
@@ -19,6 +23,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 
+import org.jocean.http.client.impl.ChannelCreator;
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Ordered;
@@ -26,6 +31,9 @@ import org.jocean.idiom.PairedVisitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import rx.Observable;
+import rx.Observable.OnSubscribe;
+import rx.Subscriber;
 import rx.functions.Func2;
 import rx.functions.FuncN;
 
@@ -64,28 +72,42 @@ public class Nettys {
             }};
     }
     
-    private static final ChannelPool UNPOOL = new ChannelPool() {
-        @Override
-        public Channel retainChannel(final SocketAddress address) {
-            return null;
-        }
-
-        @Override
-        public boolean recycleChannel(final SocketAddress address, final Channel channel) {
-            return false;
-        }
-
-        @Override
-        public void beforeSendRequest(Channel channel, HttpRequest request) {
-        }
-
-        @Override
-        public void afterReceiveLastContent(Channel channel) {
-        }
-    };
-
-    public static ChannelPool unpoolChannels() {
-        return UNPOOL;
+    public static ChannelPool unpoolChannels(final ChannelCreator channelCreator) {
+        return new ChannelPool() {
+            @Override
+            public Observable<? extends Channel> retainChannel(final SocketAddress address) {
+                return Observable.create(new OnSubscribe<Channel>() {
+                    @Override
+                    public void call(final Subscriber<? super Channel> subscriber) {
+                        channelCreator.newChannel()
+                        .addListener(new ChannelFutureListener() {
+                            @Override
+                            public void operationComplete(
+                                    final ChannelFuture future)
+                                    throws Exception {
+                                if (future.isSuccess()) {
+                                    subscriber.onNext(future.channel());
+                                    subscriber.onCompleted();
+                                } else {
+                                    subscriber.onError(future.cause());
+                                }
+                            }});
+                    }});
+            }
+    
+            @Override
+            public boolean recycleChannel(final SocketAddress address, final Channel channel) {
+                return false;
+            }
+    
+            @Override
+            public void beforeSendRequest(Channel channel, HttpRequest request) {
+            }
+    
+            @Override
+            public void afterReceiveLastContent(Channel channel) {
+            }
+        };
     }
     
     public static PairedVisitor<Object> _NETTY_REFCOUNTED_GUARD = new PairedVisitor<Object>() {
@@ -158,12 +180,24 @@ public class Nettys {
             }};
     }
     
+    public static final FuncN<ChannelHandler> HTTPSERVER_CODEC_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new HttpServerCodec();
+        }};
+        
     public static final FuncN<ChannelHandler> CONTENT_COMPRESSOR_FUNCN = new FuncN<ChannelHandler>() {
         @Override
         public ChannelHandler call(final Object... args) {
             return new HttpContentCompressor();
         }};
         
+    public static final FuncN<ChannelHandler> HTTPCLIENT_CODEC_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new HttpClientCodec();
+        }};
+            
     public static final FuncN<ChannelHandler> CONTENT_DECOMPRESSOR_FUNCN = new FuncN<ChannelHandler>() {
         @Override
         public ChannelHandler call(final Object... args) {

@@ -18,7 +18,7 @@ public enum InboundFeature {
     LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
     CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC2)),
     ENABLE_SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
-    HTTPSERVER_CODEC(null),
+    HTTPSERVER_CODEC(Nettys.HTTPSERVER_CODEC_FUNCN),
     CONTENT_COMPRESSOR(Nettys.CONTENT_COMPRESSOR_FUNCN),
     LAST_FEATURE(null)
     ;

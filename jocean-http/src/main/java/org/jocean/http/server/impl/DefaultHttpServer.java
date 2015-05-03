@@ -9,8 +9,6 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelPipeline;
-import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
@@ -21,13 +19,11 @@ import org.jocean.event.api.EventEngine;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpTrade;
 import org.jocean.http.server.InboundFeature;
-import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
-import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -62,21 +58,20 @@ public class DefaultHttpServer implements HttpServer {
                     final ServerBootstrap bootstrap = _creator.newBootstrap();
                     bootstrap.childHandler(new ChannelInitializer<Channel>() {
                         @Override
-                        protected void initChannel(final Channel ch) throws Exception {
-                            final ChannelPipeline pipeline = ch.pipeline();
+                        protected void initChannel(final Channel channel) throws Exception {
                             for (InboundFeature.Applicable feature : applyFeatures) {
-                                feature.call(ch);
+                                feature.call(channel);
                             }
-                            Nettys.insertHandler(
-                                    pipeline,
-                                    InboundFeature.HTTPSERVER_CODEC.name(), 
-                                    new HttpServerCodec(),
-                                    InboundFeature.TO_ORDINAL);
-                            subscriber.onNext(createHttpTrade(ch, subscriber));
+                            InboundFeature.HTTPSERVER_CODEC.applyTo(channel);
+                            subscriber.onNext(createHttpTrade(channel, subscriber));
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
-                    subscriber.add(Subscriptions.from(future));
                     subscriber.add(RxNettys.subscriptionFrom(future.channel()));
+                    RxNettys.<ChannelFuture, HttpTrade>emitErrorOnFailure()
+                        .call(future)
+                        .subscribe(subscriber);
+                    /*
+                    subscriber.add(Subscriptions.from(future));
                     future.addListener(new ChannelFutureListener() {
                         @Override
                         public void operationComplete(final ChannelFuture future)
@@ -85,6 +80,7 @@ public class DefaultHttpServer implements HttpServer {
                                 subscriber.onError(future.cause());
                             }
                         }});
+                    */
                 }
             }});
     }

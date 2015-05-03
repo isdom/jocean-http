@@ -9,6 +9,7 @@ import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.ReferenceCountUtil;
@@ -48,7 +49,7 @@ public class RxNettys {
             }};
     }
     
-    private final static Func1<Future<Object>, Observable<Object>> CHECK_FUTURE = 
+    private final static Func1<Future<Object>, Observable<Object>> EMITERROR_ONFAILURE = 
     new Func1<Future<Object>, Observable<Object>>() {
         @Override
         public Observable<Object> call(final Future<Object> future) {
@@ -70,8 +71,8 @@ public class RxNettys {
         
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public static <F extends Future<?>,R> Func1<F, Observable<? extends R>> 
-        checkFuture() {
-        return (Func1)CHECK_FUTURE;
+        emitErrorOnFailure() {
+        return (Func1)EMITERROR_ONFAILURE;
         /* replace by global one instance
         return new Func1<F, Observable<? extends R>>() {
             @Override
@@ -93,6 +94,32 @@ public class RxNettys {
                     }});
             }};
             */
+    }
+    
+    private final static Func1<ChannelFuture, Observable<? extends Channel>> EMITNEXTANDCOMPLETED_ONSUCCESS = 
+    new Func1<ChannelFuture, Observable<? extends Channel>>() {
+        @Override
+        public Observable<? extends Channel> call(final ChannelFuture future) {
+            return Observable.create(new OnSubscribe<Channel>() {
+                @Override
+                public void call(final Subscriber<? super Channel> subscriber) {
+                    subscriber.add(Subscriptions.from(
+                        future.addListener(new ChannelFutureListener() {
+                            @Override
+                            public void operationComplete(final ChannelFuture f)
+                                    throws Exception {
+                                if (f.isSuccess()) {
+                                    subscriber.onNext(f.channel());
+                                    subscriber.onCompleted();
+                                }
+                            }
+                        })));
+                }});
+        }};
+        
+    public static Func1<ChannelFuture, Observable<? extends Channel>> 
+        emitNextAndCompletedOnSuccess() {
+        return  EMITNEXTANDCOMPLETED_ONSUCCESS;
     }
     
     public static Subscription subscriptionFrom(final Channel channel) {
