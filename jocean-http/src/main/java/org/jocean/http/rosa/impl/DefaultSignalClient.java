@@ -42,11 +42,11 @@ import org.jocean.http.rosa.SignalClient;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
-import org.jocean.idiom.Pair;
 import org.jocean.idiom.PropertyPlaceholderHelper;
 import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.SimpleCache;
+import org.jocean.idiom.Triple;
 import org.jocean.idiom.Visitor2;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,8 +75,7 @@ public class DefaultSignalClient implements SignalClient {
     }
     
     @Override
-    public <REQUEST, RESPONSE> Observable<RESPONSE> start(final REQUEST request, 
-            final Class<RESPONSE> respCls) {
+    public <RESPONSE> Observable<RESPONSE> interaction(final Object request) {
         return Observable.create(new OnSubscribe<RESPONSE>() {
 
             @Override
@@ -115,17 +114,23 @@ public class DefaultSignalClient implements SignalClient {
                             }
                         }
                         
+                        @SuppressWarnings("unchecked")
                         @Override
                         public void onCompleted() {
                             final FullHttpResponse httpResp = retainFullHttpResponse();
                             if (null!=httpResp) {
                                 try {
                                     final InputStream is = new ByteBufInputStream(httpResp.content());
-                                    final byte[] bytes = new byte[is.available()];
-                                    final int readed = is.read(bytes);
-                                    final Object resp = JSON.parseObject(bytes, respCls);
-                                    subscriber.onNext((RESPONSE)resp);
-                                    subscriber.onCompleted();
+                                    try {
+                                        final byte[] bytes = new byte[is.available()];
+                                        @SuppressWarnings("unused")
+                                        final int readed = is.read(bytes);
+                                        final Object resp = JSON.parseObject(bytes, safeGetResponseClass(request));
+                                        subscriber.onNext((RESPONSE)resp);
+                                        subscriber.onCompleted();
+                                    } finally {
+                                        is.close();
+                                    }
                                 } catch (Exception e) {
                                     LOG.warn("exception when parse response {}, detail:{}",
                                             httpResp, ExceptionUtils.exception2detail(e));
@@ -152,14 +157,22 @@ public class DefaultSignalClient implements SignalClient {
         });
     }
 
-    public void registerRequestType(final Class<?> reqCls, final String pathPrefix, 
+    @SuppressWarnings("rawtypes")
+    public void registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
             final OutboundFeature.Applicable... features) {
-        this._req2pathPrefix.put(reqCls, Pair.of(pathPrefix, features) );
+        this._req2pathPrefix.put(reqCls, Triple.of((Class)respCls, pathPrefix, features));
     }
     
     private OutboundFeature.Applicable[] safeGetRequestFeatures(final Object request) {
-        final Pair<String, OutboundFeature.Applicable[]> pair = _req2pathPrefix.get(request.getClass());
-        return (null != pair ? pair.second : OutboundFeature.EMPTY_APPLICABLES);
+        @SuppressWarnings("rawtypes")
+        final Triple<Class,String, OutboundFeature.Applicable[]> triple = _req2pathPrefix.get(request.getClass());
+        return (null != triple ? triple.third : OutboundFeature.EMPTY_APPLICABLES);
+    }
+    
+    private Class<?> safeGetResponseClass(final Object request) {
+        @SuppressWarnings("rawtypes")
+        final Triple<Class,String, OutboundFeature.Applicable[]> triple = _req2pathPrefix.get(request.getClass());
+        return (null != triple ? triple.first : null);
     }
     
     private static DefaultFullHttpRequest genHttpRequest(final URI uri) {
@@ -173,8 +186,9 @@ public class DefaultSignalClient implements SignalClient {
         return request;
     }
     
-    private final Map<Class<?>, Pair<String, OutboundFeature.Applicable[]>> _req2pathPrefix = 
-            new ConcurrentHashMap<Class<?>, Pair<String, OutboundFeature.Applicable[]>>();
+    @SuppressWarnings("rawtypes")
+    private final Map<Class<?>, Triple<Class, String, OutboundFeature.Applicable[]>> _req2pathPrefix = 
+            new ConcurrentHashMap<>();
     
     private final SignalConverter _converter = new SignalConverter() {
 
@@ -252,13 +266,10 @@ public class DefaultSignalClient implements SignalClient {
             }
         }
 
-        /**
-         * @param request
-         * @return
-         */
         private String safeGetPathPrefix(final Object request) {
-            final Pair<String, OutboundFeature.Applicable[]> pair = _req2pathPrefix.get(request.getClass());
-            return (null != pair ? pair.first : null);
+            @SuppressWarnings("rawtypes")
+            final Triple<Class, String, OutboundFeature.Applicable[]> triple = _req2pathPrefix.get(request.getClass());
+            return (null != triple ? triple.second : null);
         }
         
         @Override
