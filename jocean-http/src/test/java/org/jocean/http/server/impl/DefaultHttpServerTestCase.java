@@ -71,10 +71,6 @@ public class DefaultHttpServerTestCase {
                 server.defineServer(new LocalAddress("test"),
                 InboundFeature.APPLY_LOGGING,
                 InboundFeature.APPLY_CONTENT_COMPRESSOR)
-//            .doOnNext(InboundFeature.APPLY_CONTENT_COMPRESSOR)
-//            .doOnNext(InboundFeature.APPLY_LOGGING)
-//            .doOnNext(new InboundFeature.APPLY_CLOSE_ON_IDLE(10))
-//            .doOnNext(new InboundFeature.APPLY_SSL(sslCtx))
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
