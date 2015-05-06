@@ -42,7 +42,8 @@ public class SignalTest {
         final FetchPatientsRequest req = new FetchPatientsRequest();
         req.setAccountId("2");
         
-        client.<FetchPatientsResponse>interaction(req)
+        final Subscription subscription = 
+            client.<FetchPatientsResponse>defineInteraction(req)
             .subscribe(new Subscriber<FetchPatientsResponse>() {
 
             @Override
@@ -52,7 +53,7 @@ public class SignalTest {
 
             @Override
             public void onError(Throwable e) {
-                System.out.println(e);
+                System.out.println("onError:" + e);
             }
 
             @Override
@@ -60,6 +61,7 @@ public class SignalTest {
                 System.out.println(resp);
             }});
             */
+        
         final AddMultiMediasToJourneyRequest req = new AddMultiMediasToJourneyRequest();
         req.setCaseId("120");
         req.setJourneyId("1");

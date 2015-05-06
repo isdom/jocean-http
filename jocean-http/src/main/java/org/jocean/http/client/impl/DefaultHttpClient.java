@@ -127,7 +127,6 @@ public class DefaultHttpClient implements HttpClient {
         return new Func1<ChannelHandler, Observable<? extends Channel>> () {
             @Override
             public Observable<? extends Channel> call(final ChannelHandler workHandler) {
-//                return _channelPool.retainChannel(remoteAddress);
                 return Observable.create(new OnSubscribe<Channel>() {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {

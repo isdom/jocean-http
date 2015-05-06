@@ -13,7 +13,6 @@ import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Ordered;
-import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,18 +63,16 @@ final class OnSubscribeResponse implements
     }
         
     @Override
-    public void call(final Subscriber<? super HttpObject> response) {
-        final Subscriber<? super HttpObject> wrapper = 
-                RxSubscribers.guardUnsubscribed(response);
-        try {
-            if (!wrapper.isUnsubscribed()) {
-                this._channelObservable.call(createResponseHandler(wrapper))
+    public void call(final Subscriber<? super HttpObject> responseSubscriber) {
+        if (!responseSubscriber.isUnsubscribed()) {
+            try {
+                this._channelObservable.call(new WorkHandler(responseSubscriber))
                     .flatMap(this._transferRequest)
                     .flatMap(RxNettys.<ChannelFuture, HttpObject>emitErrorOnFailure())
-                    .subscribe(wrapper);
+                    .subscribe(responseSubscriber);
+            } catch (final Throwable e) {
+                responseSubscriber.onError(e);
             }
-        } catch (final Throwable e) {
-            wrapper.onError(e);
         }
     }
 
@@ -86,10 +83,10 @@ final class OnSubscribeResponse implements
             return OutboundFeature.LAST_FEATURE.ordinal() + 2;
         }
 
-        private final Subscriber<? super HttpObject> _response;
+        private final Subscriber<? super HttpObject> _responseSubscriber;
 
-        private WorkHandler(Subscriber<? super HttpObject> response) {
-            this._response = response;
+        private WorkHandler(Subscriber<? super HttpObject> responseSubscriber) {
+            this._responseSubscriber = responseSubscriber;
         }
 
         @Override
@@ -99,7 +96,7 @@ final class OnSubscribeResponse implements
                 LOG.debug("channelInactive: ch({})", ctx.channel());
             }
             ctx.fireChannelInactive();
-            _response.onError(new RuntimeException("peer has closed."));
+            _responseSubscriber.onError(new RuntimeException("peer has closed."));
         }
 
         @Override
@@ -110,13 +107,13 @@ final class OnSubscribeResponse implements
                         ExceptionUtils.exception2detail(cause));
             }
             ctx.close();
-            _response.onError(cause);
+            _responseSubscriber.onError(cause);
         }
 
         @Override
         protected void channelRead0(final ChannelHandlerContext ctx,
                 final HttpObject msg) throws Exception {
-            _response.onNext(msg);
+            _responseSubscriber.onNext(msg);
             if (msg instanceof LastHttpContent) {
                 /*
                  * netty 参考代码:
@@ -138,13 +135,8 @@ final class OnSubscribeResponse implements
                             ctx.channel(), msg);
                 }
                 _channelPool.afterReceiveLastContent(ctx.channel());
-                _response.onCompleted();
+                _responseSubscriber.onCompleted();
             }
         }
-    }
-
-    private SimpleChannelInboundHandler<HttpObject> createResponseHandler(
-            final Subscriber<? super HttpObject> response) {
-        return new WorkHandler(response);
     }
 }

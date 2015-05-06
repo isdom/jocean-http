@@ -38,7 +38,6 @@ import org.jocean.http.util.HandlersClosure;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Ordered;
-import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -384,8 +383,7 @@ public class DefaultHttpTrade implements HttpTrade {
             }
             final String suffix = genSuffix(this._idx);
             final Subscription subscription = response.subscribe(
-                RxSubscribers.guardUnsubscribed(
-                    new Subscriber<HttpObject>() {
+                new Subscriber<HttpObject>() {
                     @Override
                     public void onCompleted() {
                         _responseReceiver.acceptEvent(ON_RESPONSE_COMPLETED + suffix);
@@ -400,8 +398,7 @@ public class DefaultHttpTrade implements HttpTrade {
                             new PairedGuardEventable(
                                 Nettys._NETTY_REFCOUNTED_GUARD, ON_RESPONSE_NEXT + suffix), 
                             msg);
-                    }})
-                );
+                    }});
             
             return new WAIT_RESP(this._idx+1, subscription)
                 .handler(buildOnResponse(
