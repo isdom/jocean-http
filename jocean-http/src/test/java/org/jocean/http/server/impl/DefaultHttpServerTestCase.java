@@ -66,9 +66,9 @@ public class DefaultHttpServerTestCase {
                 bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
                 bootstrap.channel(LocalServerChannel.class);
             }});
-        @SuppressWarnings("unchecked")
+        
         final Subscription testServer = 
-                server.create(new LocalAddress("test"),
+                server.defineServer(new LocalAddress("test"),
                 InboundFeature.APPLY_LOGGING,
                 InboundFeature.APPLY_CONTENT_COMPRESSOR)
 //            .doOnNext(InboundFeature.APPLY_CONTENT_COMPRESSOR)

@@ -13,7 +13,7 @@ import rx.Observable;
  *
  */
 public interface HttpServer extends Closeable {
-    public Observable<? extends HttpTrade> create(
+    public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress, 
             final InboundFeature.Applicable ... features);
 }

@@ -76,7 +76,7 @@ public class HttpServerDemo {
         
         @SuppressWarnings("unused")
         final Subscription subscription = 
-        server.create(new LocalAddress("test"))
+        server.defineServer(new LocalAddress("test"))
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {

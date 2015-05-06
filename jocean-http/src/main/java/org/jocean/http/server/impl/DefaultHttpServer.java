@@ -46,7 +46,7 @@ public class DefaultHttpServer implements HttpServer {
      * @see org.jocean.http.server.HttpServer#create(java.net.SocketAddress)
      */
     @Override
-    public Observable<? extends HttpTrade> create(
+    public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress,
             final InboundFeature.Applicable... features) {
         final InboundFeature.Applicable[] applyFeatures = 
