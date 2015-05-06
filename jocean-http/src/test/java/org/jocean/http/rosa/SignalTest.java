@@ -65,7 +65,7 @@ public class SignalTest {
         req.setJourneyId("1");
         
         final Subscription subscription = 
-        client.<AddMultiMediasToJourneyResponse>interaction(req, 
+        client.<AddMultiMediasToJourneyResponse>defineInteraction(req, 
                 new Attachment("/Users/isdom/Desktop/997df3df73797e91dea4853c228fcbdee36ceb8a38cc8-1vxyhE_fw236.jpeg", "image/jpeg"))
             .subscribe(new Subscriber<AddMultiMediasToJourneyResponse>() {
 

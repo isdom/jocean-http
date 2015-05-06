@@ -72,7 +72,7 @@ public class SslDemo {
         try (final HttpClient client = new DefaultHttpClient()) {
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new InetSocketAddress(host, 443), 
 //                        new InetSocketAddress("58.215.107.207", 443), 
                         Observable.just(request),
@@ -91,7 +91,7 @@ public class SslDemo {
             }
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new InetSocketAddress(host, 443), 
 //                        new InetSocketAddress("58.215.107.207", 443), 
                         Observable.just(request),

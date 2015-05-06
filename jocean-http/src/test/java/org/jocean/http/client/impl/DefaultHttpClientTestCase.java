@@ -99,7 +99,7 @@ public class DefaultHttpClientTestCase {
         try {
         
             final Iterator<HttpObject> itr = 
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                 .map(RxNettys.<HttpObject>retainMap())
@@ -127,7 +127,7 @@ public class DefaultHttpClientTestCase {
                 OutboundFeature.APPLY_LOGGING);
         try {
             final Iterator<HttpObject> itr = 
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.just(request))
                 .map(RxNettys.<HttpObject>retainMap())
@@ -155,7 +155,7 @@ public class DefaultHttpClientTestCase {
                 new OutboundFeature.APPLY_SSL(sslCtx));
         try {
             final Iterator<HttpObject> itr = 
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                 .map(RxNettys.<HttpObject>retainMap())
@@ -182,7 +182,7 @@ public class DefaultHttpClientTestCase {
             // first 
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -197,7 +197,7 @@ public class DefaultHttpClientTestCase {
             // second
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -229,7 +229,7 @@ public class DefaultHttpClientTestCase {
             // first 
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -244,7 +244,7 @@ public class DefaultHttpClientTestCase {
             // second
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -279,7 +279,7 @@ public class DefaultHttpClientTestCase {
             {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
                 try {
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.<HttpObject>error(new RuntimeException("test error")))
                     .subscribe(testSubscriber);
@@ -301,7 +301,7 @@ public class DefaultHttpClientTestCase {
             // second
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -337,7 +337,7 @@ public class DefaultHttpClientTestCase {
             {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
                 try {
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .subscribe(testSubscriber);
@@ -362,7 +362,7 @@ public class DefaultHttpClientTestCase {
             // second
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -394,7 +394,7 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            client.sendRequest(new LocalAddress("test"), 
+            client.defineInteraction(new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
             .subscribe(testSubscriber);
@@ -430,7 +430,7 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            client.sendRequest(new LocalAddress("test"), 
+            client.defineInteraction(new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
             .subscribe(testSubscriber);
@@ -466,7 +466,7 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            client.sendRequest(
+            client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
@@ -505,7 +505,7 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            client.sendRequest(
+            client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
@@ -545,7 +545,7 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            client.sendRequest(
+            client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
@@ -597,7 +597,7 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            client.sendRequest(
+            client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
@@ -650,7 +650,7 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            client.sendRequest(
+            client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
@@ -703,7 +703,7 @@ public class DefaultHttpClientTestCase {
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             final Subscription subscription = 
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                     .doOnNext(nextSensor))
@@ -757,7 +757,7 @@ public class DefaultHttpClientTestCase {
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             final Subscription subscription = 
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                     .doOnNext(nextSensor))
@@ -798,7 +798,7 @@ public class DefaultHttpClientTestCase {
                 OutboundFeature.APPLY_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
-            client.sendRequest(
+            client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>error(new RuntimeException("test error")))
             .subscribe(testSubscriber);
@@ -833,7 +833,7 @@ public class DefaultHttpClientTestCase {
                 new OutboundFeature.APPLY_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
-            client.sendRequest(
+            client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>error(new RuntimeException("test error")))
             .subscribe(testSubscriber);
@@ -869,7 +869,7 @@ public class DefaultHttpClientTestCase {
         try {
             //  first
             {
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>error(new RuntimeException("test error")))
                 .subscribe(testSubscriber);
@@ -889,7 +889,7 @@ public class DefaultHttpClientTestCase {
             // second
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -922,7 +922,7 @@ public class DefaultHttpClientTestCase {
         try {
             //  first
             {
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>error(new RuntimeException("test error")))
                 .subscribe(testSubscriber);
@@ -942,7 +942,7 @@ public class DefaultHttpClientTestCase {
             // second
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -975,7 +975,7 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            client.sendRequest(
+            client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
@@ -1017,7 +1017,7 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            client.sendRequest(
+            client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
@@ -1060,7 +1060,7 @@ public class DefaultHttpClientTestCase {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
                 final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
                 // first
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                     .doOnNext(nextSensor))
@@ -1086,7 +1086,7 @@ public class DefaultHttpClientTestCase {
             {
                 // second
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -1121,7 +1121,7 @@ public class DefaultHttpClientTestCase {
             {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
                 final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                     .doOnNext(nextSensor))
@@ -1147,7 +1147,7 @@ public class DefaultHttpClientTestCase {
             {
                 // second
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -1198,7 +1198,7 @@ public class DefaultHttpClientTestCase {
             request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
             
             final Iterator<HttpObject> itr = 
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.just(request))
                 .map(RxNettys.<HttpObject>retainMap())
@@ -1252,7 +1252,7 @@ public class DefaultHttpClientTestCase {
         
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
-            client.sendRequest(
+            client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(request))
             .subscribe(testSubscriber);
@@ -1308,7 +1308,7 @@ public class DefaultHttpClientTestCase {
             request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
             
             final Iterator<HttpObject> itr = 
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.just(request))
                 .map(RxNettys.<HttpObject>retainMap())
@@ -1363,7 +1363,7 @@ public class DefaultHttpClientTestCase {
         
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
-            client.sendRequest(
+            client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(request))
             .subscribe(testSubscriber);

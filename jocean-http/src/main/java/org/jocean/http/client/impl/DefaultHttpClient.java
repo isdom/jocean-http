@@ -107,7 +107,7 @@ public class DefaultHttpClient implements HttpClient {
      * eg: new SocketAddress(this._uri.getHost(), this._uri.getPort()))
      */
     @Override
-    public Observable<? extends HttpObject> sendRequest(
+    public Observable<? extends HttpObject> defineInteraction(
             final SocketAddress remoteAddress,
             final Observable<? extends Object> request,
             final OutboundFeature.Applicable... features) {

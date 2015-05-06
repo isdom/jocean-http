@@ -85,7 +85,7 @@ public class DefaultSignalClient implements SignalClient {
     }
     
     @Override
-    public <RESPONSE> Observable<RESPONSE> interaction(final Object request, final Attachment... attachments) {
+    public <RESPONSE> Observable<? extends RESPONSE> defineInteraction(final Object request, final Attachment... attachments) {
         return Observable.create(new OnSubscribe<RESPONSE>() {
 
             @Override
@@ -98,7 +98,7 @@ public class DefaultSignalClient implements SignalClient {
                     
                     Observable<? extends HttpObject> response = null;
                     try {
-                        response = _httpClient.sendRequest(remoteAddress, 
+                        response = _httpClient.defineInteraction(remoteAddress, 
                             buildHttpRequest(uri, request, attachments),
                                 safeGetRequestFeatures(request));
                     } catch (Exception e) {

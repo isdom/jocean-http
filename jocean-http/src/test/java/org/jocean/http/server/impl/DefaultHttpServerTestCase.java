@@ -117,7 +117,7 @@ public class DefaultHttpServerTestCase {
             HttpHeaders.setContentLength(request, content.readableBytes());
             
             final Iterator<HttpObject> itr = 
-                client.sendRequest(
+                client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.just(request),
                     OutboundFeature.APPLY_LOGGING)

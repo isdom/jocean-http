@@ -128,7 +128,7 @@ public class HttpServerDemo {
             HttpHeaders.setContentLength(request, content.readableBytes());
             
             final Iterator<HttpObject> itr =
-                client.sendRequest(
+                client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.just(request))
                 .map(RxNettys.<HttpObject>retainMap())

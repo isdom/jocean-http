@@ -67,7 +67,7 @@ public class UnpoolHttpClientTestCase {
             // first 
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
                         OutboundFeature.APPLY_LOGGING)
@@ -83,7 +83,7 @@ public class UnpoolHttpClientTestCase {
             // second
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -117,7 +117,7 @@ public class UnpoolHttpClientTestCase {
             // first 
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())
@@ -132,7 +132,7 @@ public class UnpoolHttpClientTestCase {
             // second
             {
                 final Iterator<HttpObject> itr = 
-                    client.sendRequest(
+                    client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainMap())

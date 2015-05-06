@@ -13,5 +13,5 @@ public interface SignalClient {
         public final String contentType;
     }
     
-    public <RESPONSE> Observable<RESPONSE> interaction(final Object request, final Attachment... attachments);
+    public <RESPONSE> Observable<? extends RESPONSE> defineInteraction(final Object request, final Attachment... attachments);
 }
