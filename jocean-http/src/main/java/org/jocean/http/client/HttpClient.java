@@ -24,6 +24,6 @@ public interface HttpClient extends Closeable {
      */
     public Observable<? extends HttpObject> sendRequest(
             final SocketAddress remoteAddress, 
-            final Observable<? extends HttpObject> request,
+            final Observable<? extends Object> request,
             final OutboundFeature.Applicable... features);
 }

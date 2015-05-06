@@ -6,6 +6,7 @@ import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -14,8 +15,15 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
+import io.netty.handler.codec.http.multipart.DiskFileUpload;
+import io.netty.handler.codec.http.multipart.HttpDataFactory;
+import io.netty.handler.codec.http.multipart.HttpPostRequestEncoder;
+import io.netty.handler.codec.http.multipart.InterfaceHttpData;
+import io.netty.handler.codec.http.multipart.MemoryFileUpload;
 import io.netty.util.ReferenceCountUtil;
 
+import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
@@ -48,12 +56,14 @@ import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.SimpleCache;
 import org.jocean.idiom.Triple;
 import org.jocean.idiom.Visitor2;
+import org.jocean.idiom.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
+import rx.Subscription;
 
 import com.alibaba.fastjson.JSON;
 
@@ -75,7 +85,7 @@ public class DefaultSignalClient implements SignalClient {
     }
     
     @Override
-    public <RESPONSE> Observable<RESPONSE> interaction(final Object request) {
+    public <RESPONSE> Observable<RESPONSE> interaction(final Object request, final Attachment... attachments) {
         return Observable.create(new OnSubscribe<RESPONSE>() {
 
             @Override
@@ -86,12 +96,18 @@ public class DefaultSignalClient implements SignalClient {
                     final int port = -1 == uri.getPort() ? ( "https".equals(uri.getScheme()) ? 443 : 80 ) : uri.getPort();
                     final InetSocketAddress remoteAddress = new InetSocketAddress(uri.getHost(), port);
                     
-                    final HttpRequest httpRequest =
-                            _converter.processHttpRequest(request,
-                                    genHttpRequest(uri));
+                    Observable<? extends HttpObject> response = null;
+                    try {
+                        response = _httpClient.sendRequest(remoteAddress, 
+                            buildHttpRequest(uri, request, attachments),
+                                safeGetRequestFeatures(request));
+                    } catch (Exception e) {
+                        subscriber.onError(e);
+                        return;
+                    }
                     
-                    _httpClient.sendRequest(remoteAddress, Observable.just(httpRequest), safeGetRequestFeatures(request))
-                    .subscribe(new Subscriber<HttpObject>() {
+                    final Subscription subscription = response.subscribe(
+                            new Subscriber<HttpObject>() {
                         private final List<HttpObject> _respObjects = new ArrayList<>();
 
                         private FullHttpResponse retainFullHttpResponse() {
@@ -151,10 +167,70 @@ public class DefaultSignalClient implements SignalClient {
                         public void onNext(final HttpObject httpObj) {
                             this._respObjects.add(ReferenceCountUtil.retain(httpObj));
                         }});
+                    subscriber.add(subscription);
                 }
             }
             
         });
+    }
+
+    protected Observable<? extends Object> buildHttpRequest(
+            final URI uri,
+            final Object request, 
+            final Attachment[] attachments) throws Exception {
+        
+        if (0 == attachments.length) {
+            final HttpRequest httpRequest =
+                    _converter.processHttpRequest(request,
+                            genFullHttpRequest(uri));
+            
+            return Observable.<HttpObject>just(httpRequest);
+        } else {
+            // multipart
+            final HttpRequest httpRequest = genPostHttpRequest(uri);
+            
+            final HttpDataFactory factory = new DefaultHttpDataFactory(false);
+            
+            try {
+                // Use the PostBody encoder
+                HttpPostRequestEncoder bodyRequestEncoder =
+                        new HttpPostRequestEncoder(factory, httpRequest, true); // true => multipart
+    
+                final List<InterfaceHttpData> datas = new ArrayList<>();
+                
+                final byte[] jsonBytes = JSON.toJSONBytes(request);
+                final MemoryFileUpload jsonFile = 
+                        new MemoryFileUpload("json", "json", "application/json", null, null, jsonBytes.length);
+                    
+                jsonFile.setContent(Unpooled.wrappedBuffer(jsonBytes));
+                
+                datas.add(jsonFile);
+                
+                for (Attachment attachment : attachments) {
+                    final File file = new File(attachment.filename);
+                    final DiskFileUpload imgFile = 
+                            new DiskFileUpload(FilenameUtils.getBaseName(attachment.filename), 
+                                attachment.filename, attachment.contentType, null, null, file.length());
+                    imgFile.setContent(file);
+                    datas.add(imgFile);
+                }
+                
+                // add Form attribute from previous request in formpost()
+                bodyRequestEncoder.setBodyHttpDatas(datas);
+    
+                // finalize request
+                bodyRequestEncoder.finalizeRequest();
+    
+                // test if request was chunked and if so, finish the write
+                if (bodyRequestEncoder.isChunked()) {
+                    return Observable.just(httpRequest, bodyRequestEncoder);
+                } else {
+                    return Observable.<HttpObject>just(httpRequest);
+                }
+            } catch (Exception e) {
+                throw e;
+            }
+        }
     }
 
     @SuppressWarnings("rawtypes")
@@ -175,12 +251,23 @@ public class DefaultSignalClient implements SignalClient {
         return (null != triple ? triple.first : null);
     }
     
-    private static DefaultFullHttpRequest genHttpRequest(final URI uri) {
+    private static DefaultFullHttpRequest genFullHttpRequest(final URI uri) {
         // Prepare the HTTP request.
         final String host = uri.getHost() == null ? "localhost" : uri.getHost();
 
         final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
                 HttpVersion.HTTP_1_1, HttpMethod.GET, uri.getRawPath());
+        request.headers().set(HttpHeaders.Names.HOST, host);
+
+        return request;
+    }
+    
+    private static DefaultHttpRequest genPostHttpRequest(final URI uri) {
+        // Prepare the HTTP request.
+        final String host = uri.getHost() == null ? "localhost" : uri.getHost();
+
+        final DefaultHttpRequest request = new DefaultHttpRequest(
+                HttpVersion.HTTP_1_1, HttpMethod.POST, uri.getRawPath());
         request.headers().set(HttpHeaders.Names.HOST, host);
 
         return request;

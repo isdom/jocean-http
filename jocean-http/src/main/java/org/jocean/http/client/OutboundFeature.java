@@ -7,6 +7,7 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.stream.ChunkedWriteHandler;
 
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ToOrdinal;
@@ -23,6 +24,7 @@ public enum OutboundFeature {
     ENABLE_SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
     HTTPCLIENT_CODEC(Nettys.HTTPCLIENT_CODEC_FUNCN),
     CONTENT_DECOMPRESSOR(Nettys.CONTENT_DECOMPRESSOR_FUNCN),
+    CHUNKED_WRITER(Nettys.CHUNKED_WRITER_FUNCN),
     LAST_FEATURE(null)
     ;
     

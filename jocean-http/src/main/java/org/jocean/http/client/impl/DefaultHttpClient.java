@@ -109,7 +109,7 @@ public class DefaultHttpClient implements HttpClient {
     @Override
     public Observable<? extends HttpObject> sendRequest(
             final SocketAddress remoteAddress,
-            final Observable<? extends HttpObject> request,
+            final Observable<? extends Object> request,
             final OutboundFeature.Applicable... features) {
         final OutboundFeature.Applicable[] applyFeatures = 
                 features.length > 0 ? features : this._defaultFeatures;
@@ -187,6 +187,7 @@ public class DefaultHttpClient implements HttpClient {
         }
         
         OutboundFeature.HTTPCLIENT_CODEC.applyTo(channel);
+        OutboundFeature.CHUNKED_WRITER.applyTo(channel);
         
         handlersClosure.call(
             Nettys.insertHandler(

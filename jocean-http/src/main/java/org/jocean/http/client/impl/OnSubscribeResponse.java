@@ -37,7 +37,7 @@ final class OnSubscribeResponse implements
         final Func1<ChannelHandler, Observable<? extends Channel>> channelObservable, 
         final ChannelPool channelPool,
         final OutboundFeature.ApplyToRequest applyToRequest,
-        final Observable<? extends HttpObject> request) {
+        final Observable<? extends Object> request) {
         this._channelObservable = channelObservable;
         this._channelPool = channelPool;
         this._transferRequest = 
@@ -45,12 +45,12 @@ final class OnSubscribeResponse implements
             @Override
             public Observable<ChannelFuture> call(final Channel channel) {
                 return request.doOnNext(applyToRequest(channel))
-                        .map(RxNettys.<HttpObject>sendMessage(channel));
+                        .map(RxNettys.<Object>sendMessage(channel));
             }
-            private final Action1<HttpObject> applyToRequest(final Channel channel) {
-                return new Action1<HttpObject> () {
+            private final Action1<Object> applyToRequest(final Channel channel) {
+                return new Action1<Object> () {
                     @Override
-                    public void call(final HttpObject msg) {
+                    public void call(final Object msg) {
                         if (msg instanceof HttpRequest) {
                             _channelPool.beforeSendRequest(channel, (HttpRequest)msg);
                             if (null!=applyToRequest) {

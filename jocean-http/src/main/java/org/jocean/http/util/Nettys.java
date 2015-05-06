@@ -12,6 +12,7 @@ import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.ReferenceCounted;
@@ -202,6 +203,12 @@ public class Nettys {
         @Override
         public ChannelHandler call(final Object... args) {
             return new HttpContentDecompressor();
+        }};
+        
+    public static final FuncN<ChannelHandler> CHUNKED_WRITER_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new ChunkedWriteHandler();
         }};
 
     public static final Func2<Channel,SslContext,ChannelHandler> SSL_FUNC2 = 
