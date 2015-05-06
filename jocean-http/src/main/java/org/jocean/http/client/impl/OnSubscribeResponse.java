@@ -80,7 +80,7 @@ final class OnSubscribeResponse implements
         implements Ordered {
         @Override
         public int ordinal() {
-            return OutboundFeature.LAST_FEATURE.ordinal() + 2;
+            return OutboundFeature.LAST_FEATURE.ordinal() + 1;
         }
 
         private final Subscriber<? super HttpObject> _responseSubscriber;

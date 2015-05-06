@@ -5,6 +5,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContentCompressor;
@@ -12,6 +13,7 @@ import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
@@ -36,6 +38,7 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Func2;
+import rx.functions.Func4;
 import rx.functions.FuncN;
 
 public class Nettys {
@@ -233,4 +236,60 @@ public class Nettys {
                   };
               }
     };
+
+    private static final class ConnectingNotifier extends
+            ChannelInboundHandlerAdapter {
+        private final boolean _enableSSL;
+        private final ChannelMarker _channelMarker;
+        private final Subscriber<? super Channel> _subscriber;
+
+        private ConnectingNotifier(
+                final boolean enableSSL,
+                final ChannelMarker channelMarker,
+                final Subscriber<? super Channel> subscriber) {
+            this._enableSSL = enableSSL;
+            this._channelMarker = channelMarker;
+            this._subscriber = subscriber;
+        }
+
+        @Override
+        public void channelActive(final ChannelHandlerContext ctx)
+                throws Exception {
+            if (!_enableSSL) {
+                _channelMarker.markChannelConnected(ctx.channel());
+                _subscriber.onNext(ctx.channel());
+                _subscriber.onCompleted();
+            }
+            ctx.fireChannelActive();
+        }
+
+        @Override
+        public void userEventTriggered(final ChannelHandlerContext ctx,
+                final Object evt) throws Exception {
+            if (_enableSSL && evt instanceof SslHandshakeCompletionEvent) {
+                final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
+                if (sslComplete.isSuccess()) {
+                    _channelMarker.markChannelConnected(ctx.channel());
+                    _subscriber.onNext(ctx.channel());
+                    _subscriber.onCompleted();
+                } else {
+                    _subscriber.onError(sslComplete.cause());
+                }
+            }
+            ctx.fireUserEventTriggered(evt);
+        }
+    }
+
+    public static final Func4<Channel,Boolean,ChannelMarker,Subscriber<? super Channel>,ChannelHandler> 
+        CONNECTING_NOTIFIER_FUNC4 = 
+        new Func4<Channel,Boolean,ChannelMarker,Subscriber<? super Channel>,ChannelHandler>() {
+
+            @Override
+            public ChannelHandler call(
+                    final Channel channel, 
+                    final Boolean isSSLEnabled,
+                    final ChannelMarker channelMarker,
+                    final Subscriber<? super Channel> subscriber) {
+                return new ConnectingNotifier(isSSLEnabled, channelMarker, subscriber);
+            }} ;
 }

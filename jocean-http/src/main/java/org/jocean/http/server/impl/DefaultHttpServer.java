@@ -70,17 +70,6 @@ public class DefaultHttpServer implements HttpServer {
                     RxNettys.<ChannelFuture, HttpTrade>emitErrorOnFailure()
                         .call(future)
                         .subscribe(subscriber);
-                    /*
-                    subscriber.add(Subscriptions.from(future));
-                    future.addListener(new ChannelFutureListener() {
-                        @Override
-                        public void operationComplete(final ChannelFuture future)
-                                throws Exception {
-                            if (!future.isSuccess()) {
-                                subscriber.onError(future.cause());
-                            }
-                        }});
-                    */
                 }
             }});
     }

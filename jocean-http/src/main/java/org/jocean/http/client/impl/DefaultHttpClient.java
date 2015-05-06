@@ -8,14 +8,10 @@ import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.ssl.SslHandshakeCompletionEvent;
-import io.netty.util.AttributeKey;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
@@ -25,11 +21,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.OutboundFeature;
+import org.jocean.http.util.ChannelMarker;
 import org.jocean.http.util.HandlersClosure;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.InterfaceUtils;
-import org.jocean.idiom.Ordered;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,52 +42,6 @@ import rx.functions.Func1;
  */
 public class DefaultHttpClient implements HttpClient {
     
-    private final class CompleteOrErrorNotifier extends ChannelInboundHandlerAdapter 
-        implements Ordered {
-        @Override
-        public int ordinal() {
-            return OutboundFeature.LAST_FEATURE.ordinal() + 1;
-        }
-        
-        private final Subscriber<? super Channel> _subscriber;
-        private final boolean _enableSSL;
-
-        private CompleteOrErrorNotifier(
-                final Subscriber<? super Channel> subscriber,
-                final boolean enableSSL) {
-            this._subscriber = subscriber;
-            this._enableSSL = enableSSL;
-        }
-
-        @Override
-        public void channelActive(final ChannelHandlerContext ctx) 
-                throws Exception {
-            if (!_enableSSL) {
-                markChannelConnected(ctx.channel());
-                _subscriber.onNext(ctx.channel());
-                _subscriber.onCompleted();
-            }
-            ctx.fireChannelActive();
-        }
-
-        @Override
-        public void userEventTriggered(final ChannelHandlerContext ctx, final Object evt) 
-                throws Exception {
-            if (_enableSSL && evt instanceof SslHandshakeCompletionEvent) {
-                final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
-                if (sslComplete.isSuccess()) {
-                    markChannelConnected(ctx.channel());
-                    _subscriber.onNext(ctx.channel());
-                    _subscriber.onCompleted();
-                } else {
-                    _subscriber.onError(sslComplete.cause());
-                }
-            }
-            ctx.fireUserEventTriggered(evt);
-        }
-    }
-    
-    private static final String WORK_HANDLER = "WORK";
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
         if (!(InternalLoggerFactory.getDefaultFactory() instanceof Slf4JLoggerFactory)) {
@@ -146,14 +96,14 @@ public class DefaultHttpClient implements HttpClient {
                                     handlersClosure.call(
                                         Nettys.insertHandler(
                                             channel.pipeline(),
-                                            WORK_HANDLER,
+                                            "__WORK",
                                             workHandler,
                                             OutboundFeature.TO_ORDINAL)
                                         );
                                     
                                     subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
                                     
-                                    if (isChannelConnected(channel)) {
+                                    if (_channelMarker.isChannelConnected(channel)) {
                                         subscriber.onNext(channel);
                                         subscriber.onCompleted();
                                     } else {
@@ -189,45 +139,20 @@ public class DefaultHttpClient implements HttpClient {
         OutboundFeature.CHUNKED_WRITER.applyTo(channel);
         
         handlersClosure.call(
-            Nettys.insertHandler(
-                channel.pipeline(),
-                "completeOrErrorNotifier",
-                new CompleteOrErrorNotifier(subscriber, 
-                    OutboundFeature.isSSLEnabled(channel.pipeline())),
-                OutboundFeature.TO_ORDINAL)
-        );
+            OutboundFeature.CONNECTING_NOTIFIER.applyTo(
+                channel, 
+                OutboundFeature.isSSLEnabled(channel.pipeline()), 
+                this._channelMarker, 
+                subscriber));
         
         RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
             .call(channel.connect(remoteAddress))
             .subscribe(subscriber);
-        /*
-        subscriber.add(Subscriptions.from(
-                channel.connect(remoteAddress)
-                .addListener(new ChannelFutureListener() {
-                    @Override
-                    public void operationComplete(final ChannelFuture future) {
-                        if (!future.isSuccess()) {
-                            subscriber.onError(future.cause());
-                        }
-                    }
-                })));
-        */
         if (LOG.isDebugEnabled()) {
             LOG.debug("createChannel and add codecs success for channel:{}/remoteAddress:{}",channel,remoteAddress);
         }
     }
 
-    private static final Object OK = new Object();
-    private static final AttributeKey<Object> CONNECTED = AttributeKey.valueOf("__CONNECTED");
-    
-    private static void markChannelConnected(final Channel channel) {
-        channel.attr(CONNECTED).set(OK);
-    }
-
-    private static boolean isChannelConnected(final Channel channel) {
-        return null != channel.attr(CONNECTED).get();
-    }
-    
     private Subscription channelClosure(
             final SocketAddress remoteAddress,
             final Channel channel, 
@@ -241,7 +166,7 @@ public class DefaultHttpClient implements HttpClient {
                         handlersClosure.close();
                     } catch (IOException e) {
                     }
-                    if (!channel.isActive() || !isChannelConnected(channel)
+                    if (!channel.isActive() || !_channelMarker.isChannelConnected(channel)
                         || !_channelPool.recycleChannel(remoteAddress, channel)) {
                         channel.close();
                     }
@@ -296,14 +221,22 @@ public class DefaultHttpClient implements HttpClient {
     public DefaultHttpClient(
             final ChannelCreator channelCreator,
             final OutboundFeature.Applicable... defaultFeatures) {
-        this(new DefaultChannelPool(channelCreator), defaultFeatures);
+        this(new DefaultChannelPool(channelCreator), new DefaultChannelMarker(), defaultFeatures);
     }
     
     public DefaultHttpClient(
             final ChannelPool channelPool,
             final OutboundFeature.Applicable... defaultFeatures) {
+        this(channelPool, new DefaultChannelMarker(), defaultFeatures);
+    }
+    
+    public DefaultHttpClient(
+            final ChannelPool channelPool,
+            final ChannelMarker channelMarker,
+            final OutboundFeature.Applicable... defaultFeatures) {
         this._channelPool = channelPool;
         this._defaultFeatures = defaultFeatures;
+        this._channelMarker = channelMarker;
     }
     
     /* (non-Javadoc)
@@ -317,5 +250,6 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     private final ChannelPool _channelPool;
+    private final ChannelMarker _channelMarker;
     private final OutboundFeature.Applicable[] _defaultFeatures;
 }

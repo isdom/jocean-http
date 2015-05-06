@@ -56,7 +56,7 @@ public class DefaultHttpTrade implements HttpTrade {
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
     private final AtomicReference<Channel> _channelRef = new AtomicReference<>(null);
-    private final HandlersClosure _closure;
+    private final HandlersClosure _handlerClosure;
     private final EventReceiver _requestReceiver;
     private final EventReceiver _responseReceiver;
     private volatile boolean _isKeepAlive = false;
@@ -68,12 +68,14 @@ public class DefaultHttpTrade implements HttpTrade {
             final ChannelRecycler channelRecycler) {
         this._channelRecycler = channelRecycler;
         this._channelRef.set(channel);
-        this._closure = Nettys.channelHandlersClosure(channel);
-        Nettys.insertHandler(
-            channel.pipeline(),
-            "work",
-            this._closure.call(new WorkHandler()),
-            InboundFeature.TO_ORDINAL);
+        this._handlerClosure = Nettys.channelHandlersClosure(channel);
+        this._handlerClosure.call(
+            Nettys.insertHandler(
+                channel.pipeline(),
+                "__WORK",
+                new WorkHandler(),
+                InboundFeature.TO_ORDINAL)
+            );
         this._requestReceiver = engine.create(this.toString() + ".req", 
             this.REQ_ACTIVED, this.REQ_ACTIVED);
         this._responseReceiver = engine.create(this.toString() + ".resp",
@@ -343,7 +345,7 @@ public class DefaultHttpTrade implements HttpTrade {
         @OnEvent(event = ON_RESPONSE_COMPLETED)
         private BizStep onCompleted() {
             try {
-                _closure.close();
+                _handlerClosure.close();
             } catch (IOException e) {
             }
             //  TODO disable continue call response

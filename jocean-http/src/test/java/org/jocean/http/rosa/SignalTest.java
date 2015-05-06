@@ -3,6 +3,8 @@
  */
 package org.jocean.http.rosa;
 
+import java.util.concurrent.CountDownLatch;
+
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.client.impl.DefaultHttpClient;
@@ -21,8 +23,9 @@ public class SignalTest {
     /**
      * @param args
      * @throws Exception 
+     * @throws Exception 
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         final HttpClient httpClient = new DefaultHttpClient(
                 OutboundFeature.APPLY_LOGGING);
         final DefaultSignalClient client = new DefaultSignalClient(httpClient);
@@ -37,55 +40,58 @@ public class SignalTest {
                 AddMultiMediasToJourneyResponse.class,
                 "http://jumpbox.medtap.cn:8888");
         
+        final CountDownLatch latch = new CountDownLatch(1);
         
-        /*
-        final FetchPatientsRequest req = new FetchPatientsRequest();
-        req.setAccountId("2");
-        
-        final Subscription subscription = 
+        {
+            final FetchPatientsRequest req = new FetchPatientsRequest();
+            req.setAccountId("2");
+            
             client.<FetchPatientsResponse>defineInteraction(req)
-            .subscribe(new Subscriber<FetchPatientsResponse>() {
-
-            @Override
-            public void onCompleted() {
-                System.out.println("onCompleted.");
-            }
-
-            @Override
-            public void onError(Throwable e) {
-                System.out.println("onError:" + e);
-            }
-
-            @Override
-            public void onNext(final FetchPatientsResponse resp) {
-                System.out.println(resp);
-            }});
-            */
-        
-        final AddMultiMediasToJourneyRequest req = new AddMultiMediasToJourneyRequest();
-        req.setCaseId("120");
-        req.setJourneyId("1");
-        
-        final Subscription subscription = 
-        client.<AddMultiMediasToJourneyResponse>defineInteraction(req, 
-                new Attachment("/Users/isdom/Desktop/997df3df73797e91dea4853c228fcbdee36ceb8a38cc8-1vxyhE_fw236.jpeg", "image/jpeg"))
-            .subscribe(new Subscriber<AddMultiMediasToJourneyResponse>() {
-
-            @Override
-            public void onCompleted() {
-                System.out.println("onCompleted.");
-            }
-
-            @Override
-            public void onError(Throwable e) {
-                System.out.println("onError:" + e);
-            }
-
-            @Override
-            public void onNext(final AddMultiMediasToJourneyResponse resp) {
-                System.out.println(resp);
-            }});
-        subscription.unsubscribe();
+                .subscribe(new Subscriber<FetchPatientsResponse>() {
+    
+                @Override
+                public void onCompleted() {
+                    latch.countDown();
+                    System.out.println("onCompleted.");
+                }
+    
+                @Override
+                public void onError(Throwable e) {
+                    latch.countDown();
+                    System.out.println("onError:" + e);
+                }
+    
+                @Override
+                public void onNext(final FetchPatientsResponse resp) {
+                    System.out.println(resp);
+                }});
+        }
+        latch.await();
+        {
+            final AddMultiMediasToJourneyRequest req = new AddMultiMediasToJourneyRequest();
+            req.setCaseId("120");
+            req.setJourneyId("1");
+            
+            final Subscription subscription = 
+            client.<AddMultiMediasToJourneyResponse>defineInteraction(req, 
+                    new Attachment("/Users/isdom/Desktop/997df3df73797e91dea4853c228fcbdee36ceb8a38cc8-1vxyhE_fw236.jpeg", "image/jpeg"))
+                .subscribe(new Subscriber<AddMultiMediasToJourneyResponse>() {
+    
+                @Override
+                public void onCompleted() {
+                    System.out.println("onCompleted.");
+                }
+    
+                @Override
+                public void onError(Throwable e) {
+                    System.out.println("onError:" + e);
+                }
+    
+                @Override
+                public void onNext(final AddMultiMediasToJourneyResponse resp) {
+                    System.out.println(resp);
+                }});
+            subscription.unsubscribe();
+        }
     }
-
 }
