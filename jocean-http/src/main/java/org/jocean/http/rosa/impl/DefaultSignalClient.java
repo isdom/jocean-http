@@ -32,6 +32,7 @@ import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -200,7 +201,12 @@ public class DefaultSignalClient implements SignalClient {
                 
                 final byte[] jsonBytes = JSON.toJSONBytes(request);
                 final MemoryFileUpload jsonFile = 
-                        new MemoryFileUpload("json", "json", "application/json", null, null, jsonBytes.length);
+                        new MemoryFileUpload("json", "json", "application/json", null, null, jsonBytes.length) {
+                            @Override
+                            public Charset getCharset() {
+                                return null;
+                            }
+                };
                     
                 jsonFile.setContent(Unpooled.wrappedBuffer(jsonBytes));
                 
@@ -208,11 +214,16 @@ public class DefaultSignalClient implements SignalClient {
                 
                 for (Attachment attachment : attachments) {
                     final File file = new File(attachment.filename);
-                    final DiskFileUpload imgFile = 
+                    final DiskFileUpload diskFile = 
                             new DiskFileUpload(FilenameUtils.getBaseName(attachment.filename), 
-                                attachment.filename, attachment.contentType, null, null, file.length());
-                    imgFile.setContent(file);
-                    datas.add(imgFile);
+                                attachment.filename, attachment.contentType, null, null, file.length()) {
+                        @Override
+                        public Charset getCharset() {
+                            return null;
+                        }
+                    };
+                    diskFile.setContent(file);
+                    datas.add(diskFile);
                 }
                 
                 // add Form attribute from previous request in formpost()
