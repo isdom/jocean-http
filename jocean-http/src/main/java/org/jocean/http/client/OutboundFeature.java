@@ -19,12 +19,14 @@ import rx.functions.Functions;
 
 public enum OutboundFeature {
     LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
+    PROGRESSIVE(Functions.fromFunc(Nettys.PROGRESSIVE_FUNC2)),
     CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC2)),
     ENABLE_SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
     HTTPCLIENT_CODEC(Nettys.HTTPCLIENT_CODEC_FUNCN),
     CONTENT_DECOMPRESSOR(Nettys.CONTENT_DECOMPRESSOR_FUNCN),
     CHUNKED_WRITER(Nettys.CHUNKED_WRITER_FUNCN),
     CONNECTING_NOTIFIER(Functions.fromFunc(Nettys.CONNECTING_NOTIFIER_FUNC4)),
+    WORKER(Functions.fromFunc(Nettys.HTTPCLIENT_WORK_FUNC3)),
     LAST_FEATURE(null)
     ;
     

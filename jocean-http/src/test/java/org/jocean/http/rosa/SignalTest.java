@@ -6,10 +6,11 @@ package org.jocean.http.rosa;
 import java.util.concurrent.CountDownLatch;
 
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.rosa.SignalClient.Attachment;
+import org.jocean.http.rosa.SignalClient.ProgressiveSubscriber;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
+import org.jocean.http.util.RxNettys;
 
 import rx.Subscriber;
 import rx.Subscription;
@@ -26,8 +27,7 @@ public class SignalTest {
      * @throws Exception 
      */
     public static void main(String[] args) throws Exception {
-        final HttpClient httpClient = new DefaultHttpClient(
-                OutboundFeature.APPLY_LOGGING);
+        final HttpClient httpClient = new DefaultHttpClient();
         final DefaultSignalClient client = new DefaultSignalClient(httpClient);
         
         client.registerRequestType(
@@ -46,7 +46,8 @@ public class SignalTest {
             final FetchPatientsRequest req = new FetchPatientsRequest();
             req.setAccountId("2");
             
-            client.<FetchPatientsResponse>defineInteraction(req)
+            client.defineInteraction(req)
+                .compose(RxNettys.<FetchPatientsResponse>filterProgress())
                 .subscribe(new Subscriber<FetchPatientsResponse>() {
     
                 @Override
@@ -62,8 +63,8 @@ public class SignalTest {
                 }
     
                 @Override
-                public void onNext(final FetchPatientsResponse resp) {
-                    System.out.println(resp);
+                public void onNext(final FetchPatientsResponse response) {
+                    System.out.println(response);
                 }});
         }
         latch.await();
@@ -73,9 +74,9 @@ public class SignalTest {
             req.setJourneyId("1");
             
             final Subscription subscription = 
-            client.<AddMultiMediasToJourneyResponse>defineInteraction(req, 
+            client.defineInteraction(req, 
                     new Attachment("/Users/isdom/Desktop/997df3df73797e91dea4853c228fcbdee36ceb8a38cc8-1vxyhE_fw236.jpeg", "image/jpeg"))
-                .subscribe(new Subscriber<AddMultiMediasToJourneyResponse>() {
+                .subscribe(new ProgressiveSubscriber<AddMultiMediasToJourneyResponse>() {
     
                 @Override
                 public void onCompleted() {
@@ -88,10 +89,20 @@ public class SignalTest {
                 }
     
                 @Override
-                public void onNext(final AddMultiMediasToJourneyResponse resp) {
-                    System.out.println(resp);
+                public void onUploadProgress(long progress, long total) {
+                    System.out.println("AddMultiMediasToJourneyResponse->onUploadProgress:" + progress + "/" + total);
+                }
+
+                @Override
+                public void onDownloadProgress(long progress, long total) {
+                    System.out.println("AddMultiMediasToJourneyResponse->onDownloadProgress:" + progress + "/" + total);
+                }
+
+                @Override
+                public void onResponse(AddMultiMediasToJourneyResponse response) {
+                    System.out.println(response);
                 }});
-            subscription.unsubscribe();
+            //subscription.unsubscribe();
         }
     }
 }

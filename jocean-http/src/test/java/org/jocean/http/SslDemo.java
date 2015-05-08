@@ -21,11 +21,11 @@ import java.util.Iterator;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.client.impl.DefaultHttpClient;
+import org.jocean.http.util.RxNettys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import rx.Observable;
-import rx.functions.Func1;
 
 public class SslDemo {
 
@@ -79,12 +79,8 @@ public class SslDemo {
                         OutboundFeature.APPLY_LOGGING,
                         new OutboundFeature.APPLY_SSL(sslCtx)
                         )
-                    .map(new Func1<HttpObject, HttpObject>() {
-                        @Override
-                        public HttpObject call(final HttpObject obj) {
-                            //    retain obj for blocking
-                            return ReferenceCountUtil.retain(obj);
-                        }})
+                    .compose(RxNettys.objects2httpobjs())
+                    .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
                 LOG.info("recv:{}", new String(responseAsBytes(itr), cs));
@@ -98,12 +94,8 @@ public class SslDemo {
                         OutboundFeature.APPLY_LOGGING,
                         new OutboundFeature.APPLY_SSL(sslCtx)
                         )
-                    .map(new Func1<HttpObject, HttpObject>() {
-                        @Override
-                        public HttpObject call(final HttpObject obj) {
-                            //    retain obj for blocking
-                            return ReferenceCountUtil.retain(obj);
-                        }})
+                    .compose(RxNettys.objects2httpobjs())
+                    .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
                 LOG.info("recv 2nd:{}", new String(responseAsBytes(itr), cs));

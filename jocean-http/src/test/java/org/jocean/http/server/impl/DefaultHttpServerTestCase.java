@@ -117,6 +117,7 @@ public class DefaultHttpServerTestCase {
                     new LocalAddress("test"), 
                     Observable.just(request),
                     OutboundFeature.APPLY_LOGGING)
+                .compose(RxNettys.objects2httpobjs())
                 .map(RxNettys.<HttpObject>retainMap())
                 .toBlocking().toIterable().iterator();
             

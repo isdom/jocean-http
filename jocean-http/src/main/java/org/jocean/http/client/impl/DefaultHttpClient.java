@@ -7,11 +7,10 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
@@ -57,77 +56,103 @@ public class DefaultHttpClient implements HttpClient {
      * eg: new SocketAddress(this._uri.getHost(), this._uri.getPort()))
      */
     @Override
-    public Observable<? extends HttpObject> defineInteraction(
+    public Observable<? extends Object> defineInteraction(
             final SocketAddress remoteAddress,
             final Observable<? extends Object> request,
             final OutboundFeature.Applicable... features) {
         final OutboundFeature.Applicable[] applyFeatures = 
                 features.length > 0 ? features : this._defaultFeatures;
-        return Observable.create(
-            new OnSubscribeResponse(
-                createChannelObservable(remoteAddress, applyFeatures),
-                this._channelPool,
-                InterfaceUtils.compositeByType(applyFeatures, OutboundFeature.ApplyToRequest.class),
-                request));
-    }
-
-    private Func1<ChannelHandler, Observable<? extends Channel>> createChannelObservable(
-            final SocketAddress remoteAddress, 
-            final OutboundFeature.Applicable[] features) {
-        return new Func1<ChannelHandler, Observable<? extends Channel>> () {
+        final OutboundFeature.ApplyToRequest applyToRequest = 
+                InterfaceUtils.compositeByType(applyFeatures, OutboundFeature.ApplyToRequest.class);
+        final Func1<Channel, Observable<ChannelFuture>> transferRequest = 
+                new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
-            public Observable<? extends Channel> call(final ChannelHandler workHandler) {
-                return Observable.create(new OnSubscribe<Channel>() {
+            public Observable<ChannelFuture> call(final Channel channel) {
+                return request.doOnNext(doWhenRequest(channel))
+                        .map(RxNettys.<Object>sendMessage(channel));
+            }
+            private final Action1<Object> doWhenRequest(final Channel channel) {
+                return new Action1<Object> () {
                     @Override
-                    public void call(final Subscriber<? super Channel> subscriber) {
-                        _channelPool.retainChannel(remoteAddress)
-                        .subscribe(
-                            new Action1<Channel>() {
-                                @Override
-                                public void call(final Channel channel) {
-                                    final HandlersClosure handlersClosure = 
-                                            Nettys.channelHandlersClosure(channel);
-                                    for (OutboundFeature.Applicable applicable : features) {
-                                        if (applicable.isRemovable()) {
-                                            handlersClosure.call(applicable.call(channel));
-                                        }
-                                    }
-                                    
-                                    handlersClosure.call(
-                                        Nettys.insertHandler(
-                                            channel.pipeline(),
-                                            "__WORK",
-                                            workHandler,
-                                            OutboundFeature.TO_ORDINAL)
-                                        );
-                                    
-                                    subscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
-                                    
-                                    if (_channelMarker.isChannelConnected(channel)) {
-                                        subscriber.onNext(channel);
-                                        subscriber.onCompleted();
-                                    } else {
-                                        startToConnect(channel, 
-                                                remoteAddress,
-                                                features, 
-                                                subscriber,
-                                                handlersClosure);
-                                    }
-                                }}, 
-                            new Action1<Throwable>() {
-                                @Override
-                                public void call(Throwable e) {
-                                    subscriber.onError(e);
-                                }});
-                }});
-            }};
+                    public void call(final Object msg) {
+                        if (msg instanceof HttpRequest) {
+                            _channelPool.beforeSendRequest(channel, (HttpRequest)msg);
+                            if (null!=applyToRequest) {
+                                applyToRequest.applyToRequest((HttpRequest) msg);
+                            }
+                        }
+                    }
+                };
+            }
+        };
+        return Observable.create(new OnSubscribe<Object>() {
+            @Override
+            public void call(final Subscriber<? super Object> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    try {
+                        channelObservable(remoteAddress, applyFeatures, subscriber)
+                            .flatMap(transferRequest)
+                            .flatMap(RxNettys.<ChannelFuture, Object>emitErrorOnFailure())
+                            .subscribe(subscriber);
+                    } catch (final Throwable e) {
+                        subscriber.onError(e);
+                    }
+                }
+            }});
     }
 
+    private Observable<? extends Channel> channelObservable(
+            final SocketAddress remoteAddress, 
+            final OutboundFeature.Applicable[] features,
+            final Subscriber<? super Object> subscriber) {
+        return Observable.create(new OnSubscribe<Channel>() {
+            @Override
+            public void call(final Subscriber<? super Channel> channelSubscriber) {
+                _channelPool.retainChannel(remoteAddress)
+                .subscribe(
+                    new Action1<Channel>() {
+                        @Override
+                        public void call(final Channel channel) {
+                            final HandlersClosure handlersClosure = 
+                                    Nettys.channelHandlersClosure(channel);
+                            for (OutboundFeature.Applicable applicable : features) {
+                                if (applicable.isRemovable()) {
+                                    handlersClosure.call(applicable.call(channel));
+                                }
+                            }
+                            
+                            handlersClosure.call(
+                                OutboundFeature.PROGRESSIVE.applyTo(channel, subscriber));
+                            
+                            handlersClosure.call(
+                                OutboundFeature.WORKER.applyTo(channel, subscriber, _channelPool));
+                            
+                            channelSubscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
+                            
+                            if (_channelMarker.isChannelConnected(channel)) {
+                                channelSubscriber.onNext(channel);
+                                channelSubscriber.onCompleted();
+                            } else {
+                                startToConnect(channel, 
+                                        remoteAddress,
+                                        features, 
+                                        channelSubscriber,
+                                        handlersClosure);
+                            }
+                        }}, 
+                    new Action1<Throwable>() {
+                        @Override
+                        public void call(Throwable e) {
+                            channelSubscriber.onError(e);
+                        }});
+        }});
+    }
+        
     private void startToConnect(
             final Channel channel,
             final SocketAddress remoteAddress,
             final OutboundFeature.Applicable[] features,
-            final Subscriber<? super Channel> subscriber,
+            final Subscriber<? super Channel> channelSubscriber,
             final HandlersClosure handlersClosure) {
         for ( OutboundFeature.Applicable applicable : features) {
             if (!applicable.isRemovable()) {
@@ -143,11 +168,11 @@ public class DefaultHttpClient implements HttpClient {
                 channel, 
                 OutboundFeature.isSSLEnabled(channel.pipeline()), 
                 this._channelMarker, 
-                subscriber));
+                channelSubscriber));
         
         RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
             .call(channel.connect(remoteAddress))
-            .subscribe(subscriber);
+            .subscribe(channelSubscriber);
         if (LOG.isDebugEnabled()) {
             LOG.debug("createChannel and add codecs success for channel:{}/remoteAddress:{}",channel,remoteAddress);
         }

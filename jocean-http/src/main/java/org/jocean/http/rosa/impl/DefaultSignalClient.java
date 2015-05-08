@@ -38,6 +38,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -51,6 +52,7 @@ import org.jocean.http.rosa.SignalClient;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
+import org.jocean.idiom.Pair;
 import org.jocean.idiom.PropertyPlaceholderHelper;
 import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
 import org.jocean.idiom.ReflectUtils;
@@ -86,31 +88,39 @@ public class DefaultSignalClient implements SignalClient {
     }
     
     @Override
-    public <RESPONSE> Observable<? extends RESPONSE> defineInteraction(final Object request, final Attachment... attachments) {
-        return Observable.create(new OnSubscribe<RESPONSE>() {
+    public Observable<? extends Object> defineInteraction(final Object request, final Attachment... attachments) {
+        return Observable.create(new OnSubscribe<Object>() {
 
             @Override
-            public void call(final Subscriber<? super RESPONSE> subscriber) {
+            public void call(final Subscriber<? super Object> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final URI uri = _converter.req2uri(request);
                     
                     final int port = -1 == uri.getPort() ? ( "https".equals(uri.getScheme()) ? 443 : 80 ) : uri.getPort();
                     final InetSocketAddress remoteAddress = new InetSocketAddress(uri.getHost(), port);
                     
-                    Observable<? extends HttpObject> response = null;
+                    Observable<? extends Object> response = null;
+                    long uploadsize = -1;
                     try {
-                        response = _httpClient.defineInteraction(remoteAddress, 
-                            buildHttpRequest(uri, request, attachments),
-                                safeGetRequestFeatures(request));
+                        final Pair<Observable<Object>,Long> ret = buildHttpRequest(uri, request, attachments);
+                        response = _httpClient.defineInteraction(
+                            remoteAddress, 
+                            ret.first,
+                            safeGetRequestFeatures(request));
+                        uploadsize = ret.second;
                     } catch (Exception e) {
                         subscriber.onError(e);
                         return;
                     }
                     
+                    final long uploadTotal = uploadsize;
+                    
                     final Subscription subscription = response.subscribe(
-                            new Subscriber<HttpObject>() {
+                            new Subscriber<Object>() {
                         private final List<HttpObject> _respObjects = new ArrayList<>();
-
+                        private final AtomicLong _uploadProgress = new AtomicLong(0);
+                        private final AtomicLong _downloadProgress = new AtomicLong(0);
+                        
                         private FullHttpResponse retainFullHttpResponse() {
                             if (this._respObjects.size()>0) {
                                 if (this._respObjects.get(0) instanceof FullHttpResponse) {
@@ -131,7 +141,6 @@ public class DefaultSignalClient implements SignalClient {
                             }
                         }
                         
-                        @SuppressWarnings("unchecked")
                         @Override
                         public void onCompleted() {
                             final FullHttpResponse httpResp = retainFullHttpResponse();
@@ -143,7 +152,7 @@ public class DefaultSignalClient implements SignalClient {
                                         @SuppressWarnings("unused")
                                         final int readed = is.read(bytes);
                                         final Object resp = JSON.parseObject(bytes, safeGetResponseClass(request));
-                                        subscriber.onNext((RESPONSE)resp);
+                                        subscriber.onNext(resp);
                                         subscriber.onCompleted();
                                     } finally {
                                         is.close();
@@ -165,8 +174,34 @@ public class DefaultSignalClient implements SignalClient {
                         }
 
                         @Override
-                        public void onNext(final HttpObject httpObj) {
-                            this._respObjects.add(ReferenceCountUtil.retain(httpObj));
+                        public void onNext(final Object object) {
+                            if (object instanceof HttpClient.UploadProgressable) {
+                                final long progress = 
+                                        _uploadProgress.addAndGet(((HttpClient.UploadProgressable)object).progress());
+                                subscriber.onNext(new UploadProgressable() {
+                                    @Override
+                                    public long progress() {
+                                        return progress;
+                                    }
+                                    @Override
+                                    public long total() {
+                                        return uploadTotal;
+                                    }});
+                            } else if (object instanceof HttpClient.DownloadProgressable) {
+                                final long progress = 
+                                        _downloadProgress.addAndGet(((HttpClient.DownloadProgressable)object).progress());
+                                subscriber.onNext(new DownloadProgressable() {
+                                    @Override
+                                    public long progress() {
+                                        return progress;
+                                    }
+                                    @Override
+                                    public long total() {
+                                        return -1;
+                                    }});
+                            } else if (object instanceof HttpObject) {
+                                this._respObjects.add(ReferenceCountUtil.retain((HttpObject)object));
+                            }
                         }});
                     subscriber.add(subscription);
                 }
@@ -175,7 +210,7 @@ public class DefaultSignalClient implements SignalClient {
         });
     }
 
-    protected Observable<? extends Object> buildHttpRequest(
+    protected Pair<Observable<Object>,Long> buildHttpRequest(
             final URI uri,
             final Object request, 
             final Attachment[] attachments) throws Exception {
@@ -185,7 +220,7 @@ public class DefaultSignalClient implements SignalClient {
                     _converter.processHttpRequest(request,
                             genFullHttpRequest(uri));
             
-            return Observable.<HttpObject>just(httpRequest);
+            return Pair.of(Observable.<Object>just(httpRequest), -1L);
         } else {
             // multipart
             final HttpRequest httpRequest = genPostHttpRequest(uri);
@@ -193,6 +228,7 @@ public class DefaultSignalClient implements SignalClient {
             final HttpDataFactory factory = new DefaultHttpDataFactory(false);
             
             try {
+                long total = 0;
                 // Use the PostBody encoder
                 HttpPostRequestEncoder bodyRequestEncoder =
                         new HttpPostRequestEncoder(factory, httpRequest, true); // true => multipart
@@ -210,6 +246,7 @@ public class DefaultSignalClient implements SignalClient {
                     
                 jsonFile.setContent(Unpooled.wrappedBuffer(jsonBytes));
                 
+                total += jsonBytes.length;
                 datas.add(jsonFile);
                 
                 for (Attachment attachment : attachments) {
@@ -223,6 +260,7 @@ public class DefaultSignalClient implements SignalClient {
                         }
                     };
                     diskFile.setContent(file);
+                    total += file.length();
                     datas.add(diskFile);
                 }
                 
@@ -230,13 +268,13 @@ public class DefaultSignalClient implements SignalClient {
                 bodyRequestEncoder.setBodyHttpDatas(datas);
     
                 // finalize request
-                bodyRequestEncoder.finalizeRequest();
+                final HttpRequest requestToSend = bodyRequestEncoder.finalizeRequest();
     
                 // test if request was chunked and if so, finish the write
                 if (bodyRequestEncoder.isChunked()) {
-                    return Observable.just(httpRequest, bodyRequestEncoder);
+                    return Pair.of(Observable.just(requestToSend, bodyRequestEncoder), total);
                 } else {
-                    return Observable.<HttpObject>just(httpRequest);
+                    return Pair.of(Observable.<Object>just(requestToSend), total);
                 }
             } catch (Exception e) {
                 throw e;

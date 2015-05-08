@@ -71,6 +71,7 @@ public class UnpoolHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
                         OutboundFeature.APPLY_LOGGING)
+                    .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -86,6 +87,7 @@ public class UnpoolHttpClientTestCase {
                     client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -120,6 +122,7 @@ public class UnpoolHttpClientTestCase {
                     client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 
@@ -135,6 +138,7 @@ public class UnpoolHttpClientTestCase {
                     client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
                 

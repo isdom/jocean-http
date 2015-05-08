@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Iterator;
 
+import org.jocean.http.rosa.SignalClient;
+
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
@@ -17,6 +19,7 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
+import rx.Observable.Transformer;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Func1;
@@ -154,5 +157,46 @@ public class RxNettys {
         } finally {
             ReferenceCountUtil.release(composite);
         }
+    }
+    
+    private static final Func1<Object,Boolean> _ISHTTPOBJ = new Func1<Object, Boolean>() {
+        @Override
+        public Boolean call(final Object obj) {
+            return obj instanceof HttpObject;
+        }};
+    private static final Func1<Object,HttpObject> _OBJ2HTTPOBJ = new Func1<Object, HttpObject> (){
+        @Override
+        public HttpObject call(final Object obj) {
+            return (HttpObject)obj;
+        }};
+        
+    private static final Transformer<Object, HttpObject> _OBJS2HTTPOBJS = 
+        new Transformer<Object, HttpObject>() {
+        @Override
+        public Observable<HttpObject> call(final Observable<Object> objs) {
+            return objs.filter(_ISHTTPOBJ).map(_OBJ2HTTPOBJ);
+        }};
+        
+    public static Transformer<Object, HttpObject> objects2httpobjs() {
+        return _OBJS2HTTPOBJS;
+    }
+    
+    private static final Func1<Object,Boolean> _PROGRESS = new Func1<Object, Boolean>() {
+        @Override
+        public Boolean call(final Object obj) {
+            return !(obj instanceof SignalClient.Progressable);
+        }};
+            
+    public static <T> Transformer<Object, T> filterProgress() {
+        return new Transformer<Object, T>() {
+            @Override
+            public Observable<T> call(final Observable<Object> objs) {
+                return objs.filter(_PROGRESS).map(new Func1<Object, T> (){
+                    @SuppressWarnings("unchecked")
+                    @Override
+                    public T call(final Object obj) {
+                        return (T)obj;
+                    }});
+            }};
     }
 }
