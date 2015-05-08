@@ -8,7 +8,6 @@ import io.netty.handler.codec.http.HttpObject;
 import java.io.Closeable;
 import java.net.SocketAddress;
 
-import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +34,7 @@ public interface HttpClient extends Closeable {
     public abstract class ProgressiveSubscriber extends Subscriber<Object> {
 
         private static final Logger LOG =
-                LoggerFactory.getLogger(DefaultHttpClient.class);
+                LoggerFactory.getLogger(HttpClient.class);
         
         public abstract void onUploadProgress(final long progress);
         
