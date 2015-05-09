@@ -11,6 +11,9 @@ import org.jocean.http.rosa.SignalClient.Attachment;
 import org.jocean.http.rosa.SignalClient.ProgressiveSubscriber;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.ExceptionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import rx.Subscriber;
 import rx.Subscription;
@@ -21,6 +24,9 @@ import rx.Subscription;
  */
 public class SignalTest {
 
+    private static final Logger LOG =
+            LoggerFactory.getLogger(SignalTest.class);
+    
     /**
      * @param args
      * @throws Exception 
@@ -53,18 +59,18 @@ public class SignalTest {
                 @Override
                 public void onCompleted() {
                     latch.countDown();
-                    System.out.println("onCompleted.");
+                    LOG.debug("FetchPatientsRequest: onCompleted.");
                 }
     
                 @Override
                 public void onError(Throwable e) {
                     latch.countDown();
-                    System.out.println("onError:" + e);
+                    LOG.debug("FetchPatientsRequest: onError: {}", ExceptionUtils.exception2detail(e));
                 }
     
                 @Override
                 public void onNext(final FetchPatientsResponse response) {
-                    System.out.println(response);
+                    LOG.debug("FetchPatientsRequest: onNext: {}", response);
                 }});
         }
         latch.await();
@@ -80,27 +86,27 @@ public class SignalTest {
     
                 @Override
                 public void onCompleted() {
-                    System.out.println("onCompleted.");
+                    LOG.debug("AddMultiMediasToJourneyRequest: onCompleted.");
                 }
     
                 @Override
                 public void onError(Throwable e) {
-                    System.out.println("onError:" + e);
+                    LOG.debug("AddMultiMediasToJourneyRequest: onError: {}", ExceptionUtils.exception2detail(e));
                 }
     
                 @Override
                 public void onUploadProgress(long progress, long total) {
-                    System.out.println("AddMultiMediasToJourneyResponse->onUploadProgress:" + progress + "/" + total);
+                    LOG.debug("AddMultiMediasToJourneyRequest->onUploadProgress: {}/{}", progress, total);
                 }
 
                 @Override
                 public void onDownloadProgress(long progress, long total) {
-                    System.out.println("AddMultiMediasToJourneyResponse->onDownloadProgress:" + progress + "/" + total);
+                    LOG.debug("AddMultiMediasToJourneyRequest->onDownloadProgress: {}/{}", progress, total);
                 }
 
                 @Override
                 public void onResponse(AddMultiMediasToJourneyResponse response) {
-                    System.out.println(response);
+                    LOG.debug("AddMultiMediasToJourneyRequest: onNext: {}", response);
                 }});
             //subscription.unsubscribe();
         }

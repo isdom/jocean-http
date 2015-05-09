@@ -66,7 +66,9 @@ import org.slf4j.LoggerFactory;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
-import rx.Subscription;
+import rx.functions.Action0;
+import rx.functions.Action1;
+import rx.functions.Func1;
 
 import com.alibaba.fastjson.JSON;
 
@@ -115,6 +117,110 @@ public class DefaultSignalClient implements SignalClient {
                     
                     final long uploadTotal = uploadsize;
                     
+                    final AtomicLong uploadProgress = new AtomicLong(0);
+                    final AtomicLong downloadProgress = new AtomicLong(0);
+                    final List<HttpObject> httpObjects = new ArrayList<>();
+                    
+                    response.map(new Func1<Object,Object>() {
+                        @Override
+                        public Object call(final Object input) {
+                            if (input instanceof HttpClient.UploadProgressable) {
+                                final long progress =
+                                        uploadProgress.addAndGet(((HttpClient.UploadProgressable)input).progress());
+                                return new UploadProgressable() {
+                                    @Override
+                                    public long progress() {
+                                        return progress;
+                                    }
+                                    @Override
+                                    public long total() {
+                                        return uploadTotal;
+                                    }};
+                            } else if (input instanceof HttpClient.DownloadProgressable) {
+                                final long progress = 
+                                        downloadProgress.addAndGet(((HttpClient.DownloadProgressable)input).progress());
+                                return new DownloadProgressable() {
+                                    @Override
+                                    public long progress() {
+                                        return progress;
+                                    }
+                                    @Override
+                                    public long total() {
+                                        return -1;
+                                    }};
+                            } else {
+                                return input;
+                            }
+                    }})
+                    .doOnNext(new Action1<Object>() {
+                        @Override
+                        public void call(final Object obj) {
+                            if (obj instanceof HttpObject) {
+                                httpObjects.add(ReferenceCountUtil.retain((HttpObject)obj));
+                            }
+                        }})
+                    .filter(new Func1<Object, Boolean>() {
+                        @Override
+                        public Boolean call(final Object obj) {
+                            return !(obj instanceof HttpObject);
+                        }})
+                    .doOnCompleted(new Action0() {
+                        @Override
+                        public void call() {
+                            final FullHttpResponse httpResp = retainFullHttpResponse(httpObjects);
+                            if (null!=httpResp) {
+                                try {
+                                    final InputStream is = new ByteBufInputStream(httpResp.content());
+                                    try {
+                                        final byte[] bytes = new byte[is.available()];
+                                        @SuppressWarnings("unused")
+                                        final int readed = is.read(bytes);
+                                        final Object resp = JSON.parseObject(bytes, safeGetResponseClass(request));
+                                        subscriber.onNext(resp);
+                                    } finally {
+                                        is.close();
+                                    }
+                                } catch (Exception e) {
+                                    LOG.warn("exception when parse response {}, detail:{}",
+                                            httpResp, ExceptionUtils.exception2detail(e));
+                                    subscriber.onError(e);
+                                } finally {
+                                    httpResp.release();
+                                }
+                            }
+                        }
+                        private FullHttpResponse retainFullHttpResponse(final List<HttpObject> httpObjs) {
+                            if (httpObjs.size()>0) {
+                                if (httpObjs.get(0) instanceof FullHttpResponse) {
+                                    return ((FullHttpResponse)httpObjs.get(0)).retain();
+                                }
+                                
+                                final HttpResponse resp = (HttpResponse)httpObjs.get(0);
+                                final ByteBuf[] bufs = new ByteBuf[httpObjs.size()-1];
+                                for (int idx = 1; idx<httpObjs.size(); idx++) {
+                                    bufs[idx-1] = ((HttpContent)httpObjs.get(idx)).content().retain();
+                                }
+                                return new DefaultFullHttpResponse(
+                                        resp.getProtocolVersion(), 
+                                        resp.getStatus(),
+                                        Unpooled.wrappedBuffer(bufs));
+                            } else {
+                                return null;
+                            }
+                        }})
+                    .doOnTerminate(new Action0() {
+                        @Override
+                        public void call() {
+                            clearHttpObjects(httpObjects);                            
+                        }})
+                    .doOnUnsubscribe(new Action0() {
+                        @Override
+                        public void call() {
+                            clearHttpObjects(httpObjects);                            
+                        }})
+                    .subscribe(subscriber);
+                    
+                    /*
                     final Subscription subscription = response.subscribe(
                             new Subscriber<Object>() {
                         private final List<HttpObject> _respObjects = new ArrayList<>();
@@ -204,12 +310,28 @@ public class DefaultSignalClient implements SignalClient {
                             }
                         }});
                     subscriber.add(subscription);
+                    */
                 }
             }
             
         });
     }
 
+    private static void clearHttpObjects(final List<HttpObject> httpObjs) {
+        synchronized (httpObjs) {
+            for ( HttpObject obj : httpObjs ) {
+                if (ReferenceCountUtil.release(obj)) {
+                    LOG.debug("HttpObject({}) is release and deallocated success.", obj); 
+                } else {
+//                    if ( obj instanceof ReferenceCounted) {
+//                        LOG.warn("HttpObject({}) is !NOT! released.", obj); 
+//                    }
+                }
+            }
+            httpObjs.clear();
+        }
+    }
+    
     protected Pair<Observable<Object>,Long> buildHttpRequest(
             final URI uri,
             final Object request, 
