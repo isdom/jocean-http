@@ -1,11 +1,5 @@
 package org.jocean.http.util;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Iterator;
-
-import org.jocean.http.rosa.SignalClient;
-
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
@@ -17,6 +11,16 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Iterator;
+import java.util.List;
+
+import org.jocean.http.rosa.SignalClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
@@ -26,6 +30,8 @@ import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
 public class RxNettys {
+    private static final Logger LOG =
+            LoggerFactory.getLogger(RxNettys.class);
     private RxNettys() {
         throw new IllegalStateException("No instances!");
     }
@@ -198,5 +204,20 @@ public class RxNettys {
                         return (T)obj;
                     }});
             }};
+    }
+    
+    public static <T> void releaseObjects(final List<T> objs) {
+        synchronized (objs) {
+            for ( T obj : objs ) {
+                if (ReferenceCountUtil.release(obj)) {
+                    LOG.debug("({}) is release and deallocated success.", obj); 
+                } else {
+//                    if ( obj instanceof ReferenceCounted) {
+//                        LOG.warn("HttpObject({}) is !NOT! released.", obj); 
+//                    }
+                }
+            }
+            objs.clear();
+        }
     }
 }

@@ -34,6 +34,7 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,7 @@ import javax.ws.rs.QueryParam;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.rosa.SignalClient;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
@@ -103,11 +105,14 @@ public class DefaultSignalClient implements SignalClient {
                     
                     Observable<? extends Object> response = null;
                     long uploadsize = -1;
+                    List<Object> httpRequest = null;
+                    
                     try {
-                        final Pair<Observable<Object>,Long> ret = buildHttpRequest(uri, request, attachments);
+                        final Pair<List<Object>,Long> ret = buildHttpRequest(uri, request, attachments);
+                        httpRequest = ret.first;
                         response = _httpClient.defineInteraction(
                             remoteAddress, 
-                            ret.first,
+                            Observable.from(httpRequest),
                             safeGetRequestFeatures(request));
                         uploadsize = ret.second;
                     } catch (Exception e) {
@@ -116,6 +121,7 @@ public class DefaultSignalClient implements SignalClient {
                     }
                     
                     final long uploadTotal = uploadsize;
+                    final List<Object> requestRaw = httpRequest;
                     
                     final AtomicLong uploadProgress = new AtomicLong(0);
                     final AtomicLong downloadProgress = new AtomicLong(0);
@@ -211,12 +217,14 @@ public class DefaultSignalClient implements SignalClient {
                     .doOnTerminate(new Action0() {
                         @Override
                         public void call() {
-                            clearHttpObjects(httpObjects);                            
+                            RxNettys.releaseObjects(httpObjects);
+                            RxNettys.releaseObjects(requestRaw);
                         }})
                     .doOnUnsubscribe(new Action0() {
                         @Override
                         public void call() {
-                            clearHttpObjects(httpObjects);                            
+                            RxNettys.releaseObjects(httpObjects);                            
+                            RxNettys.releaseObjects(requestRaw);
                         }})
                     .subscribe(subscriber);
                     
@@ -317,32 +325,18 @@ public class DefaultSignalClient implements SignalClient {
         });
     }
 
-    private static void clearHttpObjects(final List<HttpObject> httpObjs) {
-        synchronized (httpObjs) {
-            for ( HttpObject obj : httpObjs ) {
-                if (ReferenceCountUtil.release(obj)) {
-                    LOG.debug("HttpObject({}) is release and deallocated success.", obj); 
-                } else {
-//                    if ( obj instanceof ReferenceCounted) {
-//                        LOG.warn("HttpObject({}) is !NOT! released.", obj); 
-//                    }
-                }
-            }
-            httpObjs.clear();
-        }
-    }
-    
-    protected Pair<Observable<Object>,Long> buildHttpRequest(
+    protected Pair<List<Object>,Long> buildHttpRequest(
             final URI uri,
             final Object request, 
             final Attachment[] attachments) throws Exception {
         
+        final List<Object> ret = new ArrayList<>();
         if (0 == attachments.length) {
             final HttpRequest httpRequest =
                     _converter.processHttpRequest(request,
                             genFullHttpRequest(uri));
-            
-            return Pair.of(Observable.<Object>just(httpRequest), -1L);
+            ret.addAll(Arrays.asList(new Object[]{httpRequest}));
+            return Pair.of(ret, -1L);
         } else {
             // multipart
             final HttpRequest httpRequest = genPostHttpRequest(uri);
@@ -352,7 +346,7 @@ public class DefaultSignalClient implements SignalClient {
             try {
                 long total = 0;
                 // Use the PostBody encoder
-                HttpPostRequestEncoder bodyRequestEncoder =
+                final HttpPostRequestEncoder bodyRequestEncoder =
                         new HttpPostRequestEncoder(factory, httpRequest, true); // true => multipart
     
                 final List<InterfaceHttpData> datas = new ArrayList<>();
@@ -394,10 +388,11 @@ public class DefaultSignalClient implements SignalClient {
     
                 // test if request was chunked and if so, finish the write
                 if (bodyRequestEncoder.isChunked()) {
-                    return Pair.of(Observable.just(requestToSend, bodyRequestEncoder), total);
+                    ret.addAll(Arrays.asList(new Object[]{requestToSend, bodyRequestEncoder}));
                 } else {
-                    return Pair.of(Observable.<Object>just(requestToSend), total);
+                    ret.addAll(Arrays.asList(new Object[]{requestToSend}));
                 }
+                return Pair.of(ret, total);
             } catch (Exception e) {
                 throw e;
             }

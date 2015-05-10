@@ -108,7 +108,7 @@ public class SignalTest {
                 public void onResponse(AddMultiMediasToJourneyResponse response) {
                     LOG.debug("AddMultiMediasToJourneyRequest: onNext: {}", response);
                 }});
-            //subscription.unsubscribe();
+//            subscription.unsubscribe();
         }
     }
 }
