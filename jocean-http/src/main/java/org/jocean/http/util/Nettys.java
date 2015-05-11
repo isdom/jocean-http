@@ -265,9 +265,16 @@ public class Nettys {
         public void channelActive(final ChannelHandlerContext ctx)
                 throws Exception {
             if (!_enableSSL) {
-                _channelMarker.markChannelConnected(ctx.channel());
-                _subscriber.onNext(ctx.channel());
-                _subscriber.onCompleted();
+                final ChannelPipeline pipeline = ctx.pipeline();
+                try {
+                    _channelMarker.markChannelConnected(ctx.channel());
+                    _subscriber.onNext(ctx.channel());
+                    _subscriber.onCompleted();
+                } finally {
+                    if (pipeline.context(this) != null) {
+                        pipeline.remove(this);
+                    }
+                }
             }
             ctx.fireChannelActive();
         }
@@ -276,13 +283,20 @@ public class Nettys {
         public void userEventTriggered(final ChannelHandlerContext ctx,
                 final Object evt) throws Exception {
             if (_enableSSL && evt instanceof SslHandshakeCompletionEvent) {
-                final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
-                if (sslComplete.isSuccess()) {
-                    _channelMarker.markChannelConnected(ctx.channel());
-                    _subscriber.onNext(ctx.channel());
-                    _subscriber.onCompleted();
-                } else {
-                    _subscriber.onError(sslComplete.cause());
+                final ChannelPipeline pipeline = ctx.pipeline();
+                try {
+                    final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
+                    if (sslComplete.isSuccess()) {
+                        _channelMarker.markChannelConnected(ctx.channel());
+                        _subscriber.onNext(ctx.channel());
+                        _subscriber.onCompleted();
+                    } else {
+                        _subscriber.onError(sslComplete.cause());
+                    }
+                } finally {
+                    if (pipeline.context(this) != null) {
+                        pipeline.remove(this);
+                    }
                 }
             }
             ctx.fireUserEventTriggered(evt);

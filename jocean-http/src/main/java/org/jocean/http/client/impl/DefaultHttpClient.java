@@ -163,12 +163,11 @@ public class DefaultHttpClient implements HttpClient {
         OutboundFeature.HTTPCLIENT_CODEC.applyTo(channel);
         OutboundFeature.CHUNKED_WRITER.applyTo(channel);
         
-        handlersClosure.call(
-            OutboundFeature.CONNECTING_NOTIFIER.applyTo(
-                channel, 
-                OutboundFeature.isSSLEnabled(channel.pipeline()), 
-                this._channelMarker, 
-                channelSubscriber));
+        OutboundFeature.CONNECTING_NOTIFIER.applyTo(
+            channel, 
+            OutboundFeature.isSSLEnabled(channel.pipeline()), 
+            this._channelMarker, 
+            channelSubscriber);
         
         RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
             .call(channel.connect(remoteAddress))
