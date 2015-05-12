@@ -20,7 +20,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.OutboundFeature;
-import org.jocean.http.util.ChannelMarker;
 import org.jocean.http.util.HandlersClosure;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
@@ -48,6 +47,7 @@ public class DefaultHttpClient implements HttpClient {
         }
     }
     
+    @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
     
@@ -105,92 +105,41 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress, 
             final OutboundFeature.Applicable[] features,
             final Subscriber<? super Object> subscriber) {
-        return Observable.create(new OnSubscribe<Channel>() {
-            @Override
-            public void call(final Subscriber<? super Channel> channelSubscriber) {
-                _channelPool.retainChannel(remoteAddress)
-                .subscribe(
-                    new Action1<Channel>() {
-                        @Override
-                        public void call(final Channel channel) {
-                            final HandlersClosure handlersClosure = 
-                                    Nettys.channelHandlersClosure(channel);
-                            for (OutboundFeature.Applicable applicable : features) {
-                                if (applicable.isRemovable()) {
-                                    handlersClosure.call(applicable.call(channel));
-                                }
+        return _channelPool.retainChannel(remoteAddress, features)
+                .doOnNext(new Action1<Channel>() {
+                    @Override
+                    public void call(final Channel channel) {
+                        final HandlersClosure closure = 
+                                Nettys.channelHandlersClosure(channel);
+                        for (OutboundFeature.Applicable applicable : features) {
+                            if (applicable.isRemovable()) {
+                                closure.call(applicable.call(channel));
                             }
-                            
-                            handlersClosure.call(
-                                OutboundFeature.PROGRESSIVE.applyTo(channel, subscriber));
-                            
-                            handlersClosure.call(
-                                OutboundFeature.WORKER.applyTo(channel, subscriber, _channelPool));
-                            
-                            channelSubscriber.add(channelClosure(remoteAddress, channel, handlersClosure));
-                            
-                            if (_channelMarker.isChannelConnected(channel)) {
-                                channelSubscriber.onNext(channel);
-                                channelSubscriber.onCompleted();
-                            } else {
-                                startToConnect(channel, 
-                                        remoteAddress,
-                                        features, 
-                                        channelSubscriber,
-                                        handlersClosure);
-                            }
-                        }}, 
-                    new Action1<Throwable>() {
-                        @Override
-                        public void call(Throwable e) {
-                            channelSubscriber.onError(e);
-                        }});
-        }});
+                        }
+                        closure.call(
+                            OutboundFeature.PROGRESSIVE.applyTo(channel, subscriber));
+                        
+                        closure.call(
+                            OutboundFeature.WORKER.applyTo(channel, subscriber, _channelPool));
+                        
+                        subscriber.add(channelClosure(remoteAddress, channel, closure));
+                    }});
     }
         
-    private void startToConnect(
-            final Channel channel,
-            final SocketAddress remoteAddress,
-            final OutboundFeature.Applicable[] features,
-            final Subscriber<? super Channel> channelSubscriber,
-            final HandlersClosure handlersClosure) {
-        for ( OutboundFeature.Applicable applicable : features) {
-            if (!applicable.isRemovable()) {
-                applicable.call(channel);
-            }
-        }
-        
-        OutboundFeature.HTTPCLIENT_CODEC.applyTo(channel);
-        OutboundFeature.CHUNKED_WRITER.applyTo(channel);
-        
-        OutboundFeature.CONNECTING_NOTIFIER.applyTo(
-            channel, 
-            OutboundFeature.isSSLEnabled(channel.pipeline()), 
-            this._channelMarker, 
-            channelSubscriber);
-        
-        RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
-            .call(channel.connect(remoteAddress))
-            .subscribe(channelSubscriber);
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("createChannel and add codecs success for channel:{}/remoteAddress:{}",channel,remoteAddress);
-        }
-    }
-
     private Subscription channelClosure(
             final SocketAddress remoteAddress,
             final Channel channel, 
-            final HandlersClosure handlersClosure) {
+            final HandlersClosure closure) {
         final AtomicBoolean isUnsubscribed = new AtomicBoolean(false);
         return new Subscription() {
             @Override
             public void unsubscribe() {
                 if (isUnsubscribed.compareAndSet(false, true)) {
                     try {
-                        handlersClosure.close();
+                        closure.close();
                     } catch (IOException e) {
                     }
-                    if (!channel.isActive() || !_channelMarker.isChannelConnected(channel)
+                    if (!channel.isActive()
                         || !_channelPool.recycleChannel(remoteAddress, channel)) {
                         channel.close();
                     }
@@ -245,22 +194,14 @@ public class DefaultHttpClient implements HttpClient {
     public DefaultHttpClient(
             final ChannelCreator channelCreator,
             final OutboundFeature.Applicable... defaultFeatures) {
-        this(new DefaultChannelPool(channelCreator), new DefaultChannelMarker(), defaultFeatures);
+        this(new DefaultChannelPool(channelCreator), defaultFeatures);
     }
     
     public DefaultHttpClient(
             final ChannelPool channelPool,
-            final OutboundFeature.Applicable... defaultFeatures) {
-        this(channelPool, new DefaultChannelMarker(), defaultFeatures);
-    }
-    
-    public DefaultHttpClient(
-            final ChannelPool channelPool,
-            final ChannelMarker channelMarker,
             final OutboundFeature.Applicable... defaultFeatures) {
         this._channelPool = channelPool;
         this._defaultFeatures = defaultFeatures;
-        this._channelMarker = channelMarker;
     }
     
     /* (non-Javadoc)
@@ -274,6 +215,5 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     private final ChannelPool _channelPool;
-    private final ChannelMarker _channelMarker;
     private final OutboundFeature.Applicable[] _defaultFeatures;
 }

@@ -10,20 +10,23 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 
+import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.util.RxNettys;
 
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
+import rx.functions.Func1;
 
 public abstract class AbstractChannelPool implements ChannelPool {
 
-    protected AbstractChannelPool(ChannelCreator channelCreator) {
+    protected AbstractChannelPool(final ChannelCreator channelCreator) {
         this._channelCreator = channelCreator;
     }
     
     @Override
-    public Observable<? extends Channel> retainChannel(final SocketAddress address) {
+    public Observable<? extends Channel> retainChannel(final SocketAddress address,
+            final OutboundFeature.Applicable[] features) {
         return Observable.create(new OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> subscriber) {
@@ -31,24 +34,14 @@ public abstract class AbstractChannelPool implements ChannelPool {
                     try {
                         final Channel channel = reuseChannel(address);
                         if (null!=channel) {
-                            final Future<?> future = 
-                                channel.eventLoop().submit(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        subscriber.onNext(channel);
-                                        subscriber.onCompleted();
-                                    }});
-                            RxNettys.<Future<?>,Channel>emitErrorOnFailure()
-                                .call(future)
-                                .subscribe(subscriber);
+                            if (channel.eventLoop().inEventLoop()) {
+                                subscriber.onNext(channel);
+                                subscriber.onCompleted();
+                            } else {
+                                onNextReuseChannelInEventloop(subscriber, channel);
+                            }
                         } else {
-                            final ChannelFuture future = _channelCreator.newChannel();
-                            RxNettys.<ChannelFuture,Channel>emitErrorOnFailure()
-                                .call(future)
-                                .subscribe(subscriber);
-                            RxNettys.emitNextAndCompletedOnSuccess()
-                                .call(future)
-                                .subscribe(subscriber);
+                            onNextNewChannel(subscriber, address, features);
                         }
                     } catch (Throwable e) {
                         subscriber.onError(e);
@@ -85,6 +78,50 @@ public abstract class AbstractChannelPool implements ChannelPool {
         return this._channels.get(address);
     }
     
+    private void onNextReuseChannelInEventloop(
+            final Subscriber<? super Channel> subscriber, final Channel channel) {
+        final Future<?> future = 
+            channel.eventLoop().submit(new Runnable() {
+                @Override
+                public void run() {
+                    subscriber.onNext(channel);
+                    subscriber.onCompleted();
+                }});
+        RxNettys.<Future<?>,Channel>emitErrorOnFailure()
+            .call(future)
+            .subscribe(subscriber);
+    }
+
+    private void onNextNewChannel(
+            final Subscriber<? super Channel> subscriber,
+            final SocketAddress address,
+            final OutboundFeature.Applicable[] features) {
+        final ChannelFuture future = _channelCreator.newChannel();
+        RxNettys.<ChannelFuture,Channel>emitErrorOnFailure()
+            .call(future)
+            .subscribe(subscriber);
+        RxNettys.emitNextAndCompletedOnSuccess()
+            .call(future)
+            .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
+                @Override
+                public Observable<? extends Channel> call(final Channel channel) {
+                    for ( OutboundFeature.Applicable applicable : features) {
+                        if (!applicable.isRemovable()) {
+                            applicable.call(channel);
+                        }
+                    }
+                    OutboundFeature.HTTPCLIENT_CODEC.applyTo(channel);
+                    OutboundFeature.CHUNKED_WRITER.applyTo(channel);
+                    OutboundFeature.CONNECTING_NOTIFIER.applyTo(
+                        channel, 
+                        OutboundFeature.isSSLEnabled(channel.pipeline()), 
+                        subscriber);
+                    return RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
+                        .call(channel.connect(address));
+                }})
+            .subscribe(subscriber);
+    }
+
     private final ConcurrentMap<SocketAddress, Queue<Channel>> _channels = 
             new ConcurrentHashMap<>();
     private final ChannelCreator _channelCreator;

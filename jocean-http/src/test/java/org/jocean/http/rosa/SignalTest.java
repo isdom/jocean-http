@@ -74,6 +74,7 @@ public class SignalTest {
                 }});
         }
         latch.await();
+        /*
         {
             final AddMultiMediasToJourneyRequest req = new AddMultiMediasToJourneyRequest();
             req.setCaseId("120");
@@ -110,5 +111,6 @@ public class SignalTest {
                 }});
 //            subscription.unsubscribe();
         }
+        */
     }
 }

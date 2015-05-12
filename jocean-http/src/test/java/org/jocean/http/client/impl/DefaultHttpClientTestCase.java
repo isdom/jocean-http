@@ -179,7 +179,8 @@ public class DefaultHttpClientTestCase {
 
         final TestChannelCreator creator = new TestChannelCreator();
     
-        final DefaultHttpClient client = new DefaultHttpClient(creator,
+        final TestChannelPool pool = new TestChannelPool(creator, 1);
+        final DefaultHttpClient client = new DefaultHttpClient(pool,
                 OutboundFeature.APPLY_LOGGING);
         try {
             // first 
@@ -195,6 +196,7 @@ public class DefaultHttpClientTestCase {
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                pool.awaitRecycleChannels();
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();
@@ -226,7 +228,8 @@ public class DefaultHttpClientTestCase {
 
         final TestChannelCreator creator = new TestChannelCreator();
         
-        final DefaultHttpClient client = new DefaultHttpClient(creator,
+        final TestChannelPool pool = new TestChannelPool(creator,1);
+        final DefaultHttpClient client = new DefaultHttpClient(pool,
                 OutboundFeature.APPLY_LOGGING,
                 new OutboundFeature.APPLY_SSL(sslCtx));
         
@@ -244,6 +247,7 @@ public class DefaultHttpClientTestCase {
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                pool.awaitRecycleChannels();
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();
@@ -278,7 +282,8 @@ public class DefaultHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
         
-        final DefaultHttpClient client = new DefaultHttpClient(creator,
+        final TestChannelPool pool = new TestChannelPool(creator, 1);
+        final DefaultHttpClient client = new DefaultHttpClient(pool,
                 OutboundFeature.APPLY_LOGGING);
         
         try {
@@ -296,6 +301,8 @@ public class DefaultHttpClientTestCase {
                         testSubscriber.add(this);
                         pauseConnecting.countDown();
                     }}.awaitUnsubscribed();
+                    
+                    pool.awaitRecycleChannels();
                 } finally {
                     assertEquals(1, testSubscriber.getOnErrorEvents().size());
                     assertEquals(RuntimeException.class, 
@@ -338,7 +345,8 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting)
             .setWriteException(new RuntimeException("write error"));
         
-        final DefaultHttpClient client = new DefaultHttpClient(creator,
+        final TestChannelPool pool = new TestChannelPool(creator, 1);
+        final DefaultHttpClient client = new DefaultHttpClient(pool,
                 OutboundFeature.APPLY_LOGGING);
         
         try {
@@ -356,6 +364,7 @@ public class DefaultHttpClientTestCase {
                         testSubscriber.add(this);
                         pauseConnecting.countDown();
                     }}.awaitUnsubscribed();
+                    pool.awaitRecycleChannels();
                 } finally {
                     assertEquals(1, testSubscriber.getOnErrorEvents().size());
                     assertEquals(RuntimeException.class, 
@@ -885,7 +894,8 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator,
+        final TestChannelPool pool = new TestChannelPool(creator, 1);
+        final DefaultHttpClient client = new DefaultHttpClient(pool,
                 OutboundFeature.APPLY_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
@@ -901,6 +911,7 @@ public class DefaultHttpClientTestCase {
                     pauseConnecting.countDown();
                 }}.awaitUnsubscribed();
                 testSubscriber.awaitTerminalEvent();
+                pool.awaitRecycleChannels();
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();
@@ -939,7 +950,8 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator,
+        final TestChannelPool pool = new TestChannelPool(creator, 1);
+        final DefaultHttpClient client = new DefaultHttpClient(pool,
                 OutboundFeature.APPLY_LOGGING,
                 new OutboundFeature.APPLY_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
@@ -956,6 +968,7 @@ public class DefaultHttpClientTestCase {
                     pauseConnecting.countDown();
                 }}.awaitUnsubscribed();
                 testSubscriber.awaitTerminalEvent();
+                pool.awaitRecycleChannels();
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();

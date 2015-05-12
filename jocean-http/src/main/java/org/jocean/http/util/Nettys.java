@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map.Entry;
 
 import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.client.impl.ChannelCreator;
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.idiom.ExceptionUtils;
@@ -47,7 +48,6 @@ import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Func2;
 import rx.functions.Func3;
-import rx.functions.Func4;
 import rx.functions.FuncN;
 
 public class Nettys {
@@ -88,7 +88,8 @@ public class Nettys {
     public static ChannelPool unpoolChannels(final ChannelCreator channelCreator) {
         return new ChannelPool() {
             @Override
-            public Observable<? extends Channel> retainChannel(final SocketAddress address) {
+            public Observable<? extends Channel> retainChannel(final SocketAddress address,
+                    final OutboundFeature.Applicable[] features) {
                 return Observable.create(new OnSubscribe<Channel>() {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {
@@ -249,15 +250,12 @@ public class Nettys {
     private static final class ConnectingNotifier extends
             ChannelInboundHandlerAdapter {
         private final boolean _enableSSL;
-        private final ChannelMarker _channelMarker;
         private final Subscriber<? super Channel> _subscriber;
 
         private ConnectingNotifier(
                 final boolean enableSSL,
-                final ChannelMarker channelMarker,
                 final Subscriber<? super Channel> subscriber) {
             this._enableSSL = enableSSL;
-            this._channelMarker = channelMarker;
             this._subscriber = subscriber;
         }
 
@@ -267,7 +265,6 @@ public class Nettys {
             if (!_enableSSL) {
                 final ChannelPipeline pipeline = ctx.pipeline();
                 try {
-                    _channelMarker.markChannelConnected(ctx.channel());
                     _subscriber.onNext(ctx.channel());
                     _subscriber.onCompleted();
                 } finally {
@@ -287,7 +284,6 @@ public class Nettys {
                 try {
                     final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
                     if (sslComplete.isSuccess()) {
-                        _channelMarker.markChannelConnected(ctx.channel());
                         _subscriber.onNext(ctx.channel());
                         _subscriber.onCompleted();
                     } else {
@@ -303,17 +299,16 @@ public class Nettys {
         }
     }
 
-    public static final Func4<Channel,Boolean,ChannelMarker,Subscriber<? super Channel>,ChannelHandler> 
-        CONNECTING_NOTIFIER_FUNC4 = 
-        new Func4<Channel,Boolean,ChannelMarker,Subscriber<? super Channel>,ChannelHandler>() {
+    public static final Func3<Channel,Boolean,Subscriber<? super Channel>,ChannelHandler> 
+        CONNECTING_NOTIFIER_FUNC3 = 
+        new Func3<Channel,Boolean,Subscriber<? super Channel>,ChannelHandler>() {
 
             @Override
             public ChannelHandler call(
                     final Channel channel, 
                     final Boolean isSSLEnabled,
-                    final ChannelMarker channelMarker,
                     final Subscriber<? super Channel> subscriber) {
-                return new ConnectingNotifier(isSSLEnabled, channelMarker, subscriber);
+                return new ConnectingNotifier(isSSLEnabled, subscriber);
             }} ;
 
     public static final Func2<Channel,Subscriber<Object>,ChannelHandler> PROGRESSIVE_FUNC2 = 

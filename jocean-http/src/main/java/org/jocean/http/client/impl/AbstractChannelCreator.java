@@ -6,8 +6,6 @@ package org.jocean.http.client.impl;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 
 import java.io.IOException;
@@ -30,6 +28,7 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
             .handler(new ChannelInitializer<Channel>() {
                 @Override
                 protected void initChannel(final Channel channel) throws Exception {
+                    /*
                     channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
                         @Override
                         public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -42,7 +41,7 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
                             _activeChannelCount.decrementAndGet();
                             ctx.fireChannelInactive();
                         }
-                    });
+                    }); */
                 }});
         initializeBootstrap(this._bootstrap);
     }
@@ -77,5 +76,6 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
     }
 
     private final Bootstrap _bootstrap;
+    
     private final AtomicInteger _activeChannelCount = new AtomicInteger(0);
 }
