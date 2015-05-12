@@ -4,8 +4,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelDuplexHandler;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -34,7 +32,7 @@ import java.util.List;
 import java.util.Map.Entry;
 
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.OutboundFeature;
+import org.jocean.http.client.impl.AbstractChannelPool;
 import org.jocean.http.client.impl.ChannelCreator;
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.idiom.ExceptionUtils;
@@ -43,8 +41,6 @@ import org.jocean.idiom.PairedVisitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import rx.Observable;
-import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Func2;
 import rx.functions.Func3;
@@ -86,29 +82,7 @@ public class Nettys {
     }
     
     public static ChannelPool unpoolChannels(final ChannelCreator channelCreator) {
-        return new ChannelPool() {
-            @Override
-            public Observable<? extends Channel> retainChannel(final SocketAddress address,
-                    final OutboundFeature.Applicable[] features) {
-                return Observable.create(new OnSubscribe<Channel>() {
-                    @Override
-                    public void call(final Subscriber<? super Channel> subscriber) {
-                        channelCreator.newChannel()
-                        .addListener(new ChannelFutureListener() {
-                            @Override
-                            public void operationComplete(
-                                    final ChannelFuture future)
-                                    throws Exception {
-                                if (future.isSuccess()) {
-                                    subscriber.onNext(future.channel());
-                                    subscriber.onCompleted();
-                                } else {
-                                    subscriber.onError(future.cause());
-                                }
-                            }});
-                    }});
-            }
-    
+        return new AbstractChannelPool(channelCreator) {
             @Override
             public boolean recycleChannel(final SocketAddress address, final Channel channel) {
                 return false;
