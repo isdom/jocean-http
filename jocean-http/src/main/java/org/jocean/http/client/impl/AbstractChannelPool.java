@@ -4,16 +4,21 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.util.concurrent.Future;
 
+import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.client.OutboundFeature;
+import org.jocean.http.util.HandlersClosure;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 
 import rx.Observable;
+import rx.Subscription;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Func1;
@@ -25,7 +30,8 @@ public abstract class AbstractChannelPool implements ChannelPool {
     }
     
     @Override
-    public Observable<? extends Channel> retainChannel(final SocketAddress address,
+    public Observable<? extends Channel> retainChannel(
+            final SocketAddress address, 
             final OutboundFeature.Applicable[] features) {
         return Observable.create(new OnSubscribe<Channel>() {
             @Override
@@ -34,6 +40,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                     try {
                         final Channel channel = reuseChannel(address);
                         if (null!=channel) {
+                            subscriber.add(addFeatures(address, channel, features));
                             if (channel.eventLoop().inEventLoop()) {
                                 subscriber.onNext(channel);
                                 subscriber.onCompleted();
@@ -50,6 +57,47 @@ public abstract class AbstractChannelPool implements ChannelPool {
             }});
     }
     
+    private Subscription addFeatures(
+            final SocketAddress address,
+            final Channel channel, 
+            final OutboundFeature.Applicable[] features) {
+        final HandlersClosure closure = 
+                Nettys.channelHandlersClosure(channel);
+        for (OutboundFeature.Applicable applicable : features) {
+            if (applicable.isRemovable()) {
+                closure.call(applicable.call(channel));
+            }
+        }
+        return channelClosure(address, channel, closure);
+    }
+
+    private Subscription channelClosure(
+            final SocketAddress address,
+            final Channel channel, 
+            final HandlersClosure closure) {
+        final AtomicBoolean isUnsubscribed = new AtomicBoolean(false);
+        return new Subscription() {
+            @Override
+            public void unsubscribe() {
+                if (isUnsubscribed.compareAndSet(false, true)) {
+                    try {
+                        closure.close();
+                    } catch (IOException e) {
+                    }
+                    if (!channel.isActive() 
+                    || !recycleChannel(address, channel)) {
+                        channel.close();
+                    }
+                }
+            }
+
+            @Override
+            public boolean isUnsubscribed() {
+                return isUnsubscribed.get();
+            }
+        };
+    }
+
     private Channel reuseChannel(final SocketAddress address) {
         final Queue<Channel> channels = getChannels(address);
         if (null == channels) {
@@ -116,6 +164,9 @@ public abstract class AbstractChannelPool implements ChannelPool {
                         channel, 
                         OutboundFeature.isSSLEnabled(channel.pipeline()), 
                         subscriber);
+                    
+                    subscriber.add(addFeatures(address, channel, features));
+                    
                     return RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
                         .call(channel.connect(address));
                 }})

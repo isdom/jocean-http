@@ -11,7 +11,8 @@ import rx.Observable;
 
 public interface ChannelPool {
     
-    public Observable<? extends Channel> retainChannel(final SocketAddress address, 
+    public Observable<? extends Channel> retainChannel(
+            final SocketAddress address, 
             final OutboundFeature.Applicable[] features);
     
     public boolean recycleChannel(final SocketAddress address, final Channel channel);

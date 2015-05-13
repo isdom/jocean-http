@@ -3,6 +3,7 @@ package org.jocean.http.client.impl;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -540,7 +541,7 @@ public class DefaultHttpClientTestCase {
             }}.awaitUnsubscribed();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed();
+            assertFalse(creator.getChannels().get(0).isActive());
         } finally {
             client.close();
             assertEquals(0, testSubscriber.getOnNextEvents().size());

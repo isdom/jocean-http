@@ -7,6 +7,7 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -16,21 +17,19 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.OutboundFeature;
-import org.jocean.http.util.HandlersClosure;
-import org.jocean.http.util.Nettys;
+import org.jocean.http.client.OutboundFeature.Applicable;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.InterfaceUtils;
+import org.jocean.idiom.JOArrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
-import rx.Subscription;
 import rx.functions.Action1;
 import rx.functions.Func1;
 
@@ -90,7 +89,31 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Subscriber<? super Object> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     try {
-                        channelObservable(remoteAddress, applyFeatures, subscriber)
+                        Applicable[] applicables = JOArrays.addFirst(applyFeatures, 
+                        new Applicable() {
+                            @Override
+                            public ChannelHandler call(final Channel channel) {
+                                return  OutboundFeature.PROGRESSIVE.applyTo(channel, subscriber);
+                            }
+                            @Override
+                            public boolean isRemovable() {
+                                return true;
+                            }
+                        }, Applicable[].class);
+                        
+                        applicables = JOArrays.addFirst(applicables, 
+                        new Applicable() {
+                            @Override
+                            public ChannelHandler call(final Channel channel) {
+                                return  OutboundFeature.WORKER.applyTo(channel, subscriber, _channelPool);
+                            }
+                            @Override
+                            public boolean isRemovable() {
+                                return true;
+                            }
+                        }, Applicable[].class);
+                        
+                        _channelPool.retainChannel(remoteAddress, applicables)
                             .flatMap(transferRequest)
                             .flatMap(RxNettys.<ChannelFuture, Object>emitErrorOnFailure())
                             .subscribe(subscriber);
@@ -99,56 +122,6 @@ public class DefaultHttpClient implements HttpClient {
                     }
                 }
             }});
-    }
-
-    private Observable<? extends Channel> channelObservable(
-            final SocketAddress remoteAddress, 
-            final OutboundFeature.Applicable[] features,
-            final Subscriber<? super Object> subscriber) {
-        return _channelPool.retainChannel(remoteAddress, features)
-                .doOnNext(new Action1<Channel>() {
-                    @Override
-                    public void call(final Channel channel) {
-                        final HandlersClosure closure = 
-                                Nettys.channelHandlersClosure(channel);
-                        for (OutboundFeature.Applicable applicable : features) {
-                            if (applicable.isRemovable()) {
-                                closure.call(applicable.call(channel));
-                            }
-                        }
-                        closure.call(
-                            OutboundFeature.PROGRESSIVE.applyTo(channel, subscriber));
-                        
-                        closure.call(
-                            OutboundFeature.WORKER.applyTo(channel, subscriber, _channelPool));
-                        
-                        subscriber.add(channelClosure(remoteAddress, channel, closure));
-                    }});
-    }
-        
-    private Subscription channelClosure(
-            final SocketAddress remoteAddress,
-            final Channel channel, 
-            final HandlersClosure closure) {
-        final AtomicBoolean isUnsubscribed = new AtomicBoolean(false);
-        return new Subscription() {
-            @Override
-            public void unsubscribe() {
-                if (isUnsubscribed.compareAndSet(false, true)) {
-                    try {
-                        closure.close();
-                    } catch (IOException e) {
-                    }
-                    if (!channel.isActive()
-                        || !_channelPool.recycleChannel(remoteAddress, channel)) {
-                        channel.close();
-                    }
-                }
-            }
-            @Override
-            public boolean isUnsubscribed() {
-                return isUnsubscribed.get();
-            }};
     }
 
     public DefaultHttpClient(final OutboundFeature.Applicable... defaultFeatures) {
