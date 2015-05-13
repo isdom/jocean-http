@@ -18,9 +18,9 @@ import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 
 import rx.Observable;
-import rx.Subscription;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
+import rx.Subscription;
 import rx.functions.Func1;
 
 public abstract class AbstractChannelPool implements ChannelPool {
@@ -40,12 +40,13 @@ public abstract class AbstractChannelPool implements ChannelPool {
                     try {
                         final Channel channel = reuseChannel(address);
                         if (null!=channel) {
-                            subscriber.add(addFeatures(address, channel, features));
+                            final Runnable runnable = buildOnNextRunnable(subscriber, channel, features);
                             if (channel.eventLoop().inEventLoop()) {
-                                subscriber.onNext(channel);
-                                subscriber.onCompleted();
+                                runnable.run();
                             } else {
-                                onNextReuseChannelInEventloop(subscriber, channel);
+                                RxNettys.<Future<?>,Channel>emitErrorOnFailure()
+                                    .call(channel.eventLoop().submit(runnable))
+                                    .subscribe(subscriber);
                             }
                         } else {
                             onNextNewChannel(subscriber, address, features);
@@ -57,22 +58,64 @@ public abstract class AbstractChannelPool implements ChannelPool {
             }});
     }
     
-    private Subscription addFeatures(
-            final SocketAddress address,
+    private Runnable buildOnNextRunnable(
+            final Subscriber<? super Channel> subscriber,
             final Channel channel, 
+            final OutboundFeature.Applicable[] features) {
+        return new Runnable() {
+            @Override
+            public void run() {
+                subscriber.add(addOneoffFeatures(channel, features));
+                subscriber.onNext(channel);
+                subscriber.onCompleted();
+            }};
+    }
+
+    private void onNextNewChannel(
+            final Subscriber<? super Channel> subscriber,
+            final SocketAddress address,
+            final OutboundFeature.Applicable[] features) {
+        final ChannelFuture future = _channelCreator.newChannel();
+        RxNettys.<ChannelFuture,Channel>emitErrorOnFailure()
+            .call(future)
+            .subscribe(subscriber);
+        RxNettys.emitNextAndCompletedOnSuccess()
+            .call(future)
+            .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
+                @Override
+                public Observable<? extends Channel> call(final Channel channel) {
+                    for ( OutboundFeature.Applicable applicable : features) {
+                        if (!applicable.isOneoff()) {
+                            applicable.call(channel);
+                        }
+                    }
+                    subscriber.add(addOneoffFeatures(channel, features));
+                    
+                    OutboundFeature.CONNECTING_NOTIFIER.applyTo(
+                        channel, 
+                        OutboundFeature.isSSLEnabled(channel.pipeline()), 
+                        subscriber);
+                    
+                    return RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
+                        .call(channel.connect(address));
+                }})
+            .subscribe(subscriber);
+    }
+    
+    private Subscription addOneoffFeatures(
+            final Channel channel,
             final OutboundFeature.Applicable[] features) {
         final HandlersClosure closure = 
                 Nettys.channelHandlersClosure(channel);
         for (OutboundFeature.Applicable applicable : features) {
-            if (applicable.isRemovable()) {
+            if (applicable.isOneoff()) {
                 closure.call(applicable.call(channel));
             }
         }
-        return channelClosure(address, channel, closure);
+        return channelClosure(channel, closure);
     }
 
     private Subscription channelClosure(
-            final SocketAddress address,
             final Channel channel, 
             final HandlersClosure closure) {
         final AtomicBoolean isUnsubscribed = new AtomicBoolean(false);
@@ -80,17 +123,31 @@ public abstract class AbstractChannelPool implements ChannelPool {
             @Override
             public void unsubscribe() {
                 if (isUnsubscribed.compareAndSet(false, true)) {
-                    try {
-                        closure.close();
-                    } catch (IOException e) {
-                    }
-                    if (!channel.isActive() 
-                    || !recycleChannel(address, channel)) {
-                        channel.close();
+                    if (channel.eventLoop().inEventLoop()) {
+                        doRecycle(channel, closure);
+                    } else {
+                        channel.eventLoop().submit(new Runnable() {
+                            @Override
+                            public void run() {
+                                doRecycle(channel, closure);
+                            }});
                     }
                 }
             }
 
+            private void doRecycle(
+                    final Channel channel,
+                    final HandlersClosure closure) {
+                try {
+                    closure.close();
+                } catch (IOException e) {
+                }
+                if (!channel.isActive() 
+                || !recycleChannel(channel)) {
+                    channel.close();
+                }
+            }
+            
             @Override
             public boolean isUnsubscribed() {
                 return isUnsubscribed.get();
@@ -126,53 +183,6 @@ public abstract class AbstractChannelPool implements ChannelPool {
         return this._channels.get(address);
     }
     
-    private void onNextReuseChannelInEventloop(
-            final Subscriber<? super Channel> subscriber, final Channel channel) {
-        final Future<?> future = 
-            channel.eventLoop().submit(new Runnable() {
-                @Override
-                public void run() {
-                    subscriber.onNext(channel);
-                    subscriber.onCompleted();
-                }});
-        RxNettys.<Future<?>,Channel>emitErrorOnFailure()
-            .call(future)
-            .subscribe(subscriber);
-    }
-
-    private void onNextNewChannel(
-            final Subscriber<? super Channel> subscriber,
-            final SocketAddress address,
-            final OutboundFeature.Applicable[] features) {
-        final ChannelFuture future = _channelCreator.newChannel();
-        RxNettys.<ChannelFuture,Channel>emitErrorOnFailure()
-            .call(future)
-            .subscribe(subscriber);
-        RxNettys.emitNextAndCompletedOnSuccess()
-            .call(future)
-            .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
-                @Override
-                public Observable<? extends Channel> call(final Channel channel) {
-                    for ( OutboundFeature.Applicable applicable : features) {
-                        if (!applicable.isRemovable()) {
-                            applicable.call(channel);
-                        }
-                    }
-                    OutboundFeature.HTTPCLIENT_CODEC.applyTo(channel);
-                    OutboundFeature.CHUNKED_WRITER.applyTo(channel);
-                    OutboundFeature.CONNECTING_NOTIFIER.applyTo(
-                        channel, 
-                        OutboundFeature.isSSLEnabled(channel.pipeline()), 
-                        subscriber);
-                    
-                    subscriber.add(addFeatures(address, channel, features));
-                    
-                    return RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
-                        .call(channel.connect(address));
-                }})
-            .subscribe(subscriber);
-    }
-
     private final ConcurrentMap<SocketAddress, Queue<Channel>> _channels = 
             new ConcurrentHashMap<>();
     private final ChannelCreator _channelCreator;

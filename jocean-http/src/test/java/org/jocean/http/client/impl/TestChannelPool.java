@@ -2,7 +2,6 @@ package org.jocean.http.client.impl;
 
 import io.netty.channel.Channel;
 
-import java.net.SocketAddress;
 import java.util.concurrent.CountDownLatch;
 
 public class TestChannelPool extends DefaultChannelPool {
@@ -13,10 +12,12 @@ public class TestChannelPool extends DefaultChannelPool {
     }
 
     @Override
-    public boolean recycleChannel(final SocketAddress address, final Channel channel) {
-        final boolean ret = super.recycleChannel(address, channel);
-        this._countdown.countDown();
-        return ret;
+    public boolean recycleChannel(final Channel channel) {
+        try {
+            return super.recycleChannel(channel);
+        } finally {
+            this._countdown.countDown();
+        }
     }
     
     public void awaitRecycleChannels() throws InterruptedException {

@@ -89,31 +89,8 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Subscriber<? super Object> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     try {
-                        Applicable[] applicables = JOArrays.addFirst(applyFeatures, 
-                        new Applicable() {
-                            @Override
-                            public ChannelHandler call(final Channel channel) {
-                                return  OutboundFeature.PROGRESSIVE.applyTo(channel, subscriber);
-                            }
-                            @Override
-                            public boolean isRemovable() {
-                                return true;
-                            }
-                        }, Applicable[].class);
-                        
-                        applicables = JOArrays.addFirst(applicables, 
-                        new Applicable() {
-                            @Override
-                            public ChannelHandler call(final Channel channel) {
-                                return  OutboundFeature.WORKER.applyTo(channel, subscriber, _channelPool);
-                            }
-                            @Override
-                            public boolean isRemovable() {
-                                return true;
-                            }
-                        }, Applicable[].class);
-                        
-                        _channelPool.retainChannel(remoteAddress, applicables)
+                        _channelPool.retainChannel(remoteAddress, 
+                                buildFeatures(applyFeatures, subscriber))
                             .flatMap(transferRequest)
                             .flatMap(RxNettys.<ChannelFuture, Object>emitErrorOnFailure())
                             .subscribe(subscriber);
@@ -185,6 +162,60 @@ public class DefaultHttpClient implements HttpClient {
         // Shut down executor threads to exit.
         //  TODO
 //        this._channelCreator.close();
+    }
+
+    final static Applicable HTTPCLIENT_APPLY = new Applicable() {
+        @Override
+        public ChannelHandler call(final Channel channel) {
+            return  OutboundFeature.HTTPCLIENT_CODEC.applyTo(channel);
+        }
+        @Override
+        public boolean isOneoff() {
+            return false;
+        }
+    };
+    
+    final static Applicable CHUNKED_WRITER_APPLY = new Applicable() {
+        @Override
+        public ChannelHandler call(final Channel channel) {
+            return  OutboundFeature.CHUNKED_WRITER.applyTo(channel);
+        }
+        @Override
+        public boolean isOneoff() {
+            return false;
+        }
+    };
+    
+    private Applicable[] buildFeatures(
+            OutboundFeature.Applicable[] features,
+            final Subscriber<? super Object> subscriber) {
+        features = JOArrays.addFirst(features, 
+                HTTPCLIENT_APPLY, Applicable[].class);
+        features = JOArrays.addFirst(features, 
+                CHUNKED_WRITER_APPLY, Applicable[].class);
+        features = JOArrays.addFirst(features, 
+            new Applicable() {
+                @Override
+                public ChannelHandler call(final Channel channel) {
+                    return  OutboundFeature.PROGRESSIVE.applyTo(channel, subscriber);
+                }
+                @Override
+                public boolean isOneoff() {
+                    return true;
+                }
+            }, Applicable[].class);
+        features = JOArrays.addFirst(features, 
+            new Applicable() {
+                @Override
+                public ChannelHandler call(final Channel channel) {
+                    return  OutboundFeature.WORKER.applyTo(channel, subscriber, _channelPool);
+                }
+                @Override
+                public boolean isOneoff() {
+                    return true;
+                }
+            }, Applicable[].class);
+        return features;
     }
 
     private final ChannelPool _channelPool;

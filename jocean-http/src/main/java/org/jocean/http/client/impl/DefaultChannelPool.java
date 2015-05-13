@@ -44,7 +44,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
     }
 
     @Override
-    public boolean recycleChannel(final SocketAddress address, final Channel channel) {
+    public boolean recycleChannel(final Channel channel) {
         if (null == channel.attr(TRANSACTIONING).get()) {
             try {
                 Observable.from(channel.pipeline()).subscribe(new Action1<Entry<String,ChannelHandler>>(){
@@ -55,13 +55,14 @@ public class DefaultChannelPool extends AbstractChannelPool {
             } catch (Throwable e) {
                 LOG.error("recycleChannel: {}", e);
             }
-            
-            getOrCreateChannels(address).add(channel);
-            return true;
+            final SocketAddress address = channel.remoteAddress();
+            if (null!=address) {
+                getOrCreateChannels(address).add(channel);
+                return true;
+            }
         }
-        else {
-            return false;
-        }
+        
+        return false;
     }
 
 }

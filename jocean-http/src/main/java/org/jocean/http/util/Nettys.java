@@ -25,7 +25,6 @@ import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.ReferenceCounted;
 
 import java.io.IOException;
-import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -84,7 +83,7 @@ public class Nettys {
     public static ChannelPool unpoolChannels(final ChannelCreator channelCreator) {
         return new AbstractChannelPool(channelCreator) {
             @Override
-            public boolean recycleChannel(final SocketAddress address, final Channel channel) {
+            public boolean recycleChannel(final Channel channel) {
                 return false;
             }
     

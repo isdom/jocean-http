@@ -35,7 +35,7 @@ public enum OutboundFeature {
     }
     
     public interface Applicable extends Func1<Channel, ChannelHandler> {
-        public boolean isRemovable();
+        public boolean isOneoff();
     };
     
     public static final Applicable[] EMPTY_APPLICABLES = new Applicable[0];
@@ -53,7 +53,7 @@ public enum OutboundFeature {
             return CONTENT_DECOMPRESSOR.applyTo(channel);
         }
         @Override
-        public boolean isRemovable() {
+        public boolean isOneoff() {
             return true;
         }
         @Override
@@ -70,7 +70,7 @@ public enum OutboundFeature {
             return LOGGING.applyTo(channel);
         }
         @Override
-        public boolean isRemovable() {
+        public boolean isOneoff() {
             return true;
         }
     };
@@ -88,7 +88,7 @@ public enum OutboundFeature {
         private final SslContext _sslCtx;
 
         @Override
-        public boolean isRemovable() {
+        public boolean isOneoff() {
             return false;
         }
     }
@@ -106,7 +106,7 @@ public enum OutboundFeature {
         private final int _allIdleTimeout;
 
         @Override
-        public boolean isRemovable() {
+        public boolean isOneoff() {
             return true;
         }
     }
