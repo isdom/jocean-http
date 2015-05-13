@@ -6,10 +6,6 @@ import io.netty.util.concurrent.Future;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.client.OutboundFeature;
@@ -91,7 +87,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                     }
                     subscriber.add(addOneoffFeatures(channel, features));
                     
-                    OutboundFeature.CONNECTING_NOTIFIER.applyTo(
+                    OutboundFeature.READY4INTERACTION_NOTIFIER.applyTo(
                         channel, 
                         OutboundFeature.isSSLEnabled(channel.pipeline()), 
                         subscriber);
@@ -142,10 +138,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                     closure.close();
                 } catch (IOException e) {
                 }
-                if (!channel.isActive() 
-                || !recycleChannel(channel)) {
-                    channel.close();
-                }
+                recycleChannel(channel);
             }
             
             @Override
@@ -155,35 +148,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
         };
     }
 
-    private Channel reuseChannel(final SocketAddress address) {
-        final Queue<Channel> channels = getChannels(address);
-        if (null == channels) {
-            return null;
-        }
-        Channel channel = null;
-        do {
-            channel = channels.poll();
-        } while (null != channel && !channel.isActive());
-        return channel;
-    }
-
-    protected Queue<Channel> getOrCreateChannels(final SocketAddress address) {
-        final Queue<Channel> channels = this._channels.get(address);
-        if (null == channels) {
-            final Queue<Channel> newChannels = new ConcurrentLinkedQueue<Channel>();
-            final Queue<Channel> previous = this._channels.putIfAbsent(address, newChannels);
-            return  null!=previous ? previous : newChannels;
-        }
-        else {
-            return channels;
-        }
-    }
+    protected abstract Channel reuseChannel(final SocketAddress address);
     
-    protected Queue<Channel> getChannels(final SocketAddress address) {
-        return this._channels.get(address);
-    }
-    
-    private final ConcurrentMap<SocketAddress, Queue<Channel>> _channels = 
-            new ConcurrentHashMap<>();
     private final ChannelCreator _channelCreator;
 }

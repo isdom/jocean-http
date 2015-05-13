@@ -25,13 +25,17 @@ public enum OutboundFeature {
     HTTPCLIENT_CODEC(Nettys.HTTPCLIENT_CODEC_FUNCN),
     CONTENT_DECOMPRESSOR(Nettys.CONTENT_DECOMPRESSOR_FUNCN),
     CHUNKED_WRITER(Nettys.CHUNKED_WRITER_FUNCN),
-    CONNECTING_NOTIFIER(Functions.fromFunc(Nettys.CONNECTING_NOTIFIER_FUNC3)),
+    READY4INTERACTION_NOTIFIER(Functions.fromFunc(Nettys.READY4INTERACTION_NOTIFIER_FUNC3)),
     WORKER(Functions.fromFunc(Nettys.HTTPCLIENT_WORK_FUNC3)),
     LAST_FEATURE(null)
     ;
     
     public static boolean isSSLEnabled(final ChannelPipeline pipeline) {
         return (pipeline.names().indexOf(ENABLE_SSL.name()) > -1);
+    }
+    
+    public static boolean isReadyForInteraction(final ChannelPipeline pipeline) {
+        return (pipeline.names().indexOf(READY4INTERACTION_NOTIFIER.name()) == -1);
     }
     
     public interface Applicable extends Func1<Channel, ChannelHandler> {

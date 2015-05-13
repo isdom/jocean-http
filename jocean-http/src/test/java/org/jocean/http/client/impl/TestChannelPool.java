@@ -12,9 +12,9 @@ public class TestChannelPool extends DefaultChannelPool {
     }
 
     @Override
-    public boolean recycleChannel(final Channel channel) {
+    public void recycleChannel(final Channel channel) {
         try {
-            return super.recycleChannel(channel);
+            super.recycleChannel(channel);
         } finally {
             this._countdown.countDown();
         }

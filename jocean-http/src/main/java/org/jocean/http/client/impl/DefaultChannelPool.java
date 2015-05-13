@@ -7,8 +7,13 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
 
 import java.net.SocketAddress;
+import java.util.Queue;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
 
+import org.jocean.http.client.OutboundFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,7 +23,7 @@ import rx.functions.Action1;
 public class DefaultChannelPool extends AbstractChannelPool {
 
     private static final Logger LOG =
-            LoggerFactory.getLogger(TestChannelPool.class);
+            LoggerFactory.getLogger(DefaultChannelPool.class);
 
     public DefaultChannelPool(final ChannelCreator channelCreator) {
         super(channelCreator);
@@ -44,8 +49,39 @@ public class DefaultChannelPool extends AbstractChannelPool {
     }
 
     @Override
-    public boolean recycleChannel(final Channel channel) {
-        if (null == channel.attr(TRANSACTIONING).get()) {
+    protected Channel reuseChannel(final SocketAddress address) {
+        final Queue<Channel> channels = getChannels(address);
+        if (null == channels) {
+            return null;
+        }
+        Channel channel = null;
+        do {
+            channel = channels.poll();
+        } while (null != channel && !channel.isActive());
+        return channel;
+    }
+
+    protected Queue<Channel> getChannels(final SocketAddress address) {
+        return this._channels.get(address);
+    }
+    
+    protected Queue<Channel> getOrCreateChannels(final SocketAddress address) {
+        final Queue<Channel> channels = this._channels.get(address);
+        if (null == channels) {
+            final Queue<Channel> newChannels = new ConcurrentLinkedQueue<Channel>();
+            final Queue<Channel> previous = this._channels.putIfAbsent(address, newChannels);
+            return  null!=previous ? previous : newChannels;
+        }
+        else {
+            return channels;
+        }
+    }
+    
+    @Override
+    public void recycleChannel(final Channel channel) {
+        if (channel.isActive() 
+            && OutboundFeature.isReadyForInteraction(channel.pipeline())
+            && null == channel.attr(TRANSACTIONING).get()) {
             try {
                 Observable.from(channel.pipeline()).subscribe(new Action1<Entry<String,ChannelHandler>>(){
                     @Override
@@ -58,11 +94,15 @@ public class DefaultChannelPool extends AbstractChannelPool {
             final SocketAddress address = channel.remoteAddress();
             if (null!=address) {
                 getOrCreateChannels(address).add(channel);
-                return true;
+                LOG.info("channel({}) save to queue for ({}), can be reused.", channel, address);
+                return;
             }
         }
         
-        return false;
+        channel.close();
+        LOG.info("channel({}) has been closed.", channel);
     }
 
+    private final ConcurrentMap<SocketAddress, Queue<Channel>> _channels = 
+            new ConcurrentHashMap<>();
 }

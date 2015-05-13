@@ -25,6 +25,7 @@ import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.ReferenceCounted;
 
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -83,8 +84,13 @@ public class Nettys {
     public static ChannelPool unpoolChannels(final ChannelCreator channelCreator) {
         return new AbstractChannelPool(channelCreator) {
             @Override
-            public boolean recycleChannel(final Channel channel) {
-                return false;
+            protected Channel reuseChannel(final SocketAddress address) {
+                return null;
+            }
+            
+            @Override
+            public void recycleChannel(final Channel channel) {
+                channel.close();
             }
     
             @Override
@@ -220,12 +226,12 @@ public class Nettys {
               }
     };
 
-    private static final class ConnectingNotifier extends
+    private static final class Ready4InteractionNotifier extends
             ChannelInboundHandlerAdapter {
         private final boolean _enableSSL;
         private final Subscriber<? super Channel> _subscriber;
 
-        private ConnectingNotifier(
+        private Ready4InteractionNotifier(
                 final boolean enableSSL,
                 final Subscriber<? super Channel> subscriber) {
             this._enableSSL = enableSSL;
@@ -237,14 +243,11 @@ public class Nettys {
                 throws Exception {
             if (!_enableSSL) {
                 final ChannelPipeline pipeline = ctx.pipeline();
-                try {
-                    _subscriber.onNext(ctx.channel());
-                    _subscriber.onCompleted();
-                } finally {
-                    if (pipeline.context(this) != null) {
-                        pipeline.remove(this);
-                    }
+                if (pipeline.context(this) != null) {
+                    pipeline.remove(this);
                 }
+                _subscriber.onNext(ctx.channel());
+                _subscriber.onCompleted();
             }
             ctx.fireChannelActive();
         }
@@ -254,18 +257,15 @@ public class Nettys {
                 final Object evt) throws Exception {
             if (_enableSSL && evt instanceof SslHandshakeCompletionEvent) {
                 final ChannelPipeline pipeline = ctx.pipeline();
-                try {
-                    final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
-                    if (sslComplete.isSuccess()) {
-                        _subscriber.onNext(ctx.channel());
-                        _subscriber.onCompleted();
-                    } else {
-                        _subscriber.onError(sslComplete.cause());
-                    }
-                } finally {
-                    if (pipeline.context(this) != null) {
-                        pipeline.remove(this);
-                    }
+                if (pipeline.context(this) != null) {
+                    pipeline.remove(this);
+                }
+                final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
+                if (sslComplete.isSuccess()) {
+                    _subscriber.onNext(ctx.channel());
+                    _subscriber.onCompleted();
+                } else {
+                    _subscriber.onError(sslComplete.cause());
                 }
             }
             ctx.fireUserEventTriggered(evt);
@@ -273,7 +273,7 @@ public class Nettys {
     }
 
     public static final Func3<Channel,Boolean,Subscriber<? super Channel>,ChannelHandler> 
-        CONNECTING_NOTIFIER_FUNC3 = 
+        READY4INTERACTION_NOTIFIER_FUNC3 = 
         new Func3<Channel,Boolean,Subscriber<? super Channel>,ChannelHandler>() {
 
             @Override
@@ -281,7 +281,7 @@ public class Nettys {
                     final Channel channel, 
                     final Boolean isSSLEnabled,
                     final Subscriber<? super Channel> subscriber) {
-                return new ConnectingNotifier(isSSLEnabled, subscriber);
+                return new Ready4InteractionNotifier(isSSLEnabled, subscriber);
             }} ;
 
     public static final Func2<Channel,Subscriber<Object>,ChannelHandler> PROGRESSIVE_FUNC2 = 
