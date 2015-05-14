@@ -2,16 +2,18 @@ package org.jocean.http.client.impl;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelPipeline;
 import io.netty.util.concurrent.Future;
 
-import java.io.IOException;
 import java.net.SocketAddress;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.jocean.http.client.OutboundFeature;
-import org.jocean.http.util.HandlersClosure;
-import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.rx.OneshotSubscription;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import rx.Observable;
 import rx.Observable.OnSubscribe;
@@ -20,6 +22,9 @@ import rx.Subscription;
 import rx.functions.Func1;
 
 public abstract class AbstractChannelPool implements ChannelPool {
+    
+    private static final Logger LOG =
+            LoggerFactory.getLogger(AbstractChannelPool.class);
 
     protected AbstractChannelPool(final ChannelCreator channelCreator) {
         this._channelCreator = channelCreator;
@@ -36,10 +41,8 @@ public abstract class AbstractChannelPool implements ChannelPool {
                     try {
                         final Channel channel = reuseChannel(address);
                         if (null!=channel) {
-                            final HandlersClosure closure = 
-                                    Nettys.channelHandlersClosure(channel);
-                            subscriber.add(recycleChannelSubscription(channel, closure));
-                            final Runnable runnable = buildOnNextRunnable(subscriber, closure, channel, features);
+                            subscriber.add(recycleChannelSubscription(channel));
+                            final Runnable runnable = buildOnNextRunnable(subscriber, channel, features);
                             if (channel.eventLoop().inEventLoop()) {
                                 runnable.run();
                             } else {
@@ -59,13 +62,12 @@ public abstract class AbstractChannelPool implements ChannelPool {
     
     private Runnable buildOnNextRunnable(
             final Subscriber<? super Channel> subscriber,
-            final HandlersClosure closure,
             final Channel channel, 
             final OutboundFeature.Applicable[] features) {
         return new Runnable() {
             @Override
             public void run() {
-                addOneoffFeatures(closure, channel, features);
+                subscriber.add(addOneoffFeatures(channel, features));
                 subscriber.onNext(channel);
                 subscriber.onCompleted();
             }};
@@ -76,9 +78,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
             final SocketAddress address,
             final OutboundFeature.Applicable[] features) {
         final ChannelFuture future = _channelCreator.newChannel();
-        final HandlersClosure closure = 
-                Nettys.channelHandlersClosure(future.channel());
-        subscriber.add(recycleChannelSubscription(future.channel(), closure));
+        subscriber.add(recycleChannelSubscription(future.channel()));
         RxNettys.<ChannelFuture,Channel>emitErrorOnFailure()
             .call(future)
             .subscribe(subscriber);
@@ -92,7 +92,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                             applicable.call(channel);
                         }
                     }
-                    addOneoffFeatures(closure, channel, features);
+                    subscriber.add(addOneoffFeatures(channel, features));
                     
                     OutboundFeature.READY4INTERACTION_NOTIFIER.applyTo(
                         channel, 
@@ -105,54 +105,66 @@ public abstract class AbstractChannelPool implements ChannelPool {
             .subscribe(subscriber);
     }
     
-    private void addOneoffFeatures(
-            final HandlersClosure closure,
+    private Subscription addOneoffFeatures(
             final Channel channel,
             final OutboundFeature.Applicable[] features) {
+        final List<String> orgs = new ArrayList<>();
+        orgs.addAll(channel.pipeline().names());
         for (OutboundFeature.Applicable applicable : features) {
             if (applicable.isOneoff()) {
-                closure.call(applicable.call(channel));
+                applicable.call(channel);
             }
         }
+        final List<String> added = new ArrayList<>();
+        added.addAll(channel.pipeline().names());
+        added.removeAll(orgs);
+        return removeHandlersSubscription(channel, added.toArray(new String[0]));
     }
 
-    private Subscription recycleChannelSubscription(
-            final Channel channel, 
-            final HandlersClosure closure) {
-        final AtomicBoolean isUnsubscribed = new AtomicBoolean(false);
-        return new Subscription() {
+    private Subscription recycleChannelSubscription(final Channel channel) {
+        return new OneshotSubscription() {
             @Override
-            public void unsubscribe() {
-                if (isUnsubscribed.compareAndSet(false, true)) {
-                    if (channel.eventLoop().inEventLoop()) {
-                        doRecycle(channel, closure);
-                    } else {
-                        channel.eventLoop().submit(new Runnable() {
-                            @Override
-                            public void run() {
-                                doRecycle(channel, closure);
-                            }});
+            protected void doUnsubscribe() {
+                if (channel.eventLoop().inEventLoop()) {
+                    recycleChannel(channel);
+                } else {
+                    channel.eventLoop().submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            recycleChannel(channel);
+                        }});
+                }
+            }};
+    }
+
+    private Subscription removeHandlersSubscription(final Channel channel, final String[] names) {
+        return new OneshotSubscription() {
+            @Override
+            protected void doUnsubscribe() {
+                if (channel.eventLoop().inEventLoop()) {
+                    doRemove();
+                } else {
+                    channel.eventLoop().submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            doRemove();
+                        }});
+                }
+            }
+
+            private void doRemove() {
+                final ChannelPipeline pipeline = channel.pipeline();
+                for (String name : names) {
+                    if (pipeline.context(name) != null) {
+                        pipeline.remove(name);
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("channel({}): remove oneoff Handler({}) success.", channel, name);
+                        }
                     }
                 }
-            }
-
-            private void doRecycle(
-                    final Channel channel,
-                    final HandlersClosure closure) {
-                try {
-                    closure.close();
-                } catch (IOException e) {
-                }
-                recycleChannel(channel);
-            }
-            
-            @Override
-            public boolean isUnsubscribed() {
-                return isUnsubscribed.get();
-            }
-        };
+            }};
     }
-
+    
     protected abstract Channel reuseChannel(final SocketAddress address);
     
     private final ChannelCreator _channelCreator;
