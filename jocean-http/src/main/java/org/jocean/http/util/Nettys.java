@@ -161,7 +161,7 @@ public class Nettys {
         }
         pipeline.addLast(name, handler);
         if (LOG.isDebugEnabled()) {
-            LOG.debug("channel({}): add ({}) handler last.", pipeline.channel(), name);
+            LOG.debug("channel({}): add ({}) handler at last.", pipeline.channel(), name);
         }
         return handler;
     }
