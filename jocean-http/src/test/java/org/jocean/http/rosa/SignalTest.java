@@ -3,10 +3,16 @@
  */
 package org.jocean.http.rosa;
 
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioSocketChannel;
+
 import java.util.concurrent.CountDownLatch;
 
 import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.impl.AbstractChannelCreator;
 import org.jocean.http.client.impl.DefaultHttpClient;
+import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.rosa.SignalClient.Attachment;
 import org.jocean.http.rosa.SignalClient.ProgressiveSubscriber;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
@@ -33,7 +39,15 @@ public class SignalTest {
      * @throws Exception 
      */
     public static void main(String[] args) throws Exception {
-        final HttpClient httpClient = new DefaultHttpClient();
+        final TestChannelPool pool = new TestChannelPool(
+                new AbstractChannelCreator() {
+            @Override
+            protected void initializeBootstrap(final Bootstrap bootstrap) {
+                bootstrap
+                .group(new NioEventLoopGroup(1))
+                .channel(NioSocketChannel.class);
+            }}, 1);
+        final HttpClient httpClient = new DefaultHttpClient(pool);
         final DefaultSignalClient client = new DefaultSignalClient(httpClient);
         
         client.registerRequestType(
@@ -74,7 +88,7 @@ public class SignalTest {
                 }});
         }
         latch.await();
-        /*
+        pool.awaitRecycleChannels();
         {
             final AddMultiMediasToJourneyRequest req = new AddMultiMediasToJourneyRequest();
             req.setCaseId("120");
@@ -109,8 +123,9 @@ public class SignalTest {
                 public void onResponse(AddMultiMediasToJourneyResponse response) {
                     LOG.debug("AddMultiMediasToJourneyRequest: onNext: {}", response);
                 }});
-//            subscription.unsubscribe();
+            subscription.unsubscribe();
+            //  TODO, why invoke onCompleted Event? not onError, check
+            //  TO BE CONTINUE, 2015-05-13
         }
-        */
     }
 }

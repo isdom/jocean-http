@@ -36,7 +36,10 @@ public abstract class AbstractChannelPool implements ChannelPool {
                     try {
                         final Channel channel = reuseChannel(address);
                         if (null!=channel) {
-                            final Runnable runnable = buildOnNextRunnable(subscriber, channel, features);
+                            final HandlersClosure closure = 
+                                    Nettys.channelHandlersClosure(channel);
+                            subscriber.add(recycleChannelSubscription(channel, closure));
+                            final Runnable runnable = buildOnNextRunnable(subscriber, closure, channel, features);
                             if (channel.eventLoop().inEventLoop()) {
                                 runnable.run();
                             } else {
@@ -56,12 +59,13 @@ public abstract class AbstractChannelPool implements ChannelPool {
     
     private Runnable buildOnNextRunnable(
             final Subscriber<? super Channel> subscriber,
+            final HandlersClosure closure,
             final Channel channel, 
             final OutboundFeature.Applicable[] features) {
         return new Runnable() {
             @Override
             public void run() {
-                subscriber.add(addOneoffFeatures(channel, features));
+                addOneoffFeatures(closure, channel, features);
                 subscriber.onNext(channel);
                 subscriber.onCompleted();
             }};
@@ -72,6 +76,9 @@ public abstract class AbstractChannelPool implements ChannelPool {
             final SocketAddress address,
             final OutboundFeature.Applicable[] features) {
         final ChannelFuture future = _channelCreator.newChannel();
+        final HandlersClosure closure = 
+                Nettys.channelHandlersClosure(future.channel());
+        subscriber.add(recycleChannelSubscription(future.channel(), closure));
         RxNettys.<ChannelFuture,Channel>emitErrorOnFailure()
             .call(future)
             .subscribe(subscriber);
@@ -85,7 +92,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                             applicable.call(channel);
                         }
                     }
-                    subscriber.add(addOneoffFeatures(channel, features));
+                    addOneoffFeatures(closure, channel, features);
                     
                     OutboundFeature.READY4INTERACTION_NOTIFIER.applyTo(
                         channel, 
@@ -98,20 +105,18 @@ public abstract class AbstractChannelPool implements ChannelPool {
             .subscribe(subscriber);
     }
     
-    private Subscription addOneoffFeatures(
+    private void addOneoffFeatures(
+            final HandlersClosure closure,
             final Channel channel,
             final OutboundFeature.Applicable[] features) {
-        final HandlersClosure closure = 
-                Nettys.channelHandlersClosure(channel);
         for (OutboundFeature.Applicable applicable : features) {
             if (applicable.isOneoff()) {
                 closure.call(applicable.call(channel));
             }
         }
-        return channelClosure(channel, closure);
     }
 
-    private Subscription channelClosure(
+    private Subscription recycleChannelSubscription(
             final Channel channel, 
             final HandlersClosure closure) {
         final AtomicBoolean isUnsubscribed = new AtomicBoolean(false);
