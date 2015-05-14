@@ -244,14 +244,18 @@ public class Nettys {
             this._subscriber = subscriber;
         }
 
+        private void removeSelf(final ChannelHandlerContext ctx) {
+            final ChannelPipeline pipeline = ctx.pipeline();
+            if (pipeline.context(this) != null) {
+                pipeline.remove(this);
+            }
+        }
+
         @Override
         public void channelActive(final ChannelHandlerContext ctx)
                 throws Exception {
             if (!_enableSSL) {
-                final ChannelPipeline pipeline = ctx.pipeline();
-                if (pipeline.context(this) != null) {
-                    pipeline.remove(this);
-                }
+                removeSelf(ctx);
                 _subscriber.onNext(ctx.channel());
                 _subscriber.onCompleted();
                 if (LOG.isDebugEnabled()) {
@@ -267,10 +271,7 @@ public class Nettys {
             if (_enableSSL && evt instanceof SslHandshakeCompletionEvent) {
                 final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
                 if (sslComplete.isSuccess()) {
-                    final ChannelPipeline pipeline = ctx.pipeline();
-                    if (pipeline.context(this) != null) {
-                        pipeline.remove(this);
-                    }
+                    removeSelf(ctx);
                     _subscriber.onNext(ctx.channel());
                     _subscriber.onCompleted();
                     if (LOG.isDebugEnabled()) {
