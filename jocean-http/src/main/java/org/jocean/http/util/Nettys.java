@@ -147,6 +147,9 @@ public class Nettys {
                 if (order > 0) {
                     //  OK, add handler before current handler
                     pipeline.addBefore(entry.getKey(), name, handler);
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("channel({}): add ({}) handler before({}).", pipeline.channel(), name, entry.getKey());
+                    }
                     return handler;
                 }
             } catch (IllegalArgumentException e) {
@@ -157,6 +160,9 @@ public class Nettys {
             }
         }
         pipeline.addLast(name, handler);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("channel({}): add ({}) handler last.", pipeline.channel(), name);
+        }
         return handler;
     }
     
@@ -248,6 +254,9 @@ public class Nettys {
                 }
                 _subscriber.onNext(ctx.channel());
                 _subscriber.onCompleted();
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channel({}): Ready4InteractionNotifier.channelActive", ctx.channel());
+                }
             }
             ctx.fireChannelActive();
         }
@@ -256,16 +265,21 @@ public class Nettys {
         public void userEventTriggered(final ChannelHandlerContext ctx,
                 final Object evt) throws Exception {
             if (_enableSSL && evt instanceof SslHandshakeCompletionEvent) {
-                final ChannelPipeline pipeline = ctx.pipeline();
-                if (pipeline.context(this) != null) {
-                    pipeline.remove(this);
-                }
                 final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
                 if (sslComplete.isSuccess()) {
+                    final ChannelPipeline pipeline = ctx.pipeline();
+                    if (pipeline.context(this) != null) {
+                        pipeline.remove(this);
+                    }
                     _subscriber.onNext(ctx.channel());
                     _subscriber.onCompleted();
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("channel({}): Ready4InteractionNotifier.userEventTriggered for ssl handshake success", ctx.channel());
+                    }
                 } else {
                     _subscriber.onError(sslComplete.cause());
+                    LOG.warn("channel({}): Ready4InteractionNotifier.userEventTriggered for ssl handshake failure:{}", 
+                            ctx.channel(), ExceptionUtils.exception2detail(sslComplete.cause()));
                 }
             }
             ctx.fireUserEventTriggered(evt);
