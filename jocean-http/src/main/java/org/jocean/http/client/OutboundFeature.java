@@ -9,11 +9,15 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 
 import org.jocean.http.util.Nettys;
+import org.jocean.http.util.RxNettys;
 import org.jocean.http.util.Nettys.ToOrdinal;
 import org.jocean.http.util.Oneoff;
+import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.rx.RxFunctions;
 
+import rx.Subscription;
+import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.functions.FuncN;
 import rx.functions.Functions;
@@ -31,6 +35,29 @@ public enum OutboundFeature {
     LAST_FEATURE(null)
     ;
     
+    public static void applyNononeoffFeatures(
+            final Channel channel,
+            final Applicable[] features) {
+        final Applicable applicable = 
+                InterfaceUtils.compositeExcludeType(features, 
+                        Applicable.class, OneoffApplicable.class);
+        if (null!=applicable) {
+            applicable.call(channel);
+        }
+    }
+
+    public static Subscription applyOneoffFeatures(
+            final Channel channel,
+            final Applicable[] features) {
+        final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
+        final Applicable applicable = 
+                InterfaceUtils.compositeIncludeType(features, OneoffApplicable.class);
+        if (null!=applicable) {
+            applicable.call(channel);
+        }
+        return RxNettys.removeHandlersSubscription(channel, diff.call());
+    }
+
     public static boolean isSSLEnabled(final ChannelPipeline pipeline) {
         return (pipeline.names().indexOf(ENABLE_SSL.name()) > -1);
     }

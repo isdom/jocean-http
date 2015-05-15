@@ -6,6 +6,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.ReferenceCountUtil;
@@ -18,6 +19,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.jocean.http.rosa.SignalClient;
+import org.jocean.idiom.rx.OneshotSubscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -143,6 +145,34 @@ public class RxNettys {
             }};
     }
 
+    public static Subscription removeHandlersSubscription(final Channel channel, final String[] names) {
+        return new OneshotSubscription() {
+            @Override
+            protected void doUnsubscribe() {
+                if (channel.eventLoop().inEventLoop()) {
+                    doRemove();
+                } else {
+                    channel.eventLoop().submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            doRemove();
+                        }});
+                }
+            }
+
+            private void doRemove() {
+                final ChannelPipeline pipeline = channel.pipeline();
+                for (String name : names) {
+                    if (pipeline.context(name) != null) {
+                        pipeline.remove(name);
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("channel({}): remove oneoff Handler({}) success.", channel, name);
+                        }
+                    }
+                }
+            }};
+    }
+    
     public static byte[] httpObjectsAsBytes(final Iterator<HttpObject> itr)
             throws IOException {
         final CompositeByteBuf composite = Unpooled.compositeBuffer();

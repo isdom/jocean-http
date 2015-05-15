@@ -2,16 +2,12 @@ package org.jocean.http.client.impl;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelPipeline;
 import io.netty.util.concurrent.Future;
 
 import java.net.SocketAddress;
 
 import org.jocean.http.client.OutboundFeature;
-import org.jocean.http.client.OutboundFeature.OneoffApplicable;
-import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.rx.OneshotSubscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,11 +16,11 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.Subscription;
-import rx.functions.Func0;
 import rx.functions.Func1;
 
 public abstract class AbstractChannelPool implements ChannelPool {
     
+    @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(AbstractChannelPool.class);
 
@@ -69,7 +65,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
         return new Runnable() {
             @Override
             public void run() {
-                subscriber.add(addOneoffFeatures(channel, features));
+                subscriber.add(OutboundFeature.applyOneoffFeatures(channel, features));
                 subscriber.onNext(channel);
                 subscriber.onCompleted();
             }};
@@ -89,13 +85,9 @@ public abstract class AbstractChannelPool implements ChannelPool {
             .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
                 @Override
                 public Observable<? extends Channel> call(final Channel channel) {
-                    final OutboundFeature.Applicable applicable = 
-                            InterfaceUtils.compositeExcludeType(features, 
-                                    OutboundFeature.Applicable.class, OneoffApplicable.class);
-                    if (null!=applicable) {
-                        applicable.call(channel);
-                    }
-                    subscriber.add(addOneoffFeatures(channel, features));
+                    OutboundFeature.applyNononeoffFeatures(channel, features);
+                    subscriber.add(
+                        OutboundFeature.applyOneoffFeatures(channel, features));
                     
                     OutboundFeature.READY4INTERACTION_NOTIFIER.applyTo(
                         channel, 
@@ -108,18 +100,6 @@ public abstract class AbstractChannelPool implements ChannelPool {
             .subscribe(subscriber);
     }
     
-    private Subscription addOneoffFeatures(
-            final Channel channel,
-            final OutboundFeature.Applicable[] features) {
-        final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
-        final OutboundFeature.Applicable applicable = 
-                InterfaceUtils.compositeIncludeType(features, OneoffApplicable.class);
-        if (null!=applicable) {
-            applicable.call(channel);
-        }
-        return removeHandlersSubscription(channel, diff.call());
-    }
-
     private Subscription recycleChannelSubscription(final Channel channel) {
         return new OneshotSubscription() {
             @Override
@@ -132,34 +112,6 @@ public abstract class AbstractChannelPool implements ChannelPool {
                         public void run() {
                             recycleChannel(channel);
                         }});
-                }
-            }};
-    }
-
-    private Subscription removeHandlersSubscription(final Channel channel, final String[] names) {
-        return new OneshotSubscription() {
-            @Override
-            protected void doUnsubscribe() {
-                if (channel.eventLoop().inEventLoop()) {
-                    doRemove();
-                } else {
-                    channel.eventLoop().submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            doRemove();
-                        }});
-                }
-            }
-
-            private void doRemove() {
-                final ChannelPipeline pipeline = channel.pipeline();
-                for (String name : names) {
-                    if (pipeline.context(name) != null) {
-                        pipeline.remove(name);
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("channel({}): remove oneoff Handler({}) success.", channel, name);
-                        }
-                    }
                 }
             }};
     }
