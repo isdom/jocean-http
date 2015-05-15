@@ -6,11 +6,12 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.util.concurrent.Future;
 
 import java.net.SocketAddress;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.jocean.http.client.OutboundFeature;
+import org.jocean.http.client.OutboundFeature.OneoffApplicable;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.rx.OneshotSubscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +20,7 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.Subscription;
+import rx.functions.Func0;
 import rx.functions.Func1;
 
 public abstract class AbstractChannelPool implements ChannelPool {
@@ -87,10 +89,11 @@ public abstract class AbstractChannelPool implements ChannelPool {
             .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
                 @Override
                 public Observable<? extends Channel> call(final Channel channel) {
-                    for ( OutboundFeature.Applicable applicable : features) {
-                        if (!applicable.isOneoff()) {
-                            applicable.call(channel);
-                        }
+                    final OutboundFeature.Applicable applicable = 
+                            InterfaceUtils.compositeExcludeType(features, 
+                                    OutboundFeature.Applicable.class, OneoffApplicable.class);
+                    if (null!=applicable) {
+                        applicable.call(channel);
                     }
                     subscriber.add(addOneoffFeatures(channel, features));
                     
@@ -108,17 +111,13 @@ public abstract class AbstractChannelPool implements ChannelPool {
     private Subscription addOneoffFeatures(
             final Channel channel,
             final OutboundFeature.Applicable[] features) {
-        final List<String> orgs = new ArrayList<>();
-        orgs.addAll(channel.pipeline().names());
-        for (OutboundFeature.Applicable applicable : features) {
-            if (applicable.isOneoff()) {
-                applicable.call(channel);
-            }
+        final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
+        final OutboundFeature.Applicable applicable = 
+                InterfaceUtils.compositeIncludeType(features, OneoffApplicable.class);
+        if (null!=applicable) {
+            applicable.call(channel);
         }
-        final List<String> added = new ArrayList<>();
-        added.addAll(channel.pipeline().names());
-        added.removeAll(orgs);
-        return removeHandlersSubscription(channel, added.toArray(new String[0]));
+        return removeHandlersSubscription(channel, diff.call());
     }
 
     private Subscription recycleChannelSubscription(final Channel channel) {

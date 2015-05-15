@@ -21,6 +21,7 @@ import java.net.SocketAddress;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.client.OutboundFeature.Applicable;
+import org.jocean.http.client.OutboundFeature.OneoffApplicable;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
@@ -62,7 +63,7 @@ public class DefaultHttpClient implements HttpClient {
         final OutboundFeature.Applicable[] applyFeatures = 
                 features.length > 0 ? features : this._defaultFeatures;
         final OutboundFeature.ApplyToRequest applyToRequest = 
-                InterfaceUtils.compositeByType(applyFeatures, OutboundFeature.ApplyToRequest.class);
+                InterfaceUtils.compositeIncludeType(applyFeatures, OutboundFeature.ApplyToRequest.class);
         final Func1<Channel, Observable<ChannelFuture>> transferRequest = 
                 new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
@@ -169,20 +170,12 @@ public class DefaultHttpClient implements HttpClient {
         public ChannelHandler call(final Channel channel) {
             return  OutboundFeature.HTTPCLIENT_CODEC.applyTo(channel);
         }
-        @Override
-        public boolean isOneoff() {
-            return false;
-        }
     };
     
     final static Applicable CHUNKED_WRITER_APPLY = new Applicable() {
         @Override
         public ChannelHandler call(final Channel channel) {
             return  OutboundFeature.CHUNKED_WRITER.applyTo(channel);
-        }
-        @Override
-        public boolean isOneoff() {
-            return false;
         }
     };
     
@@ -194,25 +187,17 @@ public class DefaultHttpClient implements HttpClient {
         features = JOArrays.addFirst(features, 
                 CHUNKED_WRITER_APPLY, Applicable[].class);
         features = JOArrays.addFirst(features, 
-            new Applicable() {
+            new OneoffApplicable() {
                 @Override
                 public ChannelHandler call(final Channel channel) {
                     return  OutboundFeature.PROGRESSIVE.applyTo(channel, subscriber);
                 }
-                @Override
-                public boolean isOneoff() {
-                    return true;
-                }
             }, Applicable[].class);
         features = JOArrays.addFirst(features, 
-            new Applicable() {
+            new OneoffApplicable() {
                 @Override
                 public ChannelHandler call(final Channel channel) {
                     return  OutboundFeature.WORKER.applyTo(channel, subscriber, _channelPool);
-                }
-                @Override
-                public boolean isOneoff() {
-                    return true;
                 }
             }, Applicable[].class);
         return features;

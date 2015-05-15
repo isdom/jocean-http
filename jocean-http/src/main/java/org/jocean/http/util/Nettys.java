@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import rx.Subscriber;
+import rx.functions.Func0;
 import rx.functions.Func2;
 import rx.functions.Func3;
 import rx.functions.FuncN;
@@ -138,6 +139,7 @@ public class Nettys {
                 if (order==0) {
                     //  equals, handler already added, just ignore
                     //  NOT added
+                    LOG.warn("channel({}): handler ({}) already added, ignore.", pipeline.channel(), name);
                     return null;
                 }
                 if (order < 0) {
@@ -176,6 +178,17 @@ public class Nettys {
                 else {
                     return Enum.valueOf(cls, name).ordinal();
                 }
+            }};
+    }
+    
+    public static Func0<String[]> namesDifferenceBuilder(final Channel channel) {
+        final List<String> orgs = channel.pipeline().names();
+        return new Func0<String[]>() {
+            @Override
+            public String[] call() {
+                final List<String> current = channel.pipeline().names();
+                current.removeAll(orgs);
+                return current.toArray(new String[0]);
             }};
     }
     

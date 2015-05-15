@@ -10,6 +10,7 @@ import io.netty.handler.ssl.SslContext;
 
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ToOrdinal;
+import org.jocean.http.util.Oneoff;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.rx.RxFunctions;
 
@@ -39,7 +40,9 @@ public enum OutboundFeature {
     }
     
     public interface Applicable extends Func1<Channel, ChannelHandler> {
-        public boolean isOneoff();
+    };
+    
+    public interface OneoffApplicable extends Applicable, Oneoff {
     };
     
     public static final Applicable[] EMPTY_APPLICABLES = new Applicable[0];
@@ -48,17 +51,13 @@ public enum OutboundFeature {
         public void applyToRequest(final HttpRequest request);
     }
     
-    private abstract static class CLS_APPLY_CONTENT_DECOMPRESSOR implements Applicable, ApplyToRequest {
+    private abstract static class CLS_APPLY_CONTENT_DECOMPRESSOR implements OneoffApplicable, ApplyToRequest {
     }
     
     public static final Applicable APPLY_CONTENT_DECOMPRESSOR = new CLS_APPLY_CONTENT_DECOMPRESSOR() {
         @Override
         public ChannelHandler call(final Channel channel) {
             return CONTENT_DECOMPRESSOR.applyTo(channel);
-        }
-        @Override
-        public boolean isOneoff() {
-            return true;
         }
         @Override
         public void applyToRequest(final HttpRequest request) {
@@ -68,14 +67,10 @@ public enum OutboundFeature {
         }
     };
     
-    public static final Applicable APPLY_LOGGING = new Applicable() {
+    public static final Applicable APPLY_LOGGING = new OneoffApplicable() {
         @Override
         public ChannelHandler call(final Channel channel) {
             return LOGGING.applyTo(channel);
-        }
-        @Override
-        public boolean isOneoff() {
-            return true;
         }
     };
             
@@ -90,14 +85,9 @@ public enum OutboundFeature {
         }
         
         private final SslContext _sslCtx;
-
-        @Override
-        public boolean isOneoff() {
-            return false;
-        }
     }
     
-    public static final class APPLY_CLOSE_ON_IDLE implements Applicable {
+    public static final class APPLY_CLOSE_ON_IDLE implements OneoffApplicable {
         public APPLY_CLOSE_ON_IDLE(final int allIdleTimeout) {
             this._allIdleTimeout = allIdleTimeout;
         }
@@ -108,11 +98,6 @@ public enum OutboundFeature {
         }
         
         private final int _allIdleTimeout;
-
-        @Override
-        public boolean isOneoff() {
-            return true;
-        }
     }
     
     public ChannelHandler applyTo(final Channel channel, final Object ... args) {
