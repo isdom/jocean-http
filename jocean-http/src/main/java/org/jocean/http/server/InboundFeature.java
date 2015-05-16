@@ -20,6 +20,7 @@ public enum InboundFeature {
     ENABLE_SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
     HTTPSERVER_CODEC(Nettys.HTTPSERVER_CODEC_FUNCN),
     CONTENT_COMPRESSOR(Nettys.CONTENT_COMPRESSOR_FUNCN),
+    WORKER(Functions.fromFunc(Nettys.HTTPSERVER_WORK_FUNC2)),
     LAST_FEATURE(null)
     ;
     

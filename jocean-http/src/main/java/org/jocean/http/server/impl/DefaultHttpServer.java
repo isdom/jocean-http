@@ -19,6 +19,7 @@ import org.jocean.event.api.EventEngine;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpTrade;
 import org.jocean.http.server.InboundFeature;
+import org.jocean.http.server.InboundFeature.Applicable;
 import org.jocean.http.util.RxNettys;
 
 import rx.Observable;
@@ -38,7 +39,7 @@ public class DefaultHttpServer implements HttpServer {
         }
     }
     
-    public interface ChannelRecycler {
+    interface ChannelRecycler {
         public void onResponseCompleted(final Channel channel, final boolean isKeepAlive);
     }
     
@@ -48,8 +49,8 @@ public class DefaultHttpServer implements HttpServer {
     @Override
     public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress,
-            final InboundFeature.Applicable... features) {
-        final InboundFeature.Applicable[] applyFeatures = 
+            final Applicable... features) {
+        final Applicable[] applyFeatures = 
                 features.length > 0 ? features : this._defaultFeatures;
         return Observable.create(new OnSubscribe<HttpTrade>() {
             @Override
@@ -59,7 +60,7 @@ public class DefaultHttpServer implements HttpServer {
                     bootstrap.childHandler(new ChannelInitializer<Channel>() {
                         @Override
                         protected void initChannel(final Channel channel) throws Exception {
-                            for (InboundFeature.Applicable feature : applyFeatures) {
+                            for (Applicable feature : applyFeatures) {
                                 feature.call(channel);
                             }
                             InboundFeature.HTTPSERVER_CODEC.applyTo(channel);
@@ -75,7 +76,8 @@ public class DefaultHttpServer implements HttpServer {
     }
 
     private DefaultHttpTrade createHttpTrade(
-            final Channel channel, final Subscriber<? super HttpTrade> subscriber) {
+            final Channel channel, 
+            final Subscriber<? super HttpTrade> subscriber) {
         return new DefaultHttpTrade(channel, this._engine, 
                 createChannelRecycler(subscriber));
     }
@@ -105,7 +107,7 @@ public class DefaultHttpServer implements HttpServer {
     public DefaultHttpServer(
             final EventEngine engine, 
             final BootstrapCreator creator,
-            final InboundFeature.Applicable... defaultFeatures) {
+            final Applicable... defaultFeatures) {
         this._engine = engine;
         this._creator = creator;
         this._defaultFeatures = defaultFeatures;
@@ -118,5 +120,5 @@ public class DefaultHttpServer implements HttpServer {
     
     private final BootstrapCreator _creator;
     private final EventEngine _engine;
-    private final InboundFeature.Applicable[] _defaultFeatures;
+    private final Applicable[] _defaultFeatures;
 }

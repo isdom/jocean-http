@@ -24,13 +24,12 @@ import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.ReferenceCounted;
 
-import java.io.IOException;
 import java.net.SocketAddress;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 
+import org.jocean.event.api.annotation.GuardPaired;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.impl.AbstractChannelPool;
 import org.jocean.http.client.impl.ChannelCreator;
@@ -55,31 +54,10 @@ public class Nettys {
         throw new IllegalStateException("No instances!");
     }
     
-    public static HandlersClosure channelHandlersClosure(final Channel channel) {
-        final List<ChannelHandler> handlers = new ArrayList<>();
-        return new HandlersClosure() {
-
-            @Override
-            public ChannelHandler call(final ChannelHandler handler) {
-                handlers.add(handler);
-                return handler;
-            }
-
-            @Override
-            public void close() throws IOException {
-                final ChannelPipeline pipeline = channel.pipeline();
-                for (ChannelHandler handler : handlers) {
-                    try {
-                        if (pipeline.context(handler) != null) {
-                            pipeline.remove(handler);
-                        }
-                    } catch (Exception e) {
-                        LOG.warn("exception when invoke pipeline.remove, detail:{}", 
-                                ExceptionUtils.exception2detail(e));
-                    }
-                    
-                }
-            }};
+    public interface OnHttpObject {
+        @GuardPaired(paired={"org.jocean.http.util.Nettys._NETTY_REFCOUNTED_GUARD"})
+        public void onHttpObject(final HttpObject httpObject);
+        public void onError(Throwable e);
     }
     
     public static ChannelPool unpoolChannels(final ChannelCreator channelCreator) {
@@ -420,5 +398,45 @@ public class Nettys {
                         }
                     };
                 }
+    };
+
+    public static final Func2<Channel, OnHttpObject, ChannelHandler> HTTPSERVER_WORK_FUNC2 = 
+            new Func2<Channel, OnHttpObject, ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Channel channel,
+                final OnHttpObject onHttpObject) {
+            return new SimpleChannelInboundHandler<HttpObject>() {
+                @Override
+                public void exceptionCaught(ChannelHandlerContext ctx,
+                        Throwable cause) throws Exception {
+                    LOG.warn("exceptionCaught {}, detail:{}", ctx.channel(),
+                            ExceptionUtils.exception2detail(cause));
+                    onHttpObject.onError(cause);
+                    ctx.close();
+                }
+
+                // @Override
+                // public void channelReadComplete(ChannelHandlerContext ctx) {
+                // ctx.flush();
+                // }
+
+                @Override
+                public void channelInactive(final ChannelHandlerContext ctx)
+                        throws Exception {
+                    onHttpObject.onError(new RuntimeException("channelInactive"));
+                }
+
+                @Override
+                protected void channelRead0(final ChannelHandlerContext ctx,
+                        final HttpObject msg) throws Exception {
+                    onHttpObject.onHttpObject(msg);
+                }
+
+                // @Override
+                // public void channelActive(final ChannelHandlerContext ctx)
+                // throws Exception {
+                // }
+            };
+        }
     };
 }
