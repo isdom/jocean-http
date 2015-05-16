@@ -75,7 +75,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
             final Subscriber<? super Channel> subscriber,
             final SocketAddress address,
             final OutboundFeature.Applicable[] features) {
-        final ChannelFuture future = _channelCreator.newChannel();
+        final ChannelFuture future = this._channelCreator.newChannel();
         subscriber.add(recycleChannelSubscription(future.channel()));
         RxNettys.<ChannelFuture,Channel>emitErrorOnFailure()
             .call(future)

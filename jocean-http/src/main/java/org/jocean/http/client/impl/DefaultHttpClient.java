@@ -59,8 +59,8 @@ public class DefaultHttpClient implements HttpClient {
     public Observable<? extends Object> defineInteraction(
             final SocketAddress remoteAddress,
             final Observable<? extends Object> request,
-            final OutboundFeature.Applicable... features) {
-        final OutboundFeature.Applicable[] applyFeatures = 
+            final Applicable... features) {
+        final Applicable[] applyFeatures = 
                 features.length > 0 ? features : this._defaultFeatures;
         final OutboundFeature.ApplyToRequest applyToRequest = 
                 InterfaceUtils.compositeIncludeType(applyFeatures, OutboundFeature.ApplyToRequest.class);
@@ -102,12 +102,12 @@ public class DefaultHttpClient implements HttpClient {
             }});
     }
 
-    public DefaultHttpClient(final OutboundFeature.Applicable... defaultFeatures) {
+    public DefaultHttpClient(final Applicable... defaultFeatures) {
         this(1, defaultFeatures);
     }
     
     public DefaultHttpClient(final int processThreadNumber,
-            final OutboundFeature.Applicable... defaultFeatures) {
+            final Applicable... defaultFeatures) {
         this(new DefaultChannelPool(new AbstractChannelCreator() {
             @Override
             protected void initializeBootstrap(final Bootstrap bootstrap) {
@@ -121,7 +121,7 @@ public class DefaultHttpClient implements HttpClient {
     public DefaultHttpClient(
             final EventLoopGroup eventLoopGroup,
             final Class<? extends Channel> channelType,
-            final OutboundFeature.Applicable... defaultFeatures) { 
+            final Applicable... defaultFeatures) { 
         this(new DefaultChannelPool(new AbstractChannelCreator() {
             @Override
             protected void initializeBootstrap(final Bootstrap bootstrap) {
@@ -133,7 +133,7 @@ public class DefaultHttpClient implements HttpClient {
     public DefaultHttpClient(
             final EventLoopGroup eventLoopGroup,
             final ChannelFactory<? extends Channel> channelFactory,
-            final OutboundFeature.Applicable... defaultFeatures) { 
+            final Applicable... defaultFeatures) { 
         this(new DefaultChannelPool(new AbstractChannelCreator() {
             @Override
             protected void initializeBootstrap(final Bootstrap bootstrap) {
@@ -144,13 +144,13 @@ public class DefaultHttpClient implements HttpClient {
     
     public DefaultHttpClient(
             final ChannelCreator channelCreator,
-            final OutboundFeature.Applicable... defaultFeatures) {
+            final Applicable... defaultFeatures) {
         this(new DefaultChannelPool(channelCreator), defaultFeatures);
     }
     
     public DefaultHttpClient(
             final ChannelPool channelPool,
-            final OutboundFeature.Applicable... defaultFeatures) {
+            final Applicable... defaultFeatures) {
         this._channelPool = channelPool;
         this._defaultFeatures = defaultFeatures;
     }
@@ -180,7 +180,7 @@ public class DefaultHttpClient implements HttpClient {
     };
     
     private Applicable[] buildFeatures(
-            OutboundFeature.Applicable[] features,
+            Applicable[] features,
             final Subscriber<? super Object> subscriber) {
         features = JOArrays.addFirst(features, 
                 HTTPCLIENT_APPLY, Applicable[].class);
@@ -204,5 +204,5 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     private final ChannelPool _channelPool;
-    private final OutboundFeature.Applicable[] _defaultFeatures;
+    private final Applicable[] _defaultFeatures;
 }
