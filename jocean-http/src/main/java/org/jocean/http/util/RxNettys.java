@@ -15,8 +15,8 @@ import io.netty.util.concurrent.GenericFutureListener;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collection;
 import java.util.Iterator;
-import java.util.List;
 
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.idiom.rx.OneshotSubscription;
@@ -236,7 +236,7 @@ public class RxNettys {
             }};
     }
     
-    public static <T> void releaseObjects(final List<T> objs) {
+    public static <T> void releaseObjects(final Collection<T> objs) {
         synchronized (objs) {
             for ( T obj : objs ) {
                 if (ReferenceCountUtil.release(obj)) {
