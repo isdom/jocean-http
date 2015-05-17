@@ -37,6 +37,7 @@ import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.OnHttpObject;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.rx.OneshotSubscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -143,6 +144,7 @@ public class DefaultHttpTrade implements HttpTrade {
     private static final Throwable REQUEST_EXPIRED = 
             new RuntimeException("request expired");
     private static final String ADD_SUBSCRIBER = "addSubscriber";
+    private static final String REMOVE_SUBSCRIBER = "removeSubscriber";
     private static final String ON_HTTP_OBJECT = "onHttpObject";
     private static final String ON_REQUEST_ERROR = "onChannelError";
     
@@ -206,9 +208,20 @@ public class DefaultHttpTrade implements HttpTrade {
                 callOnCompletedWhenFully(subscriber);
             }
             
+            subscriber.add(new OneshotSubscription() {
+                @Override
+                protected void doUnsubscribe() {
+                    _requestReceiver.acceptEvent(REMOVE_SUBSCRIBER, subscriber);
+                }});
             return BizStep.CURRENT_BIZSTEP;
         }
 
+        @OnEvent(event = REMOVE_SUBSCRIBER)
+        private BizStep doUnregisterSubscriber(final Subscriber<? super HttpObject> subscriber) {
+            this._reqSubscribers.remove(subscriber);
+            return BizStep.CURRENT_BIZSTEP;
+        }
+        
         @OnEvent(event = ON_HTTP_OBJECT)
         private BizStep doCacheReqHttpObject(final HttpObject httpObj) {
             if ( (httpObj instanceof FullHttpRequest) 
