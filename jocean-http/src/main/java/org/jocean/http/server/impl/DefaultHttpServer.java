@@ -55,7 +55,7 @@ public class DefaultHttpServer implements HttpServer {
             final SocketAddress localAddress,
             final Applicable... features) {
         final Applicable[] applyFeatures = 
-                features.length > 0 ? features : this._defaultFeatures;
+                (null != features && features.length > 0 ) ? features : this._defaultFeatures;
         return Observable.create(new OnSubscribe<HttpTrade>() {
             @Override
             public void call(final Subscriber<? super HttpTrade> subscriber) {
