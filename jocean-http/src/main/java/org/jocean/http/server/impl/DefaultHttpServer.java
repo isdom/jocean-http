@@ -9,6 +9,9 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
@@ -32,6 +35,7 @@ import rx.Subscriber;
  */
 public class DefaultHttpServer implements HttpServer {
 
+    private static final Applicable[] EMPTY_APPLICABLES = new Applicable[0];
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
         if (!(InternalLoggerFactory.getDefaultFactory() instanceof Slf4JLoggerFactory)) {
@@ -104,13 +108,28 @@ public class DefaultHttpServer implements HttpServer {
             }};
     }
 
+    public DefaultHttpServer(final EventEngine engine) {
+        this(engine, (Applicable[])null);
+    }
+    
+    public DefaultHttpServer(
+            final EventEngine engine, 
+            final Applicable... defaultFeatures) {
+        this(engine, new AbstractBootstrapCreator(new NioEventLoopGroup(1), new NioEventLoopGroup()) {
+            @Override
+            protected void initializeBootstrap(ServerBootstrap bootstrap) {
+                bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
+                bootstrap.channel(NioServerSocketChannel.class);
+            }}, defaultFeatures);
+    }
+    
     public DefaultHttpServer(
             final EventEngine engine, 
             final BootstrapCreator creator,
             final Applicable... defaultFeatures) {
         this._engine = engine;
         this._creator = creator;
-        this._defaultFeatures = defaultFeatures;
+        this._defaultFeatures = null!=defaultFeatures ? defaultFeatures : EMPTY_APPLICABLES;
     }
 
     @Override
