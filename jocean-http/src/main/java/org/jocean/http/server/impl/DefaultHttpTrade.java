@@ -148,9 +148,6 @@ public class DefaultHttpTrade implements HttpTrade {
     private static final String ON_HTTP_OBJECT = "onHttpObject";
     private static final String ON_REQUEST_ERROR = "onChannelError";
     
-//    private static final PairedGuardEventable ONHTTPOBJ_EVENT = 
-//            new PairedGuardEventable(Nettys._NETTY_REFCOUNTED_GUARD, ON_HTTP_OBJECT);
-    
     private static final AbstractUnhandleAware ADDSUBSCRIBER_EVENT = 
             new AbstractUnhandleAware(ADD_SUBSCRIBER) {
         @Override
