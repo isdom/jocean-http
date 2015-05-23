@@ -79,6 +79,12 @@ public class DefaultSignalClient implements SignalClient {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClient.class);
 
+    private static final Func1<Object, Boolean> NOT_HTTPOBJECT = new Func1<Object, Boolean>() {
+        @Override
+        public Boolean call(final Object obj) {
+            return !(obj instanceof HttpObject);
+        }};
+        
     public interface SignalConverter {
 
         public URI req2uri(final Object request);
@@ -123,41 +129,9 @@ public class DefaultSignalClient implements SignalClient {
                     final long uploadTotal = uploadsize;
                     final List<Object> requestRaw = httpRequest;
                     
-                    final AtomicLong uploadProgress = new AtomicLong(0);
-                    final AtomicLong downloadProgress = new AtomicLong(0);
                     final List<HttpObject> httpObjects = new ArrayList<>();
                     
-                    response.map(new Func1<Object,Object>() {
-                        @Override
-                        public Object call(final Object input) {
-                            if (input instanceof HttpClient.UploadProgressable) {
-                                final long progress =
-                                        uploadProgress.addAndGet(((HttpClient.UploadProgressable)input).progress());
-                                return new UploadProgressable() {
-                                    @Override
-                                    public long progress() {
-                                        return progress;
-                                    }
-                                    @Override
-                                    public long total() {
-                                        return uploadTotal;
-                                    }};
-                            } else if (input instanceof HttpClient.DownloadProgressable) {
-                                final long progress = 
-                                        downloadProgress.addAndGet(((HttpClient.DownloadProgressable)input).progress());
-                                return new DownloadProgressable() {
-                                    @Override
-                                    public long progress() {
-                                        return progress;
-                                    }
-                                    @Override
-                                    public long total() {
-                                        return -1;
-                                    }};
-                            } else {
-                                return input;
-                            }
-                    }})
+                    response.map(convertProgressable(uploadTotal))
                     .doOnNext(new Action1<Object>() {
                         @Override
                         public void call(final Object obj) {
@@ -165,11 +139,7 @@ public class DefaultSignalClient implements SignalClient {
                                 httpObjects.add(ReferenceCountUtil.retain((HttpObject)obj));
                             }
                         }})
-                    .filter(new Func1<Object, Boolean>() {
-                        @Override
-                        public Boolean call(final Object obj) {
-                            return !(obj instanceof HttpObject);
-                        }})
+                    .filter(NOT_HTTPOBJECT)
                     .doOnCompleted(new Action0() {
                         @Override
                         public void call() {
@@ -227,98 +197,6 @@ public class DefaultSignalClient implements SignalClient {
                             RxNettys.releaseObjects(requestRaw);
                         }})
                     .subscribe(subscriber);
-                    
-                    /*
-                    final Subscription subscription = response.subscribe(
-                            new Subscriber<Object>() {
-                        private final List<HttpObject> _respObjects = new ArrayList<>();
-                        private final AtomicLong _uploadProgress = new AtomicLong(0);
-                        private final AtomicLong _downloadProgress = new AtomicLong(0);
-                        
-                        private FullHttpResponse retainFullHttpResponse() {
-                            if (this._respObjects.size()>0) {
-                                if (this._respObjects.get(0) instanceof FullHttpResponse) {
-                                    return ((FullHttpResponse)this._respObjects.get(0)).retain();
-                                }
-                                
-                                final HttpResponse resp = (HttpResponse)this._respObjects.get(0);
-                                final ByteBuf[] bufs = new ByteBuf[this._respObjects.size()-1];
-                                for (int idx = 1; idx<this._respObjects.size(); idx++) {
-                                    bufs[idx-1] = ((HttpContent)this._respObjects.get(idx)).content().retain();
-                                }
-                                return new DefaultFullHttpResponse(
-                                        resp.getProtocolVersion(), 
-                                        resp.getStatus(),
-                                        Unpooled.wrappedBuffer(bufs));
-                            } else {
-                                return null;
-                            }
-                        }
-                        
-                        @Override
-                        public void onCompleted() {
-                            final FullHttpResponse httpResp = retainFullHttpResponse();
-                            if (null!=httpResp) {
-                                try {
-                                    final InputStream is = new ByteBufInputStream(httpResp.content());
-                                    try {
-                                        final byte[] bytes = new byte[is.available()];
-                                        @SuppressWarnings("unused")
-                                        final int readed = is.read(bytes);
-                                        final Object resp = JSON.parseObject(bytes, safeGetResponseClass(request));
-                                        subscriber.onNext(resp);
-                                        subscriber.onCompleted();
-                                    } finally {
-                                        is.close();
-                                    }
-                                } catch (Exception e) {
-                                    LOG.warn("exception when parse response {}, detail:{}",
-                                            httpResp, ExceptionUtils.exception2detail(e));
-                                    subscriber.onError(e);
-                                } finally {
-                                    httpResp.release();
-                                }
-                            }
-                            
-                        }
-
-                        @Override
-                        public void onError(final Throwable e) {
-                            subscriber.onError(e);
-                        }
-
-                        @Override
-                        public void onNext(final Object object) {
-                            if (object instanceof HttpClient.UploadProgressable) {
-                                final long progress = 
-                                        _uploadProgress.addAndGet(((HttpClient.UploadProgressable)object).progress());
-                                subscriber.onNext(new UploadProgressable() {
-                                    @Override
-                                    public long progress() {
-                                        return progress;
-                                    }
-                                    @Override
-                                    public long total() {
-                                        return uploadTotal;
-                                    }});
-                            } else if (object instanceof HttpClient.DownloadProgressable) {
-                                final long progress = 
-                                        _downloadProgress.addAndGet(((HttpClient.DownloadProgressable)object).progress());
-                                subscriber.onNext(new DownloadProgressable() {
-                                    @Override
-                                    public long progress() {
-                                        return progress;
-                                    }
-                                    @Override
-                                    public long total() {
-                                        return -1;
-                                    }});
-                            } else if (object instanceof HttpObject) {
-                                this._respObjects.add(ReferenceCountUtil.retain((HttpObject)object));
-                            }
-                        }});
-                    subscriber.add(subscription);
-                    */
                 }
             }
             
@@ -417,6 +295,43 @@ public class DefaultSignalClient implements SignalClient {
         return (null != triple ? triple.first : null);
     }
     
+    private Func1<Object, Object> convertProgressable(final long uploadTotal) {
+        final AtomicLong uploadProgress = new AtomicLong(0);
+        final AtomicLong downloadProgress = new AtomicLong(0);
+        
+        return new Func1<Object,Object>() {
+            @Override
+            public Object call(final Object input) {
+                if (input instanceof HttpClient.UploadProgressable) {
+                    final long progress =
+                            uploadProgress.addAndGet(((HttpClient.UploadProgressable)input).progress());
+                    return new UploadProgressable() {
+                        @Override
+                        public long progress() {
+                            return progress;
+                        }
+                        @Override
+                        public long total() {
+                            return uploadTotal;
+                        }};
+                } else if (input instanceof HttpClient.DownloadProgressable) {
+                    final long progress = 
+                            downloadProgress.addAndGet(((HttpClient.DownloadProgressable)input).progress());
+                    return new DownloadProgressable() {
+                        @Override
+                        public long progress() {
+                            return progress;
+                        }
+                        @Override
+                        public long total() {
+                            return -1;
+                        }};
+                } else {
+                    return input;
+                }
+        }};
+    }
+
     private static DefaultFullHttpRequest genFullHttpRequest(final URI uri) {
         // Prepare the HTTP request.
         final String host = uri.getHost() == null ? "localhost" : uri.getHost();
