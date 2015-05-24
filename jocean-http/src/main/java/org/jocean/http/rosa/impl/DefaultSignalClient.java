@@ -35,6 +35,7 @@ import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -85,6 +86,54 @@ public class DefaultSignalClient implements SignalClient {
             return !(obj instanceof HttpObject);
         }};
         
+    private static Func1<Object, Object> convertProgressable(final long uploadTotal) {
+        final AtomicLong uploadProgress = new AtomicLong(0);
+        final AtomicLong downloadProgress = new AtomicLong(0);
+        
+        return new Func1<Object,Object>() {
+            @Override
+            public Object call(final Object input) {
+                if (input instanceof HttpClient.UploadProgressable) {
+                    final long progress =
+                            uploadProgress.addAndGet(((HttpClient.UploadProgressable)input).progress());
+                    return new UploadProgressable() {
+                        @Override
+                        public long progress() {
+                            return progress;
+                        }
+                        @Override
+                        public long total() {
+                            return uploadTotal;
+                        }};
+                } else if (input instanceof HttpClient.DownloadProgressable) {
+                    final long progress = 
+                            downloadProgress.addAndGet(((HttpClient.DownloadProgressable)input).progress());
+                    return new DownloadProgressable() {
+                        @Override
+                        public long progress() {
+                            return progress;
+                        }
+                        @Override
+                        public long total() {
+                            return -1;
+                        }};
+                } else {
+                    return input;
+                }
+        }};
+    }
+    
+    private static Action1<Object> retainHttpObjects(
+            final Collection<HttpObject> httpObjects) {
+        return new Action1<Object>() {
+            @Override
+            public void call(final Object obj) {
+                if (obj instanceof HttpObject) {
+                    httpObjects.add(ReferenceCountUtil.retain((HttpObject)obj));
+                }
+            }};
+    }
+        
     public interface SignalConverter {
 
         public URI req2uri(final Object request);
@@ -132,13 +181,7 @@ public class DefaultSignalClient implements SignalClient {
                     final List<HttpObject> httpObjects = new ArrayList<>();
                     
                     response.map(convertProgressable(uploadTotal))
-                    .doOnNext(new Action1<Object>() {
-                        @Override
-                        public void call(final Object obj) {
-                            if (obj instanceof HttpObject) {
-                                httpObjects.add(ReferenceCountUtil.retain((HttpObject)obj));
-                            }
-                        }})
+                    .doOnNext(retainHttpObjects(httpObjects))
                     .filter(NOT_HTTPOBJECT)
                     .doOnCompleted(new Action0() {
                         @Override
@@ -199,7 +242,6 @@ public class DefaultSignalClient implements SignalClient {
                     .subscribe(subscriber);
                 }
             }
-            
         });
     }
 
@@ -293,43 +335,6 @@ public class DefaultSignalClient implements SignalClient {
         @SuppressWarnings("rawtypes")
         final Triple<Class,String, OutboundFeature.Applicable[]> triple = _req2pathPrefix.get(request.getClass());
         return (null != triple ? triple.first : null);
-    }
-    
-    private Func1<Object, Object> convertProgressable(final long uploadTotal) {
-        final AtomicLong uploadProgress = new AtomicLong(0);
-        final AtomicLong downloadProgress = new AtomicLong(0);
-        
-        return new Func1<Object,Object>() {
-            @Override
-            public Object call(final Object input) {
-                if (input instanceof HttpClient.UploadProgressable) {
-                    final long progress =
-                            uploadProgress.addAndGet(((HttpClient.UploadProgressable)input).progress());
-                    return new UploadProgressable() {
-                        @Override
-                        public long progress() {
-                            return progress;
-                        }
-                        @Override
-                        public long total() {
-                            return uploadTotal;
-                        }};
-                } else if (input instanceof HttpClient.DownloadProgressable) {
-                    final long progress = 
-                            downloadProgress.addAndGet(((HttpClient.DownloadProgressable)input).progress());
-                    return new DownloadProgressable() {
-                        @Override
-                        public long progress() {
-                            return progress;
-                        }
-                        @Override
-                        public long total() {
-                            return -1;
-                        }};
-                } else {
-                    return input;
-                }
-        }};
     }
 
     private static DefaultFullHttpRequest genFullHttpRequest(final URI uri) {
@@ -466,7 +471,6 @@ public class DefaultSignalClient implements SignalClient {
 //            }
             
             httpRequest.setMethod(HttpMethod.POST);
-//            httpRequest.content().writeBytes(jsonBytes);
         }
 
         /**
