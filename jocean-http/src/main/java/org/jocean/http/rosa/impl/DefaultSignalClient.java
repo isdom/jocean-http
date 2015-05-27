@@ -159,24 +159,22 @@ public class DefaultSignalClient implements SignalClient {
                     final InetSocketAddress remoteAddress = new InetSocketAddress(uri.getHost(), port);
                     
                     Observable<? extends Object> response = null;
-                    long uploadsize = -1;
-                    List<Object> httpRequest = null;
+                    Pair<List<Object>,Long> pair;
                     
                     try {
-                        final Pair<List<Object>,Long> ret = buildHttpRequest(uri, request, attachments);
-                        httpRequest = ret.first;
-                        response = _httpClient.defineInteraction(
-                            remoteAddress, 
-                            Observable.from(httpRequest),
-                            safeGetRequestFeatures(request));
-                        uploadsize = ret.second;
+                        pair = buildHttpRequest(uri, request, attachments);
                     } catch (Exception e) {
                         subscriber.onError(e);
                         return;
                     }
                     
-                    final long uploadTotal = uploadsize;
-                    final List<Object> requestRaw = httpRequest;
+                    final long uploadTotal = pair.second;
+                    final List<Object> httpRequest = pair.first;
+                    
+                    response = _httpClient.defineInteraction(
+                            remoteAddress, 
+                            Observable.from(httpRequest),
+                            safeGetRequestFeatures(request));
                     
                     final List<HttpObject> httpObjects = new ArrayList<>();
                     
@@ -231,13 +229,13 @@ public class DefaultSignalClient implements SignalClient {
                         @Override
                         public void call() {
                             RxNettys.releaseObjects(httpObjects);
-                            RxNettys.releaseObjects(requestRaw);
+                            RxNettys.releaseObjects(httpRequest);
                         }})
                     .doOnUnsubscribe(new Action0() {
                         @Override
                         public void call() {
                             RxNettys.releaseObjects(httpObjects);                            
-                            RxNettys.releaseObjects(requestRaw);
+                            RxNettys.releaseObjects(httpRequest);
                         }})
                     .subscribe(subscriber);
                 }
@@ -263,59 +261,55 @@ public class DefaultSignalClient implements SignalClient {
             
             final HttpDataFactory factory = new DefaultHttpDataFactory(false);
             
-            try {
-                long total = 0;
-                // Use the PostBody encoder
-                final HttpPostRequestEncoder bodyRequestEncoder =
-                        new HttpPostRequestEncoder(factory, httpRequest, true); // true => multipart
-    
-                final List<InterfaceHttpData> datas = new ArrayList<>();
-                
-                final byte[] jsonBytes = JSON.toJSONBytes(request);
-                final MemoryFileUpload jsonFile = 
-                        new MemoryFileUpload("json", "json", "application/json", null, null, jsonBytes.length) {
-                            @Override
-                            public Charset getCharset() {
-                                return null;
-                            }
-                };
-                    
-                jsonFile.setContent(Unpooled.wrappedBuffer(jsonBytes));
-                
-                total += jsonBytes.length;
-                datas.add(jsonFile);
-                
-                for (Attachment attachment : attachments) {
-                    final File file = new File(attachment.filename);
-                    final DiskFileUpload diskFile = 
-                            new DiskFileUpload(FilenameUtils.getBaseName(attachment.filename), 
-                                attachment.filename, attachment.contentType, null, null, file.length()) {
+            long total = 0;
+            // Use the PostBody encoder
+            final HttpPostRequestEncoder bodyRequestEncoder =
+                    new HttpPostRequestEncoder(factory, httpRequest, true); // true => multipart
+
+            final List<InterfaceHttpData> datas = new ArrayList<>();
+            
+            final byte[] jsonBytes = JSON.toJSONBytes(request);
+            final MemoryFileUpload jsonFile = 
+                    new MemoryFileUpload("json", "json", "application/json", null, null, jsonBytes.length) {
                         @Override
                         public Charset getCharset() {
                             return null;
                         }
-                    };
-                    diskFile.setContent(file);
-                    total += file.length();
-                    datas.add(diskFile);
-                }
+            };
                 
-                // add Form attribute from previous request in formpost()
-                bodyRequestEncoder.setBodyHttpDatas(datas);
-    
-                // finalize request
-                final HttpRequest requestToSend = bodyRequestEncoder.finalizeRequest();
-    
-                // test if request was chunked and if so, finish the write
-                if (bodyRequestEncoder.isChunked()) {
-                    ret.addAll(Arrays.asList(new Object[]{requestToSend, bodyRequestEncoder}));
-                } else {
-                    ret.addAll(Arrays.asList(new Object[]{requestToSend}));
-                }
-                return Pair.of(ret, total);
-            } catch (Exception e) {
-                throw e;
+            jsonFile.setContent(Unpooled.wrappedBuffer(jsonBytes));
+            
+            total += jsonBytes.length;
+            datas.add(jsonFile);
+            
+            for (Attachment attachment : attachments) {
+                final File file = new File(attachment.filename);
+                final DiskFileUpload diskFile = 
+                        new DiskFileUpload(FilenameUtils.getBaseName(attachment.filename), 
+                            attachment.filename, attachment.contentType, null, null, file.length()) {
+                    @Override
+                    public Charset getCharset() {
+                        return null;
+                    }
+                };
+                diskFile.setContent(file);
+                total += file.length();
+                datas.add(diskFile);
             }
+            
+            // add Form attribute from previous request in formpost()
+            bodyRequestEncoder.setBodyHttpDatas(datas);
+
+            // finalize request
+            final HttpRequest requestToSend = bodyRequestEncoder.finalizeRequest();
+
+            // test if request was chunked and if so, finish the write
+            if (bodyRequestEncoder.isChunked()) {
+                ret.addAll(Arrays.asList(new Object[]{requestToSend, bodyRequestEncoder}));
+            } else {
+                ret.addAll(Arrays.asList(new Object[]{requestToSend}));
+            }
+            return Pair.of(ret, total);
         }
     }
 
