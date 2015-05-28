@@ -290,27 +290,47 @@ public class Nettys {
                 return new Ready4InteractionNotifier(isSSLEnabled, subscriber);
             }} ;
 
-    public static final Func2<Channel,Subscriber<Object>,ChannelHandler> PROGRESSIVE_FUNC2 = 
-            new Func2<Channel,Subscriber<Object>,ChannelHandler>() {
+    public static final Func3<Channel,Subscriber<Object>,Long,ChannelHandler> PROGRESSIVE_FUNC3 = 
+            new Func3<Channel,Subscriber<Object>,Long,ChannelHandler>() {
                 @Override
-                public ChannelHandler call(final Channel channel, final Subscriber<Object> subscriber) {
+                public ChannelHandler call(final Channel channel, final Subscriber<Object> subscriber, final Long minIntervalInMs) {
                     return new ChannelDuplexHandler() {
+                        long _lastTimestamp = -1;
+                        long _uploadProgress = 0;
+                        long _downloadProgress = 0;
+                        
                         private void notifyUploadProgress(final ByteBuf byteBuf) {
-                            final long progress = byteBuf.readableBytes();
+                            this._uploadProgress += byteBuf.readableBytes();
+                            final long now = System.currentTimeMillis();
+                            if (this._lastTimestamp > 0
+                                && (now - this._lastTimestamp) < minIntervalInMs) {
+                                return;
+                            }
+                            this._lastTimestamp = now;
+                            final long uploadProgress = this._uploadProgress;
+                            this._uploadProgress = 0;
                             subscriber.onNext(new HttpClient.UploadProgressable() {
                                 @Override
                                 public long progress() {
-                                    return progress;
+                                    return uploadProgress;
                                 }
                             });
                         }
                 
                         private void notifyDownloadProgress(final ByteBuf byteBuf) {
-                            final long progress = byteBuf.readableBytes();
+                            this._downloadProgress += byteBuf.readableBytes();
+                            final long now = System.currentTimeMillis();
+                            if (this._lastTimestamp > 0
+                                && (now - this._lastTimestamp) < minIntervalInMs) {
+                                return;
+                            }
+                            this._lastTimestamp = now;
+                            final long downloadProgress = this._downloadProgress;
+                            this._downloadProgress = 0;
                             subscriber.onNext(new HttpClient.DownloadProgressable() {
                                 @Override
                                 public long progress() {
-                                    return progress;
+                                    return downloadProgress;
                                 }
                             });
                         }

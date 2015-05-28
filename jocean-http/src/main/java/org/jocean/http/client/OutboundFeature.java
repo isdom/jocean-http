@@ -24,7 +24,7 @@ import rx.functions.Functions;
 
 public enum OutboundFeature {
     LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
-    PROGRESSIVE(Functions.fromFunc(Nettys.PROGRESSIVE_FUNC2)),
+    PROGRESSIVE(Functions.fromFunc(Nettys.PROGRESSIVE_FUNC3)),
     CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC2)),
     ENABLE_SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
     HTTPCLIENT_CODEC(Nettys.HTTPCLIENT_CODEC_FUNCN),
