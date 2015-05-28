@@ -299,14 +299,7 @@ public class Nettys {
                         long _uploadProgress = 0;
                         long _downloadProgress = 0;
                         
-                        private void notifyUploadProgress(final ByteBuf byteBuf) {
-                            this._uploadProgress += byteBuf.readableBytes();
-                            final long now = System.currentTimeMillis();
-                            if (this._lastTimestamp > 0
-                                && (now - this._lastTimestamp) < minIntervalInMs) {
-                                return;
-                            }
-                            this._lastTimestamp = now;
+                        private void onNext4UploadProgress(final Subscriber<Object> subscriber) {
                             final long uploadProgress = this._uploadProgress;
                             this._uploadProgress = 0;
                             subscriber.onNext(new HttpClient.UploadProgressable() {
@@ -317,7 +310,22 @@ public class Nettys {
                             });
                         }
                 
+                        private void notifyUploadProgress(final ByteBuf byteBuf) {
+                            this._uploadProgress += byteBuf.readableBytes();
+                            final long now = System.currentTimeMillis();
+                            if (this._lastTimestamp > 0
+                                && (now - this._lastTimestamp) < minIntervalInMs) {
+                                return;
+                            }
+                            this._lastTimestamp = now;
+                            onNext4UploadProgress(subscriber);
+                        }
+
                         private void notifyDownloadProgress(final ByteBuf byteBuf) {
+                            if (this._uploadProgress > 0) {
+                                onNext4UploadProgress(subscriber);
+                            }
+                            
                             this._downloadProgress += byteBuf.readableBytes();
                             final long now = System.currentTimeMillis();
                             if (this._lastTimestamp > 0
