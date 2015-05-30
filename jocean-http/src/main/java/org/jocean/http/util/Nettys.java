@@ -290,6 +290,14 @@ public class Nettys {
                 return new Ready4InteractionNotifier(isSSLEnabled, subscriber);
             }} ;
 
+    public static final Func0<ApplyContext> PROGRESSIVE_CTX = 
+            new Func0<ApplyContext>() {
+
+                @Override
+                public ApplyContext call() {
+                    return new ApplyContext() {};
+                }};
+            
     public static final Func3<Channel,Subscriber<Object>,Long,ChannelHandler> PROGRESSIVE_FUNC3 = 
             new Func3<Channel,Subscriber<Object>,Long,ChannelHandler>() {
                 @Override
