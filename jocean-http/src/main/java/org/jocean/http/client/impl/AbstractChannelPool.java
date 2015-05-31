@@ -90,7 +90,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                         OutboundFeature.applyOneoffFeatures(channel, features));
                     
                     OutboundFeature.READY4INTERACTION_NOTIFIER.applyTo(
-                        channel, 
+                        channel.pipeline(), 
                         OutboundFeature.isSSLEnabled(channel.pipeline()), 
                         subscriber);
                     

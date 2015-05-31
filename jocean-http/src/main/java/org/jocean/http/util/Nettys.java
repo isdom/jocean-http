@@ -278,30 +278,20 @@ public class Nettys {
         }
     }
 
-    public static final Func3<Channel,Boolean,Subscriber<? super Channel>,ChannelHandler> 
-        READY4INTERACTION_NOTIFIER_FUNC3 = 
-        new Func3<Channel,Boolean,Subscriber<? super Channel>,ChannelHandler>() {
-
+    public static final Func2<Boolean,Subscriber<? super Channel>,ChannelHandler> 
+        READY4INTERACTION_NOTIFIER_FUNC2 = 
+        new Func2<Boolean,Subscriber<? super Channel>,ChannelHandler>() {
             @Override
             public ChannelHandler call(
-                    final Channel channel, 
                     final Boolean isSSLEnabled,
                     final Subscriber<? super Channel> subscriber) {
                 return new Ready4InteractionNotifier(isSSLEnabled, subscriber);
             }} ;
 
-    public static final Func0<ApplyContext> PROGRESSIVE_CTX = 
-            new Func0<ApplyContext>() {
-
+    public static final Func2<Subscriber<Object>,Long,ChannelHandler> PROGRESSIVE_FUNC2 = 
+            new Func2<Subscriber<Object>,Long,ChannelHandler>() {
                 @Override
-                public ApplyContext call() {
-                    return new ApplyContext() {};
-                }};
-            
-    public static final Func3<Channel,Subscriber<Object>,Long,ChannelHandler> PROGRESSIVE_FUNC3 = 
-            new Func3<Channel,Subscriber<Object>,Long,ChannelHandler>() {
-                @Override
-                public ChannelHandler call(final Channel channel, final Subscriber<Object> subscriber, final Long minIntervalInMs) {
+                public ChannelHandler call(final Subscriber<Object> subscriber, final Long minIntervalInMs) {
                     return new ChannelDuplexHandler() {
                         long _lastTimestamp = -1;
                         long _uploadProgress = 0;

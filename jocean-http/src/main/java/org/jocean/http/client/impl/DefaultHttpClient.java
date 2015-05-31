@@ -8,6 +8,7 @@ import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -87,16 +88,16 @@ public class DefaultHttpClient implements HttpClient {
         };
         return Observable.create(new OnSubscribe<Object>() {
             @Override
-            public void call(final Subscriber<? super Object> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
+            public void call(final Subscriber<? super Object> responseSubscriber) {
+                if (!responseSubscriber.isUnsubscribed()) {
                     try {
                         _channelPool.retainChannel(remoteAddress, 
-                                buildFeatures(applyFeatures, subscriber))
+                                buildFeatures(applyFeatures, responseSubscriber))
                             .flatMap(transferRequest)
                             .flatMap(RxNettys.<ChannelFuture, Object>emitErrorOnFailure())
-                            .subscribe(subscriber);
+                            .subscribe(responseSubscriber);
                     } catch (final Throwable e) {
-                        subscriber.onError(e);
+                        responseSubscriber.onError(e);
                     }
                 }
             }});
@@ -167,39 +168,41 @@ public class DefaultHttpClient implements HttpClient {
 
     final static Applicable HTTPCLIENT_APPLY = new Applicable() {
         @Override
-        public ChannelHandler call(final Channel channel) {
-            return  OutboundFeature.HTTPCLIENT_CODEC.applyTo(channel);
+        public ChannelHandler call(final ChannelPipeline pipeline) {
+            return  OutboundFeature.HTTPCLIENT_CODEC.applyTo(pipeline);
         }
     };
     
     final static Applicable CHUNKED_WRITER_APPLY = new Applicable() {
         @Override
-        public ChannelHandler call(final Channel channel) {
-            return  OutboundFeature.CHUNKED_WRITER.applyTo(channel);
+        public ChannelHandler call(final ChannelPipeline pipeline) {
+            return  OutboundFeature.CHUNKED_WRITER.applyTo(pipeline);
         }
     };
     
     private Applicable[] buildFeatures(
             Applicable[] features,
-            final Subscriber<? super Object> subscriber) {
+            final Subscriber<? super Object> responseSubscriber) {
         features = JOArrays.addFirst(features, 
                 HTTPCLIENT_APPLY, Applicable[].class);
         features = JOArrays.addFirst(features, 
                 CHUNKED_WRITER_APPLY, Applicable[].class);
+        /*// TODO
         features = JOArrays.addFirst(features, 
             new OneoffApplicable() {
                 @Override
                 public ChannelHandler call(final Channel channel) {
-                    return  OutboundFeature.PROGRESSIVE.applyTo(channel, subscriber, 100L);
+                    return  OutboundFeature.PROGRESSIVE.applyTo(channel, responseSubscriber, 100L);
                 }
             }, Applicable[].class);
         features = JOArrays.addFirst(features, 
             new OneoffApplicable() {
                 @Override
                 public ChannelHandler call(final Channel channel) {
-                    return  OutboundFeature.WORKER.applyTo(channel, subscriber, _channelPool);
+                    return  OutboundFeature.WORKER.applyTo(channel, responseSubscriber, _channelPool);
                 }
             }, Applicable[].class);
+            */
         return features;
     }
 
