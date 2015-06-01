@@ -23,6 +23,7 @@ import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.OutboundFeature;
 import org.jocean.http.client.OutboundFeature.Applicable;
 import org.jocean.http.client.OutboundFeature.OneoffApplicable;
+import org.jocean.http.util.ResponseSubscriberAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
@@ -203,6 +204,11 @@ public class DefaultHttpClient implements HttpClient {
                     return  OutboundFeature.WORKER.applyTo(pipeline, responseSubscriber, _channelPool);
                 }
             }, Applicable[].class);
+        final ResponseSubscriberAware responseSubscriberAware = 
+                InterfaceUtils.compositeIncludeType(features, ResponseSubscriberAware.class);
+        if (null!=responseSubscriberAware) {
+            responseSubscriberAware.setResponseSubscriber(responseSubscriber);
+        }
         return features;
     }
 

@@ -138,11 +138,6 @@ public enum OutboundFeature {
         public void setResponseSubscriber(Subscriber<Object> subscriber) {
             this._responseSubscriber = subscriber;
         }
-
-        @Override
-        public Subscriber<Object> getResponseSubscriber() {
-            return this._responseSubscriber;
-        }
         
         @Override
         public ChannelHandler call(final ChannelPipeline pipeline) {
