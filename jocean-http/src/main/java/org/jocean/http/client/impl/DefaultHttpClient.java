@@ -195,14 +195,14 @@ public class DefaultHttpClient implements HttpClient {
                     return  OutboundFeature.PROGRESSIVE.applyTo(channel, responseSubscriber, 100L);
                 }
             }, Applicable[].class);
+            */
         features = JOArrays.addFirst(features, 
             new OneoffApplicable() {
                 @Override
-                public ChannelHandler call(final Channel channel) {
-                    return  OutboundFeature.WORKER.applyTo(channel, responseSubscriber, _channelPool);
+                public ChannelHandler call(final ChannelPipeline pipeline) {
+                    return  OutboundFeature.WORKER.applyTo(pipeline, responseSubscriber, _channelPool);
                 }
             }, Applicable[].class);
-            */
         return features;
     }
 

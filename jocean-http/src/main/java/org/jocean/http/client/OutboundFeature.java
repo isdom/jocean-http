@@ -26,13 +26,13 @@ import rx.functions.Functions;
 public enum OutboundFeature {
     LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
     PROGRESSIVE(Functions.fromFunc(Nettys.PROGRESSIVE_FUNC2)),
-    CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC2)),
+    CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC1)),
     ENABLE_SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
     HTTPCLIENT_CODEC(Nettys.HTTPCLIENT_CODEC_FUNCN),
     CONTENT_DECOMPRESSOR(Nettys.CONTENT_DECOMPRESSOR_FUNCN),
     CHUNKED_WRITER(Nettys.CHUNKED_WRITER_FUNCN),
     READY4INTERACTION_NOTIFIER(Functions.fromFunc(Nettys.READY4INTERACTION_NOTIFIER_FUNC2)),
-    WORKER(Functions.fromFunc(Nettys.HTTPCLIENT_WORK_FUNC3)),
+    WORKER(Functions.fromFunc(Nettys.HTTPCLIENT_WORK_FUNC2)),
     LAST_FEATURE(null)
     ;
     
@@ -110,7 +110,7 @@ public enum OutboundFeature {
         
         @Override
         public ChannelHandler call(final ChannelPipeline pipeline) {
-            return ENABLE_SSL.applyTo(pipeline, this._sslCtx);
+            return ENABLE_SSL.applyTo(pipeline, pipeline.channel(), this._sslCtx);
         }
         
         private final SslContext _sslCtx;
@@ -136,22 +136,21 @@ public enum OutboundFeature {
         
         @Override
         public void setResponseSubscriber(Subscriber<Object> subscriber) {
-            _responseSubscriber = subscriber;
+            this._responseSubscriber = subscriber;
         }
 
         @Override
         public Subscriber<Object> getResponseSubscriber() {
-            return _responseSubscriber;
+            return this._responseSubscriber;
         }
         
         @Override
         public ChannelHandler call(final ChannelPipeline pipeline) {
-            return PROGRESSIVE.applyTo(pipeline, _responseSubscriber, this._minIntervalInMs);
+            return PROGRESSIVE.applyTo(pipeline, this._responseSubscriber, this._minIntervalInMs);
         }
         
         private final long _minIntervalInMs;
         private Subscriber<Object> _responseSubscriber;
-
     }
     
     public ChannelHandler applyTo(final ChannelPipeline pipeline, final Object ... args) {

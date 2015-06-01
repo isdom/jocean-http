@@ -42,8 +42,8 @@ import org.slf4j.LoggerFactory;
 
 import rx.Subscriber;
 import rx.functions.Func0;
+import rx.functions.Func1;
 import rx.functions.Func2;
-import rx.functions.Func3;
 import rx.functions.FuncN;
 
 public class Nettys {
@@ -207,10 +207,10 @@ public class Nettys {
             return ctx.newHandler(channel.alloc());
         }};
         
-    public static final Func2<Channel,Integer,ChannelHandler> CLOSE_ON_IDLE_FUNC2 = 
-            new Func2<Channel,Integer,ChannelHandler>() {
+    public static final Func1<Integer,ChannelHandler> CLOSE_ON_IDLE_FUNC1 = 
+            new Func1<Integer,ChannelHandler>() {
                 @Override
-                public ChannelHandler call(final Channel channel, Integer allIdleTimeout) {
+                public ChannelHandler call(final Integer allIdleTimeout) {
                   return new IdleStateHandler(0, 0, allIdleTimeout) {
                       @Override
                       protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
@@ -223,6 +223,22 @@ public class Nettys {
               }
     };
 
+    public static final Func2<Channel,Integer,ChannelHandler> CLOSE_ON_IDLE_FUNC2 = 
+            new Func2<Channel,Integer,ChannelHandler>() {
+                @Override
+                public ChannelHandler call(final Channel channel, final Integer allIdleTimeout) {
+                  return new IdleStateHandler(0, 0, allIdleTimeout) {
+                      @Override
+                      protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
+                          if (LOG.isInfoEnabled()) {
+                              LOG.info("channelIdle:{} , close channel[{}]", evt.state().name(), ctx.channel());
+                          }
+                          ctx.channel().close();
+                      }
+                  };
+              }
+    };
+    
     private static final class Ready4InteractionNotifier extends
             ChannelInboundHandlerAdapter {
         private final boolean _enableSSL;
@@ -365,12 +381,11 @@ public class Nettys {
         
     };
 
-    public static final Func3<Channel,Subscriber<? super HttpObject>,ChannelPool,ChannelHandler> HTTPCLIENT_WORK_FUNC3 = 
-            new Func3<Channel,Subscriber<? super HttpObject>,ChannelPool,ChannelHandler>() {
+    public static final Func2<Subscriber<? super Object>,ChannelPool,ChannelHandler> HTTPCLIENT_WORK_FUNC2 = 
+            new Func2<Subscriber<? super Object>,ChannelPool,ChannelHandler>() {
                 @Override
                 public ChannelHandler call(
-                        final Channel channel,
-                        final Subscriber<? super HttpObject> subscriber, 
+                        final Subscriber<? super Object> subscriber, 
                         final ChannelPool channelPool) {
                     return new SimpleChannelInboundHandler<HttpObject>() {
                         @Override
