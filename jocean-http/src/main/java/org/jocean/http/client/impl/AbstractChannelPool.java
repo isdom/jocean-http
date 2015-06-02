@@ -7,7 +7,11 @@ import io.netty.util.concurrent.Future;
 import java.net.SocketAddress;
 
 import org.jocean.http.client.OutboundFeature;
+import org.jocean.http.client.OutboundFeature.Applicable;
+import org.jocean.http.client.OutboundFeature.FeaturesAware;
+import org.jocean.http.util.ChannelSubscriberAware;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.rx.OneshotSubscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +35,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
     @Override
     public Observable<? extends Channel> retainChannel(
             final SocketAddress address, 
-            final OutboundFeature.Applicable[] features) {
+            final Applicable[] features) {
         return Observable.create(new OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> subscriber) {
@@ -61,10 +65,11 @@ public abstract class AbstractChannelPool implements ChannelPool {
     private Runnable buildOnNextRunnable(
             final Subscriber<? super Channel> subscriber,
             final Channel channel, 
-            final OutboundFeature.Applicable[] features) {
+            final Applicable[] features) {
         return new Runnable() {
             @Override
             public void run() {
+                prepareChannelSubscriberAware(subscriber, features);
                 subscriber.add(OutboundFeature.applyOneoffFeatures(channel, features));
                 subscriber.onNext(channel);
                 subscriber.onCompleted();
@@ -74,7 +79,11 @@ public abstract class AbstractChannelPool implements ChannelPool {
     private void onNextNewChannel(
             final Subscriber<? super Channel> subscriber,
             final SocketAddress address,
-            final OutboundFeature.Applicable[] features) {
+            final Applicable[] features) {
+        
+        prepareChannelSubscriberAware(subscriber, features);
+        prepareFeaturesAware(features);
+
         final ChannelFuture future = this._channelCreator.newChannel();
         subscriber.add(recycleChannelSubscription(future.channel()));
         RxNettys.<ChannelFuture,Channel>emitErrorOnFailure()
@@ -85,19 +94,32 @@ public abstract class AbstractChannelPool implements ChannelPool {
             .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
                 @Override
                 public Observable<? extends Channel> call(final Channel channel) {
+                    ChannelPool.Util.attachChannelPool(channel, AbstractChannelPool.this);
                     OutboundFeature.applyNononeoffFeatures(channel, features);
                     subscriber.add(
                         OutboundFeature.applyOneoffFeatures(channel, features));
-                    
-                    OutboundFeature.READY4INTERACTION_NOTIFIER.applyTo(
-                        channel.pipeline(), 
-                        OutboundFeature.isSSLEnabled(channel.pipeline()), 
-                        subscriber);
-                    
                     return RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
                         .call(channel.connect(address));
                 }})
             .subscribe(subscriber);
+    }
+
+    private void prepareFeaturesAware(final Applicable[] features) {
+        final FeaturesAware featuresAware = 
+                InterfaceUtils.compositeIncludeType(features, FeaturesAware.class);
+        if (null!=featuresAware) {
+            featuresAware.setApplyFeatures(features);
+        }
+    }
+
+    private void prepareChannelSubscriberAware(
+            final Subscriber<? super Channel> subscriber,
+            final Applicable[] features) {
+        final ChannelSubscriberAware channelSubscriberAware = 
+                InterfaceUtils.compositeIncludeType(features, ChannelSubscriberAware.class);
+        if (null!=channelSubscriberAware) {
+            channelSubscriberAware.setChannelSubscriber(subscriber);
+        }
     }
     
     private Subscription recycleChannelSubscription(final Channel channel) {

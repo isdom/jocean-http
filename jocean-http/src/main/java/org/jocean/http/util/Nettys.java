@@ -381,12 +381,10 @@ public class Nettys {
         
     };
 
-    public static final Func2<Subscriber<? super Object>,ChannelPool,ChannelHandler> HTTPCLIENT_WORK_FUNC2 = 
-            new Func2<Subscriber<? super Object>,ChannelPool,ChannelHandler>() {
+    public static final Func1<Subscriber<? super Object>,ChannelHandler> HTTPCLIENT_WORK_FUNC1 = 
+            new Func1<Subscriber<? super Object>,ChannelHandler>() {
                 @Override
-                public ChannelHandler call(
-                        final Subscriber<? super Object> subscriber, 
-                        final ChannelPool channelPool) {
+                public ChannelHandler call(final Subscriber<? super Object> subscriber) {
                     return new SimpleChannelInboundHandler<HttpObject>() {
                         @Override
                         public void channelInactive(final ChannelHandlerContext ctx)
@@ -433,7 +431,10 @@ public class Nettys {
                                     LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
                                             ctx.channel(), msg);
                                 }
-                                channelPool.afterReceiveLastContent(ctx.channel());
+                                final ChannelPool pool = ChannelPool.Util.getChannelPool(ctx.channel());
+                                if (null!=pool) {
+                                    pool.afterReceiveLastContent(ctx.channel());
+                                }
                                 subscriber.onCompleted();
                             }
                         }

@@ -21,8 +21,11 @@ import java.net.SocketAddress;
 
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.OutboundFeature;
+import org.jocean.http.client.OutboundFeature.APPLY_SSL;
 import org.jocean.http.client.OutboundFeature.Applicable;
+import org.jocean.http.client.OutboundFeature.FeaturesAware;
 import org.jocean.http.client.OutboundFeature.OneoffApplicable;
+import org.jocean.http.util.ChannelSubscriberAware;
 import org.jocean.http.util.ResponseSubscriberAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.InterfaceUtils;
@@ -167,43 +170,61 @@ public class DefaultHttpClient implements HttpClient {
 //        this._channelCreator.close();
     }
 
-    final static Applicable HTTPCLIENT_APPLY = new Applicable() {
+    private final static Applicable HTTPCLIENT_APPLY = new Applicable() {
         @Override
         public ChannelHandler call(final ChannelPipeline pipeline) {
             return  OutboundFeature.HTTPCLIENT_CODEC.applyTo(pipeline);
         }
     };
     
-    final static Applicable CHUNKED_WRITER_APPLY = new Applicable() {
+    private static final class APPLY_READY4INTERACTION_NOTIFIER implements
+            Applicable, ChannelSubscriberAware, FeaturesAware {
+        @Override
+        public void setChannelSubscriber(
+                final Subscriber<? super Channel> subscriber) {
+            this._channelSubscriber = subscriber;
+        }
+        @Override
+        public void setApplyFeatures(final Applicable[] features) {
+            for (Applicable feature : features) {
+                if (feature instanceof APPLY_SSL) {
+                    this._isSSLEnabled = true;
+                }
+            }
+        }
+
         @Override
         public ChannelHandler call(final ChannelPipeline pipeline) {
-            return  OutboundFeature.CHUNKED_WRITER.applyTo(pipeline);
+            return OutboundFeature.READY4INTERACTION_NOTIFIER.applyTo(pipeline,
+                    this._isSSLEnabled, this._channelSubscriber);
         }
-    };
+
+        private boolean _isSSLEnabled = false;
+        private Subscriber<? super Channel> _channelSubscriber;
+    }
+
+    private static final class APPLY_WORKER implements OneoffApplicable,
+            ResponseSubscriberAware {
+
+        @Override
+        public void setResponseSubscriber(final Subscriber<Object> subscriber) {
+            this._responseSubscriber = subscriber;
+        }
+
+        @Override
+        public ChannelHandler call(final ChannelPipeline pipeline) {
+            return OutboundFeature.WORKER.applyTo(pipeline,
+                    this._responseSubscriber);
+        }
+
+        private Subscriber<Object> _responseSubscriber;
+    }
     
     private Applicable[] buildFeatures(
             Applicable[] features,
             final Subscriber<? super Object> responseSubscriber) {
-        features = JOArrays.addFirst(features, 
-                HTTPCLIENT_APPLY, Applicable[].class);
-        features = JOArrays.addFirst(features, 
-                CHUNKED_WRITER_APPLY, Applicable[].class);
-        /*// TODO
-        features = JOArrays.addFirst(features, 
-            new OneoffApplicable() {
-                @Override
-                public ChannelHandler call(final Channel channel) {
-                    return  OutboundFeature.PROGRESSIVE.applyTo(channel, responseSubscriber, 100L);
-                }
-            }, Applicable[].class);
-            */
-        features = JOArrays.addFirst(features, 
-            new OneoffApplicable() {
-                @Override
-                public ChannelHandler call(final ChannelPipeline pipeline) {
-                    return  OutboundFeature.WORKER.applyTo(pipeline, responseSubscriber, _channelPool);
-                }
-            }, Applicable[].class);
+        features = JOArrays.addFirst(Applicable[].class, features, 
+                HTTPCLIENT_APPLY, new APPLY_READY4INTERACTION_NOTIFIER(), new APPLY_WORKER());
         final ResponseSubscriberAware responseSubscriberAware = 
                 InterfaceUtils.compositeIncludeType(features, ResponseSubscriberAware.class);
         if (null!=responseSubscriberAware) {

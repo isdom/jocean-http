@@ -74,7 +74,7 @@ public enum InboundFeature {
         return Nettys.insertHandler(
             channel.pipeline(),
             this.name(), 
-            this._factory.call(JOArrays.addFirst(args, channel, Object[].class)), 
+            this._factory.call(JOArrays.addFirst(Object[].class, args, channel)), 
             TO_ORDINAL);
     }
 

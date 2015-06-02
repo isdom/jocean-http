@@ -32,7 +32,7 @@ public enum OutboundFeature {
     CONTENT_DECOMPRESSOR(Nettys.CONTENT_DECOMPRESSOR_FUNCN),
     CHUNKED_WRITER(Nettys.CHUNKED_WRITER_FUNCN),
     READY4INTERACTION_NOTIFIER(Functions.fromFunc(Nettys.READY4INTERACTION_NOTIFIER_FUNC2)),
-    WORKER(Functions.fromFunc(Nettys.HTTPCLIENT_WORK_FUNC2)),
+    WORKER(Functions.fromFunc(Nettys.HTTPCLIENT_WORK_FUNC1)),
     LAST_FEATURE(null)
     ;
     
@@ -59,8 +59,8 @@ public enum OutboundFeature {
         return RxNettys.removeHandlersSubscription(channel, diff.call());
     }
 
-    public static boolean isSSLEnabled(final ChannelPipeline pipeline) {
-        return (pipeline.names().indexOf(ENABLE_SSL.name()) > -1);
+    public interface FeaturesAware {
+        public void setApplyFeatures(final Applicable[] features);
     }
     
     public static boolean isReadyForInteraction(final ChannelPipeline pipeline) {
@@ -103,6 +103,13 @@ public enum OutboundFeature {
         }
     };
             
+    public static final Applicable APPLY_MULTIPART = new Applicable() {
+        @Override
+        public ChannelHandler call(final ChannelPipeline pipeline) {
+            return  CHUNKED_WRITER.applyTo(pipeline);
+        }
+    };
+    
     public static final class APPLY_SSL implements Applicable {
         public APPLY_SSL(final SslContext sslCtx) {
             this._sslCtx = sslCtx;
