@@ -30,6 +30,7 @@ import org.jocean.http.util.ResponseSubscriberAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
+import org.jocean.idiom.ReflectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,8 +66,7 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress,
             final Observable<? extends Object> request,
             final Feature... features) {
-        final Feature[] applyFeatures = 
-                features.length > 0 ? features : this._defaultFeatures;
+        final Feature[] applyFeatures = cloneFeatures(features.length > 0 ? features : this._defaultFeatures);
         final Outbound.ApplyToRequest applyToRequest = 
                 InterfaceUtils.compositeIncludeType(applyFeatures, Outbound.ApplyToRequest.class);
         final Func1<Channel, Observable<ChannelFuture>> transferRequest = 
@@ -105,6 +105,18 @@ public class DefaultHttpClient implements HttpClient {
                     }
                 }
             }});
+    }
+
+    private Feature[] cloneFeatures(final Feature[] features) {
+        final Feature[] cloned = new Feature[features.length];
+        for (int idx = 0; idx < cloned.length; idx++) {
+            if (features[idx] instanceof Cloneable) {
+                cloned[idx] = ReflectUtils.invokeClone(features[idx]);
+            } else {
+                cloned[idx] = features[idx];
+            }
+        }
+        return cloned;
     }
 
     public DefaultHttpClient(final Feature... defaultFeatures) {
@@ -157,7 +169,7 @@ public class DefaultHttpClient implements HttpClient {
             final ChannelPool channelPool,
             final Feature... defaultFeatures) {
         this._channelPool = channelPool;
-        this._defaultFeatures = defaultFeatures;
+        this._defaultFeatures = (null != defaultFeatures) ? defaultFeatures : Outbound.EMPTY_FEATURES;
     }
     
     /* (non-Javadoc)

@@ -128,7 +128,8 @@ public class Outbound {
         private final int _allIdleTimeout;
     }
     
-    public static final class ENABLE_PROGRESSIVE implements OneoffFeature, ResponseSubscriberAware {
+    public static final class ENABLE_PROGRESSIVE implements 
+        OneoffFeature, ResponseSubscriberAware, Cloneable {
         public ENABLE_PROGRESSIVE(final long minIntervalInMs) {
             this._minIntervalInMs = minIntervalInMs;
         }
@@ -143,8 +144,13 @@ public class Outbound {
             return APPLY.PROGRESSIVE.applyTo(pipeline, this._responseSubscriber, this._minIntervalInMs);
         }
         
+        @Override
+        public ENABLE_PROGRESSIVE clone() throws CloneNotSupportedException {
+            return (ENABLE_PROGRESSIVE)super.clone();
+        }
+
         private final long _minIntervalInMs;
-        private Subscriber<Object> _responseSubscriber;
+        private Subscriber<Object> _responseSubscriber = null;
     }
     
     public enum APPLY {
