@@ -92,7 +92,7 @@ public class DefaultHttpClient implements HttpClient {
         };
         return Observable.create(new OnSubscribe<Object>() {
             @Override
-            public void call(final Subscriber<? super Object> responseSubscriber) {
+            public void call(final Subscriber<Object> responseSubscriber) {
                 if (!responseSubscriber.isUnsubscribed()) {
                     try {
                         _channelPool.retainChannel(remoteAddress, 
@@ -234,7 +234,7 @@ public class DefaultHttpClient implements HttpClient {
     
     private Feature[] buildFeatures(
             Feature[] features,
-            final Subscriber<? super Object> responseSubscriber) {
+            final Subscriber<Object> responseSubscriber) {
         features = JOArrays.addFirst(Feature[].class, features, 
                 APPLY_HTTPCLIENT, new APPLY_READY4INTERACTION_NOTIFIER(), new APPLY_WORKER());
         final ResponseSubscriberAware responseSubscriberAware = 
