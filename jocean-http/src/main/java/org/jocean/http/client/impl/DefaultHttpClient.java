@@ -20,11 +20,11 @@ import java.io.IOException;
 import java.net.SocketAddress;
 
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.OutboundFeature;
-import org.jocean.http.client.OutboundFeature.APPLY_SSL;
-import org.jocean.http.client.OutboundFeature.Applicable;
-import org.jocean.http.client.OutboundFeature.FeaturesAware;
-import org.jocean.http.client.OutboundFeature.OneoffApplicable;
+import org.jocean.http.client.Outbound;
+import org.jocean.http.client.Outbound.ENABLE_SSL;
+import org.jocean.http.client.Outbound.Feature;
+import org.jocean.http.client.Outbound.FeaturesAware;
+import org.jocean.http.client.Outbound.OneoffFeature;
 import org.jocean.http.util.ChannelSubscriberAware;
 import org.jocean.http.util.ResponseSubscriberAware;
 import org.jocean.http.util.RxNettys;
@@ -64,11 +64,11 @@ public class DefaultHttpClient implements HttpClient {
     public Observable<? extends Object> defineInteraction(
             final SocketAddress remoteAddress,
             final Observable<? extends Object> request,
-            final Applicable... features) {
-        final Applicable[] applyFeatures = 
+            final Feature... features) {
+        final Feature[] applyFeatures = 
                 features.length > 0 ? features : this._defaultFeatures;
-        final OutboundFeature.ApplyToRequest applyToRequest = 
-                InterfaceUtils.compositeIncludeType(applyFeatures, OutboundFeature.ApplyToRequest.class);
+        final Outbound.ApplyToRequest applyToRequest = 
+                InterfaceUtils.compositeIncludeType(applyFeatures, Outbound.ApplyToRequest.class);
         final Func1<Channel, Observable<ChannelFuture>> transferRequest = 
                 new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
@@ -107,12 +107,12 @@ public class DefaultHttpClient implements HttpClient {
             }});
     }
 
-    public DefaultHttpClient(final Applicable... defaultFeatures) {
+    public DefaultHttpClient(final Feature... defaultFeatures) {
         this(1, defaultFeatures);
     }
     
     public DefaultHttpClient(final int processThreadNumber,
-            final Applicable... defaultFeatures) {
+            final Feature... defaultFeatures) {
         this(new DefaultChannelPool(new AbstractChannelCreator() {
             @Override
             protected void initializeBootstrap(final Bootstrap bootstrap) {
@@ -126,7 +126,7 @@ public class DefaultHttpClient implements HttpClient {
     public DefaultHttpClient(
             final EventLoopGroup eventLoopGroup,
             final Class<? extends Channel> channelType,
-            final Applicable... defaultFeatures) { 
+            final Feature... defaultFeatures) { 
         this(new DefaultChannelPool(new AbstractChannelCreator() {
             @Override
             protected void initializeBootstrap(final Bootstrap bootstrap) {
@@ -138,7 +138,7 @@ public class DefaultHttpClient implements HttpClient {
     public DefaultHttpClient(
             final EventLoopGroup eventLoopGroup,
             final ChannelFactory<? extends Channel> channelFactory,
-            final Applicable... defaultFeatures) { 
+            final Feature... defaultFeatures) { 
         this(new DefaultChannelPool(new AbstractChannelCreator() {
             @Override
             protected void initializeBootstrap(final Bootstrap bootstrap) {
@@ -149,13 +149,13 @@ public class DefaultHttpClient implements HttpClient {
     
     public DefaultHttpClient(
             final ChannelCreator channelCreator,
-            final Applicable... defaultFeatures) {
+            final Feature... defaultFeatures) {
         this(new DefaultChannelPool(channelCreator), defaultFeatures);
     }
     
     public DefaultHttpClient(
             final ChannelPool channelPool,
-            final Applicable... defaultFeatures) {
+            final Feature... defaultFeatures) {
         this._channelPool = channelPool;
         this._defaultFeatures = defaultFeatures;
     }
@@ -170,24 +170,24 @@ public class DefaultHttpClient implements HttpClient {
 //        this._channelCreator.close();
     }
 
-    private final static Applicable HTTPCLIENT_APPLY = new Applicable() {
+    private final static Feature APPLY_HTTPCLIENT = new Feature() {
         @Override
         public ChannelHandler call(final ChannelPipeline pipeline) {
-            return  OutboundFeature.HTTPCLIENT_CODEC.applyTo(pipeline);
+            return  Outbound.APPLY.HTTPCLIENT.applyTo(pipeline);
         }
     };
     
     private static final class APPLY_READY4INTERACTION_NOTIFIER implements
-            Applicable, ChannelSubscriberAware, FeaturesAware {
+            Feature, ChannelSubscriberAware, FeaturesAware {
         @Override
         public void setChannelSubscriber(
                 final Subscriber<? super Channel> subscriber) {
             this._channelSubscriber = subscriber;
         }
         @Override
-        public void setApplyFeatures(final Applicable[] features) {
-            for (Applicable feature : features) {
-                if (feature instanceof APPLY_SSL) {
+        public void setApplyFeatures(final Feature[] features) {
+            for (Feature feature : features) {
+                if (feature instanceof ENABLE_SSL) {
                     this._isSSLEnabled = true;
                 }
             }
@@ -195,7 +195,7 @@ public class DefaultHttpClient implements HttpClient {
 
         @Override
         public ChannelHandler call(final ChannelPipeline pipeline) {
-            return OutboundFeature.READY4INTERACTION_NOTIFIER.applyTo(pipeline,
+            return Outbound.APPLY.READY4INTERACTION_NOTIFIER.applyTo(pipeline,
                     this._isSSLEnabled, this._channelSubscriber);
         }
 
@@ -203,7 +203,7 @@ public class DefaultHttpClient implements HttpClient {
         private Subscriber<? super Channel> _channelSubscriber;
     }
 
-    private static final class APPLY_WORKER implements OneoffApplicable,
+    private static final class APPLY_WORKER implements OneoffFeature,
             ResponseSubscriberAware {
 
         @Override
@@ -213,18 +213,18 @@ public class DefaultHttpClient implements HttpClient {
 
         @Override
         public ChannelHandler call(final ChannelPipeline pipeline) {
-            return OutboundFeature.WORKER.applyTo(pipeline,
+            return Outbound.APPLY.WORKER.applyTo(pipeline,
                     this._responseSubscriber);
         }
 
         private Subscriber<Object> _responseSubscriber;
     }
     
-    private Applicable[] buildFeatures(
-            Applicable[] features,
+    private Feature[] buildFeatures(
+            Feature[] features,
             final Subscriber<? super Object> responseSubscriber) {
-        features = JOArrays.addFirst(Applicable[].class, features, 
-                HTTPCLIENT_APPLY, new APPLY_READY4INTERACTION_NOTIFIER(), new APPLY_WORKER());
+        features = JOArrays.addFirst(Feature[].class, features, 
+                APPLY_HTTPCLIENT, new APPLY_READY4INTERACTION_NOTIFIER(), new APPLY_WORKER());
         final ResponseSubscriberAware responseSubscriberAware = 
                 InterfaceUtils.compositeIncludeType(features, ResponseSubscriberAware.class);
         if (null!=responseSubscriberAware) {
@@ -234,5 +234,5 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     private final ChannelPool _channelPool;
-    private final Applicable[] _defaultFeatures;
+    private final Feature[] _defaultFeatures;
 }

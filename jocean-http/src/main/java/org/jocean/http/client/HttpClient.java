@@ -77,5 +77,5 @@ public interface HttpClient extends Closeable {
     public Observable<? extends Object> defineInteraction(
             final SocketAddress remoteAddress, 
             final Observable<? extends Object> request,
-            final OutboundFeature.Applicable... features);
+            final Outbound.Feature... features);
 }

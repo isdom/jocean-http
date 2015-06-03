@@ -28,7 +28,7 @@ import java.util.Iterator;
 import org.jocean.event.api.EventEngine;
 import org.jocean.event.extend.Runners;
 import org.jocean.event.extend.Services;
-import org.jocean.http.client.OutboundFeature;
+import org.jocean.http.client.Outbound;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
@@ -118,7 +118,7 @@ public class HttpServerDemo {
         
         @SuppressWarnings("resource")
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(),
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
         
         while (true) {
             final ByteBuf content = Unpooled.buffer(0);

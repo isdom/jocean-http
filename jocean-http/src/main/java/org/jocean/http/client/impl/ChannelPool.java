@@ -6,7 +6,7 @@ import io.netty.util.AttributeKey;
 
 import java.net.SocketAddress;
 
-import org.jocean.http.client.OutboundFeature;
+import org.jocean.http.client.Outbound.Feature;
 
 import rx.Observable;
 
@@ -14,7 +14,7 @@ public interface ChannelPool {
     
     public Observable<? extends Channel> retainChannel(
             final SocketAddress address, 
-            final OutboundFeature.Applicable[] features);
+            final Feature[] features);
     
     public void recycleChannel(final Channel channel);
     

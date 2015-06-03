@@ -33,7 +33,7 @@ import java.util.concurrent.CountDownLatch;
 
 import javax.net.ssl.SSLException;
 
-import org.jocean.http.client.OutboundFeature;
+import org.jocean.http.client.Outbound;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
 import org.jocean.http.util.RxNettys;
@@ -96,7 +96,7 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpHappyPathOnce() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), OutboundFeature.APPLY_LOGGING);
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), Outbound.ENABLE_LOGGING);
         try {
         
             final Iterator<HttpObject> itr = 
@@ -126,7 +126,7 @@ public class DefaultHttpClientTestCase {
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
         
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
         try {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
@@ -154,8 +154,8 @@ public class DefaultHttpClientTestCase {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
 
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                Outbound.ENABLE_LOGGING,
+                new Outbound.ENABLE_SSL(sslCtx));
         try {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
@@ -182,7 +182,7 @@ public class DefaultHttpClientTestCase {
     
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
         try {
             // first 
             {
@@ -231,8 +231,8 @@ public class DefaultHttpClientTestCase {
         
         final TestChannelPool pool = new TestChannelPool(creator,1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                Outbound.ENABLE_LOGGING,
+                new Outbound.ENABLE_SSL(sslCtx));
         
         try {
             // first 
@@ -285,7 +285,7 @@ public class DefaultHttpClientTestCase {
         
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
         
         try {
             // first 
@@ -348,7 +348,7 @@ public class DefaultHttpClientTestCase {
         
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
         
         try {
             // first 
@@ -410,7 +410,7 @@ public class DefaultHttpClientTestCase {
         @SuppressWarnings("resource")
         final TestChannelCreator creator = 
                 new TestChannelCreator().setPauseConnecting(pauseConnecting);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, OutboundFeature.APPLY_LOGGING);
+        final DefaultHttpClient client = new DefaultHttpClient(creator, Outbound.ENABLE_LOGGING);
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -446,8 +446,8 @@ public class DefaultHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
         final DefaultHttpClient client = new DefaultHttpClient(creator,
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                Outbound.ENABLE_LOGGING,
+                new Outbound.ENABLE_SSL(sslCtx));
         //  NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -486,7 +486,7 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting);
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                new Outbound.ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -567,7 +567,7 @@ public class DefaultHttpClientTestCase {
             .setConnectException(new RuntimeException(errorMsg));
         
         final DefaultHttpClient client = new DefaultHttpClient(creator,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                new Outbound.ENABLE_SSL(sslCtx));
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -623,7 +623,7 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting);
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -678,8 +678,8 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting);
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                Outbound.ENABLE_LOGGING,
+                new Outbound.ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -787,8 +787,8 @@ public class DefaultHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                Outbound.ENABLE_LOGGING,
+                new Outbound.ENABLE_SSL(sslCtx));
         
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -834,7 +834,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
         final DefaultHttpClient client = new DefaultHttpClient(creator,
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             client.defineInteraction(
@@ -870,8 +870,8 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting);
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                Outbound.ENABLE_LOGGING,
+                new Outbound.ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             client.defineInteraction(
@@ -908,7 +908,7 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting);
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             //  first
@@ -964,8 +964,8 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting);
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                Outbound.ENABLE_LOGGING,
+                new Outbound.ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             //  first
@@ -1022,7 +1022,7 @@ public class DefaultHttpClientTestCase {
             .setWriteException(new RuntimeException("doWrite Error for test"));
         
         final DefaultHttpClient client = new DefaultHttpClient(creator,
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -1065,8 +1065,8 @@ public class DefaultHttpClientTestCase {
         
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                Outbound.ENABLE_LOGGING,
+                new Outbound.ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -1110,7 +1110,7 @@ public class DefaultHttpClientTestCase {
         
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
             try {
             {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
@@ -1175,8 +1175,8 @@ public class DefaultHttpClientTestCase {
         
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                Outbound.ENABLE_LOGGING,
+                new Outbound.ENABLE_SSL(sslCtx));
         try {
             {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
@@ -1255,7 +1255,7 @@ public class DefaultHttpClientTestCase {
 
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
         try {
             final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
             request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
@@ -1310,7 +1310,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator()
             .setPauseConnecting(pauseConnecting);
         final DefaultHttpClient client = new DefaultHttpClient(creator,
-                OutboundFeature.APPLY_LOGGING);
+                Outbound.ENABLE_LOGGING);
         final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
         request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
         
@@ -1366,8 +1366,8 @@ public class DefaultHttpClientTestCase {
 
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                Outbound.ENABLE_LOGGING,
+                new Outbound.ENABLE_SSL(sslCtx));
         try {
             final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
             request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
@@ -1423,8 +1423,8 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting);
         final TestChannelPool pool = new TestChannelPool(creator, 1);
         final DefaultHttpClient client = new DefaultHttpClient(pool,
-                OutboundFeature.APPLY_LOGGING,
-                new OutboundFeature.APPLY_SSL(sslCtx));
+                Outbound.ENABLE_LOGGING,
+                new Outbound.ENABLE_SSL(sslCtx));
         final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
         request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
         

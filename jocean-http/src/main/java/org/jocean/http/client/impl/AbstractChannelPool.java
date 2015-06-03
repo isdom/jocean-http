@@ -6,9 +6,9 @@ import io.netty.util.concurrent.Future;
 
 import java.net.SocketAddress;
 
-import org.jocean.http.client.OutboundFeature;
-import org.jocean.http.client.OutboundFeature.Applicable;
-import org.jocean.http.client.OutboundFeature.FeaturesAware;
+import org.jocean.http.client.Outbound;
+import org.jocean.http.client.Outbound.Feature;
+import org.jocean.http.client.Outbound.FeaturesAware;
 import org.jocean.http.util.ChannelSubscriberAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.InterfaceUtils;
@@ -35,7 +35,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
     @Override
     public Observable<? extends Channel> retainChannel(
             final SocketAddress address, 
-            final Applicable[] features) {
+            final Feature[] features) {
         return Observable.create(new OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> subscriber) {
@@ -65,12 +65,12 @@ public abstract class AbstractChannelPool implements ChannelPool {
     private Runnable buildOnNextRunnable(
             final Subscriber<? super Channel> subscriber,
             final Channel channel, 
-            final Applicable[] features) {
+            final Feature[] features) {
         return new Runnable() {
             @Override
             public void run() {
                 prepareChannelSubscriberAware(subscriber, features);
-                subscriber.add(OutboundFeature.applyOneoffFeatures(channel, features));
+                subscriber.add(Outbound.applyOneoffFeatures(channel, features));
                 subscriber.onNext(channel);
                 subscriber.onCompleted();
             }};
@@ -79,7 +79,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
     private void onNextNewChannel(
             final Subscriber<? super Channel> subscriber,
             final SocketAddress address,
-            final Applicable[] features) {
+            final Feature[] features) {
         
         prepareChannelSubscriberAware(subscriber, features);
         prepareFeaturesAware(features);
@@ -95,16 +95,16 @@ public abstract class AbstractChannelPool implements ChannelPool {
                 @Override
                 public Observable<? extends Channel> call(final Channel channel) {
                     ChannelPool.Util.attachChannelPool(channel, AbstractChannelPool.this);
-                    OutboundFeature.applyNononeoffFeatures(channel, features);
+                    Outbound.applyNononeoffFeatures(channel, features);
                     subscriber.add(
-                        OutboundFeature.applyOneoffFeatures(channel, features));
+                        Outbound.applyOneoffFeatures(channel, features));
                     return RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
                         .call(channel.connect(address));
                 }})
             .subscribe(subscriber);
     }
 
-    private void prepareFeaturesAware(final Applicable[] features) {
+    private void prepareFeaturesAware(final Feature[] features) {
         final FeaturesAware featuresAware = 
                 InterfaceUtils.compositeIncludeType(features, FeaturesAware.class);
         if (null!=featuresAware) {
@@ -114,7 +114,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
 
     private void prepareChannelSubscriberAware(
             final Subscriber<? super Channel> subscriber,
-            final Applicable[] features) {
+            final Feature[] features) {
         final ChannelSubscriberAware channelSubscriberAware = 
                 InterfaceUtils.compositeIncludeType(features, ChannelSubscriberAware.class);
         if (null!=channelSubscriberAware) {

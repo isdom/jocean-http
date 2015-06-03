@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 
-import org.jocean.http.client.OutboundFeature;
+import org.jocean.http.client.Outbound;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,7 +80,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
     @Override
     public void recycleChannel(final Channel channel) {
         if (channel.isActive() 
-            && OutboundFeature.isReadyForInteraction(channel.pipeline())
+            && Outbound.isReadyForInteraction(channel.pipeline())
             && null == channel.attr(TRANSACTIONING).get()) {
             try {
                 Observable.from(channel.pipeline()).subscribe(new Action1<Entry<String,ChannelHandler>>(){

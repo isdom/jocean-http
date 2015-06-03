@@ -19,7 +19,7 @@ import java.net.InetSocketAddress;
 import java.util.Iterator;
 
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.OutboundFeature;
+import org.jocean.http.client.Outbound;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.util.RxNettys;
 import org.slf4j.Logger;
@@ -76,8 +76,8 @@ public class SslDemo {
                         new InetSocketAddress(host, 443), 
 //                        new InetSocketAddress("58.215.107.207", 443), 
                         Observable.just(request),
-                        OutboundFeature.APPLY_LOGGING,
-                        new OutboundFeature.APPLY_SSL(sslCtx)
+                        Outbound.ENABLE_LOGGING,
+                        new Outbound.ENABLE_SSL(sslCtx)
                         )
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainMap())
@@ -91,8 +91,8 @@ public class SslDemo {
                         new InetSocketAddress(host, 443), 
 //                        new InetSocketAddress("58.215.107.207", 443), 
                         Observable.just(request),
-                        OutboundFeature.APPLY_LOGGING,
-                        new OutboundFeature.APPLY_SSL(sslCtx)
+                        Outbound.ENABLE_LOGGING,
+                        new Outbound.ENABLE_SSL(sslCtx)
                         )
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainMap())
