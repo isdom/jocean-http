@@ -16,7 +16,7 @@ public interface ChannelPool {
             final SocketAddress address, 
             final Feature[] features);
     
-    public void recycleChannel(final Channel channel);
+    public boolean recycleChannel(final Channel channel);
     
     public void beforeSendRequest(final Channel channel, final HttpRequest request);
     

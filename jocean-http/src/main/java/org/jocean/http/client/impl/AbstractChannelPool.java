@@ -6,10 +6,12 @@ import io.netty.util.concurrent.Future;
 
 import java.net.SocketAddress;
 
-import org.jocean.http.client.Outbound;
+import org.jocean.http.client.Outbound.Factory;
 import org.jocean.http.client.Outbound.Feature;
 import org.jocean.http.client.Outbound.FeaturesAware;
+import org.jocean.http.client.Outbound.OneoffFeature;
 import org.jocean.http.util.ChannelSubscriberAware;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.rx.OneshotSubscription;
@@ -20,6 +22,7 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.Subscription;
+import rx.functions.Func0;
 import rx.functions.Func1;
 
 public abstract class AbstractChannelPool implements ChannelPool {
@@ -30,6 +33,14 @@ public abstract class AbstractChannelPool implements ChannelPool {
 
     protected AbstractChannelPool(final ChannelCreator channelCreator) {
         this._channelCreator = channelCreator;
+    }
+    
+    public void setFactory(final Factory factory) {
+        this._factory = factory;
+    }
+    
+    public void setIsReady(final Func1<Channel, Boolean> isReady) {
+        this._isReady = isReady;
     }
     
     @Override
@@ -70,7 +81,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
             @Override
             public void run() {
                 prepareChannelSubscriberAware(subscriber, features);
-                subscriber.add(Outbound.applyOneoffFeatures(channel, features));
+                subscriber.add(applyOneoffFeatures(_factory, channel, features));
                 subscriber.onNext(channel);
                 subscriber.onCompleted();
             }};
@@ -95,9 +106,9 @@ public abstract class AbstractChannelPool implements ChannelPool {
                 @Override
                 public Observable<? extends Channel> call(final Channel channel) {
                     ChannelPool.Util.attachChannelPool(channel, AbstractChannelPool.this);
-                    Outbound.applyNononeoffFeatures(channel, features);
+                    applyNononeoffFeatures(_factory, channel, features);
                     subscriber.add(
-                        Outbound.applyOneoffFeatures(channel, features));
+                        applyOneoffFeatures(_factory, channel, features));
                     return RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
                         .call(channel.connect(address));
                 }})
@@ -138,7 +149,40 @@ public abstract class AbstractChannelPool implements ChannelPool {
             }};
     }
     
+    @Override
+    public boolean recycleChannel(final Channel channel) {
+        return this._isReady.call(channel);
+    }
+    
     protected abstract Channel reuseChannel(final SocketAddress address);
     
     private final ChannelCreator _channelCreator;
+    private Factory _factory;
+    private Func1<Channel, Boolean> _isReady;
+
+    private static void applyNononeoffFeatures(
+            final Factory factory,
+            final Channel channel,
+            final Feature[] features) {
+        final Feature feature = 
+                InterfaceUtils.compositeExcludeType(features, 
+                        Feature.class, OneoffFeature.class);
+        if (null!=feature) {
+            feature.call(factory, channel.pipeline());
+        }
+    }
+
+    private static Subscription applyOneoffFeatures(
+            final Factory factory,
+            final Channel channel,
+            final Feature[] features) {
+        final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
+        final Feature feature = 
+                InterfaceUtils.compositeIncludeType(features, OneoffFeature.class);
+        if (null!=feature) {
+            feature.call(factory, channel.pipeline());
+        }
+        return RxNettys.removeHandlersSubscription(channel, diff.call());
+    }
+    
 }
