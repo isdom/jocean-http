@@ -61,7 +61,8 @@ public class UnpoolHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator();
     
         final DefaultHttpClient client = new DefaultHttpClient(
-                Nettys.unpoolChannels(creator),
+                creator,
+                Nettys.unpoolChannels(),
                 Outbound.ENABLE_LOGGING);
         try {
             // first 
@@ -110,7 +111,8 @@ public class UnpoolHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator();
         
         final DefaultHttpClient client = new DefaultHttpClient(
-                Nettys.unpoolChannels(creator),
+                creator,
+                Nettys.unpoolChannels(),
                 Outbound.ENABLE_LOGGING,
                 new Outbound.ENABLE_SSL(sslCtx)
                 );

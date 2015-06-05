@@ -6,8 +6,7 @@ import java.util.concurrent.CountDownLatch;
 
 public class TestChannelPool extends DefaultChannelPool {
 
-    public TestChannelPool(final ChannelCreator channelCreator, final int recycleChannelCount) {
-        super(channelCreator);
+    public TestChannelPool(final int recycleChannelCount) {
         this._countdown = new CountDownLatch(recycleChannelCount);
     }
 

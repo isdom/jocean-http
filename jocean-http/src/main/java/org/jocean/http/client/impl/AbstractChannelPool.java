@@ -44,7 +44,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
     }
     
     @Override
-    public Observable<? extends Channel> retainChannel(
+    public Observable<Channel> retainChannel(
             final SocketAddress address, 
             final Feature[] features) {
         return Observable.create(new OnSubscribe<Channel>() {

@@ -53,14 +53,17 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.ReflectUtils;
+import org.jocean.idiom.rx.OneshotSubscription;
 import org.jocean.idiom.rx.RxFunctions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import rx.Observable;
+import rx.Subscription;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Action1;
+import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.functions.Func2;
 import rx.functions.FuncN;
@@ -120,8 +123,14 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Subscriber<Object> responseSubscriber) {
                 if (!responseSubscriber.isUnsubscribed()) {
                     try {
-                        _channelPool.retainChannel(remoteAddress, 
-                                buildFeatures(applyFeatures, responseSubscriber))
+                        final Feature[] features = buildFeatures(applyFeatures, responseSubscriber);
+                        _channelPool.retainChannel(remoteAddress, features)
+                            .doOnNext(new Action1<Channel>() {
+                                @Override
+                                public void call(Channel channel) {
+                                    responseSubscriber.add(applyOneoffFeatures(_FACTORY, channel, features));
+                                }})
+                            .onErrorResumeNext(createChannel(remoteAddress, features))
                             .flatMap(transferRequest)
                             .flatMap(RxNettys.<ChannelFuture, Object>emitErrorOnFailure())
                             .subscribe(responseSubscriber);
@@ -129,6 +138,36 @@ public class DefaultHttpClient implements HttpClient {
                         responseSubscriber.onError(e);
                     }
                 }
+            }});
+    }
+
+    private Observable<? extends Channel> createChannel(
+            final SocketAddress remoteAddress, 
+            final Feature[] features) {
+        return Observable.create(new OnSubscribe<Channel>() {
+            @Override
+            public void call(final Subscriber<? super Channel> channelSubscriber) {
+                prepareChannelSubscriberAware(channelSubscriber, features);
+                prepareFeaturesAware(features);
+
+                final ChannelFuture future = _channelCreator.newChannel();
+                channelSubscriber.add(recycleChannelSubscription(future.channel()));
+                RxNettys.<ChannelFuture,Channel>emitErrorOnFailure()
+                    .call(future)
+                    .subscribe(channelSubscriber);
+                RxNettys.emitNextAndCompletedOnSuccess()
+                    .call(future)
+                    .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
+                        @Override
+                        public Observable<? extends Channel> call(final Channel channel) {
+                            ChannelPool.Util.attachChannelPool(channel, _channelPool);
+                            applyNononeoffFeatures(_FACTORY, channel, features);
+                            channelSubscriber.add(
+                                applyOneoffFeatures(_FACTORY, channel, features));
+                            return RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
+                                .call(channel.connect(remoteAddress));
+                        }})
+                    .subscribe(channelSubscriber);
             }});
     }
 
@@ -144,19 +183,54 @@ public class DefaultHttpClient implements HttpClient {
         return cloned;
     }
 
+    private void prepareFeaturesAware(final Feature[] features) {
+        final FeaturesAware featuresAware = 
+                InterfaceUtils.compositeIncludeType(features, FeaturesAware.class);
+        if (null!=featuresAware) {
+            featuresAware.setApplyFeatures(features);
+        }
+    }
+
+    private void prepareChannelSubscriberAware(
+            final Subscriber<? super Channel> subscriber,
+            final Feature[] features) {
+        final ChannelSubscriberAware channelSubscriberAware = 
+                InterfaceUtils.compositeIncludeType(features, ChannelSubscriberAware.class);
+        if (null!=channelSubscriberAware) {
+            channelSubscriberAware.setChannelSubscriber(subscriber);
+        }
+    }
+    
+    private Subscription recycleChannelSubscription(final Channel channel) {
+        return new OneshotSubscription() {
+            @Override
+            protected void doUnsubscribe() {
+                if (channel.eventLoop().inEventLoop()) {
+                    _channelPool.recycleChannel(channel);
+                } else {
+                    channel.eventLoop().submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            _channelPool.recycleChannel(channel);
+                        }});
+                }
+            }};
+    }
+    
     public DefaultHttpClient(final Feature... defaultFeatures) {
         this(1, defaultFeatures);
     }
     
     public DefaultHttpClient(final int processThreadNumber,
             final Feature... defaultFeatures) {
-        this(new DefaultChannelPool(new AbstractChannelCreator() {
+        this(new AbstractChannelCreator() {
             @Override
             protected void initializeBootstrap(final Bootstrap bootstrap) {
                 bootstrap
                 .group(new NioEventLoopGroup(processThreadNumber))
                 .channel(NioSocketChannel.class);
-            }}), 
+            }},
+            new DefaultChannelPool(), 
             defaultFeatures);
     }
     
@@ -164,11 +238,12 @@ public class DefaultHttpClient implements HttpClient {
             final EventLoopGroup eventLoopGroup,
             final Class<? extends Channel> channelType,
             final Feature... defaultFeatures) { 
-        this(new DefaultChannelPool(new AbstractChannelCreator() {
+        this(new AbstractChannelCreator() {
             @Override
             protected void initializeBootstrap(final Bootstrap bootstrap) {
                 bootstrap.group(eventLoopGroup).channel(channelType);
-            }}),
+            }},
+            new DefaultChannelPool(),
             defaultFeatures);
     }
     
@@ -176,28 +251,30 @@ public class DefaultHttpClient implements HttpClient {
             final EventLoopGroup eventLoopGroup,
             final ChannelFactory<? extends Channel> channelFactory,
             final Feature... defaultFeatures) { 
-        this(new DefaultChannelPool(new AbstractChannelCreator() {
+        this(new AbstractChannelCreator() {
             @Override
             protected void initializeBootstrap(final Bootstrap bootstrap) {
                 bootstrap.group(eventLoopGroup).channelFactory(channelFactory);
-            }}),
+            }},
+            new DefaultChannelPool(),
             defaultFeatures);
     }
     
     public DefaultHttpClient(
             final ChannelCreator channelCreator,
             final Feature... defaultFeatures) {
-        this(new DefaultChannelPool(channelCreator), defaultFeatures);
+        this(channelCreator, new DefaultChannelPool(), defaultFeatures);
     }
     
     public DefaultHttpClient(
+            final ChannelCreator channelCreator,
             final ChannelPool channelPool,
             final Feature... defaultFeatures) {
+        this._channelCreator = channelCreator;
         this._channelPool = channelPool;
         this._defaultFeatures = (null != defaultFeatures) ? defaultFeatures : Outbound.EMPTY_FEATURES;
         
-        ((AbstractChannelPool)this._channelPool).setFactory(_FACTORY);
-        ((AbstractChannelPool)this._channelPool).setIsReady(new Func1<Channel,Boolean>() {
+        ((ChannelPoolImpl)this._channelPool).setIsReady(new Func1<Channel,Boolean>() {
             @Override
             public Boolean call(final Channel channel) {
                 return (channel.pipeline().names().indexOf(APPLY.READY4INTERACTION_NOTIFIER.name()) == -1);
@@ -278,7 +355,33 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     private final ChannelPool _channelPool;
+    private final ChannelCreator _channelCreator;
     private final Feature[] _defaultFeatures;
+    
+    private static void applyNononeoffFeatures(
+            final Factory factory,
+            final Channel channel,
+            final Feature[] features) {
+        final Feature feature = 
+                InterfaceUtils.compositeExcludeType(features, 
+                        Feature.class, OneoffFeature.class);
+        if (null!=feature) {
+            feature.call(factory, channel.pipeline());
+        }
+    }
+
+    private static Subscription applyOneoffFeatures(
+            final Factory factory,
+            final Channel channel,
+            final Feature[] features) {
+        final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
+        final Feature feature = 
+                InterfaceUtils.compositeIncludeType(features, OneoffFeature.class);
+        if (null!=feature) {
+            feature.call(factory, channel.pipeline());
+        }
+        return RxNettys.removeHandlersSubscription(channel, diff.call());
+    }
     
     private static final Map<Class<?>, APPLY> _CLS2APPLY;
     

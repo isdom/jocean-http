@@ -19,14 +19,10 @@ import org.slf4j.LoggerFactory;
 import rx.Observable;
 import rx.functions.Action1;
 
-public class DefaultChannelPool extends AbstractChannelPool {
+public class DefaultChannelPool extends ChannelPoolImpl {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultChannelPool.class);
-
-    public DefaultChannelPool(final ChannelCreator channelCreator) {
-        super(channelCreator);
-    }
 
     private static final AttributeKey<Object> TRANSACTIONING = AttributeKey.valueOf("__TRANSACTIONING");
     private static final Object OK = new Object();
