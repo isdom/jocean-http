@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
 import rx.Observable;
 import rx.functions.Action1;
 
-public class DefaultChannelPool extends ChannelPoolImpl {
+public class DefaultChannelPool extends AbstractChannelPool {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultChannelPool.class);
@@ -74,24 +74,23 @@ public class DefaultChannelPool extends ChannelPoolImpl {
     
     @Override
     public boolean recycleChannel(final Channel channel) {
-        if (super.recycleChannel(channel)) {
-            if (channel.isActive() 
-                && null == channel.attr(TRANSACTIONING).get()) {
-                try {
-                    Observable.from(channel.pipeline()).subscribe(new Action1<Entry<String,ChannelHandler>>(){
-                        @Override
-                        public void call(Entry<String, ChannelHandler> entry) {
-                            LOG.info("recycleChannel({}) handler:{}/{}", channel, entry.getKey(), entry.getValue());
-                        }});
-                } catch (Throwable e) {
-                    LOG.error("recycleChannel: {}", e);
-                }
-                final SocketAddress address = channel.remoteAddress();
-                if (null!=address) {
-                    getOrCreateChannels(address).add(channel);
-                    LOG.info("channel({}) save to queue for ({}), can be reused.", channel, address);
-                    return  true;
-                }
+        if (channel.isActive() 
+            && ChannelPool.Util.isChannelReady(channel)
+            && null == channel.attr(TRANSACTIONING).get()) {
+            try {
+                Observable.from(channel.pipeline()).subscribe(new Action1<Entry<String,ChannelHandler>>(){
+                    @Override
+                    public void call(Entry<String, ChannelHandler> entry) {
+                        LOG.info("recycleChannel({}) handler:{}/{}", channel, entry.getKey(), entry.getValue());
+                    }});
+            } catch (Throwable e) {
+                LOG.error("recycleChannel: {}", e);
+            }
+            final SocketAddress address = channel.remoteAddress();
+            if (null!=address) {
+                getOrCreateChannels(address).add(channel);
+                LOG.info("channel({}) save to queue for ({}), can be reused.", channel, address);
+                return  true;
             }
         }
         

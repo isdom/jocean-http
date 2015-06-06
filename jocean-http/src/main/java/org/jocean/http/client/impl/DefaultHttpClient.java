@@ -40,7 +40,7 @@ import java.util.Map;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.client.Outbound.ENABLE_SSL;
-import org.jocean.http.client.Outbound.Factory;
+import org.jocean.http.client.Outbound.HandlerBuilder;
 import org.jocean.http.client.Outbound.Feature;
 import org.jocean.http.client.Outbound.FeaturesAware;
 import org.jocean.http.client.Outbound.OneoffFeature;
@@ -128,7 +128,7 @@ public class DefaultHttpClient implements HttpClient {
                             .doOnNext(new Action1<Channel>() {
                                 @Override
                                 public void call(Channel channel) {
-                                    responseSubscriber.add(applyOneoffFeatures(_FACTORY, channel, features));
+                                    responseSubscriber.add(applyOneoffFeatures(_BUILDER, channel, features));
                                 }})
                             .onErrorResumeNext(createChannel(remoteAddress, features))
                             .flatMap(transferRequest)
@@ -161,9 +161,10 @@ public class DefaultHttpClient implements HttpClient {
                         @Override
                         public Observable<? extends Channel> call(final Channel channel) {
                             ChannelPool.Util.attachChannelPool(channel, _channelPool);
-                            applyNononeoffFeatures(_FACTORY, channel, features);
+                            ChannelPool.Util.attachIsReady(channel, IS_READY);
+                            applyNononeoffFeatures(_BUILDER, channel, features);
                             channelSubscriber.add(
-                                applyOneoffFeatures(_FACTORY, channel, features));
+                                applyOneoffFeatures(_BUILDER, channel, features));
                             return RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
                                 .call(channel.connect(remoteAddress));
                         }})
@@ -273,12 +274,6 @@ public class DefaultHttpClient implements HttpClient {
         this._channelCreator = channelCreator;
         this._channelPool = channelPool;
         this._defaultFeatures = (null != defaultFeatures) ? defaultFeatures : Outbound.EMPTY_FEATURES;
-        
-        ((ChannelPoolImpl)this._channelPool).setIsReady(new Func1<Channel,Boolean>() {
-            @Override
-            public Boolean call(final Channel channel) {
-                return (channel.pipeline().names().indexOf(APPLY.READY4INTERACTION_NOTIFIER.name()) == -1);
-            }});;
     }
     
     /* (non-Javadoc)
@@ -293,7 +288,7 @@ public class DefaultHttpClient implements HttpClient {
 
     private final static Feature APPLY_HTTPCLIENT = new Feature() {
         @Override
-        public ChannelHandler call(final Factory factory, final ChannelPipeline pipeline) {
+        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
             return  APPLY.HTTPCLIENT.applyTo(pipeline);
         }
     };
@@ -315,7 +310,7 @@ public class DefaultHttpClient implements HttpClient {
         }
 
         @Override
-        public ChannelHandler call(final Factory factory, final ChannelPipeline pipeline) {
+        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
             return APPLY.READY4INTERACTION_NOTIFIER.applyTo(pipeline,
                     this._isSSLEnabled, this._channelSubscriber);
         }
@@ -333,7 +328,7 @@ public class DefaultHttpClient implements HttpClient {
         }
 
         @Override
-        public ChannelHandler call(final Factory factory, final ChannelPipeline pipeline) {
+        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
             return APPLY.WORKER.applyTo(pipeline,
                     this._responseSubscriber);
         }
@@ -359,38 +354,44 @@ public class DefaultHttpClient implements HttpClient {
     private final Feature[] _defaultFeatures;
     
     private static void applyNononeoffFeatures(
-            final Factory factory,
+            final HandlerBuilder builder,
             final Channel channel,
             final Feature[] features) {
         final Feature feature = 
                 InterfaceUtils.compositeExcludeType(features, 
                         Feature.class, OneoffFeature.class);
         if (null!=feature) {
-            feature.call(factory, channel.pipeline());
+            feature.call(builder, channel.pipeline());
         }
     }
 
     private static Subscription applyOneoffFeatures(
-            final Factory factory,
+            final HandlerBuilder builder,
             final Channel channel,
             final Feature[] features) {
         final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
         final Feature feature = 
                 InterfaceUtils.compositeIncludeType(features, OneoffFeature.class);
         if (null!=feature) {
-            feature.call(factory, channel.pipeline());
+            feature.call(builder, channel.pipeline());
         }
         return RxNettys.removeHandlersSubscription(channel, diff.call());
     }
     
+    private static final Func1<Channel,Boolean> IS_READY = new Func1<Channel,Boolean>() {
+        @Override
+        public Boolean call(final Channel channel) {
+            return (channel.pipeline().names().indexOf(APPLY.READY4INTERACTION_NOTIFIER.name()) == -1);
+        }};
+        
     private static final Map<Class<?>, APPLY> _CLS2APPLY;
     
-    private static final Factory _FACTORY = new Factory() {
+    private static final HandlerBuilder _BUILDER = new HandlerBuilder() {
 
         @Override
-        public ChannelHandler build(final Class<?> cls, final ChannelPipeline pipeline,
+        public ChannelHandler build(final Feature feature, final ChannelPipeline pipeline,
                 final Object... args) {
-            return _CLS2APPLY.get(cls).applyTo(pipeline, args);
+            return _CLS2APPLY.get(feature.getClass()).applyTo(pipeline, args);
         }};
     
 

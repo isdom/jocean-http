@@ -17,14 +17,14 @@ public class Outbound {
         throw new IllegalStateException("No instances!");
     }
 
-    public interface Factory {
-        public ChannelHandler build(final Class<?> cls, final ChannelPipeline pipeline, final Object... args);
-    }
-    
     public static final Feature[] EMPTY_FEATURES = new Feature[0];
 
-    public interface Feature extends Func2<Factory, ChannelPipeline, ChannelHandler> {
+    public interface Feature extends Func2<HandlerBuilder, ChannelPipeline, ChannelHandler> {
     };
+    
+    public interface HandlerBuilder {
+        public ChannelHandler build(final Feature feature, final ChannelPipeline pipeline, final Object... args);
+    }
     
     public interface OneoffFeature extends Feature, Oneoff {
     };
@@ -42,15 +42,15 @@ public class Outbound {
     
     public static final Feature ENABLE_LOGGING = new OneoffFeature() {
         @Override
-        public ChannelHandler call(final Factory factory, final ChannelPipeline pipeline) {
-            return factory.build(this.getClass(), pipeline);
+        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
+            return factory.build(this, pipeline);
         }
     };
             
     public static final Feature ENABLE_DECOMPRESSOR = new CLS_DECOMPRESSOR() {
         @Override
-        public ChannelHandler call(final Factory factory, final ChannelPipeline pipeline) {
-            return factory.build(this.getClass(), pipeline);
+        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
+            return factory.build(this, pipeline);
         }
         
         @Override
@@ -63,8 +63,8 @@ public class Outbound {
     
     public static final Feature ENABLE_MULTIPART = new Feature() {
         @Override
-        public ChannelHandler call(final Factory factory, final ChannelPipeline pipeline) {
-            return  factory.build(this.getClass(), pipeline);
+        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
+            return  factory.build(this, pipeline);
         }
     };
     
@@ -74,8 +74,8 @@ public class Outbound {
         }
         
         @Override
-        public ChannelHandler call(final Factory factory, final ChannelPipeline pipeline) {
-            return factory.build(this.getClass(), pipeline, pipeline.channel(), this._sslCtx);
+        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
+            return factory.build(this, pipeline, pipeline.channel(), this._sslCtx);
         }
         
         private final SslContext _sslCtx;
@@ -87,8 +87,8 @@ public class Outbound {
         }
         
         @Override
-        public ChannelHandler call(final Factory factory, final ChannelPipeline pipeline) {
-            return factory.build(this.getClass(), pipeline, this._allIdleTimeout);
+        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
+            return factory.build(this, pipeline, this._allIdleTimeout);
         }
         
         private final int _allIdleTimeout;
@@ -106,8 +106,8 @@ public class Outbound {
         }
         
         @Override
-        public ChannelHandler call(final Factory factory, final ChannelPipeline pipeline) {
-            return factory.build(this.getClass(), pipeline, this._responseSubscriber, this._minIntervalInMs);
+        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
+            return factory.build(this, pipeline, this._responseSubscriber, this._minIntervalInMs);
         }
         
         @Override

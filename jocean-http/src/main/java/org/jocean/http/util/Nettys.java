@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map.Entry;
 
 import org.jocean.event.api.annotation.GuardPaired;
-import org.jocean.http.client.impl.ChannelPoolImpl;
+import org.jocean.http.client.impl.AbstractChannelPool;
 import org.jocean.http.client.impl.ChannelCreator;
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.idiom.ExceptionUtils;
@@ -48,7 +48,7 @@ public class Nettys {
     }
     
     public static ChannelPool unpoolChannels() {
-        return new ChannelPoolImpl() {
+        return new AbstractChannelPool() {
             @Override
             protected Channel reuseChannel(final SocketAddress address) {
                 return null;
