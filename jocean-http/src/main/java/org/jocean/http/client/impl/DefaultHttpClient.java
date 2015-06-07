@@ -207,12 +207,12 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             protected void doUnsubscribe() {
                 if (channel.eventLoop().inEventLoop()) {
-                    _channelPool.recycleChannel(channel);
+                    ChannelPool.Util.getChannelPool(channel).recycleChannel(channel);
                 } else {
                     channel.eventLoop().submit(new Runnable() {
                         @Override
                         public void run() {
-                            _channelPool.recycleChannel(channel);
+                            ChannelPool.Util.getChannelPool(channel).recycleChannel(channel);
                         }});
                 }
             }};
@@ -579,7 +579,7 @@ public class DefaultHttpClient implements HttpClient {
 
     };
 
-    public static final Func1<Subscriber<? super Object>, ChannelHandler> HTTPCLIENT_WORK_FUNC1 = 
+    private static final Func1<Subscriber<? super Object>, ChannelHandler> HTTPCLIENT_WORK_FUNC1 = 
             new Func1<Subscriber<? super Object>, ChannelHandler>() {
         @Override
         public ChannelHandler call(final Subscriber<? super Object> subscriber) {
@@ -591,8 +591,7 @@ public class DefaultHttpClient implements HttpClient {
                         LOG.debug("channelInactive: ch({})", ctx.channel());
                     }
                     ctx.fireChannelInactive();
-                    subscriber
-                            .onError(new RuntimeException("peer has closed."));
+                    subscriber.onError(new RuntimeException("peer has closed."));
                 }
 
                 @Override
