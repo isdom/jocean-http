@@ -42,15 +42,15 @@ public class Outbound {
     
     public static final Feature ENABLE_LOGGING = new OneoffFeature() {
         @Override
-        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
-            return factory.build(this, pipeline);
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return builder.build(this, pipeline);
         }
     };
             
     public static final Feature ENABLE_DECOMPRESSOR = new CLS_DECOMPRESSOR() {
         @Override
-        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
-            return factory.build(this, pipeline);
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return builder.build(this, pipeline);
         }
         
         @Override
@@ -63,8 +63,8 @@ public class Outbound {
     
     public static final Feature ENABLE_MULTIPART = new Feature() {
         @Override
-        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
-            return  factory.build(this, pipeline);
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return  builder.build(this, pipeline);
         }
     };
     
@@ -74,8 +74,8 @@ public class Outbound {
         }
         
         @Override
-        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
-            return factory.build(this, pipeline, pipeline.channel(), this._sslCtx);
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return builder.build(this, pipeline, pipeline.channel(), this._sslCtx);
         }
         
         private final SslContext _sslCtx;
@@ -87,8 +87,8 @@ public class Outbound {
         }
         
         @Override
-        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
-            return factory.build(this, pipeline, this._allIdleTimeout);
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return builder.build(this, pipeline, this._allIdleTimeout);
         }
         
         private final int _allIdleTimeout;
@@ -106,8 +106,8 @@ public class Outbound {
         }
         
         @Override
-        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
-            return factory.build(this, pipeline, this._responseSubscriber, this._minIntervalInMs);
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return builder.build(this, pipeline, this._responseSubscriber, this._minIntervalInMs);
         }
         
         @Override

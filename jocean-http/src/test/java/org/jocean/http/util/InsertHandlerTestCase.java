@@ -8,7 +8,7 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 
 import java.util.List;
 
-import org.jocean.http.server.InboundFeature;
+import org.jocean.http.server.Inbound;
 import org.junit.Test;
 
 public class InsertHandlerTestCase {
@@ -20,17 +20,17 @@ public class InsertHandlerTestCase {
 
         final Channel channel = new LocalChannel();
         
-        InboundFeature.CONTENT_COMPRESSOR.applyTo(channel);
-        InboundFeature.ENABLE_SSL.applyTo(channel, sslCtx);
-        InboundFeature.CLOSE_ON_IDLE.applyTo(channel, 180);
-        InboundFeature.LOGGING.applyTo(channel);
+//        Inbound.CONTENT_COMPRESSOR.applyTo(channel);
+//        Inbound.ENABLE_SSL.applyTo(channel, sslCtx);
+//        Inbound.CLOSE_ON_IDLE.applyTo(channel, 180);
+//        Inbound.LOGGING.applyTo(channel);
         
         final List<String> names = channel.pipeline().names();
         
-        assertEquals(InboundFeature.LOGGING.name(), names.get(0));
-        assertEquals(InboundFeature.CLOSE_ON_IDLE.name(), names.get(1));
-        assertEquals(InboundFeature.ENABLE_SSL.name(), names.get(2));
-        assertEquals(InboundFeature.CONTENT_COMPRESSOR.name(), names.get(3));
+//        assertEquals(Inbound.LOGGING.name(), names.get(0));
+//        assertEquals(Inbound.CLOSE_ON_IDLE.name(), names.get(1));
+//        assertEquals(Inbound.ENABLE_SSL.name(), names.get(2));
+//        assertEquals(Inbound.CONTENT_COMPRESSOR.name(), names.get(3));
     }
 
     @Test
@@ -40,17 +40,17 @@ public class InsertHandlerTestCase {
 
         final Channel channel = new LocalChannel();
         
-        InboundFeature.ENABLE_SSL.applyTo(channel, sslCtx);
-        InboundFeature.CLOSE_ON_IDLE.applyTo(channel, 180);
-        InboundFeature.CONTENT_COMPRESSOR.applyTo(channel);
-        InboundFeature.LOGGING.applyTo(channel);
+//        Inbound.ENABLE_SSL.applyTo(channel, sslCtx);
+//        Inbound.CLOSE_ON_IDLE.applyTo(channel, 180);
+//        Inbound.CONTENT_COMPRESSOR.applyTo(channel);
+//        Inbound.LOGGING.applyTo(channel);
         
         final List<String> names = channel.pipeline().names();
         
-        assertEquals(InboundFeature.LOGGING.name(), names.get(0));
-        assertEquals(InboundFeature.CLOSE_ON_IDLE.name(), names.get(1));
-        assertEquals(InboundFeature.ENABLE_SSL.name(), names.get(2));
-        assertEquals(InboundFeature.CONTENT_COMPRESSOR.name(), names.get(3));
+//        assertEquals(Inbound.LOGGING.name(), names.get(0));
+//        assertEquals(Inbound.CLOSE_ON_IDLE.name(), names.get(1));
+//        assertEquals(Inbound.ENABLE_SSL.name(), names.get(2));
+//        assertEquals(Inbound.CONTENT_COMPRESSOR.name(), names.get(3));
     }
 
     @Test
@@ -60,16 +60,16 @@ public class InsertHandlerTestCase {
 
         final Channel channel = new LocalChannel();
         
-        InboundFeature.CLOSE_ON_IDLE.applyTo(channel, 180);
-        InboundFeature.ENABLE_SSL.applyTo(channel, sslCtx);
-        InboundFeature.CONTENT_COMPRESSOR.applyTo(channel);
-        InboundFeature.LOGGING.applyTo(channel);
+//        Inbound.CLOSE_ON_IDLE.applyTo(channel, 180);
+//        Inbound.ENABLE_SSL.applyTo(channel, sslCtx);
+//        Inbound.CONTENT_COMPRESSOR.applyTo(channel);
+//        Inbound.LOGGING.applyTo(channel);
         
         final List<String> names = channel.pipeline().names();
         
-        assertEquals(InboundFeature.LOGGING.name(), names.get(0));
-        assertEquals(InboundFeature.CLOSE_ON_IDLE.name(), names.get(1));
-        assertEquals(InboundFeature.ENABLE_SSL.name(), names.get(2));
-        assertEquals(InboundFeature.CONTENT_COMPRESSOR.name(), names.get(3));
+//        assertEquals(Inbound.LOGGING.name(), names.get(0));
+//        assertEquals(Inbound.CLOSE_ON_IDLE.name(), names.get(1));
+//        assertEquals(Inbound.ENABLE_SSL.name(), names.get(2));
+//        assertEquals(Inbound.CONTENT_COMPRESSOR.name(), names.get(3));
     }
 }

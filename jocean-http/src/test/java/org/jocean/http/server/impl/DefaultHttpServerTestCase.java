@@ -36,7 +36,7 @@ import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTrade;
-import org.jocean.http.server.InboundFeature;
+import org.jocean.http.server.Inbound;
 import org.jocean.http.util.RxNettys;
 import org.junit.Test;
 
@@ -69,8 +69,8 @@ public class DefaultHttpServerTestCase {
         
         final Subscription testServer = 
                 server.defineServer(new LocalAddress("test"),
-                InboundFeature.APPLY_LOGGING,
-                InboundFeature.APPLY_CONTENT_COMPRESSOR)
+                Inbound.ENABLE_LOGGING,
+                Inbound.ENABLE_COMPRESSOR)
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {

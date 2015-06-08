@@ -2,16 +2,10 @@ package org.jocean.http.util;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
-import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.timeout.IdleStateEvent;
-import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.ReferenceCounted;
 
 import java.net.SocketAddress;
@@ -21,9 +15,7 @@ import java.util.Map.Entry;
 
 import org.jocean.event.api.annotation.GuardPaired;
 import org.jocean.http.client.impl.AbstractChannelPool;
-import org.jocean.http.client.impl.ChannelCreator;
 import org.jocean.http.client.impl.ChannelPool;
-import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Ordered;
 import org.jocean.idiom.PairedVisitor;
 import org.slf4j.Logger;
@@ -31,7 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import rx.functions.Func0;
 import rx.functions.Func2;
-import rx.functions.FuncN;
 
 public class Nettys {
     private static final Logger LOG =
@@ -158,78 +149,10 @@ public class Nettys {
             }};
     }
     
-    public static final FuncN<ChannelHandler> HTTPSERVER_CODEC_FUNCN = new FuncN<ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Object... args) {
-            return new HttpServerCodec();
-        }};
-        
-    public static final FuncN<ChannelHandler> CONTENT_COMPRESSOR_FUNCN = new FuncN<ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Object... args) {
-            return new HttpContentCompressor();
-        }};
-        
     public static final Func2<Channel,SslContext,ChannelHandler> SSL_FUNC2 = 
             new Func2<Channel,SslContext,ChannelHandler>() {
         @Override
         public ChannelHandler call(final Channel channel, final SslContext ctx) {
             return ctx.newHandler(channel.alloc());
         }};
-            
-    public static final Func2<Channel,Integer,ChannelHandler> CLOSE_ON_IDLE_FUNC2 = 
-            new Func2<Channel,Integer,ChannelHandler>() {
-                @Override
-                public ChannelHandler call(final Channel channel, final Integer allIdleTimeout) {
-                  return new IdleStateHandler(0, 0, allIdleTimeout) {
-                      @Override
-                      protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
-                          if (LOG.isInfoEnabled()) {
-                              LOG.info("channelIdle:{} , close channel[{}]", evt.state().name(), ctx.channel());
-                          }
-                          ctx.channel().close();
-                      }
-                  };
-              }
-    };
-    
-    public static final Func2<Channel, OnHttpObject, ChannelHandler> HTTPSERVER_WORK_FUNC2 = 
-            new Func2<Channel, OnHttpObject, ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Channel channel,
-                final OnHttpObject onHttpObject) {
-            return new SimpleChannelInboundHandler<HttpObject>() {
-                @Override
-                public void exceptionCaught(ChannelHandlerContext ctx,
-                        Throwable cause) throws Exception {
-                    LOG.warn("exceptionCaught {}, detail:{}", ctx.channel(),
-                            ExceptionUtils.exception2detail(cause));
-                    onHttpObject.onError(cause);
-                    ctx.close();
-                }
-
-                // @Override
-                // public void channelReadComplete(ChannelHandlerContext ctx) {
-                // ctx.flush();
-                // }
-
-                @Override
-                public void channelInactive(final ChannelHandlerContext ctx)
-                        throws Exception {
-                    onHttpObject.onError(new RuntimeException("channelInactive"));
-                }
-
-                @Override
-                protected void channelRead0(final ChannelHandlerContext ctx,
-                        final HttpObject msg) throws Exception {
-                    onHttpObject.onHttpObject(msg);
-                }
-
-                // @Override
-                // public void channelActive(final ChannelHandlerContext ctx)
-                // throws Exception {
-                // }
-            };
-        }
-    };
 }

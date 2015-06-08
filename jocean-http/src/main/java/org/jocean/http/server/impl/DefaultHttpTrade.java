@@ -31,12 +31,14 @@ import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.event.api.internal.DefaultInvoker;
 import org.jocean.event.api.internal.EventInvoker;
 import org.jocean.http.server.HttpTrade;
-import org.jocean.http.server.InboundFeature;
+import org.jocean.http.server.Inbound.Feature;
+import org.jocean.http.server.Inbound.HandlerBuilder;
 import org.jocean.http.server.impl.DefaultHttpServer.ChannelRecycler;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.OnHttpObject;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.rx.OneshotSubscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +68,9 @@ public class DefaultHttpTrade implements HttpTrade {
     public DefaultHttpTrade(
             final Channel channel, 
             final EventEngine engine,
-            final ChannelRecycler channelRecycler) {
+            final ChannelRecycler channelRecycler,
+            final HandlerBuilder builder,
+            final Feature... features) {
         this._channelRecycler = channelRecycler;
         this._channelRef.set(channel);
         this._requestReceiver = engine.create(this.toString() + ".req", 
@@ -84,9 +88,16 @@ public class DefaultHttpTrade implements HttpTrade {
                 public void afterFlowDestroy() throws Exception {
                     detachAll();
                 }});
+        final OnHttpObjectAware onHttpObjectAware = 
+                InterfaceUtils.compositeIncludeType(features, OnHttpObjectAware.class);
+        if (null!=onHttpObjectAware) {
+            onHttpObjectAware.setOnHttpObject(
+                    EventUtils.buildInterfaceAdapter(OnHttpObject.class, this._requestReceiver));
+        }
         final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
-        InboundFeature.WORKER.applyTo(channel, 
-                EventUtils.buildInterfaceAdapter(OnHttpObject.class, this._requestReceiver));
+        for (Feature feature : features) {
+            feature.call(builder, channel.pipeline());
+        }
         this._removeHandlers = RxNettys.removeHandlersSubscription(channel, diff.call());
     }
 

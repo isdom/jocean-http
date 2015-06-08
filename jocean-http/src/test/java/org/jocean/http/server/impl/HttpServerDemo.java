@@ -33,7 +33,7 @@ import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpTrade;
-import org.jocean.http.server.InboundFeature;
+import org.jocean.http.server.Inbound;
 import org.jocean.http.util.RxNettys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,7 +71,7 @@ public class HttpServerDemo {
                 bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
                 bootstrap.channel(LocalServerChannel.class);
             }},
-            InboundFeature.APPLY_LOGGING
+            Inbound.ENABLE_LOGGING
             );
         
         @SuppressWarnings("unused")
