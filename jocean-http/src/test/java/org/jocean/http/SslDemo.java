@@ -77,7 +77,7 @@ public class SslDemo {
 //                        new InetSocketAddress("58.215.107.207", 443), 
                         Observable.just(request),
                         Outbound.ENABLE_LOGGING,
-                        new Outbound.ENABLE_SSL(sslCtx)
+                        new Feature.ENABLE_SSL(sslCtx)
                         )
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainMap())
@@ -92,7 +92,7 @@ public class SslDemo {
 //                        new InetSocketAddress("58.215.107.207", 443), 
                         Observable.just(request),
                         Outbound.ENABLE_LOGGING,
-                        new Outbound.ENABLE_SSL(sslCtx)
+                        new Feature.ENABLE_SSL(sslCtx)
                         )
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainMap())

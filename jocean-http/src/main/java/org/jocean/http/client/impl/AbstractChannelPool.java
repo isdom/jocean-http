@@ -5,7 +5,7 @@ import io.netty.util.concurrent.Future;
 
 import java.net.SocketAddress;
 
-import org.jocean.http.client.Outbound.Feature;
+import org.jocean.http.Feature;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.OneshotSubscription;
 import org.slf4j.Logger;

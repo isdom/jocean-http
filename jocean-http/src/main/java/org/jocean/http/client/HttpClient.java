@@ -8,6 +8,7 @@ import io.netty.handler.codec.http.HttpObject;
 import java.io.Closeable;
 import java.net.SocketAddress;
 
+import org.jocean.http.Feature;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,5 +78,5 @@ public interface HttpClient extends Closeable {
     public Observable<? extends Object> defineInteraction(
             final SocketAddress remoteAddress, 
             final Observable<? extends Object> request,
-            final Outbound.Feature... features);
+            final Feature... features);
 }

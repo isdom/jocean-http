@@ -48,8 +48,8 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 
+import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.Outbound;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.AnnotationWrapper;
@@ -315,19 +315,19 @@ public class DefaultSignalClient implements SignalClient {
 
     @SuppressWarnings("rawtypes")
     public void registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
-            final Outbound.Feature... features) {
+            final Feature... features) {
         this._req2pathPrefix.put(reqCls, Triple.of((Class)respCls, pathPrefix, features));
     }
     
-    private Outbound.Feature[] safeGetRequestFeatures(final Object request) {
+    private Feature[] safeGetRequestFeatures(final Object request) {
         @SuppressWarnings("rawtypes")
-        final Triple<Class,String, Outbound.Feature[]> triple = _req2pathPrefix.get(request.getClass());
-        return (null != triple ? triple.third : Outbound.EMPTY_FEATURES);
+        final Triple<Class,String, Feature[]> triple = _req2pathPrefix.get(request.getClass());
+        return (null != triple ? triple.third : Feature.EMPTY_FEATURES);
     }
     
     private Class<?> safeGetResponseClass(final Object request) {
         @SuppressWarnings("rawtypes")
-        final Triple<Class,String, Outbound.Feature[]> triple = _req2pathPrefix.get(request.getClass());
+        final Triple<Class,String, Feature[]> triple = _req2pathPrefix.get(request.getClass());
         return (null != triple ? triple.first : null);
     }
 
@@ -354,7 +354,7 @@ public class DefaultSignalClient implements SignalClient {
     }
     
     @SuppressWarnings("rawtypes")
-    private final Map<Class<?>, Triple<Class, String, Outbound.Feature[]>> _req2pathPrefix = 
+    private final Map<Class<?>, Triple<Class, String, Feature[]>> _req2pathPrefix = 
             new ConcurrentHashMap<>();
     
     private final SignalConverter _converter = new SignalConverter() {
@@ -435,7 +435,7 @@ public class DefaultSignalClient implements SignalClient {
 
         private String safeGetPathPrefix(final Object request) {
             @SuppressWarnings("rawtypes")
-            final Triple<Class, String, Outbound.Feature[]> triple = _req2pathPrefix.get(request.getClass());
+            final Triple<Class, String, Feature[]> triple = _req2pathPrefix.get(request.getClass());
             return (null != triple ? triple.second : null);
         }
         

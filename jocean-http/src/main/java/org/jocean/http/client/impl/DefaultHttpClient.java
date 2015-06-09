@@ -27,8 +27,6 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
-import io.netty.handler.timeout.IdleStateEvent;
-import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
@@ -37,11 +35,10 @@ import java.net.SocketAddress;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.jocean.http.Feature;
+import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
-import org.jocean.http.client.Outbound.ENABLE_SSL;
-import org.jocean.http.client.Outbound.HandlerBuilder;
-import org.jocean.http.client.Outbound.Feature;
 import org.jocean.http.client.Outbound.FeaturesAware;
 import org.jocean.http.client.Outbound.OneoffFeature;
 import org.jocean.http.util.ChannelSubscriberAware;
@@ -59,9 +56,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import rx.Observable;
-import rx.Subscription;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
+import rx.Subscription;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
@@ -273,7 +270,7 @@ public class DefaultHttpClient implements HttpClient {
             final Feature... defaultFeatures) {
         this._channelCreator = channelCreator;
         this._channelPool = channelPool;
-        this._defaultFeatures = (null != defaultFeatures) ? defaultFeatures : Outbound.EMPTY_FEATURES;
+        this._defaultFeatures = (null != defaultFeatures) ? defaultFeatures : Feature.EMPTY_FEATURES;
     }
     
     /* (non-Javadoc)
@@ -412,22 +409,6 @@ public class DefaultHttpClient implements HttpClient {
         public ChannelHandler call(final Object... args) {
             return new ChunkedWriteHandler();
         }};
-
-    private static final Func1<Integer,ChannelHandler> CLOSE_ON_IDLE_FUNC1 = 
-            new Func1<Integer,ChannelHandler>() {
-                @Override
-                public ChannelHandler call(final Integer allIdleTimeout) {
-                  return new IdleStateHandler(0, 0, allIdleTimeout) {
-                      @Override
-                      protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
-                          if (LOG.isInfoEnabled()) {
-                              LOG.info("channelIdle:{} , close channel[{}]", evt.state().name(), ctx.channel());
-                          }
-                          ctx.channel().close();
-                      }
-                  };
-              }
-    };
 
     private static final class Ready4InteractionNotifier extends
             ChannelInboundHandlerAdapter {
@@ -648,7 +629,7 @@ public class DefaultHttpClient implements HttpClient {
     private static enum APPLY {
         LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
         PROGRESSIVE(Functions.fromFunc(PROGRESSIVE_FUNC2)),
-        CLOSE_ON_IDLE(Functions.fromFunc(CLOSE_ON_IDLE_FUNC1)),
+        CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC1)),
         SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
         HTTPCLIENT(HTTPCLIENT_CODEC_FUNCN),
         CONTENT_DECOMPRESSOR(CONTENT_DECOMPRESSOR_FUNCN),
@@ -684,6 +665,6 @@ public class DefaultHttpClient implements HttpClient {
         _CLS2APPLY.put(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
         _CLS2APPLY.put(Outbound.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
         _CLS2APPLY.put(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
-        _CLS2APPLY.put(Outbound.ENABLE_SSL.class, APPLY.SSL);
+        _CLS2APPLY.put(Feature.ENABLE_SSL.class, APPLY.SSL);
     }
 }

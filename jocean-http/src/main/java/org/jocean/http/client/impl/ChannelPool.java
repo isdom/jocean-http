@@ -6,7 +6,7 @@ import io.netty.util.AttributeKey;
 
 import java.net.SocketAddress;
 
-import org.jocean.http.client.Outbound.Feature;
+import org.jocean.http.Feature;
 
 import rx.Observable;
 import rx.functions.Func1;

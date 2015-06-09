@@ -2,10 +2,13 @@ package org.jocean.http.util;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.timeout.IdleStateEvent;
+import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.ReferenceCounted;
 
 import java.net.SocketAddress;
@@ -22,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import rx.functions.Func0;
+import rx.functions.Func1;
 import rx.functions.Func2;
 
 public class Nettys {
@@ -155,4 +159,20 @@ public class Nettys {
         public ChannelHandler call(final Channel channel, final SslContext ctx) {
             return ctx.newHandler(channel.alloc());
         }};
+        
+    public static final Func1<Integer,ChannelHandler> CLOSE_ON_IDLE_FUNC1 = 
+        new Func1<Integer,ChannelHandler>() {
+            @Override
+            public ChannelHandler call(final Integer allIdleTimeout) {
+              return new IdleStateHandler(0, 0, allIdleTimeout) {
+                  @Override
+                  protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
+                      if (LOG.isInfoEnabled()) {
+                          LOG.info("channelIdle:{} , close channel[{}]", evt.state().name(), ctx.channel());
+                      }
+                      ctx.channel().close();
+                  }
+              };
+          }
+    };
 }

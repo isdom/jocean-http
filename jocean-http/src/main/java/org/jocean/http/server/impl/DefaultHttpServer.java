@@ -20,8 +20,6 @@ import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.logging.LoggingHandler;
-import io.netty.handler.timeout.IdleStateEvent;
-import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
@@ -31,11 +29,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.jocean.event.api.EventEngine;
+import org.jocean.http.Feature;
+import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpTrade;
 import org.jocean.http.server.Inbound;
-import org.jocean.http.server.Inbound.Feature;
-import org.jocean.http.server.Inbound.HandlerBuilder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.OnHttpObject;
 import org.jocean.http.util.Nettys.ToOrdinal;
@@ -155,7 +153,7 @@ public class DefaultHttpServer implements HttpServer {
             final Feature... defaultFeatures) {
         this._engine = engine;
         this._creator = creator;
-        this._defaultFeatures = null!=defaultFeatures ? defaultFeatures : Inbound.EMPTY_FEATURES;
+        this._defaultFeatures = null!=defaultFeatures ? defaultFeatures : Feature.EMPTY_FEATURES;
     }
 
     @Override
@@ -190,22 +188,6 @@ public class DefaultHttpServer implements HttpServer {
         }
     };
             
-    private static final Func1<Integer,ChannelHandler> CLOSE_ON_IDLE_FUNC1 = 
-            new Func1<Integer,ChannelHandler>() {
-                @Override
-                public ChannelHandler call(final Integer allIdleTimeout) {
-                  return new IdleStateHandler(0, 0, allIdleTimeout) {
-                      @Override
-                      protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
-                          if (LOG.isInfoEnabled()) {
-                              LOG.info("channelIdle:{} , close channel[{}]", evt.state().name(), ctx.channel());
-                          }
-                          ctx.channel().close();
-                      }
-                  };
-              }
-    };
-        
     public static final Func1<OnHttpObject, ChannelHandler> HTTPSERVER_WORK_FUNC1 = 
             new Func1<OnHttpObject, ChannelHandler>() {
         @Override
@@ -247,7 +229,7 @@ public class DefaultHttpServer implements HttpServer {
     
     private static enum APPLY {
         LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
-        CLOSE_ON_IDLE(Functions.fromFunc(CLOSE_ON_IDLE_FUNC1)),
+        CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC1)),
         SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
         HTTPSERVER(HTTPSERVER_CODEC_FUNCN),
         CONTENT_COMPRESSOR(CONTENT_COMPRESSOR_FUNCN),
@@ -303,6 +285,6 @@ public class DefaultHttpServer implements HttpServer {
         _CLS2APPLY.put(Inbound.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
         _CLS2APPLY.put(Inbound.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
         _CLS2APPLY.put(Inbound.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
-        _CLS2APPLY.put(Inbound.ENABLE_SSL.class, APPLY.SSL);
+        _CLS2APPLY.put(Feature.ENABLE_SSL.class, APPLY.SSL);
     }
 }

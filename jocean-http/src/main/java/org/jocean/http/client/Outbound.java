@@ -4,28 +4,18 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.ssl.SslContext;
 
+import org.jocean.http.Feature;
 import org.jocean.http.util.Oneoff;
 import org.jocean.http.util.ResponseSubscriberAware;
 
 import rx.Subscriber;
-import rx.functions.Func2;
 
 public class Outbound {
     private Outbound() {
         throw new IllegalStateException("No instances!");
     }
 
-    public static final Feature[] EMPTY_FEATURES = new Feature[0];
-
-    public interface Feature extends Func2<HandlerBuilder, ChannelPipeline, ChannelHandler> {
-    };
-    
-    public interface HandlerBuilder {
-        public ChannelHandler build(final Feature feature, final ChannelPipeline pipeline, final Object... args);
-    }
-    
     public interface OneoffFeature extends Feature, Oneoff {
     };
     
@@ -67,19 +57,6 @@ public class Outbound {
             return  builder.build(this, pipeline);
         }
     };
-    
-    public static final class ENABLE_SSL implements Feature {
-        public ENABLE_SSL(final SslContext sslCtx) {
-            this._sslCtx = sslCtx;
-        }
-        
-        @Override
-        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
-            return builder.build(this, pipeline, pipeline.channel(), this._sslCtx);
-        }
-        
-        private final SslContext _sslCtx;
-    }
     
     public static final class ENABLE_CLOSE_ON_IDLE implements OneoffFeature {
         public ENABLE_CLOSE_ON_IDLE(final int allIdleTimeout) {

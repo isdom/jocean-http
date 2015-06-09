@@ -33,6 +33,7 @@ import java.util.concurrent.CountDownLatch;
 
 import javax.net.ssl.SSLException;
 
+import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
@@ -155,7 +156,7 @@ public class DefaultHttpClientTestCase {
 
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         try {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
@@ -232,7 +233,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         
         try {
             // first 
@@ -447,7 +448,7 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting);
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         //  NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -486,7 +487,7 @@ public class DefaultHttpClientTestCase {
             .setPauseConnecting(pauseConnecting);
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -567,7 +568,7 @@ public class DefaultHttpClientTestCase {
             .setConnectException(new RuntimeException(errorMsg));
         
         final DefaultHttpClient client = new DefaultHttpClient(creator,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -679,7 +680,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -788,7 +789,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -871,7 +872,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             client.defineInteraction(
@@ -965,7 +966,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             //  first
@@ -1066,7 +1067,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -1176,7 +1177,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         try {
             {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
@@ -1367,7 +1368,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         try {
             final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
             request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
@@ -1424,7 +1425,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx));
+                new ENABLE_SSL(sslCtx));
         final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
         request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
         

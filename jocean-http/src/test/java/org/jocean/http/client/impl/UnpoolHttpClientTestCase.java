@@ -17,6 +17,7 @@ import java.util.Iterator;
 
 import javax.net.ssl.SSLException;
 
+import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.util.Nettys;
@@ -114,7 +115,7 @@ public class UnpoolHttpClientTestCase {
                 creator,
                 Nettys.unpoolChannels(),
                 Outbound.ENABLE_LOGGING,
-                new Outbound.ENABLE_SSL(sslCtx)
+                new ENABLE_SSL(sslCtx)
                 );
         
         try {
