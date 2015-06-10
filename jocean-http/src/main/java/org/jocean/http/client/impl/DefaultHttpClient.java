@@ -39,7 +39,6 @@ import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
-import org.jocean.http.client.Outbound.FeaturesAware;
 import org.jocean.http.client.Outbound.OneoffFeature;
 import org.jocean.http.util.ChannelSubscriberAware;
 import org.jocean.http.util.Nettys;
@@ -71,6 +70,10 @@ import rx.functions.Functions;
  *
  */
 public class DefaultHttpClient implements HttpClient {
+    
+    interface FeaturesAware {
+        public void setApplyFeatures(final Feature[] features);
+    }
     
     //放在最顶上，以让NETTY默认使用SLF4J
     static {

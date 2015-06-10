@@ -19,10 +19,6 @@ public class Outbound {
     public interface OneoffFeature extends Feature, Oneoff {
     };
     
-    public interface FeaturesAware {
-        public void setApplyFeatures(final Feature[] features);
-    }
-    
     public interface ApplyToRequest {
         public void applyToRequest(final HttpRequest request);
     }
