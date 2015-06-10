@@ -21,6 +21,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContentDecompressor;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
@@ -31,8 +32,11 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.net.SocketAddress;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.jocean.http.Feature;
@@ -71,8 +75,12 @@ import rx.functions.Functions;
  */
 public class DefaultHttpClient implements HttpClient {
     
-    interface FeaturesAware {
+    public interface FeaturesAware {
         public void setApplyFeatures(final Feature[] features);
+    }
+    
+    public interface ApplyToRequest {
+        public void applyToRequest(final HttpRequest request);
     }
     
     //放在最顶上，以让NETTY默认使用SLF4J
@@ -95,8 +103,7 @@ public class DefaultHttpClient implements HttpClient {
             final Observable<? extends Object> request,
             final Feature... features) {
         final Feature[] applyFeatures = cloneFeatures(features.length > 0 ? features : this._defaultFeatures);
-        final Outbound.ApplyToRequest applyToRequest = 
-                InterfaceUtils.compositeIncludeType(applyFeatures, Outbound.ApplyToRequest.class);
+        final ApplyToRequest applyToRequest = buildInterfaceOf(applyFeatures, _CLS2APPLYTOREQUEST, ApplyToRequest.class);
         final Func1<Channel, Observable<ChannelFuture>> transferRequest = 
                 new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
@@ -139,6 +146,22 @@ public class DefaultHttpClient implements HttpClient {
                     }
                 }
             }});
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T buildInterfaceOf(
+            final Feature[]         features, 
+            final Map<Class<?>, T>  cls2intf, 
+            final Class<T>          cls) {
+        final List<T> intfs = new ArrayList<>();
+        for (Feature f : features) {
+            final T intf = cls2intf.get(f.getClass());
+            if (null!=intf) {
+                intfs.add(intf);
+            }
+        }
+        return !intfs.isEmpty() ? InterfaceUtils.compositeIncludeType(
+                intfs.toArray((T[])Array.newInstance(cls, 0)), cls) : null;
     }
 
     private Observable<? extends Channel> createChannel(
@@ -385,6 +408,7 @@ public class DefaultHttpClient implements HttpClient {
         }};
         
     private static final Map<Class<?>, APPLY> _CLS2APPLY;
+    private static final Map<Class<?>, ApplyToRequest> _CLS2APPLYTOREQUEST;
     
     private static final HandlerBuilder _BUILDER = new HandlerBuilder() {
 
@@ -669,5 +693,16 @@ public class DefaultHttpClient implements HttpClient {
         _CLS2APPLY.put(Outbound.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
         _CLS2APPLY.put(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
         _CLS2APPLY.put(Feature.ENABLE_SSL.class, APPLY.SSL);
+        
+        _CLS2APPLYTOREQUEST = new HashMap<>();
+        _CLS2APPLYTOREQUEST.put(Outbound.ENABLE_DECOMPRESSOR.getClass(), 
+            new ApplyToRequest() {
+                @Override
+                public void applyToRequest(final HttpRequest request) {
+                    HttpHeaders.addHeader(request,
+                            HttpHeaders.Names.ACCEPT_ENCODING, 
+                            HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
+                }
+            });
     }
 }

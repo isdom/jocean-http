@@ -2,8 +2,6 @@ package org.jocean.http.client;
 
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpRequest;
 
 import org.jocean.http.Feature;
 import org.jocean.http.util.Oneoff;
@@ -19,13 +17,6 @@ public class Outbound {
     public interface OneoffFeature extends Feature, Oneoff {
     };
     
-    public interface ApplyToRequest {
-        public void applyToRequest(final HttpRequest request);
-    }
-    
-    private abstract static class CLS_DECOMPRESSOR implements OneoffFeature, ApplyToRequest {
-    }
-    
     public static final Feature ENABLE_LOGGING = new OneoffFeature() {
         @Override
         public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
@@ -33,17 +24,10 @@ public class Outbound {
         }
     };
             
-    public static final Feature ENABLE_DECOMPRESSOR = new CLS_DECOMPRESSOR() {
+    public static final Feature ENABLE_DECOMPRESSOR = new OneoffFeature() {
         @Override
         public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
             return builder.build(this, pipeline);
-        }
-        
-        @Override
-        public void applyToRequest(final HttpRequest request) {
-            HttpHeaders.addHeader(request,
-                    HttpHeaders.Names.ACCEPT_ENCODING, 
-                    HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
         }
     };
     

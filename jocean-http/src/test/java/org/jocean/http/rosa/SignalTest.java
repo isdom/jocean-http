@@ -47,9 +47,10 @@ public class SignalTest {
                 bootstrap
                 .group(new NioEventLoopGroup(1))
                 .channel(NioSocketChannel.class);
-            }}, pool);
-//            , 
-//                OutboundFeature.APPLY_LOGGING, OutboundFeature.APPLY_CONTENT_DECOMPRESSOR);
+            }}, pool
+            , 
+            Outbound.ENABLE_LOGGING, 
+            Outbound.ENABLE_DECOMPRESSOR);
         final DefaultSignalClient client = new DefaultSignalClient(httpClient);
         
         client.registerRequestType(
@@ -71,7 +72,6 @@ public class SignalTest {
                 new Outbound.ENABLE_PROGRESSIVE(100)
                 );
         
-        /*
         {
             final QueryMyPatientsForDoctorRequest req = new QueryMyPatientsForDoctorRequest();
             req.setDoctorId("8510");
@@ -125,7 +125,7 @@ public class SignalTest {
         }
         latch.await();
         pool.awaitRecycleChannels();
-        */
+        /*
         {
             final AddMultiMediasToJourneyRequest req = new AddMultiMediasToJourneyRequest();
             req.setCaseId("120");
@@ -164,5 +164,6 @@ public class SignalTest {
             //  TODO, why invoke onCompleted Event? not onError, check
             //  TO BE CONTINUE, 2015-05-13
         }
+        */
     }
 }
