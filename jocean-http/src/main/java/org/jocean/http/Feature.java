@@ -18,6 +18,33 @@ public interface Feature extends Func2<Feature.HandlerBuilder, ChannelPipeline, 
     }
     public static final Feature[] EMPTY_FEATURES = new Feature[0];
 
+    public static final Feature ENABLE_LOGGING = new Feature() {
+        @Override
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return builder.build(this, pipeline);
+        }
+    };
+    
+    public static final Feature ENABLE_COMPRESSOR = new Feature() {
+        @Override
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return builder.build(this, pipeline);
+        }
+    };
+    
+    public static final class ENABLE_CLOSE_ON_IDLE implements Feature {
+        public ENABLE_CLOSE_ON_IDLE(final int allIdleTimeout) {
+            this._allIdleTimeout = allIdleTimeout;
+        }
+        
+        @Override
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return builder.build(this, pipeline, this._allIdleTimeout);
+        }
+        
+        private final int _allIdleTimeout;
+    }
+    
     public static final class ENABLE_SSL implements Feature {
         public ENABLE_SSL(final SslContext sslCtx) {
             this._sslCtx = sslCtx;

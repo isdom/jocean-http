@@ -4,7 +4,7 @@ import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertTrue;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
@@ -30,13 +30,12 @@ import java.util.Iterator;
 import org.jocean.event.api.EventEngine;
 import org.jocean.event.extend.Runners;
 import org.jocean.event.extend.Services;
-import org.jocean.http.client.Outbound;
+import org.jocean.http.Feature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTrade;
-import org.jocean.http.server.Inbound;
 import org.jocean.http.util.RxNettys;
 import org.junit.Test;
 
@@ -69,8 +68,8 @@ public class DefaultHttpServerTestCase {
         
         final Subscription testServer = 
                 server.defineServer(new LocalAddress("test"),
-                Inbound.ENABLE_LOGGING,
-                Inbound.ENABLE_COMPRESSOR)
+                Feature.ENABLE_LOGGING,
+                Feature.ENABLE_COMPRESSOR)
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
@@ -116,7 +115,7 @@ public class DefaultHttpServerTestCase {
                 client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.just(request),
-                    Outbound.ENABLE_LOGGING)
+                    Feature.ENABLE_LOGGING)
                 .compose(RxNettys.objects2httpobjs())
                 .map(RxNettys.<HttpObject>retainMap())
                 .toBlocking().toIterable().iterator();

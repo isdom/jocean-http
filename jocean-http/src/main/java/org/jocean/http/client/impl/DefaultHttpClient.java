@@ -43,7 +43,6 @@ import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
-import org.jocean.http.client.Outbound.OneoffFeature;
 import org.jocean.http.util.ChannelSubscriberAware;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ToOrdinal;
@@ -135,7 +134,7 @@ public class DefaultHttpClient implements HttpClient {
                             .doOnNext(new Action1<Channel>() {
                                 @Override
                                 public void call(Channel channel) {
-                                    responseSubscriber.add(applyOneoffFeatures(_BUILDER, channel, features));
+                                    responseSubscriber.add(applyOneoffFeatures(channel, features));
                                 }})
                             .onErrorResumeNext(createChannel(remoteAddress, features))
                             .flatMap(transferRequest)
@@ -185,9 +184,9 @@ public class DefaultHttpClient implements HttpClient {
                         public Observable<? extends Channel> call(final Channel channel) {
                             ChannelPool.Util.attachChannelPool(channel, _channelPool);
                             ChannelPool.Util.attachIsReady(channel, IS_READY);
-                            applyNononeoffFeatures(_BUILDER, channel, features);
+                            applyNononeoffFeatures(channel, features);
                             channelSubscriber.add(
-                                applyOneoffFeatures(_BUILDER, channel, features));
+                                applyOneoffFeatures(channel, features));
                             return RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
                                 .call(channel.connect(remoteAddress));
                         }})
@@ -311,8 +310,8 @@ public class DefaultHttpClient implements HttpClient {
 
     private final static Feature APPLY_HTTPCLIENT = new Feature() {
         @Override
-        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
-            return  APPLY.HTTPCLIENT.applyTo(pipeline);
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return builder.build(this, pipeline);
         }
     };
     
@@ -323,6 +322,7 @@ public class DefaultHttpClient implements HttpClient {
                 final Subscriber<? super Channel> subscriber) {
             this._channelSubscriber = subscriber;
         }
+        
         @Override
         public void setApplyFeatures(final Feature[] features) {
             for (Feature feature : features) {
@@ -333,8 +333,8 @@ public class DefaultHttpClient implements HttpClient {
         }
 
         @Override
-        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
-            return APPLY.READY4INTERACTION_NOTIFIER.applyTo(pipeline,
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return builder.build(this, pipeline,
                     this._isSSLEnabled, this._channelSubscriber);
         }
 
@@ -342,7 +342,7 @@ public class DefaultHttpClient implements HttpClient {
         private Subscriber<? super Channel> _channelSubscriber;
     }
 
-    private static final class APPLY_WORKER implements OneoffFeature,
+    private static final class APPLY_WORKER implements Feature,
             ResponseSubscriberAware {
 
         @Override
@@ -351,9 +351,8 @@ public class DefaultHttpClient implements HttpClient {
         }
 
         @Override
-        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
-            return APPLY.WORKER.applyTo(pipeline,
-                    this._responseSubscriber);
+        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
+            return builder.build(this, pipeline, this._responseSubscriber);
         }
 
         private Subscriber<Object> _responseSubscriber;
@@ -377,27 +376,18 @@ public class DefaultHttpClient implements HttpClient {
     private final Feature[] _defaultFeatures;
     
     private static void applyNononeoffFeatures(
-            final HandlerBuilder builder,
             final Channel channel,
             final Feature[] features) {
-        final Feature feature = 
-                InterfaceUtils.compositeExcludeType(features, 
-                        Feature.class, OneoffFeature.class);
-        if (null!=feature) {
-            feature.call(builder, channel.pipeline());
-        }
+        InterfaceUtils.combineImpls(Feature.class, features)
+            .call(_BUILDER, channel.pipeline());
     }
 
     private static Subscription applyOneoffFeatures(
-            final HandlerBuilder builder,
             final Channel channel,
             final Feature[] features) {
         final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
-        final Feature feature = 
-                InterfaceUtils.compositeIncludeType(features, OneoffFeature.class);
-        if (null!=feature) {
-            feature.call(builder, channel.pipeline());
-        }
+        InterfaceUtils.combineImpls(Feature.class, features)
+            .call(_BUILDER_ONEOFF, channel.pipeline());
         return RxNettys.removeHandlersSubscription(channel, diff.call());
     }
     
@@ -408,14 +398,31 @@ public class DefaultHttpClient implements HttpClient {
         }};
         
     private static final Map<Class<?>, APPLY> _CLS2APPLY;
+    private static final Map<Class<?>, APPLY> _CLS2APPLY_ONEOFF;
     private static final Map<Class<?>, ApplyToRequest> _CLS2APPLYTOREQUEST;
     
-    private static final HandlerBuilder _BUILDER = new HandlerBuilder() {
-
+    private static final HandlerBuilder _BUILDER_ONEOFF = new HandlerBuilder() {
         @Override
         public ChannelHandler build(final Feature feature, final ChannelPipeline pipeline,
                 final Object... args) {
-            return _CLS2APPLY.get(feature.getClass()).applyTo(pipeline, args);
+            final APPLY apply = _CLS2APPLY_ONEOFF.get(feature.getClass());
+            if (null!=apply) {
+                return apply.applyTo(pipeline, args);
+            } else {
+                return null;
+            }
+        }};
+        
+    private static final HandlerBuilder _BUILDER = new HandlerBuilder() {
+        @Override
+        public ChannelHandler build(final Feature feature, final ChannelPipeline pipeline,
+                final Object... args) {
+            final APPLY apply = _CLS2APPLY.get(feature.getClass());
+            if (null!=apply) {
+                return apply.applyTo(pipeline, args);
+            } else {
+                return null;
+            }
         }};
     
 
@@ -686,16 +693,21 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     static {
+        _CLS2APPLY_ONEOFF = new HashMap<>();
+        _CLS2APPLY_ONEOFF.put(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
+        _CLS2APPLY_ONEOFF.put(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_DECOMPRESSOR);
+        _CLS2APPLY_ONEOFF.put(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
+        _CLS2APPLY_ONEOFF.put(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
+        _CLS2APPLY_ONEOFF.put(APPLY_WORKER.class, APPLY.WORKER);
+        
         _CLS2APPLY = new HashMap<>();
-        _CLS2APPLY.put(Outbound.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
-        _CLS2APPLY.put(Outbound.ENABLE_DECOMPRESSOR.getClass(), APPLY.CONTENT_DECOMPRESSOR);
         _CLS2APPLY.put(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
-        _CLS2APPLY.put(Outbound.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
-        _CLS2APPLY.put(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
         _CLS2APPLY.put(Feature.ENABLE_SSL.class, APPLY.SSL);
+        _CLS2APPLY.put(APPLY_READY4INTERACTION_NOTIFIER.class, APPLY.READY4INTERACTION_NOTIFIER);
+        _CLS2APPLY.put(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
         
         _CLS2APPLYTOREQUEST = new HashMap<>();
-        _CLS2APPLYTOREQUEST.put(Outbound.ENABLE_DECOMPRESSOR.getClass(), 
+        _CLS2APPLYTOREQUEST.put(Feature.ENABLE_COMPRESSOR.getClass(), 
             new ApplyToRequest() {
                 @Override
                 public void applyToRequest(final HttpRequest request) {

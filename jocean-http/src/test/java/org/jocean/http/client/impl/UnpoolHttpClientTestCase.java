@@ -17,8 +17,8 @@ import java.util.Iterator;
 
 import javax.net.ssl.SSLException;
 
+import static org.jocean.http.Feature.ENABLE_LOGGING;
 import org.jocean.http.Feature.ENABLE_SSL;
-import org.jocean.http.client.Outbound;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
@@ -64,7 +64,7 @@ public class UnpoolHttpClientTestCase {
         final DefaultHttpClient client = new DefaultHttpClient(
                 creator,
                 Nettys.unpoolChannels(),
-                Outbound.ENABLE_LOGGING);
+                ENABLE_LOGGING);
         try {
             // first 
             {
@@ -72,7 +72,7 @@ public class UnpoolHttpClientTestCase {
                     client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
-                        Outbound.ENABLE_LOGGING)
+                        ENABLE_LOGGING)
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainMap())
                     .toBlocking().toIterable().iterator();
@@ -114,7 +114,7 @@ public class UnpoolHttpClientTestCase {
         final DefaultHttpClient client = new DefaultHttpClient(
                 creator,
                 Nettys.unpoolChannels(),
-                Outbound.ENABLE_LOGGING,
+                ENABLE_LOGGING,
                 new ENABLE_SSL(sslCtx)
                 );
         

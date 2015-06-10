@@ -9,6 +9,8 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 
 import java.util.concurrent.CountDownLatch;
 
+import static org.jocean.http.Feature.ENABLE_LOGGING;
+import static org.jocean.http.Feature.ENABLE_COMPRESSOR;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.client.impl.AbstractChannelCreator;
@@ -49,8 +51,8 @@ public class SignalTest {
                 .channel(NioSocketChannel.class);
             }}, pool
             , 
-            Outbound.ENABLE_LOGGING, 
-            Outbound.ENABLE_DECOMPRESSOR);
+            ENABLE_LOGGING, 
+            ENABLE_COMPRESSOR);
         final DefaultSignalClient client = new DefaultSignalClient(httpClient);
         
         client.registerRequestType(

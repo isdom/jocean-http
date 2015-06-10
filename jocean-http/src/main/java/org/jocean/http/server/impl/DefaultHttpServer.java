@@ -33,7 +33,6 @@ import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpTrade;
-import org.jocean.http.server.Inbound;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.OnHttpObject;
 import org.jocean.http.util.Nettys.ToOrdinal;
@@ -282,9 +281,9 @@ public class DefaultHttpServer implements HttpServer {
     
     static {
         _CLS2APPLY = new HashMap<>();
-        _CLS2APPLY.put(Inbound.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
-        _CLS2APPLY.put(Inbound.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
-        _CLS2APPLY.put(Inbound.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
+        _CLS2APPLY.put(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
+        _CLS2APPLY.put(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
+        _CLS2APPLY.put(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
         _CLS2APPLY.put(Feature.ENABLE_SSL.class, APPLY.SSL);
     }
 }

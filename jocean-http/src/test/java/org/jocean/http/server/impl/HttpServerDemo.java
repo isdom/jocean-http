@@ -28,12 +28,11 @@ import java.util.Iterator;
 import org.jocean.event.api.EventEngine;
 import org.jocean.event.extend.Runners;
 import org.jocean.event.extend.Services;
-import org.jocean.http.client.Outbound;
+import org.jocean.http.Feature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpTrade;
-import org.jocean.http.server.Inbound;
 import org.jocean.http.util.RxNettys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,7 +70,7 @@ public class HttpServerDemo {
                 bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
                 bootstrap.channel(LocalServerChannel.class);
             }},
-            Inbound.ENABLE_LOGGING
+            Feature.ENABLE_LOGGING
             );
         
         @SuppressWarnings("unused")
@@ -118,7 +117,7 @@ public class HttpServerDemo {
         
         @SuppressWarnings("resource")
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(),
-                Outbound.ENABLE_LOGGING);
+                Feature.ENABLE_LOGGING);
         
         while (true) {
             final ByteBuf content = Unpooled.buffer(0);
