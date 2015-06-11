@@ -396,29 +396,28 @@ public class DefaultHttpClient implements HttpClient {
     private static final Map<Class<?>, APPLY> _CLS2APPLY_ONEOFF;
     private static final Map<Class<?>, ApplyToRequest> _CLS2APPLYTOREQUEST;
     
-    private static final HandlerBuilder _BUILDER_ONEOFF = new HandlerBuilder() {
-        @Override
-        public ChannelHandler build(final Feature feature, final ChannelPipeline pipeline,
-                final Object... args) {
-            final APPLY apply = _CLS2APPLY_ONEOFF.get(feature.getClass());
-            if (null!=apply) {
-                return apply.applyTo(pipeline, args);
-            } else {
-                return null;
-            }
-        }};
+    private static final class CLS2APPLYBuilder implements HandlerBuilder {
+        CLS2APPLYBuilder(final Map<Class<?>, APPLY> cls2apply) {
+            this._cls2apply = cls2apply;
+        }
         
-    private static final HandlerBuilder _BUILDER = new HandlerBuilder() {
         @Override
         public ChannelHandler build(final Feature feature, final ChannelPipeline pipeline,
                 final Object... args) {
-            final APPLY apply = _CLS2APPLY.get(feature.getClass());
+            final APPLY apply = this._cls2apply.get(feature.getClass());
             if (null!=apply) {
                 return apply.applyTo(pipeline, args);
             } else {
                 return null;
             }
-        }};
+        }
+        
+        private final Map<Class<?>, APPLY> _cls2apply;
+    }
+    
+    private static final HandlerBuilder _BUILDER_ONEOFF;
+        
+    private static final HandlerBuilder _BUILDER;
     
 
     private static final FuncN<ChannelHandler> HTTPCLIENT_CODEC_FUNCN = new FuncN<ChannelHandler>() {
@@ -711,5 +710,7 @@ public class DefaultHttpClient implements HttpClient {
                             HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
                 }
             });
+        _BUILDER = new CLS2APPLYBuilder(_CLS2APPLY);
+        _BUILDER_ONEOFF = new CLS2APPLYBuilder(_CLS2APPLY_ONEOFF);
     }
 }

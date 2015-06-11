@@ -255,18 +255,13 @@ public class DefaultHttpServer implements HttpServer {
         private final FuncN<ChannelHandler> _factory;
     }
     
-    private final static Feature APPLY_HTTPSERVER = new Feature() {
-        @Override
-        public ChannelHandler call(final HandlerBuilder factory, final ChannelPipeline pipeline) {
-            return  APPLY.HTTPSERVER.applyTo(pipeline);
-        }
-    };
+    private final static Feature APPLY_HTTPSERVER = new Feature.AbstractFeature0() {};
 
     private static final class APPLY_WORKER 
         implements Feature, OnHttpObjectAware {
 
         @Override
-        public ChannelHandler call(final HandlerBuilder factory,
+        public ChannelHandler call(final HandlerBuilder builder,
                 final ChannelPipeline pipeline) {
             return APPLY.WORKER.applyTo(pipeline, this._onHttpObject);
         }
@@ -285,5 +280,6 @@ public class DefaultHttpServer implements HttpServer {
         _CLS2APPLY.put(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
         _CLS2APPLY.put(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
         _CLS2APPLY.put(Feature.ENABLE_SSL.class, APPLY.SSL);
+        _CLS2APPLY.put(APPLY_HTTPSERVER.getClass(), APPLY.HTTPSERVER);
     }
 }
