@@ -3,14 +3,16 @@ package org.jocean.http.util;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
 
 public class Class2ApplyBuilder implements HandlerBuilder {
-    public Class2ApplyBuilder(final Map<Class<?>, PipelineApply> cls2apply) {
-        this._cls2apply = cls2apply;
+
+    public void register(final Class<?> cls, final PipelineApply apply) {
+        this._cls2apply.put(cls, apply);
     }
     
     @Override
@@ -24,5 +26,5 @@ public class Class2ApplyBuilder implements HandlerBuilder {
         }
     }
     
-    private final Map<Class<?>, PipelineApply> _cls2apply;
+    private final Map<Class<?>, PipelineApply> _cls2apply = new HashMap<>();
 }

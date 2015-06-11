@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.jocean.http.Feature;
-import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.util.ChannelSubscriberAware;
@@ -396,9 +395,9 @@ public class DefaultHttpClient implements HttpClient {
         
     private static final Map<Class<?>, ApplyToRequest> _CLS2APPLYTOREQUEST;
     
-    private static final HandlerBuilder _BUILDER_ONEOFF;
+    private static final Class2ApplyBuilder _BUILDER_ONEOFF;
         
-    private static final HandlerBuilder _BUILDER;
+    private static final Class2ApplyBuilder _BUILDER;
     
 
     private static final FuncN<ChannelHandler> HTTPCLIENT_CODEC_FUNCN = new FuncN<ChannelHandler>() {
@@ -667,23 +666,20 @@ public class DefaultHttpClient implements HttpClient {
     
         private final FuncN<ChannelHandler> _factory;
     }
-
-    private static final Map<Class<?>, PipelineApply> _CLS2APPLY;
-    private static final Map<Class<?>, PipelineApply> _CLS2APPLY_ONEOFF;
     
     static {
-        _CLS2APPLY_ONEOFF = new HashMap<>();
-        _CLS2APPLY_ONEOFF.put(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
-        _CLS2APPLY_ONEOFF.put(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_DECOMPRESSOR);
-        _CLS2APPLY_ONEOFF.put(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
-        _CLS2APPLY_ONEOFF.put(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
-        _CLS2APPLY_ONEOFF.put(APPLY_WORKER.class, APPLY.WORKER);
+        _BUILDER_ONEOFF = new Class2ApplyBuilder();
+        _BUILDER_ONEOFF.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
+        _BUILDER_ONEOFF.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_DECOMPRESSOR);
+        _BUILDER_ONEOFF.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
+        _BUILDER_ONEOFF.register(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
+        _BUILDER_ONEOFF.register(APPLY_WORKER.class, APPLY.WORKER);
         
-        _CLS2APPLY = new HashMap<>();
-        _CLS2APPLY.put(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
-        _CLS2APPLY.put(Feature.ENABLE_SSL.class, APPLY.SSL);
-        _CLS2APPLY.put(APPLY_READY4INTERACTION_NOTIFIER.class, APPLY.READY4INTERACTION_NOTIFIER);
-        _CLS2APPLY.put(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
+        _BUILDER = new Class2ApplyBuilder();
+        _BUILDER.register(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
+        _BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
+        _BUILDER.register(APPLY_READY4INTERACTION_NOTIFIER.class, APPLY.READY4INTERACTION_NOTIFIER);
+        _BUILDER.register(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
         
         _CLS2APPLYTOREQUEST = new HashMap<>();
         _CLS2APPLYTOREQUEST.put(Feature.ENABLE_COMPRESSOR.getClass(), 
@@ -695,7 +691,5 @@ public class DefaultHttpClient implements HttpClient {
                             HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
                 }
             });
-        _BUILDER = new Class2ApplyBuilder(_CLS2APPLY);
-        _BUILDER_ONEOFF = new Class2ApplyBuilder(_CLS2APPLY_ONEOFF);
     }
 }

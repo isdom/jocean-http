@@ -25,18 +25,15 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.jocean.event.api.EventEngine;
 import org.jocean.http.Feature;
-import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpTrade;
+import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.OnHttpObject;
 import org.jocean.http.util.Nettys.ToOrdinal;
-import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.PipelineApply;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
@@ -166,9 +163,7 @@ public class DefaultHttpServer implements HttpServer {
     private final EventEngine _engine;
     private final Feature[] _defaultFeatures;
     
-    private static final Map<Class<?>, PipelineApply> _CLS2APPLY;
-    
-    private static final HandlerBuilder _BUILDER;
+    private static final Class2ApplyBuilder _BUILDER;
         
     private static final FuncN<ChannelHandler> HTTPSERVER_CODEC_FUNCN = new FuncN<ChannelHandler>() {
         @Override
@@ -272,13 +267,12 @@ public class DefaultHttpServer implements HttpServer {
     }
     
     static {
-        _CLS2APPLY = new HashMap<>();
-        _CLS2APPLY.put(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
-        _CLS2APPLY.put(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
-        _CLS2APPLY.put(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
-        _CLS2APPLY.put(Feature.ENABLE_SSL.class, APPLY.SSL);
-        _CLS2APPLY.put(APPLY_HTTPSERVER.getClass(), APPLY.HTTPSERVER);
+        _BUILDER = new Class2ApplyBuilder();
+        _BUILDER.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
+        _BUILDER.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
+        _BUILDER.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
+        _BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
+        _BUILDER.register(APPLY_HTTPSERVER.getClass(), APPLY.HTTPSERVER);
         
-        _BUILDER = new Class2ApplyBuilder(_CLS2APPLY);
     }
 }
