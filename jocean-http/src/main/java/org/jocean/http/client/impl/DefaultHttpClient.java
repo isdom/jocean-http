@@ -394,8 +394,6 @@ public class DefaultHttpClient implements HttpClient {
             return (channel.pipeline().names().indexOf(APPLY.READY4INTERACTION_NOTIFIER.name()) == -1);
         }};
         
-    private static final Map<Class<?>, PipelineApply> _CLS2APPLY;
-    private static final Map<Class<?>, PipelineApply> _CLS2APPLY_ONEOFF;
     private static final Map<Class<?>, ApplyToRequest> _CLS2APPLYTOREQUEST;
     
     private static final HandlerBuilder _BUILDER_ONEOFF;
@@ -670,6 +668,9 @@ public class DefaultHttpClient implements HttpClient {
         private final FuncN<ChannelHandler> _factory;
     }
 
+    private static final Map<Class<?>, PipelineApply> _CLS2APPLY;
+    private static final Map<Class<?>, PipelineApply> _CLS2APPLY_ONEOFF;
+    
     static {
         _CLS2APPLY_ONEOFF = new HashMap<>();
         _CLS2APPLY_ONEOFF.put(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
