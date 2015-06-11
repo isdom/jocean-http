@@ -103,9 +103,11 @@ public class DefaultHttpServer implements HttpServer {
     private DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        return new DefaultHttpTrade(channel, this._engine, 
+        return new DefaultHttpTrade(channel, 
+                this._engine, 
                 createChannelRecycler(subscriber),
-                _BUILDER, new APPLY_WORKER());
+                _BUILDER, 
+                new APPLY_WORKER());
     }
 
     private ChannelRecycler createChannelRecycler(final Subscriber<? super HttpTrade> subscriber) {
