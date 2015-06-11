@@ -72,7 +72,7 @@ public interface HttpClient extends Closeable {
      * 当返回的Observable<? extends Object> 实例被subscribe时,才基于上述指定的参数真正发起交互动作
      * @param remoteAddress 远端地址
      * @param request 要发送的HttpRequest (Object)*
-     * @return Observable<HttpObject> response: Observable of HttpObject, 
+     * @return Observable<Object> response: Observable of HttpObject, 
      * 推送内容为 HttpResponse + 0~N (HttpContent)
      */
     public Observable<? extends Object> defineInteraction(
