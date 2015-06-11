@@ -36,6 +36,8 @@ import org.jocean.http.server.HttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.OnHttpObject;
 import org.jocean.http.util.Nettys.ToOrdinal;
+import org.jocean.http.util.Class2ApplyBuilder;
+import org.jocean.http.util.PipelineApply;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.RxFunctions;
@@ -164,15 +166,9 @@ public class DefaultHttpServer implements HttpServer {
     private final EventEngine _engine;
     private final Feature[] _defaultFeatures;
     
-    private static final Map<Class<?>, APPLY> _CLS2APPLY;
+    private static final Map<Class<?>, PipelineApply> _CLS2APPLY;
     
-    private static final HandlerBuilder _BUILDER = new HandlerBuilder() {
-
-        @Override
-        public ChannelHandler build(final Feature feature, final ChannelPipeline pipeline,
-                final Object... args) {
-            return _CLS2APPLY.get(feature.getClass()).applyTo(pipeline, args);
-        }};
+    private static final HandlerBuilder _BUILDER;
         
     private static final FuncN<ChannelHandler> HTTPSERVER_CODEC_FUNCN = new FuncN<ChannelHandler>() {
         @Override
@@ -226,7 +222,7 @@ public class DefaultHttpServer implements HttpServer {
         }
     };
     
-    private static enum APPLY {
+    private static enum APPLY implements PipelineApply {
         LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
         CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC1)),
         SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
@@ -235,6 +231,7 @@ public class DefaultHttpServer implements HttpServer {
         WORKER(Functions.fromFunc(HTTPSERVER_WORK_FUNC1)),
         ;
         
+        @Override
         public ChannelHandler applyTo(final ChannelPipeline pipeline, final Object ... args) {
             if (null==this._factory) {
                 throw new UnsupportedOperationException("ChannelHandler's factory is null");
@@ -281,5 +278,7 @@ public class DefaultHttpServer implements HttpServer {
         _CLS2APPLY.put(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
         _CLS2APPLY.put(Feature.ENABLE_SSL.class, APPLY.SSL);
         _CLS2APPLY.put(APPLY_HTTPSERVER.getClass(), APPLY.HTTPSERVER);
+        
+        _BUILDER = new Class2ApplyBuilder(_CLS2APPLY);
     }
 }

@@ -44,8 +44,10 @@ import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.util.ChannelSubscriberAware;
+import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ToOrdinal;
+import org.jocean.http.util.PipelineApply;
 import org.jocean.http.util.ResponseSubscriberAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
@@ -392,28 +394,9 @@ public class DefaultHttpClient implements HttpClient {
             return (channel.pipeline().names().indexOf(APPLY.READY4INTERACTION_NOTIFIER.name()) == -1);
         }};
         
-    private static final Map<Class<?>, APPLY> _CLS2APPLY;
-    private static final Map<Class<?>, APPLY> _CLS2APPLY_ONEOFF;
+    private static final Map<Class<?>, PipelineApply> _CLS2APPLY;
+    private static final Map<Class<?>, PipelineApply> _CLS2APPLY_ONEOFF;
     private static final Map<Class<?>, ApplyToRequest> _CLS2APPLYTOREQUEST;
-    
-    private static final class CLS2APPLYBuilder implements HandlerBuilder {
-        CLS2APPLYBuilder(final Map<Class<?>, APPLY> cls2apply) {
-            this._cls2apply = cls2apply;
-        }
-        
-        @Override
-        public ChannelHandler build(final Feature feature, final ChannelPipeline pipeline,
-                final Object... args) {
-            final APPLY apply = this._cls2apply.get(feature.getClass());
-            if (null!=apply) {
-                return apply.applyTo(pipeline, args);
-            } else {
-                return null;
-            }
-        }
-        
-        private final Map<Class<?>, APPLY> _cls2apply;
-    }
     
     private static final HandlerBuilder _BUILDER_ONEOFF;
         
@@ -654,7 +637,7 @@ public class DefaultHttpClient implements HttpClient {
         }
     };
         
-    private static enum APPLY {
+    private static enum APPLY implements PipelineApply {
         LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
         PROGRESSIVE(Functions.fromFunc(PROGRESSIVE_FUNC2)),
         CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC1)),
@@ -668,6 +651,7 @@ public class DefaultHttpClient implements HttpClient {
         
         public static final ToOrdinal TO_ORDINAL = Nettys.ordinal(APPLY.class);
         
+        @Override
         public ChannelHandler applyTo(final ChannelPipeline pipeline, final Object ... args) {
             if (null==this._factory) {
                 throw new UnsupportedOperationException("ChannelHandler's factory is null");
@@ -710,7 +694,7 @@ public class DefaultHttpClient implements HttpClient {
                             HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
                 }
             });
-        _BUILDER = new CLS2APPLYBuilder(_CLS2APPLY);
-        _BUILDER_ONEOFF = new CLS2APPLYBuilder(_CLS2APPLY_ONEOFF);
+        _BUILDER = new Class2ApplyBuilder(_CLS2APPLY);
+        _BUILDER_ONEOFF = new Class2ApplyBuilder(_CLS2APPLY_ONEOFF);
     }
 }
