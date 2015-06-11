@@ -13,11 +13,7 @@ public class Outbound {
         throw new IllegalStateException("No instances!");
     }
 
-    public static final Feature ENABLE_MULTIPART = new Feature() {
-        @Override
-        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
-            return  builder.build(this, pipeline);
-        }
+    public static final Feature ENABLE_MULTIPART = new Feature.AbstractFeature0() {
     };
     
     public static final class ENABLE_PROGRESSIVE implements 

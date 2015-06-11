@@ -308,12 +308,7 @@ public class DefaultHttpClient implements HttpClient {
 //        this._channelCreator.close();
     }
 
-    private final static Feature APPLY_HTTPCLIENT = new Feature() {
-        @Override
-        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
-            return builder.build(this, pipeline);
-        }
-    };
+    private final static Feature APPLY_HTTPCLIENT = new Feature.AbstractFeature0() {};
     
     private static final class APPLY_READY4INTERACTION_NOTIFIER implements
             Feature, ChannelSubscriberAware, FeaturesAware {
