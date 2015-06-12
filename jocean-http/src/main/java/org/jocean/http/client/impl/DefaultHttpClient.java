@@ -662,10 +662,10 @@ public class DefaultHttpClient implements HttpClient {
         _BUILDER_ONEOFF.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_DECOMPRESSOR);
         _BUILDER_ONEOFF.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
         _BUILDER_ONEOFF.register(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
+        _BUILDER_ONEOFF.register(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
         _BUILDER_ONEOFF.register(APPLY_WORKER.class, APPLY.WORKER);
         
         _BUILDER = new Class2ApplyBuilder();
-        _BUILDER.register(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
         _BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
         _BUILDER.register(APPLY_READY4INTERACTION_NOTIFIER.class, APPLY.READY4INTERACTION_NOTIFIER);
         _BUILDER.register(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
