@@ -32,11 +32,8 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.net.SocketAddress;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.jocean.http.Feature;
@@ -103,7 +100,15 @@ public class DefaultHttpClient implements HttpClient {
             final Observable<? extends Object> request,
             final Feature... features) {
         final Feature[] applyFeatures = cloneFeatures(features.length > 0 ? features : this._defaultFeatures);
-        final ApplyToRequest applyToRequest = buildInterfaceOf(applyFeatures, _CLS2APPLYTOREQUEST, ApplyToRequest.class);
+        final ApplyToRequest applyToRequest = InterfaceUtils.compositeBySource(
+                ApplyToRequest.class, 
+                new Func1<Feature,ApplyToRequest>() {
+                    @Override
+                    public ApplyToRequest call(final Feature feature) {
+                        return _CLS2APPLYTOREQUEST.get(feature.getClass());
+                    }}, 
+                applyFeatures);
+//                buildInterfaceOf(_CLS2APPLYTOREQUEST, ApplyToRequest.class, );
         final Func1<Channel, Observable<ChannelFuture>> transferRequest = 
                 new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
@@ -146,22 +151,6 @@ public class DefaultHttpClient implements HttpClient {
                     }
                 }
             }});
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T> T buildInterfaceOf(
-            final Feature[]         features, 
-            final Map<Class<?>, T>  cls2intf, 
-            final Class<T>          cls) {
-        final List<T> intfs = new ArrayList<>();
-        for (Feature f : features) {
-            final T intf = cls2intf.get(f.getClass());
-            if (null!=intf) {
-                intfs.add(intf);
-            }
-        }
-        return !intfs.isEmpty() ? InterfaceUtils.compositeIncludeType(
-                intfs.toArray((T[])Array.newInstance(cls, 0)), cls) : null;
     }
 
     private Observable<? extends Channel> createChannel(
@@ -209,7 +198,7 @@ public class DefaultHttpClient implements HttpClient {
 
     private void prepareFeaturesAware(final Feature[] features) {
         final FeaturesAware featuresAware = 
-                InterfaceUtils.compositeIncludeType(features, FeaturesAware.class);
+                InterfaceUtils.compositeIncludeType(FeaturesAware.class, (Object[])features);
         if (null!=featuresAware) {
             featuresAware.setApplyFeatures(features);
         }
@@ -219,7 +208,7 @@ public class DefaultHttpClient implements HttpClient {
             final Subscriber<? super Channel> subscriber,
             final Feature[] features) {
         final ChannelSubscriberAware channelSubscriberAware = 
-                InterfaceUtils.compositeIncludeType(features, ChannelSubscriberAware.class);
+                InterfaceUtils.compositeIncludeType(ChannelSubscriberAware.class, (Object[])features);
         if (null!=channelSubscriberAware) {
             channelSubscriberAware.setChannelSubscriber(subscriber);
         }
@@ -360,7 +349,7 @@ public class DefaultHttpClient implements HttpClient {
         features = JOArrays.addFirst(Feature[].class, features, 
                 APPLY_HTTPCLIENT, new APPLY_READY4INTERACTION_NOTIFIER(), new APPLY_WORKER());
         final ResponseSubscriberAware responseSubscriberAware = 
-                InterfaceUtils.compositeIncludeType(features, ResponseSubscriberAware.class);
+                InterfaceUtils.compositeIncludeType(ResponseSubscriberAware.class, (Object[])features);
         if (null!=responseSubscriberAware) {
             responseSubscriberAware.setResponseSubscriber(responseSubscriber);
         }

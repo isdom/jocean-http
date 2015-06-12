@@ -89,7 +89,7 @@ public class DefaultHttpTrade implements HttpTrade {
                     detachAll();
                 }});
         final OnHttpObjectAware onHttpObjectAware = 
-                InterfaceUtils.compositeIncludeType(features, OnHttpObjectAware.class);
+                InterfaceUtils.compositeIncludeType(OnHttpObjectAware.class, (Object[])features);
         if (null!=onHttpObjectAware) {
             onHttpObjectAware.setOnHttpObject(
                     EventUtils.buildInterfaceAdapter(OnHttpObject.class, this._requestReceiver));
