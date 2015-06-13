@@ -33,14 +33,13 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.util.ChannelSubscriberAware;
 import org.jocean.http.util.Class2ApplyBuilder;
+import org.jocean.http.util.Class2Obj;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ToOrdinal;
 import org.jocean.http.util.PipelineApply;
@@ -101,14 +100,7 @@ public class DefaultHttpClient implements HttpClient {
             final Feature... features) {
         final Feature[] applyFeatures = cloneFeatures(features.length > 0 ? features : this._defaultFeatures);
         final ApplyToRequest applyToRequest = InterfaceUtils.compositeBySource(
-                ApplyToRequest.class, 
-                new Func1<Feature,ApplyToRequest>() {
-                    @Override
-                    public ApplyToRequest call(final Feature feature) {
-                        return _CLS2APPLYTOREQUEST.get(feature.getClass());
-                    }}, 
-                applyFeatures);
-//                buildInterfaceOf(_CLS2APPLYTOREQUEST, ApplyToRequest.class, );
+                ApplyToRequest.class, _CLS2APPLYTOREQUEST, applyFeatures);
         final Func1<Channel, Observable<ChannelFuture>> transferRequest = 
                 new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
@@ -382,7 +374,7 @@ public class DefaultHttpClient implements HttpClient {
             return (channel.pipeline().names().indexOf(APPLY.READY4INTERACTION_NOTIFIER.name()) == -1);
         }};
         
-    private static final Map<Class<?>, ApplyToRequest> _CLS2APPLYTOREQUEST;
+    private static final Class2Obj<Feature, ApplyToRequest> _CLS2APPLYTOREQUEST;
     
     private static final Class2ApplyBuilder _BUILDER_ONEOFF;
         
@@ -670,8 +662,8 @@ public class DefaultHttpClient implements HttpClient {
         _BUILDER.register(APPLY_READY4INTERACTION_NOTIFIER.class, APPLY.READY4INTERACTION_NOTIFIER);
         _BUILDER.register(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
         
-        _CLS2APPLYTOREQUEST = new HashMap<>();
-        _CLS2APPLYTOREQUEST.put(Feature.ENABLE_COMPRESSOR.getClass(), 
+        _CLS2APPLYTOREQUEST = new Class2Obj<>();
+        _CLS2APPLYTOREQUEST.register(Feature.ENABLE_COMPRESSOR.getClass(), 
             new ApplyToRequest() {
                 @Override
                 public void applyToRequest(final HttpRequest request) {
