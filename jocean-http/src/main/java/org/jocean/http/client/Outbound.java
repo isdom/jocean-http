@@ -4,7 +4,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 
 import org.jocean.http.Feature;
-import org.jocean.http.util.ResponseSubscriberAware;
+import org.jocean.http.client.impl.ResponseSubscriberAware;
 
 import rx.Subscriber;
 

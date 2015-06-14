@@ -1,4 +1,4 @@
-package org.jocean.http.util;
+package org.jocean.http.client.impl;
 
 import java.util.HashMap;
 import java.util.Map;

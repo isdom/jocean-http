@@ -37,13 +37,10 @@ import java.net.SocketAddress;
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
-import org.jocean.http.util.ChannelSubscriberAware;
 import org.jocean.http.util.Class2ApplyBuilder;
-import org.jocean.http.util.Class2Obj;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ToOrdinal;
 import org.jocean.http.util.PipelineApply;
-import org.jocean.http.util.ResponseSubscriberAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
@@ -286,8 +283,7 @@ public class DefaultHttpClient implements HttpClient {
     @Override
     public void close() throws IOException {
         // Shut down executor threads to exit.
-        //  TODO
-//        this._channelCreator.close();
+        this._channelCreator.close();
     }
 
     private final static Feature APPLY_HTTPCLIENT = new Feature.AbstractFeature0() {};
