@@ -37,6 +37,7 @@ import java.net.SocketAddress;
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
+import org.jocean.http.client.Outbound.ResponseSubscriberAware;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ToOrdinal;

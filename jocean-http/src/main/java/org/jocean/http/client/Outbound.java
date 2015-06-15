@@ -4,7 +4,6 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 
 import org.jocean.http.Feature;
-import org.jocean.http.client.impl.ResponseSubscriberAware;
 
 import rx.Subscriber;
 
@@ -15,6 +14,10 @@ public class Outbound {
 
     public static final Feature ENABLE_MULTIPART = new Feature.AbstractFeature0() {
     };
+    
+    public interface ResponseSubscriberAware {
+        public void setResponseSubscriber(final Subscriber<Object> subscriber);
+    }
     
     public static final class ENABLE_PROGRESSIVE implements 
         Feature, ResponseSubscriberAware, Cloneable {
