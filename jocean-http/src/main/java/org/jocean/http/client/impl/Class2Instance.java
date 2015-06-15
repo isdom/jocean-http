@@ -5,7 +5,7 @@ import java.util.Map;
 
 import rx.functions.Func1;
 
-public class Class2Obj<T,R> implements Func1<T,R> {
+public class Class2Instance<T,R> implements Func1<T,R> {
 
     @Override
     public R call(final T t) {

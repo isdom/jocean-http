@@ -370,7 +370,7 @@ public class DefaultHttpClient implements HttpClient {
             return (channel.pipeline().names().indexOf(APPLY.READY4INTERACTION_NOTIFIER.name()) == -1);
         }};
         
-    private static final Class2Obj<Feature, ApplyToRequest> _CLS2APPLYTOREQUEST;
+    private static final Class2Instance<Feature, ApplyToRequest> _CLS2APPLYTOREQUEST;
     
     private static final Class2ApplyBuilder _BUILDER_ONEOFF;
         
@@ -658,7 +658,7 @@ public class DefaultHttpClient implements HttpClient {
         _BUILDER.register(APPLY_READY4INTERACTION_NOTIFIER.class, APPLY.READY4INTERACTION_NOTIFIER);
         _BUILDER.register(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
         
-        _CLS2APPLYTOREQUEST = new Class2Obj<>();
+        _CLS2APPLYTOREQUEST = new Class2Instance<>();
         _CLS2APPLYTOREQUEST.register(Feature.ENABLE_COMPRESSOR.getClass(), 
             new ApplyToRequest() {
                 @Override
