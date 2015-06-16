@@ -17,25 +17,27 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.util.ReferenceCountUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 
-import org.jocean.event.api.EventEngine;
-import org.jocean.event.extend.Runners;
-import org.jocean.event.extend.Services;
 import org.jocean.http.Feature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
+import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.server.HttpTestServer;
-import org.jocean.http.server.HttpTrade;
 import org.jocean.http.util.RxNettys;
 import org.junit.Test;
 
@@ -45,19 +47,9 @@ import rx.Subscription;
 import rx.functions.Action1;
 
 public class DefaultHttpServerTestCase {
-    
-    final EventEngine engine = 
-            Runners.build(new Runners.Config()
-                .objectNamePrefix("demo:type=test")
-                .name("demo")
-                .timerService(Services.lookupOrCreateTimerService("demo"))
-                .executorSource(Services.lookupOrCreateFlowBasedExecutorSource("demo"))
-                );
-
     @Test
     public void testHttpHappyPathOnce() throws Exception {
         final HttpServer server = new DefaultHttpServer(
-                engine,
                 new AbstractBootstrapCreator(
                 new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
             @Override
@@ -74,9 +66,10 @@ public class DefaultHttpServerTestCase {
                 @Override
                 public void call(final HttpTrade trade) {
                     trade.request().subscribe(new Subscriber<HttpObject>() {
+                        private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
                         @Override
                         public void onCompleted() {
-                            final FullHttpRequest req = trade.retainFullHttpRequest();
+                            final FullHttpRequest req = retainFullHttpRequest();
                             if (null!=req) {
                                 try {
                                     final InputStream is = new ByteBufInputStream(req.content());
@@ -86,8 +79,7 @@ public class DefaultHttpServerTestCase {
                                             Unpooled.wrappedBuffer(bytes));
                                     response.headers().set(CONTENT_TYPE, "text/plain");
                                     response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                                    trade.response(
-                                        Observable.<HttpObject>just(response));
+                                    Observable.<HttpObject>just(response).subscribe(trade.responseObserver());
                                 } catch (IOException e) {
                                     e.printStackTrace();
                                 } finally {
@@ -98,8 +90,29 @@ public class DefaultHttpServerTestCase {
                         @Override
                         public void onError(Throwable e) {
                         }
+                        private FullHttpRequest retainFullHttpRequest() {
+                            if (this._reqHttpObjects.size()>0) {
+                                if (this._reqHttpObjects.get(0) instanceof FullHttpRequest) {
+                                    return ((FullHttpRequest)this._reqHttpObjects.get(0)).retain();
+                                }
+                                
+                                final HttpRequest req = (HttpRequest)this._reqHttpObjects.get(0);
+                                final ByteBuf[] bufs = new ByteBuf[this._reqHttpObjects.size()-1];
+                                for (int idx = 1; idx<this._reqHttpObjects.size(); idx++) {
+                                    bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
+                                }
+                                return new DefaultFullHttpRequest(
+                                        req.getProtocolVersion(), 
+                                        req.getMethod(), 
+                                        req.getUri(), 
+                                        Unpooled.wrappedBuffer(bufs));
+                            } else {
+                                return null;
+                            }
+                        }
                         @Override
                         public void onNext(final HttpObject msg) {
+                            this._reqHttpObjects.add(ReferenceCountUtil.retain(msg));
                         }});
                 }});
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());

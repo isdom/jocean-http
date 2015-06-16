@@ -26,8 +26,10 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import java.io.IOException;
 import java.net.SocketAddress;
 
+import org.jocean.event.api.EventEngine;
 import org.jocean.http.Feature;
-import org.jocean.http.server.HttpServer;
+import org.jocean.http.server.HttpServerOld;
+import org.jocean.http.server.HttpTrade;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.OnHttpObject;
@@ -50,7 +52,7 @@ import rx.functions.Functions;
  * @author isdom
  *
  */
-public class DefaultHttpServer implements HttpServer {
+public class DefaultHttpServerOld implements HttpServerOld {
 
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
@@ -64,7 +66,7 @@ public class DefaultHttpServer implements HttpServer {
     }
     
     private static final Logger LOG =
-            LoggerFactory.getLogger(DefaultHttpServer.class);
+            LoggerFactory.getLogger(DefaultHttpServerOld.class);
     
     /* (non-Javadoc)
      * @see org.jocean.http.server.HttpServer#create(java.net.SocketAddress)
@@ -98,10 +100,11 @@ public class DefaultHttpServer implements HttpServer {
             }});
     }
 
-    private DefaultHttpTrade createHttpTrade(
+    private DefaultHttpTradeOld createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        return new DefaultHttpTrade(channel, 
+        return new DefaultHttpTradeOld(channel, 
+                this._engine, 
                 createChannelRecycler(subscriber),
                 _BUILDER, 
                 new APPLY_WORKER());
@@ -129,13 +132,14 @@ public class DefaultHttpServer implements HttpServer {
             }};
     }
 
-    public DefaultHttpServer() {
-        this((Feature[])null);
+    public DefaultHttpServerOld(final EventEngine engine) {
+        this(engine, (Feature[])null);
     }
     
-    public DefaultHttpServer(
+    public DefaultHttpServerOld(
+            final EventEngine engine, 
             final Feature... defaultFeatures) {
-        this(new AbstractBootstrapCreator(new NioEventLoopGroup(1), new NioEventLoopGroup()) {
+        this(engine, new AbstractBootstrapCreator(new NioEventLoopGroup(1), new NioEventLoopGroup()) {
             @Override
             protected void initializeBootstrap(ServerBootstrap bootstrap) {
                 bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
@@ -143,9 +147,11 @@ public class DefaultHttpServer implements HttpServer {
             }}, defaultFeatures);
     }
     
-    public DefaultHttpServer(
+    public DefaultHttpServerOld(
+            final EventEngine engine, 
             final BootstrapCreator creator,
             final Feature... defaultFeatures) {
+        this._engine = engine;
         this._creator = creator;
         this._defaultFeatures = null!=defaultFeatures ? defaultFeatures : Feature.EMPTY_FEATURES;
     }
@@ -156,6 +162,7 @@ public class DefaultHttpServer implements HttpServer {
     }
     
     private final BootstrapCreator _creator;
+    private final EventEngine _engine;
     private final Feature[] _defaultFeatures;
     
     private static final Class2ApplyBuilder _BUILDER;

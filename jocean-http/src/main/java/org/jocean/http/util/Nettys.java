@@ -16,7 +16,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 
-import org.jocean.event.api.annotation.GuardPaired;
 import org.jocean.http.client.impl.AbstractChannelPool;
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.idiom.Ordered;
@@ -37,7 +36,7 @@ public class Nettys {
     }
     
     public interface OnHttpObject {
-        @GuardPaired(paired={"org.jocean.http.util.Nettys._NETTY_REFCOUNTED_GUARD"})
+        //@GuardPaired(paired={"org.jocean.http.util.Nettys._NETTY_REFCOUNTED_GUARD"})
         public void onHttpObject(final HttpObject httpObject);
         public void onError(Throwable e);
     }
