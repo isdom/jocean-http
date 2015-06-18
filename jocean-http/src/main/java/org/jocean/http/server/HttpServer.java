@@ -7,6 +7,7 @@ import io.netty.handler.codec.http.HttpObject;
 
 import java.io.Closeable;
 import java.net.SocketAddress;
+import java.util.concurrent.Executor;
 
 import org.jocean.http.Feature;
 
@@ -24,6 +25,7 @@ public interface HttpServer extends Closeable {
     
     public interface HttpTrade {
         public Observable<? extends HttpObject> request();
+        public Executor requestExecutor();
         public Observer<HttpObject> responseObserver();
     }
 }

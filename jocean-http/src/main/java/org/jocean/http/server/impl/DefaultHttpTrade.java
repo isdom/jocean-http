@@ -13,6 +13,7 @@ import io.netty.util.ReferenceCountUtil;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
@@ -67,7 +68,7 @@ public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
         if (httpObject instanceof HttpRequest) {
             this._isKeepAlive = HttpHeaders.isKeepAlive((HttpRequest)httpObject);
         }
-        for (Subscriber<? super HttpObject> subscriber : this._subscriber) {
+        for (Subscriber<? super HttpObject> subscriber : this._subscribers) {
             if (!subscriber.isUnsubscribed()) {
                 subscriber.onNext(httpObject);
                 if ( (httpObject instanceof FullHttpRequest) 
@@ -80,7 +81,7 @@ public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
 
     @Override
     public void onError(final Throwable e) {
-        for (Subscriber<? super HttpObject> subscriber : this._subscriber) {
+        for (Subscriber<? super HttpObject> subscriber : this._subscribers) {
             subscriber.onError(e);
         }
     }
@@ -90,6 +91,11 @@ public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
         return Observable.create(this._onSubscribeRequest);
     }
 
+    @Override
+    public Executor requestExecutor() {
+        return this._channel.eventLoop();
+    }
+    
     @Override
     public Observer<HttpObject> responseObserver() {
         
@@ -114,23 +120,24 @@ public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
             }};
     }
     
-    private OnSubscribe<HttpObject> _onSubscribeRequest = new OnSubscribe<HttpObject>() {
+    private final Channel _channel;
+    private final List<Subscriber<? super HttpObject>> _subscribers = new CopyOnWriteArrayList<>();
+    private volatile boolean _isKeepAlive = false;
+    private final ChannelRecycler _channelRecycler;
+    private final Subscription _removeHandlers;
+    
+    private final OnSubscribe<HttpObject> _onSubscribeRequest = new OnSubscribe<HttpObject>() {
         @Override
         public void call(final Subscriber<? super HttpObject> subscriber) {
             if (!subscriber.isUnsubscribed()) {
-                _subscriber.add(subscriber);
+                _subscribers.add(subscriber);
                 subscriber.add(new OneshotSubscription() {
                     @Override
                     protected void doUnsubscribe() {
-                        _subscriber.remove(subscriber);
+                        _subscribers.remove(subscriber);
                     }});
             }
         }
     };
     
-    private final Channel _channel;
-    private final List<Subscriber<? super HttpObject>> _subscriber = new CopyOnWriteArrayList<>();
-    private volatile boolean _isKeepAlive = false;
-    private final ChannelRecycler _channelRecycler;
-    private final Subscription _removeHandlers;
 }
