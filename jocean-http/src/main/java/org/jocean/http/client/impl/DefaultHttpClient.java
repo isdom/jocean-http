@@ -220,6 +220,10 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
     
+    public DefaultHttpClient() {
+        this(1, Feature.EMPTY_FEATURES);
+    }
+    
     public DefaultHttpClient(final Feature... defaultFeatures) {
         this(1, defaultFeatures);
     }
