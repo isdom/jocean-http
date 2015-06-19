@@ -7,8 +7,13 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelPipeline;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
@@ -250,4 +255,14 @@ public class RxNettys {
             objs.clear();
         }
     }
+    
+    public static Observable<? extends HttpObject> response401Unauthorized(
+            final HttpVersion version, final String vlaueOfWWWAuthenticate) {
+        final HttpResponse response = new DefaultFullHttpResponse(
+                version, HttpResponseStatus.UNAUTHORIZED);
+        HttpHeaders.setHeader(response, HttpHeaders.Names.WWW_AUTHENTICATE, vlaueOfWWWAuthenticate);
+        HttpHeaders.setHeader(response, HttpHeaders.Names.CONTENT_LENGTH, 0);
+        return Observable.just(response);
+    }
+    
 }
