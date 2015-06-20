@@ -40,6 +40,7 @@ public class CachedRequest {
             
             @Override
             public void onError(final Throwable e) {
+                _error = e;
                 for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
                     try {
                         subscriber.onError(e);
@@ -84,7 +85,15 @@ public class CachedRequest {
                     @Override
                     public void run() {
                         if (!subscriber.isUnsubscribed()) {
-                            //  TODO, handle onError cached
+                            if (null != _error) {
+                                try {
+                                    subscriber.onError(_error);
+                                } catch (Throwable e1) {
+                                    LOG.warn("exception when request's ({}).onError, detail:{}",
+                                        subscriber, ExceptionUtils.exception2detail(e1));
+                                }
+                                return;
+                            }
                             for (HttpObject httpObj : _reqHttpObjects ) {
                                 subscriber.onNext(httpObj);
                             }
@@ -109,4 +118,6 @@ public class CachedRequest {
     private final HttpTrade _trade;
     private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
     private final List<Subscriber<? super HttpObject>> _subscribers = new ArrayList<>();
-    private boolean _isCompleted = false;}
+    private boolean _isCompleted = false;
+    private Throwable _error = null;
+}
