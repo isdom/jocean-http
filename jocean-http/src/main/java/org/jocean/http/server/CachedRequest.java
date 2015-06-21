@@ -1,6 +1,12 @@
 package org.jocean.http.server;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.ReferenceCountUtil;
 
 import java.util.ArrayList;
@@ -75,6 +81,27 @@ public class CachedRequest {
                 }
                 _reqHttpObjects.clear();
             }});
+    }
+    
+    public FullHttpRequest retainFullHttpRequest() {
+        if (this._isCompleted && this._reqHttpObjects.size()>0) {
+            if (this._reqHttpObjects.get(0) instanceof FullHttpRequest) {
+                return ((FullHttpRequest)this._reqHttpObjects.get(0)).retain();
+            }
+            
+            final HttpRequest req = (HttpRequest)this._reqHttpObjects.get(0);
+            final ByteBuf[] bufs = new ByteBuf[this._reqHttpObjects.size()-1];
+            for (int idx = 1; idx<this._reqHttpObjects.size(); idx++) {
+                bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
+            }
+            return new DefaultFullHttpRequest(
+                    req.getProtocolVersion(), 
+                    req.getMethod(), 
+                    req.getUri(), 
+                    Unpooled.wrappedBuffer(bufs));
+        } else {
+            return null;
+        }
     }
     
     public Observable<? extends HttpObject> request() {
