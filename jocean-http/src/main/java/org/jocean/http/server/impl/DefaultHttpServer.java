@@ -120,8 +120,16 @@ public class DefaultHttpServer implements HttpServer {
                 //
                 // See https://github.com/netty/netty/issues/2983 for more information.
                 if (isKeepAlive && !subscriber.isUnsubscribed()) {
-                    subscriber.onNext(createHttpTrade(channel, subscriber));
                     channel.flush();
+                    if (channel.eventLoop().inEventLoop()) {
+                        subscriber.onNext(createHttpTrade(channel, subscriber));
+                    } else {
+                        channel.eventLoop().submit(new Runnable() {
+                            @Override
+                            public void run() {
+                                subscriber.onNext(createHttpTrade(channel, subscriber));
+                            }});
+                    }
                 } else {
                     channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
                         .addListener(ChannelFutureListener.CLOSE);
