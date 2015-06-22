@@ -11,6 +11,7 @@ import io.netty.util.ReferenceCountUtil;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.idiom.ExceptionUtils;
@@ -131,11 +132,7 @@ public class CachedRequest {
                             subscriber.add(new OneshotSubscription() {
                                 @Override
                                 protected void doUnsubscribe() {
-                                    _trade.requestExecutor().execute(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            _subscribers.remove(subscriber);
-                                        }});
+                                    _subscribers.remove(subscriber);
                                 }});
                         }
                     }});
@@ -144,7 +141,7 @@ public class CachedRequest {
     
     private final HttpTrade _trade;
     private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
-    private final List<Subscriber<? super HttpObject>> _subscribers = new ArrayList<>();
+    private final List<Subscriber<? super HttpObject>> _subscribers = new CopyOnWriteArrayList<>();
     private boolean _isCompleted = false;
     private Throwable _error = null;
 }
