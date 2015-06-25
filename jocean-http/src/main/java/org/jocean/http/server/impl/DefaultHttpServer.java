@@ -203,12 +203,20 @@ public class DefaultHttpServer implements HttpServer {
                 @Override
                 public void channelInactive(final ChannelHandlerContext ctx)
                         throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("channel({})/handler({}): channelInactive and call onHttpObject({}).onError with RuntimeException.", 
+                                ctx.channel(), this, onHttpObject);
+                    }
                     onHttpObject.onError(new RuntimeException("channelInactive"));
                 }
 
                 @Override
                 protected void channelRead0(final ChannelHandlerContext ctx,
                         final HttpObject msg) throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("channel({})/handler({}): channelRead0 and call onHttpObject({}).onHttpObject with msg({}).", 
+                                ctx.channel(), this, onHttpObject, msg);
+                    }
                     onHttpObject.onHttpObject(msg);
                 }
 

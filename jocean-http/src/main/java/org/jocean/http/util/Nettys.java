@@ -110,7 +110,7 @@ public class Nettys {
                     //  OK, add handler before current handler
                     pipeline.addBefore(entry.getKey(), name, handler);
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("channel({}): add ({}) handler before({}).", pipeline.channel(), name, entry.getKey());
+                        LOG.debug("channel({}): add ({}/{}) handler before({}).", pipeline.channel(), name, handler, entry.getKey());
                     }
                     return handler;
                 }
@@ -123,7 +123,7 @@ public class Nettys {
         }
         pipeline.addLast(name, handler);
         if (LOG.isDebugEnabled()) {
-            LOG.debug("channel({}): add ({}) handler at last.", pipeline.channel(), name);
+            LOG.debug("channel({}): add ({}/{}) handler at last.", pipeline.channel(), name, handler);
         }
         return handler;
     }

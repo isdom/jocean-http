@@ -6,6 +6,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
@@ -169,9 +170,9 @@ public class RxNettys {
                 final ChannelPipeline pipeline = channel.pipeline();
                 for (String name : names) {
                     if (pipeline.context(name) != null) {
-                        pipeline.remove(name);
+                        final ChannelHandler handler = pipeline.remove(name);
                         if (LOG.isDebugEnabled()) {
-                            LOG.debug("channel({}): remove oneoff Handler({}) success.", channel, name);
+                            LOG.debug("channel({}): remove oneoff Handler({}/{}) success.", channel, name, handler);
                         }
                     }
                 }
