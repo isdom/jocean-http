@@ -266,4 +266,12 @@ public class RxNettys {
         return Observable.just(response);
     }
     
+    public static Observable<? extends HttpObject> response200OK(
+            final HttpVersion version) {
+        final HttpResponse response = new DefaultFullHttpResponse(
+                version, HttpResponseStatus.OK);
+        HttpHeaders.setHeader(response, HttpHeaders.Names.CONTENT_LENGTH, 0);
+        return Observable.just(response);
+    }
+    
 }
