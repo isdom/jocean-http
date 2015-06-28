@@ -68,12 +68,13 @@ public class SignalTest {
         client.registerRequestType(
                 AddMultiMediasToJourneyRequest.class, 
                 AddMultiMediasToJourneyResponse.class,
-                "http://jumpbox.medtap.cn:8888",
-//                "http://127.0.0.1:9090"
+//                "http://jumpbox.medtap.cn:8888",
+                "http://127.0.0.1:8888",
                 Outbound.ENABLE_MULTIPART,
                 new Outbound.ENABLE_PROGRESSIVE(100)
                 );
         
+        /*
         {
             final QueryMyPatientsForDoctorRequest req = new QueryMyPatientsForDoctorRequest();
             req.setDoctorId("8510");
@@ -127,7 +128,7 @@ public class SignalTest {
         }
         latch.await();
         pool.awaitRecycleChannels();
-        /*
+        */
         {
             final AddMultiMediasToJourneyRequest req = new AddMultiMediasToJourneyRequest();
             req.setCaseId("120");
@@ -136,6 +137,8 @@ public class SignalTest {
             final Subscription subscription = 
             client.defineInteraction(req, 
                     new Attachment("/Users/isdom/Desktop/997df3df73797e91dea4853c228fcbdee36ceb8a38cc8-1vxyhE_fw236.jpeg", "image/jpeg"))
+//                    new Attachment("/Users/isdom/Pictures/2015-05-23-胜利实验一(1)班临安杨溪村亲子活动/11850523/DSC06443.JPG", "image/jpeg"))
+                    
                 .subscribe(new ProgressiveSubscriber<AddMultiMediasToJourneyResponse>() {
     
                 @Override
@@ -166,6 +169,5 @@ public class SignalTest {
             //  TODO, why invoke onCompleted Event? not onError, check
             //  TO BE CONTINUE, 2015-05-13
         }
-        */
     }
 }
