@@ -40,6 +40,12 @@ import rx.functions.Func0;
  */
 public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
     
+    @Override
+    public String toString() {
+        return "HttpTrade [channel=" + _channel + ", subscribers.size="
+                + _subscribers.size() + ", isKeepAlive=" + _isKeepAlive + "]";
+    }
+
     @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
