@@ -42,7 +42,7 @@ public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
     
     @Override
     public String toString() {
-        return "HttpTrade [channel=" + _channel + ", subscribers.size="
+        return "HttpTrade [channel=" + _channel + ", request's subscribers.size="
                 + _subscribers.size() + ", isKeepAlive=" + _isKeepAlive + "]";
     }
 
