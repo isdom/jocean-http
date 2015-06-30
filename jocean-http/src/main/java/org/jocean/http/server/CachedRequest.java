@@ -143,5 +143,5 @@ public class CachedRequest {
     private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
     private final List<Subscriber<? super HttpObject>> _subscribers = new CopyOnWriteArrayList<>();
     private boolean _isCompleted = false;
-    private Throwable _error = null;
+    private volatile Throwable _error = null;
 }
