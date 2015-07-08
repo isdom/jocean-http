@@ -95,11 +95,13 @@ public class CachedRequest {
             for (int idx = 1; idx<this._reqHttpObjects.size(); idx++) {
                 bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
             }
-            return new DefaultFullHttpRequest(
+            final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
                     req.getProtocolVersion(), 
                     req.getMethod(), 
                     req.getUri(), 
                     Unpooled.wrappedBuffer(bufs));
+            fullreq.headers().add(req.headers());
+            return fullreq;
         } else {
             return null;
         }
