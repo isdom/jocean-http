@@ -314,9 +314,10 @@ public class DefaultSignalClient implements SignalClient {
     }
 
     @SuppressWarnings("rawtypes")
-    public void registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
+    public DefaultSignalClient registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
             final Feature... features) {
         this._req2pathPrefix.put(reqCls, Triple.of((Class)respCls, pathPrefix, features));
+        return this;
     }
     
     private Feature[] safeGetRequestFeatures(final Object request) {
