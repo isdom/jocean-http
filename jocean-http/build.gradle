@@ -12,7 +12,7 @@ dependencies {
     compile 'org.slf4j:slf4j-api:1.7.7'
     
 	compile 'io.reactivex:rxjava:1.0.10'
-    compile 'io.netty:netty-all:4.0.27.Final'
+    compile 'io.netty:netty-all:4.0.29.Final'
     runtime 'org.javassist:javassist:3.19.0-GA'
     compile 'com.jcraft:jzlib:1.1.3'
     
