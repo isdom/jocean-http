@@ -3,14 +3,12 @@
  */
 package org.jocean.http.rosa;
 
+import static org.jocean.http.Feature.ENABLE_COMPRESSOR;
+import static org.jocean.http.Feature.ENABLE_LOGGING;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 
-import java.util.concurrent.CountDownLatch;
-
-import static org.jocean.http.Feature.ENABLE_LOGGING;
-import static org.jocean.http.Feature.ENABLE_COMPRESSOR;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.client.impl.AbstractChannelCreator;
@@ -19,12 +17,10 @@ import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.rosa.SignalClient.Attachment;
 import org.jocean.http.rosa.SignalClient.ProgressiveSubscriber;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import rx.Subscriber;
 import rx.Subscription;
 
 /**
@@ -69,7 +65,7 @@ public class SignalTest {
                 AddMultiMediasToJourneyRequest.class, 
                 AddMultiMediasToJourneyResponse.class,
 //                "http://jumpbox.medtap.cn:8888",
-                "http://127.0.0.1:8888",
+                "http://127.0.0.1:9090",
                 Outbound.ENABLE_MULTIPART,
                 new Outbound.ENABLE_PROGRESSIVE(100)
                 );
