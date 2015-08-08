@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.jocean.idiom.Ordered;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,30 +25,35 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
             LoggerFactory.getLogger(AbstractChannelCreator.class);
 
     protected AbstractChannelCreator() {
-        this._bootstrap = new Bootstrap()
-            .handler(new ChannelInitializer<Channel>() {
-                @Override
-                public String toString() {
-                    return "[AbstractChannelCreator' ChannelInitializer]";
-                }
+        class Initializer extends ChannelInitializer<Channel> implements Ordered {
+            @Override
+            public int ordinal() {
+                return -1000;
+            }
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                /*
+                channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+                    @Override
+                    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                        _activeChannelCount.incrementAndGet();
+                        ctx.fireChannelActive();
+                    }
 
-                @Override
-                protected void initChannel(final Channel channel) throws Exception {
-                    /*
-                    channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
-                        @Override
-                        public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                            _activeChannelCount.incrementAndGet();
-                            ctx.fireChannelActive();
-                        }
-    
-                        @Override
-                        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-                            _activeChannelCount.decrementAndGet();
-                            ctx.fireChannelInactive();
-                        }
-                    }); */
-                }});
+                    @Override
+                    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+                        _activeChannelCount.decrementAndGet();
+                        ctx.fireChannelInactive();
+                    }
+                }); */
+            }
+            @Override
+            public String toString() {
+                return "[AbstractChannelCreator' ChannelInitializer]";
+            }
+        }
+        this._bootstrap = new Bootstrap()
+            .handler(new Initializer());
         initializeBootstrap(this._bootstrap);
     }
     

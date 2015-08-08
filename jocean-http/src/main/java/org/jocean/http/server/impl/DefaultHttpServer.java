@@ -35,6 +35,7 @@ import org.jocean.http.util.Nettys.ToOrdinal;
 import org.jocean.http.util.PipelineApply;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.Ordered;
 import org.jocean.idiom.rx.RxFunctions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,12 +81,17 @@ public class DefaultHttpServer implements HttpServer {
             public void call(final Subscriber<? super HttpTrade> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final ServerBootstrap bootstrap = _creator.newBootstrap();
-                    bootstrap.childHandler(new ChannelInitializer<Channel>() {
+                    abstract class Initializer extends ChannelInitializer<Channel> implements Ordered {
                         @Override
                         public String toString() {
                             return "[DefaultHttpServer' ChannelInitializer]";
                         }
-                        
+                        @Override
+                        public int ordinal() {
+                            return -1000;
+                        }
+                    }
+                    bootstrap.childHandler(new Initializer() {
                         @Override
                         protected void initChannel(final Channel channel) throws Exception {
                             for (Feature feature : applyFeatures) {
