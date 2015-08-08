@@ -82,6 +82,11 @@ public class DefaultHttpServer implements HttpServer {
                     final ServerBootstrap bootstrap = _creator.newBootstrap();
                     bootstrap.childHandler(new ChannelInitializer<Channel>() {
                         @Override
+                        public String toString() {
+                            return "[DefaultHttpServer' ChannelInitializer]";
+                        }
+                        
+                        @Override
                         protected void initChannel(final Channel channel) throws Exception {
                             for (Feature feature : applyFeatures) {
                                 feature.call(_BUILDER, channel.pipeline());

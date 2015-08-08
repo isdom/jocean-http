@@ -27,6 +27,11 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
         this._bootstrap = new Bootstrap()
             .handler(new ChannelInitializer<Channel>() {
                 @Override
+                public String toString() {
+                    return "[AbstractChannelCreator' ChannelInitializer]";
+                }
+
+                @Override
                 protected void initChannel(final Channel channel) throws Exception {
                     /*
                     channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
