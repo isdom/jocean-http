@@ -257,21 +257,21 @@ public class RxNettys {
         }
     }
     
-    public static Observable<? extends HttpObject> response401Unauthorized(
+    public static Observable<HttpObject> response401Unauthorized(
             final HttpVersion version, final String vlaueOfWWWAuthenticate) {
         final HttpResponse response = new DefaultFullHttpResponse(
                 version, HttpResponseStatus.UNAUTHORIZED);
         HttpHeaders.setHeader(response, HttpHeaders.Names.WWW_AUTHENTICATE, vlaueOfWWWAuthenticate);
         HttpHeaders.setHeader(response, HttpHeaders.Names.CONTENT_LENGTH, 0);
-        return Observable.just(response);
+        return Observable.<HttpObject>just(response);
     }
     
-    public static Observable<? extends HttpObject> response200OK(
+    public static Observable<HttpObject> response200OK(
             final HttpVersion version) {
         final HttpResponse response = new DefaultFullHttpResponse(
                 version, HttpResponseStatus.OK);
         HttpHeaders.setHeader(response, HttpHeaders.Names.CONTENT_LENGTH, 0);
-        return Observable.just(response);
+        return Observable.<HttpObject>just(response);
     }
     
 }
