@@ -107,7 +107,7 @@ public class CachedRequest {
         }
     }
     
-    public Observable<? extends HttpObject> request() {
+    public Observable<HttpObject> request() {
         return Observable.create(new OnSubscribe<HttpObject>() {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
