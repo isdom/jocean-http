@@ -5,7 +5,7 @@
         http://www.springframework.org/schema/beans/spring-beans.xsd">
     
     <bean class="org.jocean.idiom.rx.RxActions"
-        factory-method="doPut"
+        factory-method="doAdd"
         destroy-method="call">
         <constructor-arg ref="httpfeatures"/>
         <constructor-arg>
