@@ -6,7 +6,7 @@
     
     <bean id="httpfeatures" class="java.util.concurrent.CopyOnWriteArrayList" />
         
-    <bean id="${httpconf.name:default}" class="org.jocean.http.util.FeaturesBuilder">
+    <bean id="featuresBuilder" class="org.jocean.http.util.FeaturesBuilder" name="${httpconf.name:default}">
         <constructor-arg ref="httpfeatures"/>
     </bean>
     
