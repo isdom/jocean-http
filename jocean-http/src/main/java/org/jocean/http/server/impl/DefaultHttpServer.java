@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
+import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.functions.FuncN;
 import rx.functions.Functions;
@@ -67,15 +68,9 @@ public class DefaultHttpServer implements HttpServer {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpServer.class);
     
-    /* (non-Javadoc)
-     * @see org.jocean.http.server.HttpServer#create(java.net.SocketAddress)
-     */
-    @Override
     public Observable<? extends HttpTrade> defineServer(
-            final SocketAddress localAddress,
-            final Feature... features) {
-        final Feature[] applyFeatures = 
-                (null != features && features.length > 0 ) ? features : this._defaultFeatures;
+            final SocketAddress localAddress, 
+            final Func0<Feature[]> featuresBuilder) {
         return Observable.create(new OnSubscribe<HttpTrade>() {
             @Override
             public void call(final Subscriber<? super HttpTrade> subscriber) {
@@ -94,6 +89,9 @@ public class DefaultHttpServer implements HttpServer {
                     bootstrap.childHandler(new Initializer() {
                         @Override
                         protected void initChannel(final Channel channel) throws Exception {
+                            final Feature[] features = featuresBuilder.call();
+                            final Feature[] applyFeatures = 
+                                    (null != features && features.length > 0 ) ? features : _defaultFeatures;
                             for (Feature feature : applyFeatures) {
                                 feature.call(_BUILDER, channel.pipeline());
                             }
@@ -107,6 +105,21 @@ public class DefaultHttpServer implements HttpServer {
                         .subscribe(subscriber);
                 }
             }});
+    }
+    
+    /* (non-Javadoc)
+     * @see org.jocean.http.server.HttpServer#create(java.net.SocketAddress)
+     */
+    @Override
+    public Observable<? extends HttpTrade> defineServer(
+            final SocketAddress localAddress,
+            final Feature... features) {
+        return defineServer(localAddress, 
+            new Func0<Feature[]>() {
+                @Override
+                public Feature[] call() {
+                    return features;
+                }});
     }
 
     private DefaultHttpTrade createHttpTrade(

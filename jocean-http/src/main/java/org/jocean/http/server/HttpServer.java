@@ -13,15 +13,21 @@ import org.jocean.http.Feature;
 
 import rx.Observable;
 import rx.Observer;
+import rx.functions.Func0;
 
 /**
  * @author isdom
  *
  */
 public interface HttpServer extends Closeable {
+    
     public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress, 
             final Feature ... features);
+    
+    public Observable<? extends HttpTrade> defineServer(
+            final SocketAddress localAddress, 
+            final Func0<Feature[]> featuresBuilder);
     
     public interface HttpTrade {
         public Observable<? extends HttpObject> request();
