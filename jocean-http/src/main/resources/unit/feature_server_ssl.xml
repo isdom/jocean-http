@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd">
+                
+    <bean id="ssc" class="io.netty.handler.ssl.util.SelfSignedCertificate" />
+    
+    <bean id="ctxBuilder" class="io.netty.handler.ssl.SslContextBuilder"
+        factory-method="forServer">
+        <constructor-arg>
+            <bean factory-bean="ssc" factory-method="certificate"/>
+        </constructor-arg>
+        <constructor-arg>
+            <bean factory-bean="ssc" factory-method="privateKey"/>
+        </constructor-arg>
+    </bean>
+     
+    <bean class="org.jocean.idiom.rx.RxActions"
+        factory-method="doAdd"
+        destroy-method="call">
+        <constructor-arg ref="httpfeatures"/>
+        <constructor-arg>
+	        <bean class="org.jocean.http.Feature.ENABLE_SSL">
+	            <constructor-arg>
+				    <bean factory-bean="ctxBuilder"
+				        factory-method="build" />
+                </constructor-arg>
+	        </bean>
+        </constructor-arg>
+    </bean>
+    
+</beans>
