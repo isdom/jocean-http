@@ -3,10 +3,12 @@ package org.jocean.http.server;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 
 import java.util.ArrayList;
@@ -60,29 +62,71 @@ public class CachedRequest {
 
             @Override
             public void onNext(final HttpObject msg) {
-                _reqHttpObjects.add(ReferenceCountUtil.retain(msg));
-                for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
-                    try {
-                        subscriber.onNext(msg);
-                    } catch (Throwable e) {
-                        LOG.warn("exception when request's ({}).onNext, detail:{}",
-                            subscriber, ExceptionUtils.exception2detail(e));
+                if (msg instanceof HttpContent) {
+                    if (msg instanceof LastHttpContent) {
+                        if (_currentBlockSize > 0) {
+                            // build block left
+                            addHttpObjectAndNotifySubscribers(buildCurrentBlockAndReset());
+                        }
+                        // direct add last HttpContent
+                        addHttpObjectAndNotifySubscribers(ReferenceCountUtil.retain(msg));
+                    } else {
+                        updateCurrentBlock(ReferenceCountUtil.retain((HttpContent)msg));
+                        if (_currentBlockSize > _MAX_BLOCK_SIZE) {
+                            // build block
+                            addHttpObjectAndNotifySubscribers(buildCurrentBlockAndReset());
+                        }
                     }
+                } else {
+                    addHttpObjectAndNotifySubscribers(ReferenceCountUtil.retain(msg));
                 }
             }});
     }
     
+    private HttpContent buildCurrentBlockAndReset() {
+        final ByteBuf[] bufs = new ByteBuf[this._currentBlock.size()];
+        for (int idx = 0; idx<this._currentBlock.size(); idx++) {
+            bufs[idx] = this._currentBlock.get(idx).content();
+        }
+        this._currentBlock.clear();
+        this._currentBlockSize = 0;
+        return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs));
+    }
+
+    private void updateCurrentBlock(final HttpContent content) {
+        this._currentBlock.add(content);
+        this._currentBlockSize += content.content().readableBytes();
+    }
+
+    private void addHttpObjectAndNotifySubscribers(final HttpObject httpobj) {
+        this._reqHttpObjects.add(httpobj);
+        for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
+            try {
+                subscriber.onNext(httpobj);
+            } catch (Throwable e) {
+                LOG.warn("exception when request's ({}).onNext, detail:{}",
+                    subscriber, ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+
     public void destroy() {
         this._trade.requestExecutor().execute(new Runnable() {
             @Override
             public void run() {
+                clearHttpObjs(_currentBlock);
                 // release all HttpObjects of request
-                for (HttpObject obj : _reqHttpObjects) {
-                    ReferenceCountUtil.release(obj);
-                }
-                _reqHttpObjects.clear();
+                clearHttpObjs(_reqHttpObjects);
             }});
     }
+    
+    private static void clearHttpObjs(final List<? extends HttpObject> httpobjs) {
+        for (HttpObject obj : httpobjs) {
+            ReferenceCountUtil.release(obj);
+        }
+        httpobjs.clear();
+    }
+
     
     public FullHttpRequest retainFullHttpRequest() {
         if (this._isCompleted && this._reqHttpObjects.size()>0) {
@@ -142,6 +186,12 @@ public class CachedRequest {
     }
     
     private final HttpTrade _trade;
+    
+    private final static int _MAX_BLOCK_SIZE = 1024 * 128; // 128K
+    
+    private final List<HttpContent> _currentBlock = new ArrayList<>();
+    private int _currentBlockSize = 0;
+    
     private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
     private final List<Subscriber<? super HttpObject>> _subscribers = new CopyOnWriteArrayList<>();
     private boolean _isCompleted = false;
