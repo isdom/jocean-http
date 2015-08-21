@@ -84,17 +84,28 @@ public class CachedRequest {
     }
     
     private HttpContent buildCurrentBlockAndReset() {
-        final ByteBuf[] bufs = new ByteBuf[this._currentBlock.size()];
-        for (int idx = 0; idx<this._currentBlock.size(); idx++) {
-            bufs[idx] = this._currentBlock.get(idx).content();
+        try {
+            if (this._currentBlock.size()>1) {
+                final ByteBuf[] bufs = new ByteBuf[this._currentBlock.size()];
+                for (int idx = 0; idx<this._currentBlock.size(); idx++) {
+                    bufs[idx] = this._currentBlock.get(idx).content();
+                }
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("build block: assemble {} HttpContent to composite content with size {} KB",
+                            bufs.length, (float)_currentBlockSize / 1024f);
+                }
+                return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs));
+            } else {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("build block: only one HttpContent with {} KB to build block, so pass through",
+                            (float)_currentBlockSize / 1024f);
+                }
+                return this._currentBlock.get(0);
+            }
+        } finally {
+            this._currentBlock.clear();
+            this._currentBlockSize = 0;
         }
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("assemble {} HttpContent to composite content with size {} KB",
-                    bufs.length, (float)_currentBlockSize / 1024f);
-        }
-        this._currentBlock.clear();
-        this._currentBlockSize = 0;
-        return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs));
     }
 
     private void updateCurrentBlock(final HttpContent content) {
