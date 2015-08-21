@@ -88,6 +88,10 @@ public class CachedRequest {
         for (int idx = 0; idx<this._currentBlock.size(); idx++) {
             bufs[idx] = this._currentBlock.get(idx).content();
         }
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("assemble {} HttpContent to composite content with size {} KB",
+                    bufs.length, (float)_currentBlockSize / 1024f);
+        }
         this._currentBlock.clear();
         this._currentBlockSize = 0;
         return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs));
@@ -114,6 +118,10 @@ public class CachedRequest {
         this._trade.requestExecutor().execute(new Runnable() {
             @Override
             public void run() {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("destroy CachedRequest with {} HttpObject.",
+                            _reqHttpObjects.size());
+                }
                 clearHttpObjs(_currentBlock);
                 // release all HttpObjects of request
                 clearHttpObjs(_reqHttpObjects);
