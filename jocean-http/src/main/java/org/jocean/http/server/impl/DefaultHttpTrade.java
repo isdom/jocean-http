@@ -70,6 +70,11 @@ public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
     }
 
     @Override
+    public Object transport() {
+        return this._channel;
+    }
+    
+    @Override
     public void onHttpObject(final HttpObject httpObject) {
         if (httpObject instanceof HttpRequest) {
             this._isKeepAlive = HttpHeaders.isKeepAlive((HttpRequest)httpObject);
@@ -145,5 +150,4 @@ public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
             }
         }
     };
-    
 }

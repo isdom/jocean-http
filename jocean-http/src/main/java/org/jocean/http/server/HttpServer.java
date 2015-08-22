@@ -33,5 +33,6 @@ public interface HttpServer extends Closeable {
         public Observable<? extends HttpObject> request();
         public Executor requestExecutor();
         public Observer<HttpObject> responseObserver();
+        public Object transport();
     }
 }
