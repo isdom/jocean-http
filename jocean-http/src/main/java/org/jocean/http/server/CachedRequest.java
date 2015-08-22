@@ -28,10 +28,30 @@ import rx.Subscriber;
 
 public class CachedRequest {
     
+    private static int _block_size = 128 * 1024; // 128KB
+    static {
+        // possible system property for overriding
+        final String sizeFromProperty = System.getProperty("org.jocean.http.cachedreq.blocksize");
+        if (sizeFromProperty != null) {
+            try {
+                _block_size = Integer.parseInt(sizeFromProperty);
+            } catch (Exception e) {
+                System.err.println("Failed to set 'org.jocean.http.cachedreq.blocksize' with value " + sizeFromProperty + " => " + e.getMessage());
+            }
+        }
+    }
+    
+    private final static int _MAX_BLOCK_SIZE = _block_size;
+    
     private static final Logger LOG = LoggerFactory
             .getLogger(CachedRequest.class);
     
     public CachedRequest(final HttpTrade trade) {
+        this(trade, _MAX_BLOCK_SIZE);
+    }
+    
+    public CachedRequest(final HttpTrade trade, final int maxBlockSize) {
+        this._maxBlockSize = maxBlockSize > 0 ? maxBlockSize : _MAX_BLOCK_SIZE;
         this._trade = trade;
         trade.request().subscribe(new Observer<HttpObject>() {
             @Override
@@ -72,7 +92,7 @@ public class CachedRequest {
                         addHttpObjectAndNotifySubscribers(ReferenceCountUtil.retain(msg));
                     } else {
                         updateCurrentBlock(ReferenceCountUtil.retain((HttpContent)msg));
-                        if (_currentBlockSize > _MAX_BLOCK_SIZE) {
+                        if (_currentBlockSize > _maxBlockSize) {
                             // build block
                             addHttpObjectAndNotifySubscribers(buildCurrentBlockAndReset());
                         }
@@ -206,7 +226,7 @@ public class CachedRequest {
     
     private final HttpTrade _trade;
     
-    private final static int _MAX_BLOCK_SIZE = 1024 * 128; // 128K
+    private final int _maxBlockSize;
     
     private final List<HttpContent> _currentBlock = new ArrayList<>();
     private int _currentBlockSize = 0;
