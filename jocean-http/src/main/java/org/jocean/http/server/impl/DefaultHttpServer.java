@@ -93,9 +93,9 @@ public class DefaultHttpServer implements HttpServer {
                             final Feature[] applyFeatures = 
                                     (null != features && features.length > 0 ) ? features : _defaultFeatures;
                             for (Feature feature : applyFeatures) {
-                                feature.call(_BUILDER, channel.pipeline());
+                                feature.call(_APPLY_BUILDER, channel.pipeline());
                             }
-                            APPLY_HTTPSERVER.call(_BUILDER, channel.pipeline());
+                            APPLY_HTTPSERVER.call(_APPLY_BUILDER, channel.pipeline());
                             subscriber.onNext(createHttpTrade(channel, subscriber));
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
@@ -127,7 +127,7 @@ public class DefaultHttpServer implements HttpServer {
             final Subscriber<? super HttpTrade> subscriber) {
         return new DefaultHttpTrade(channel, 
                 createChannelRecycler(subscriber),
-                _BUILDER, 
+                _APPLY_BUILDER, 
                 new APPLY_WORKER());
     }
 
@@ -190,7 +190,7 @@ public class DefaultHttpServer implements HttpServer {
     private final BootstrapCreator _creator;
     private final Feature[] _defaultFeatures;
     
-    private static final Class2ApplyBuilder _BUILDER;
+    private static final Class2ApplyBuilder _APPLY_BUILDER;
         
     private static final FuncN<ChannelHandler> HTTPSERVER_CODEC_FUNCN = new FuncN<ChannelHandler>() {
         @Override
@@ -302,12 +302,12 @@ public class DefaultHttpServer implements HttpServer {
     }
     
     static {
-        _BUILDER = new Class2ApplyBuilder();
-        _BUILDER.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
-        _BUILDER.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
-        _BUILDER.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
-        _BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
-        _BUILDER.register(APPLY_HTTPSERVER.getClass(), APPLY.HTTPSERVER);
+        _APPLY_BUILDER = new Class2ApplyBuilder();
+        _APPLY_BUILDER.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
+        _APPLY_BUILDER.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
+        _APPLY_BUILDER.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
+        _APPLY_BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
+        _APPLY_BUILDER.register(APPLY_HTTPSERVER.getClass(), APPLY.HTTPSERVER);
         
     }
 }
