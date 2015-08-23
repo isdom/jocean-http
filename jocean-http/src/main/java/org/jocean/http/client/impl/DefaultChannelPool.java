@@ -1,13 +1,11 @@
 package org.jocean.http.client.impl;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
 
 import java.net.SocketAddress;
-import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -15,9 +13,6 @@ import java.util.concurrent.ConcurrentMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import rx.Observable;
-import rx.functions.Action1;
 
 public class DefaultChannelPool extends AbstractChannelPool {
 
@@ -77,15 +72,15 @@ public class DefaultChannelPool extends AbstractChannelPool {
         if (channel.isActive() 
             && ChannelPool.Util.isChannelReady(channel)
             && null == channel.attr(TRANSACTIONING).get()) {
-            try {
-                Observable.from(channel.pipeline()).subscribe(new Action1<Entry<String,ChannelHandler>>(){
-                    @Override
-                    public void call(Entry<String, ChannelHandler> entry) {
-                        LOG.info("recycleChannel({}) handler:{}/{}", channel, entry.getKey(), entry.getValue());
-                    }});
-            } catch (Throwable e) {
-                LOG.error("recycleChannel: {}", e);
-            }
+//            try {
+//                Observable.from(channel.pipeline()).subscribe(new Action1<Entry<String,ChannelHandler>>(){
+//                    @Override
+//                    public void call(Entry<String, ChannelHandler> entry) {
+//                        LOG.info("recycleChannel({}) handler:{}/{}", channel, entry.getKey(), entry.getValue());
+//                    }});
+//            } catch (Throwable e) {
+//                LOG.error("recycleChannel: {}", e);
+//            }
             final SocketAddress address = channel.remoteAddress();
             if (null!=address) {
                 getOrCreateChannels(address).add(channel);

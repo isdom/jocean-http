@@ -35,6 +35,10 @@ public class Nettys {
         throw new IllegalStateException("No instances!");
     }
     
+    public interface ChannelAware {
+        public void setChannel(final Channel channel);
+    }
+    
     public interface OnHttpObject {
         //@GuardPaired(paired={"org.jocean.http.util.Nettys._NETTY_REFCOUNTED_GUARD"})
         public void onHttpObject(final HttpObject httpObject);

@@ -5,7 +5,6 @@ import io.netty.util.concurrent.Future;
 
 import java.net.SocketAddress;
 
-import org.jocean.http.Feature;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.OneshotSubscription;
 import org.slf4j.Logger;
@@ -23,9 +22,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
             LoggerFactory.getLogger(AbstractChannelPool.class);
 
     @Override
-    public Observable<Channel> retainChannel(
-            final SocketAddress address, 
-            final Feature[] features) {
+    public Observable<Channel> retainChannel(final SocketAddress address) {
         return Observable.create(new OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> subscriber) {

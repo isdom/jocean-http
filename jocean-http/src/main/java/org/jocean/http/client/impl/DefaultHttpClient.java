@@ -40,6 +40,7 @@ import org.jocean.http.client.Outbound;
 import org.jocean.http.client.Outbound.ResponseSubscriberAware;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys;
+import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.Nettys.ToOrdinal;
 import org.jocean.http.util.PipelineApply;
 import org.jocean.http.util.RxNettys;
@@ -120,19 +121,33 @@ public class DefaultHttpClient implements HttpClient {
                 };
             }
         };
+        final ChannelAware channelAware = InterfaceUtils.compositeIncludeType(ChannelAware.class, 
+                (Object[])applyFeatures);
         return Observable.create(new OnSubscribe<Object>() {
             @Override
             public void call(final Subscriber<Object> responseSubscriber) {
                 if (!responseSubscriber.isUnsubscribed()) {
                     try {
                         final Feature[] features = buildFeatures(applyFeatures, responseSubscriber);
-                        _channelPool.retainChannel(remoteAddress, features)
+                        _channelPool.retainChannel(remoteAddress)
                             .doOnNext(new Action1<Channel>() {
                                 @Override
                                 public void call(Channel channel) {
                                     responseSubscriber.add(applyOneoffFeatures(channel, features));
                                 }})
                             .onErrorResumeNext(createChannel(remoteAddress, features))
+                            .doOnNext(new Action1<Channel>() {
+                                @Override
+                                public void call(final Channel channel) {
+                                    if (null!=channelAware) {
+                                        try {
+                                            channelAware.setChannel(channel);
+                                        } catch (Exception e) {
+                                            LOG.warn("exception when invoke setChannel for channel ({}), detail: {}",
+                                                    channel, ExceptionUtils.exception2detail(e));
+                                        }
+                                    }
+                                }})
                             .flatMap(transferRequest)
                             .flatMap(RxNettys.<ChannelFuture, Object>emitErrorOnFailure())
                             .subscribe(responseSubscriber);
@@ -221,11 +236,11 @@ public class DefaultHttpClient implements HttpClient {
     }
     
     public DefaultHttpClient() {
-        this(1, Feature.EMPTY_FEATURES);
+        this(0, Feature.EMPTY_FEATURES);
     }
     
     public DefaultHttpClient(final Feature... defaultFeatures) {
-        this(1, defaultFeatures);
+        this(0, defaultFeatures);
     }
     
     public DefaultHttpClient(final int processThreadNumber,
@@ -357,7 +372,7 @@ public class DefaultHttpClient implements HttpClient {
             final Channel channel,
             final Feature[] features) {
         InterfaceUtils.combineImpls(Feature.class, features)
-            .call(_BUILDER, channel.pipeline());
+            .call(_APPLY_BUILDER, channel.pipeline());
     }
 
     private static Subscription applyOneoffFeatures(
@@ -365,7 +380,7 @@ public class DefaultHttpClient implements HttpClient {
             final Feature[] features) {
         final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
         InterfaceUtils.combineImpls(Feature.class, features)
-            .call(_BUILDER_ONEOFF, channel.pipeline());
+            .call(_APPLY_BUILDER_ONEOFF, channel.pipeline());
         return RxNettys.removeHandlersSubscription(channel, diff.call());
     }
     
@@ -377,9 +392,9 @@ public class DefaultHttpClient implements HttpClient {
         
     private static final Class2Instance<Feature, ApplyToRequest> _CLS2APPLYTOREQUEST;
     
-    private static final Class2ApplyBuilder _BUILDER_ONEOFF;
+    private static final Class2ApplyBuilder _APPLY_BUILDER_ONEOFF;
         
-    private static final Class2ApplyBuilder _BUILDER;
+    private static final Class2ApplyBuilder _APPLY_BUILDER;
     
 
     private static final FuncN<ChannelHandler> HTTPCLIENT_CODEC_FUNCN = new FuncN<ChannelHandler>() {
@@ -650,18 +665,18 @@ public class DefaultHttpClient implements HttpClient {
     }
     
     static {
-        _BUILDER_ONEOFF = new Class2ApplyBuilder();
-        _BUILDER_ONEOFF.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
-        _BUILDER_ONEOFF.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_DECOMPRESSOR);
-        _BUILDER_ONEOFF.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
-        _BUILDER_ONEOFF.register(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
-        _BUILDER_ONEOFF.register(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
-        _BUILDER_ONEOFF.register(APPLY_WORKER.class, APPLY.WORKER);
+        _APPLY_BUILDER_ONEOFF = new Class2ApplyBuilder();
+        _APPLY_BUILDER_ONEOFF.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
+        _APPLY_BUILDER_ONEOFF.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_DECOMPRESSOR);
+        _APPLY_BUILDER_ONEOFF.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
+        _APPLY_BUILDER_ONEOFF.register(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
+        _APPLY_BUILDER_ONEOFF.register(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
+        _APPLY_BUILDER_ONEOFF.register(APPLY_WORKER.class, APPLY.WORKER);
         
-        _BUILDER = new Class2ApplyBuilder();
-        _BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
-        _BUILDER.register(APPLY_READY4INTERACTION_NOTIFIER.class, APPLY.READY4INTERACTION_NOTIFIER);
-        _BUILDER.register(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
+        _APPLY_BUILDER = new Class2ApplyBuilder();
+        _APPLY_BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
+        _APPLY_BUILDER.register(APPLY_READY4INTERACTION_NOTIFIER.class, APPLY.READY4INTERACTION_NOTIFIER);
+        _APPLY_BUILDER.register(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
         
         _CLS2APPLYTOREQUEST = new Class2Instance<>();
         _CLS2APPLYTOREQUEST.register(Feature.ENABLE_COMPRESSOR.getClass(), 

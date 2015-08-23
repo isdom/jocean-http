@@ -6,16 +6,12 @@ import io.netty.util.AttributeKey;
 
 import java.net.SocketAddress;
 
-import org.jocean.http.Feature;
-
 import rx.Observable;
 import rx.functions.Func1;
 
 public interface ChannelPool {
     
-    public Observable<Channel> retainChannel(
-            final SocketAddress address, 
-            final Feature[] features);
+    public Observable<Channel> retainChannel(final SocketAddress address);
     
     public boolean recycleChannel(final Channel channel);
     
