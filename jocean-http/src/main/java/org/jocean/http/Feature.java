@@ -6,6 +6,7 @@ package org.jocean.http;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.ssl.SslContext;
+import rx.functions.Func0;
 import rx.functions.Func2;
 
 /**
@@ -18,6 +19,13 @@ public interface Feature extends Func2<Feature.HandlerBuilder, ChannelPipeline, 
     }
     public static final Feature[] EMPTY_FEATURES = new Feature[0];
 
+    public static final Func0<Feature[]> FEATURESBUILDER_FOR_EMPTY = new Func0<Feature[]>() {
+        @Override
+        public Feature[] call() {
+            return EMPTY_FEATURES;
+        }
+    };
+    
     public static abstract class AbstractFeature0 implements Feature {
         @Override
         public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
