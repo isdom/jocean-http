@@ -235,6 +235,10 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
     
+    public DefaultHttpClient(final int processThreadNumber) {
+        this(processThreadNumber, Feature.EMPTY_FEATURES);
+    }
+    
     public DefaultHttpClient() {
         this(0, Feature.EMPTY_FEATURES);
     }

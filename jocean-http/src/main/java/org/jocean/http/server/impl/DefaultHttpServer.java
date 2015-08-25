@@ -162,12 +162,23 @@ public class DefaultHttpServer implements HttpServer {
     }
 
     public DefaultHttpServer() {
-        this((Feature[])null);
+        this(1, 0, Feature.EMPTY_FEATURES);
     }
     
     public DefaultHttpServer(
+            final int processThreadNumberForAccept, 
+            final int processThreadNumberForWork
+            ) {
+        this(processThreadNumberForAccept, processThreadNumberForWork, Feature.EMPTY_FEATURES);
+    }
+    
+    public DefaultHttpServer(
+            final int processThreadNumberForAccept, 
+            final int processThreadNumberForWork,
             final Feature... defaultFeatures) {
-        this(new AbstractBootstrapCreator(new NioEventLoopGroup(1), new NioEventLoopGroup()) {
+        this(new AbstractBootstrapCreator(
+                new NioEventLoopGroup(processThreadNumberForAccept), 
+                new NioEventLoopGroup(processThreadNumberForWork)) {
             @Override
             protected void initializeBootstrap(ServerBootstrap bootstrap) {
                 bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
