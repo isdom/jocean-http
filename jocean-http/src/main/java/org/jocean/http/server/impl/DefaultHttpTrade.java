@@ -22,6 +22,7 @@ import org.jocean.http.server.impl.DefaultHttpServer.ChannelRecycler;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.OnHttpObject;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.rx.OneshotSubscription;
 import org.slf4j.Logger;
@@ -46,7 +47,6 @@ public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
                 + _subscribers.size() + ", isKeepAlive=" + _isKeepAlive + "]";
     }
 
-    @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
@@ -92,6 +92,8 @@ public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
 
     @Override
     public void onError(final Throwable e) {
+        LOG.warn("trade({}).onError, detail:{}",
+                this, ExceptionUtils.exception2detail(e));
         for (Subscriber<? super HttpObject> subscriber : this._subscribers) {
             subscriber.onError(e);
         }
@@ -120,6 +122,8 @@ public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
 
             @Override
             public void onError(final Throwable e) {
+                LOG.warn("trade({})'s responseObserver.onError, detail:{}",
+                        DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
                 _removeHandlers.unsubscribe();
                 _channelRecycler.onResponseCompleted(_channel, _isKeepAlive);
             }

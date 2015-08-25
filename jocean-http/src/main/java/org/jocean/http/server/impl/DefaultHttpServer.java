@@ -224,9 +224,11 @@ public class DefaultHttpServer implements HttpServer {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx,
                         Throwable cause) throws Exception {
-                    LOG.warn("exceptionCaught {}, detail:{}", ctx.channel(),
-                            ExceptionUtils.exception2detail(cause));
-                    onHttpObject.onError(cause);
+                    LOG.warn("exceptionCaught at channel({})/handler({}), detail:{}, and call onHttpObject({}).onError with TransportException.", 
+                            ctx.channel(), this,
+                            ExceptionUtils.exception2detail(cause), 
+                            onHttpObject);
+                    onHttpObject.onError(new TransportException("exceptionCaught", cause));
                     ctx.close();
                 }
 
@@ -239,10 +241,10 @@ public class DefaultHttpServer implements HttpServer {
                 public void channelInactive(final ChannelHandlerContext ctx)
                         throws Exception {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("channel({})/handler({}): channelInactive and call onHttpObject({}).onError with RuntimeException.", 
+                        LOG.debug("channel({})/handler({}): channelInactive and call onHttpObject({}).onError with TransportException.", 
                                 ctx.channel(), this, onHttpObject);
                     }
-                    onHttpObject.onError(new RuntimeException("channelInactive"));
+                    onHttpObject.onError(new TransportException("channelInactive"));
                 }
 
                 @Override
