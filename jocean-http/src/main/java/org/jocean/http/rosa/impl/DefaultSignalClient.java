@@ -71,6 +71,7 @@ import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.functions.Func0;
 import rx.functions.Func1;
 
 import com.alibaba.fastjson.JSON;
@@ -313,22 +314,33 @@ public class DefaultSignalClient implements SignalClient {
         }
     }
 
-    @SuppressWarnings("rawtypes")
     public DefaultSignalClient registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
             final Feature... features) {
-        this._req2pathPrefix.put(reqCls, Triple.of((Class)respCls, pathPrefix, features));
+        return registerRequestType(reqCls, respCls, pathPrefix, new Func0<Feature[]>() {
+            @Override
+            public Feature[] call() {
+                return features;
+            }});
+    }
+    
+    @SuppressWarnings("rawtypes")
+    public DefaultSignalClient registerRequestType(final Class<?> reqCls, 
+            final Class<?> respCls, 
+            final String pathPrefix, 
+            final Func0<Feature[]> featuresBuilder) {
+        this._req2pathPrefix.put(reqCls, Triple.of((Class)respCls, pathPrefix, featuresBuilder));
         return this;
     }
     
     private Feature[] safeGetRequestFeatures(final Object request) {
         @SuppressWarnings("rawtypes")
-        final Triple<Class,String, Feature[]> triple = _req2pathPrefix.get(request.getClass());
-        return (null != triple ? triple.third : Feature.EMPTY_FEATURES);
+        final Triple<Class,String, Func0<Feature[]>> triple = _req2pathPrefix.get(request.getClass());
+        return (null != triple ? triple.third.call() : Feature.EMPTY_FEATURES);
     }
     
     private Class<?> safeGetResponseClass(final Object request) {
         @SuppressWarnings("rawtypes")
-        final Triple<Class,String, Feature[]> triple = _req2pathPrefix.get(request.getClass());
+        final Triple<Class,String, ?> triple = _req2pathPrefix.get(request.getClass());
         return (null != triple ? triple.first : null);
     }
 
@@ -355,7 +367,7 @@ public class DefaultSignalClient implements SignalClient {
     }
     
     @SuppressWarnings("rawtypes")
-    private final Map<Class<?>, Triple<Class, String, Feature[]>> _req2pathPrefix = 
+    private final Map<Class<?>, Triple<Class, String, Func0<Feature[]>>> _req2pathPrefix = 
             new ConcurrentHashMap<>();
     
     private final SignalConverter _converter = new SignalConverter() {
@@ -436,7 +448,7 @@ public class DefaultSignalClient implements SignalClient {
 
         private String safeGetPathPrefix(final Object request) {
             @SuppressWarnings("rawtypes")
-            final Triple<Class, String, Feature[]> triple = _req2pathPrefix.get(request.getClass());
+            final Triple<Class, String, ?> triple = _req2pathPrefix.get(request.getClass());
             return (null != triple ? triple.second : null);
         }
         
