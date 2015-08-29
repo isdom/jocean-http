@@ -64,6 +64,8 @@ public interface SignalClient {
         public final String contentType;
     }
     
+    public Observable<? extends Object> defineInteraction(final Object request);
+    
     public Observable<? extends Object> defineInteraction(
             final Object request, final Feature... features);
     

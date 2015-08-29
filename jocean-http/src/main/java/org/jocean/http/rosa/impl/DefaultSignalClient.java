@@ -149,6 +149,11 @@ public class DefaultSignalClient implements SignalClient {
     }
     
     @Override
+    public Observable<? extends Object> defineInteraction(final Object request) {
+        return defineInteraction(request, Feature.EMPTY_FEATURES, new Attachment[0]);
+    }
+    
+    @Override
     public Observable<? extends Object> defineInteraction(final Object request, final Feature... features) {
         return defineInteraction(request, features, new Attachment[0]);
     }
