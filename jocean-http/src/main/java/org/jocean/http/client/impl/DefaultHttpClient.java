@@ -37,6 +37,7 @@ import java.net.SocketAddress;
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
+import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.client.Outbound.ResponseSubscriberAware;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys;
@@ -74,10 +75,6 @@ public class DefaultHttpClient implements HttpClient {
         public void setApplyFeatures(final Feature[] features);
     }
     
-    public interface ApplyToRequest {
-        public void applyToRequest(final HttpRequest request);
-    }
-    
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
         if (!(InternalLoggerFactory.getDefaultFactory() instanceof Slf4JLoggerFactory)) {
@@ -98,8 +95,13 @@ public class DefaultHttpClient implements HttpClient {
             final Observable<? extends Object> request,
             final Feature... features) {
         final Feature[] applyFeatures = cloneFeatures(features.length > 0 ? features : this._defaultFeatures);
-        final ApplyToRequest applyToRequest = InterfaceUtils.compositeBySource(
-                ApplyToRequest.class, _CLS2APPLYTOREQUEST, applyFeatures);
+        final ApplyToRequest applyToRequest = 
+            InterfaceUtils.compositeIncludeType(
+                ApplyToRequest.class,
+                InterfaceUtils.compositeBySource(
+                    ApplyToRequest.class, _CLS2APPLYTOREQUEST, applyFeatures),
+                InterfaceUtils.compositeIncludeType(
+                    ApplyToRequest.class, (Object[])applyFeatures));
         final Func1<Channel, Observable<ChannelFuture>> transferRequest = 
                 new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
@@ -114,7 +116,7 @@ public class DefaultHttpClient implements HttpClient {
                         if (msg instanceof HttpRequest) {
                             _channelPool.beforeSendRequest(channel, (HttpRequest)msg);
                             if (null!=applyToRequest) {
-                                applyToRequest.applyToRequest((HttpRequest) msg);
+                                applyToRequest.call((HttpRequest) msg);
                             }
                         }
                     }
@@ -686,7 +688,7 @@ public class DefaultHttpClient implements HttpClient {
         _CLS2APPLYTOREQUEST.register(Feature.ENABLE_COMPRESSOR.getClass(), 
             new ApplyToRequest() {
                 @Override
-                public void applyToRequest(final HttpRequest request) {
+                public void call(final HttpRequest request) {
                     HttpHeaders.addHeader(request,
                             HttpHeaders.Names.ACCEPT_ENCODING, 
                             HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);

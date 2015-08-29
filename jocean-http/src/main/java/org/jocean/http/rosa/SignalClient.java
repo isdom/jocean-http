@@ -1,5 +1,6 @@
 package org.jocean.http.rosa;
 
+import org.jocean.http.Feature;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,5 +65,11 @@ public interface SignalClient {
     }
     
     public Observable<? extends Object> defineInteraction(
+            final Object request, final Feature... features);
+    
+    public Observable<? extends Object> defineInteraction(
             final Object request, final Attachment... attachments);
+    
+    public Observable<? extends Object> defineInteraction(
+            final Object request, final Feature[] features, final Attachment[] attachments);
 }

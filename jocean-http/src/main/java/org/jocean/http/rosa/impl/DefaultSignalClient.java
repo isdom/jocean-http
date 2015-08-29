@@ -55,6 +55,7 @@ import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
+import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.PropertyPlaceholderHelper;
 import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
@@ -148,7 +149,17 @@ public class DefaultSignalClient implements SignalClient {
     }
     
     @Override
+    public Observable<? extends Object> defineInteraction(final Object request, final Feature... features) {
+        return defineInteraction(request, features, new Attachment[0]);
+    }
+
+    @Override
     public Observable<? extends Object> defineInteraction(final Object request, final Attachment... attachments) {
+        return defineInteraction(request, Feature.EMPTY_FEATURES, attachments);
+    }
+    
+    @Override
+    public Observable<? extends Object> defineInteraction(final Object request, final Feature[] features, final Attachment[] attachments) {
         return Observable.create(new OnSubscribe<Object>() {
 
             @Override
@@ -175,7 +186,7 @@ public class DefaultSignalClient implements SignalClient {
                     response = _httpClient.defineInteraction(
                             remoteAddress, 
                             Observable.from(httpRequest),
-                            safeGetRequestFeatures(request));
+                            JOArrays.addFirst(Feature[].class, safeGetRequestFeatures(request), features));
                     
                     final List<HttpObject> httpObjects = new ArrayList<>();
                     
