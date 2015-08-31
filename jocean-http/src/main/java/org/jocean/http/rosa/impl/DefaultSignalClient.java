@@ -474,7 +474,7 @@ public class DefaultSignalClient implements SignalClient {
             final Class<?> httpMethod = getHttpMethod(request);
             if ( null == httpMethod 
                 || GET.class.equals(httpMethod)) {
-                genGetRequest(request, httpRequest);
+                genQueryParamsRequest(request, httpRequest);
             }
             else if (POST.class.equals(httpMethod)) {
                 genPostRequest(request, httpRequest);
@@ -486,46 +486,11 @@ public class DefaultSignalClient implements SignalClient {
                 final DefaultFullHttpRequest httpRequest) {
             final byte[] jsonBytes = JSON.toJSONBytes(request);
             
-//            if ( RequestFeature.isEnabled(features, RequestFeature.EnableJsonCompress)) {
-//                genContentAsCJSON(httpRequest, jsonBytes);
-//            }
-//            else {
-                genContentAsJSON(httpRequest, jsonBytes);
-//            }
+            genContentAsJSON(httpRequest, jsonBytes);
+            genQueryParamsRequest(request, httpRequest);
             
             httpRequest.setMethod(HttpMethod.POST);
         }
-
-        /**
-         * @param httpRequest
-         * @param jsonBytes
-         */
-//        private void genContentAsCJSON(
-//                final DefaultFullHttpRequest httpRequest,
-//                final byte[] jsonBytes) {
-//            final OutputStream os = new ByteBufOutputStream(httpRequest.content());
-//            DeflaterOutputStream zos = null;
-//            
-//            try {
-//                zos = new DeflaterOutputStream(os, new Deflater(JZlib.Z_BEST_COMPRESSION));
-//                zos.write(jsonBytes);
-//                zos.finish();
-//                HttpHeaders.setContentLength(httpRequest, zos.getTotalOut());
-//            }
-//            catch (Throwable e) {
-//                LOG.warn("exception when compress json, detail:{}", 
-//                        ExceptionUtils.exception2detail(e));
-//            }
-//            finally {
-//                if ( null != zos ) {
-//                    try {
-//                        zos.close();
-//                    } catch (Exception e) {
-//                    }
-//                }
-//            }
-//            httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/cjson");
-//        }
 
         private void genContentAsJSON(
                 final DefaultFullHttpRequest httpRequest,
@@ -550,7 +515,7 @@ public class DefaultSignalClient implements SignalClient {
             httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/json");
         }
 
-        private void genGetRequest(
+        private void genQueryParamsRequest(
                 final Object request, 
                 final DefaultFullHttpRequest httpRequest) {
             if ( null != this._queryFields ) {
