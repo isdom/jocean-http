@@ -43,6 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.ws.rs.GET;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -392,7 +393,7 @@ public class DefaultSignalClient implements SignalClient {
         public URI req2uri(final Object request) {
             final String uri = 
                 _processorCache.get(request.getClass())
-                .apply(request);
+                .call(request);
             
             try {
                 return ( null != uri ? new URI(uri) : null);
@@ -428,10 +429,11 @@ public class DefaultSignalClient implements SignalClient {
                 }});
     
     private final class RequestProcessor 
-        implements Function<Object, String>, Visitor2<Object, DefaultFullHttpRequest> {
+        implements Func1<Object, String>, Visitor2<Object, DefaultFullHttpRequest> {
 
         RequestProcessor(final Class<?> reqCls) {
             this._queryFields = ReflectUtils.getAnnotationFieldsOf(reqCls, QueryParam.class);
+            this._headerFields = ReflectUtils.getAnnotationFieldsOf(reqCls, HeaderParam.class);
             
             this._pathSuffix = getPathValueOf(reqCls);
             
@@ -442,7 +444,7 @@ public class DefaultSignalClient implements SignalClient {
         }
 
         @Override
-        public String apply(final Object request) {
+        public String call(final Object request) {
             final String pathPrefix = safeGetPathPrefix(request);
             if ( null == pathPrefix && null == this._pathSuffix ) {
                 // class not registered, return null
@@ -478,6 +480,29 @@ public class DefaultSignalClient implements SignalClient {
             }
             else if (POST.class.equals(httpMethod)) {
                 genPostRequest(request, httpRequest);
+            }
+            
+            applyHeaderParams(request, httpRequest);
+        }
+
+        private void applyHeaderParams(
+                final Object request,
+                final DefaultFullHttpRequest httpRequest) {
+            if ( null != this._headerFields ) {
+                for ( Field field : this._headerFields ) {
+                    try {
+                        final Object value = field.get(request);
+                        if ( null != value ) {
+                            final String headername = 
+                                field.getAnnotation(HeaderParam.class).value();
+                            httpRequest.headers().set(headername, value);
+                        }
+                    } catch (Exception e) {
+                        LOG.warn("exception when get value from field:[{}], detail:{}",
+                                field, ExceptionUtils.exception2detail(e));
+                    }
+                }
+                
             }
         }
 
@@ -550,6 +575,8 @@ public class DefaultSignalClient implements SignalClient {
         
         
         private final Field[] _queryFields;
+        
+        private final Field[] _headerFields;
         
         private final String _pathSuffix;
         
