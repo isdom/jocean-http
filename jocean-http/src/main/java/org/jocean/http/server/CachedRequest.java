@@ -114,7 +114,7 @@ public class CachedRequest {
                     LOG.debug("build block: assemble {} HttpContent to composite content with size {} KB",
                             bufs.length, (float)_currentBlockSize / 1024f);
                 }
-                return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs));
+                return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs.length, bufs));
             } else {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("build block: only one HttpContent with {} KB to build block, so pass through",
