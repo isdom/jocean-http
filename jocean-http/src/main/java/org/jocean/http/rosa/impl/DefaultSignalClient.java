@@ -52,8 +52,11 @@ import javax.ws.rs.QueryParam;
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.rosa.SignalClient;
+import org.jocean.http.util.FeaturesBuilder;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.AnnotationWrapper;
+import org.jocean.idiom.BeanHolder;
+import org.jocean.idiom.BeanHolderAware;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
 import org.jocean.idiom.JOArrays;
@@ -78,7 +81,7 @@ import rx.functions.Func1;
 
 import com.alibaba.fastjson.JSON;
 
-public class DefaultSignalClient implements SignalClient {
+public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClient.class);
@@ -337,6 +340,25 @@ public class DefaultSignalClient implements SignalClient {
             @Override
             public Feature[] call() {
                 return features;
+            }});
+    }
+    
+    public Action0 registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
+            final String featuresName) {
+        return registerRequestType(reqCls, respCls, pathPrefix, new Func0<Feature[]>() {
+            @Override
+            public String toString() {
+                return "Features Config named(" + featuresName + ")";
+            }
+            
+            @Override
+            public Feature[] call() {
+                final FeaturesBuilder builder = _beanHolder.getBean(featuresName, FeaturesBuilder.class);
+                if (null==builder) {
+                    LOG.warn("signal client {} require FeaturesBuilder named({}) not exist! please check application config!",
+                            DefaultSignalClient.this, featuresName);
+                }
+                return null!=builder ? builder.call() : Feature.EMPTY_FEATURES;
             }});
     }
     
@@ -717,5 +739,11 @@ public class DefaultSignalClient implements SignalClient {
         }
     }
 
+    @Override
+    public void setBeanHolder(BeanHolder beanHolder) {
+        this._beanHolder = beanHolder;
+    }
+    
     final private HttpClient _httpClient;
+    private BeanHolder _beanHolder;
 }
