@@ -17,5 +17,10 @@ public class FeaturesBuilder implements Func0<Feature[]> {
         return this._features.toArray(Feature.EMPTY_FEATURES);
     }
 
+    @Override
+    public String toString() {
+        return "FeaturesBuilder [features=" + _features + "]";
+    }
+
     private final List<Feature> _features;
 }

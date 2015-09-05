@@ -18,6 +18,10 @@ public class Outbound {
     }
     
     public static final Feature ENABLE_MULTIPART = new Feature.AbstractFeature0() {
+        @Override
+        public String toString() {
+            return "ENABLE_MULTIPART";
+        }
     };
     
     public interface ResponseSubscriberAware {
@@ -45,6 +49,11 @@ public class Outbound {
             return (ENABLE_PROGRESSIVE)super.clone();
         }
 
+        @Override
+        public String toString() {
+            return "ENABLE_PROGRESSIVE";
+        }
+        
         private final long _minIntervalInMs;
         private Subscriber<Object> _responseSubscriber = null;
     }
