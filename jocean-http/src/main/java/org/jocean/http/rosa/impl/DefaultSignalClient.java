@@ -331,7 +331,7 @@ public class DefaultSignalClient implements SignalClient {
         }
     }
 
-    public DefaultSignalClient registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
+    public Action0 registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
             final Feature... features) {
         return registerRequestType(reqCls, respCls, pathPrefix, new Func0<Feature[]>() {
             @Override
@@ -341,12 +341,19 @@ public class DefaultSignalClient implements SignalClient {
     }
     
     @SuppressWarnings("rawtypes")
-    public DefaultSignalClient registerRequestType(final Class<?> reqCls, 
+    public Action0 registerRequestType(final Class<?> reqCls, 
             final Class<?> respCls, 
             final String pathPrefix, 
             final Func0<Feature[]> featuresBuilder) {
         this._req2pathPrefix.put(reqCls, Triple.of((Class)respCls, pathPrefix, featuresBuilder));
-        return this;
+        LOG.info("register request type {} with resp type {}/path {}/features builder {}",
+                reqCls, respCls, pathPrefix, featuresBuilder);
+        return new Action0() {
+            @Override
+            public void call() {
+                _req2pathPrefix.remove(reqCls);
+                LOG.info("unregister request type {}", reqCls);
+            }};
     }
     
     private Feature[] safeGetRequestFeatures(final Object request) {
