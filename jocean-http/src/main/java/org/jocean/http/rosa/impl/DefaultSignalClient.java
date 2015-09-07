@@ -80,6 +80,7 @@ import rx.functions.Func0;
 import rx.functions.Func1;
 
 import com.alibaba.fastjson.JSON;
+import com.google.common.base.Charsets;
 
 public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
@@ -213,6 +214,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                                         final byte[] bytes = new byte[is.available()];
                                         @SuppressWarnings("unused")
                                         final int readed = is.read(bytes);
+                                        if (LOG.isDebugEnabled()) {
+                                            LOG.debug("receive signal response: {}",
+                                                    new String(bytes, Charsets.UTF_8));
+                                        }
                                         final Object resp = JSON.parseObject(bytes, safeGetResponseClass(request));
                                         subscriber.onNext(resp);
                                     } finally {
