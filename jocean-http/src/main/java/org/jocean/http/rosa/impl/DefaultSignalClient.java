@@ -66,7 +66,6 @@ import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.SimpleCache;
 import org.jocean.idiom.Triple;
-import org.jocean.idiom.Visitor2;
 import org.jocean.idiom.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +75,7 @@ import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.functions.Action2;
 import rx.functions.Func0;
 import rx.functions.Func1;
 
@@ -443,7 +443,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 final DefaultFullHttpRequest httpRequest) {
             try {
                 _processorCache.get(request.getClass())
-                    .visit(request, httpRequest);
+                    .call(request, httpRequest);
             }
             catch (Exception e) {
                 LOG.error("exception when process httpRequest ({}) with request bean({})",
@@ -462,7 +462,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 }});
     
     private final class RequestProcessor 
-        implements Func1<Object, String>, Visitor2<Object, DefaultFullHttpRequest> {
+        implements Func1<Object, String>, Action2<Object, DefaultFullHttpRequest> {
 
         RequestProcessor(final Class<?> reqCls) {
             this._queryFields = ReflectUtils.getAnnotationFieldsOf(reqCls, QueryParam.class);
@@ -504,8 +504,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
         
         @Override
-        public void visit(final Object request, final DefaultFullHttpRequest httpRequest) 
-                throws Exception {
+        public void call(final Object request, final DefaultFullHttpRequest httpRequest) {
             final Class<?> httpMethod = getHttpMethod(request);
             if ( null == httpMethod 
                 || GET.class.equals(httpMethod)) {
