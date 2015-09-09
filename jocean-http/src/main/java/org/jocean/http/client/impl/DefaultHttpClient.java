@@ -35,10 +35,10 @@ import java.io.IOException;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
+import org.jocean.http.client.ApplyToRequest;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
-import org.jocean.http.client.Outbound.ApplyToRequest;
-import org.jocean.http.client.Outbound.ResponseSubscriberAware;
+import org.jocean.http.client.ResponseSubscriberAware;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ChannelAware;
