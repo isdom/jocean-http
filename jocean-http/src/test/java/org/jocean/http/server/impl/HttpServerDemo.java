@@ -22,6 +22,10 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.util.ReferenceCountUtil;
 
 import java.io.IOException;
@@ -50,8 +54,9 @@ public class HttpServerDemo {
             LoggerFactory.getLogger(HttpServerDemo.class);
 
     public static void main(final String[] args) throws Exception {
-//        SelfSignedCertificate ssc = new SelfSignedCertificate();
-//        final SslContext sslCtx = SslContext.newServerContext(ssc.certificate(), ssc.privateKey());
+        SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx = // SslContext.newServerContext(ssc.certificate(), ssc.privateKey());
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
 
         //  create for LocalChannel
         @SuppressWarnings("resource")
@@ -63,7 +68,8 @@ public class HttpServerDemo {
                 bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
                 bootstrap.channel(LocalServerChannel.class);
             }},
-            Feature.ENABLE_LOGGING
+            Feature.ENABLE_LOGGING,
+            new Feature.ENABLE_SSL(sslCtx)
             );
         
         @SuppressWarnings("unused")
@@ -132,7 +138,8 @@ public class HttpServerDemo {
         
         @SuppressWarnings("resource")
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(),
-                Feature.ENABLE_LOGGING);
+                Feature.ENABLE_LOGGING,
+                new Feature.ENABLE_SSL(SslContextBuilder.forClient().build()));
         
         while (true) {
             final ByteBuf content = Unpooled.buffer(0);

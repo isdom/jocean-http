@@ -2,16 +2,25 @@ package org.jocean.http.client;
 
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
+import io.netty.handler.codec.http.HttpRequest;
 
 import org.jocean.http.Feature;
 
 import rx.Subscriber;
+import rx.functions.Action1;
 
 public class Outbound {
     private Outbound() {
         throw new IllegalStateException("No instances!");
     }
 
+    public interface ApplyToRequest extends Action1<HttpRequest> {
+    }
+    
+    public interface ResponseSubscriberAware {
+        public void setResponseSubscriber(final Subscriber<Object> subscriber);
+    }
+    
     public static final Feature ENABLE_MULTIPART = new Feature.AbstractFeature0() {
         @Override
         public String toString() {
