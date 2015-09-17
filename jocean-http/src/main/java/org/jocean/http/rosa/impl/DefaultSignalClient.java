@@ -75,7 +75,6 @@ import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Action2;
 import rx.functions.Func0;
 import rx.functions.Func1;
 
@@ -144,8 +143,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
         public URI req2uri(final Object request);
 
-        public HttpRequest processHttpRequest(final Object request,
-                final DefaultFullHttpRequest httpRequest);
+        public HttpRequest genHttpRequest(URI uri, Object request);
     }
     
     public DefaultSignalClient(final HttpClient httpClient) {
@@ -276,13 +274,16 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         final List<Object> ret = new ArrayList<>();
         if (0 == attachments.length) {
             final HttpRequest httpRequest =
-                    _converter.processHttpRequest(request,
-                            genFullHttpRequest(uri));
+                    _converter.genHttpRequest(uri, request);
             ret.addAll(Arrays.asList(new Object[]{httpRequest}));
             return Pair.of(ret, -1L);
         } else {
             // multipart
+            
             final HttpRequest httpRequest = genPostHttpRequest(uri);
+            
+            this._processorCache.get(request.getClass())
+                    .processHttpRequest(request, httpRequest);
             
             final HttpDataFactory factory = new DefaultHttpDataFactory(false);
             
@@ -426,7 +427,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         public URI req2uri(final Object request) {
             final String uri = 
                 _processorCache.get(request.getClass())
-                .call(request);
+                .req2path(request);
             
             try {
                 return ( null != uri ? new URI(uri) : null);
@@ -438,19 +439,18 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
 
         @Override
-        public HttpRequest processHttpRequest(
-                final Object request, 
-                final DefaultFullHttpRequest httpRequest) {
+        public HttpRequest genHttpRequest(
+                final URI uri,
+                final Object request) {
             try {
-                _processorCache.get(request.getClass())
-                    .call(request, httpRequest);
+                return _processorCache.get(request.getClass())
+                    .genHttpRequest(uri, request);
             }
             catch (Exception e) {
-                LOG.error("exception when process httpRequest ({}) with request bean({})",
-                        httpRequest, request);
+                LOG.error("exception when generate httpRequest for request bean({})",
+                        request);
+                return null;
             }
-            
-            return httpRequest;
         }};
         
     private final SimpleCache<Class<?>, RequestProcessor> _processorCache = 
@@ -461,8 +461,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     return new RequestProcessor(reqCls);
                 }});
     
-    private final class RequestProcessor 
-        implements Func1<Object, String>, Action2<Object, DefaultFullHttpRequest> {
+    private final class RequestProcessor {
 
         RequestProcessor(final Class<?> reqCls) {
             this._queryFields = ReflectUtils.getAnnotationFieldsOf(reqCls, QueryParam.class);
@@ -476,8 +475,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     ( null != this._pathparamResolver ? new PropertyPlaceholderHelper("{", "}") : null);
         }
 
-        @Override
-        public String call(final Object request) {
+        public String req2path(final Object request) {
             final String pathPrefix = safeGetPathPrefix(request);
             if ( null == pathPrefix && null == this._pathSuffix ) {
                 // class not registered, return null
@@ -503,8 +501,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             return (null != triple ? triple.second : null);
         }
         
-        @Override
-        public void call(final Object request, final DefaultFullHttpRequest httpRequest) {
+        public DefaultFullHttpRequest genHttpRequest(final URI uri, final Object request) {
+            final DefaultFullHttpRequest httpRequest = genFullHttpRequest(uri);
+
             final Class<?> httpMethod = getHttpMethod(request);
             if ( null == httpMethod 
                 || GET.class.equals(httpMethod)) {
@@ -515,11 +514,17 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }
             
             applyHeaderParams(request, httpRequest);
+            return httpRequest;
         }
 
+        public void processHttpRequest(final Object request, final HttpRequest httpRequest) {
+            genQueryParamsRequest(request, httpRequest);
+            applyHeaderParams(request, httpRequest);
+        }
+        
         private void applyHeaderParams(
                 final Object request,
-                final DefaultFullHttpRequest httpRequest) {
+                final HttpRequest httpRequest) {
             if ( null != this._headerFields ) {
                 for ( Field field : this._headerFields ) {
                     try {
@@ -574,7 +579,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
         private void genQueryParamsRequest(
                 final Object request, 
-                final DefaultFullHttpRequest httpRequest) {
+                final HttpRequest httpRequest) {
             if ( null != this._queryFields ) {
                 final StringBuilder sb = new StringBuilder();
                 char link = '?';
