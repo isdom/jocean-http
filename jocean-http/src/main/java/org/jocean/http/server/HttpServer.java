@@ -29,6 +29,11 @@ public interface HttpServer extends Closeable {
             final SocketAddress localAddress, 
             final Func0<Feature[]> featuresBuilder);
     
+    public Observable<? extends HttpTrade> defineServer(
+            final SocketAddress localAddress, 
+            final Func0<Feature[]> featuresBuilder,
+            final Feature ... features);
+    
     public interface HttpTrade {
         public Observable<? extends HttpObject> request();
         public Executor requestExecutor();

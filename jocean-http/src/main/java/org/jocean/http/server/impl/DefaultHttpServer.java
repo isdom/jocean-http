@@ -13,6 +13,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
+import io.netty.channel.ServerChannel;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -31,10 +32,13 @@ import org.jocean.http.server.HttpServer;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.OnHttpObject;
+import org.jocean.http.util.Nettys.ServerChannelAware;
 import org.jocean.http.util.Nettys.ToOrdinal;
 import org.jocean.http.util.PipelineApply;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.InterfaceUtils;
+import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
 import org.jocean.idiom.rx.RxFunctions;
 import org.slf4j.Logger;
@@ -71,6 +75,20 @@ public class DefaultHttpServer implements HttpServer {
     public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress, 
             final Func0<Feature[]> featuresBuilder) {
+        return defineServer(localAddress, featuresBuilder);
+    }
+    
+    @Override
+    public Observable<? extends HttpTrade> defineServer(
+            final SocketAddress localAddress,
+            final Feature... features) {
+        return defineServer(localAddress, null, features);
+    }
+    
+    public Observable<? extends HttpTrade> defineServer(
+            final SocketAddress localAddress, 
+            final Func0<Feature[]> featuresBuilder,
+            final Feature... features) {
         return Observable.create(new OnSubscribe<HttpTrade>() {
             @Override
             public void call(final Subscriber<? super HttpTrade> subscriber) {
@@ -86,12 +104,13 @@ public class DefaultHttpServer implements HttpServer {
                             return -1000;
                         }
                     }
+                    final Feature[] actualFeatures = JOArrays.addFirst(Feature[].class, 
+                            featuresOf(featuresBuilder), features);
+                    final Feature[] applyFeatures = 
+                            (null != actualFeatures && actualFeatures.length > 0 ) ? actualFeatures : _defaultFeatures;
                     bootstrap.childHandler(new Initializer() {
                         @Override
                         protected void initChannel(final Channel channel) throws Exception {
-                            final Feature[] features = featuresBuilder.call();
-                            final Feature[] applyFeatures = 
-                                    (null != features && features.length > 0 ) ? features : _defaultFeatures;
                             for (Feature feature : applyFeatures) {
                                 feature.call(_APPLY_BUILDER, channel.pipeline());
                             }
@@ -103,23 +122,9 @@ public class DefaultHttpServer implements HttpServer {
                     RxNettys.<ChannelFuture, HttpTrade>emitErrorOnFailure()
                         .call(future)
                         .subscribe(subscriber);
+                    future.addListener(channelFutureListenerOf(applyFeatures));
                 }
             }});
-    }
-    
-    /* (non-Javadoc)
-     * @see org.jocean.http.server.HttpServer#create(java.net.SocketAddress)
-     */
-    @Override
-    public Observable<? extends HttpTrade> defineServer(
-            final SocketAddress localAddress,
-            final Feature... features) {
-        return defineServer(localAddress, 
-            new Func0<Feature[]>() {
-                @Override
-                public Feature[] call() {
-                    return features;
-                }});
     }
 
     private DefaultHttpTrade createHttpTrade(
@@ -198,6 +203,32 @@ public class DefaultHttpServer implements HttpServer {
         this._creator.close();
     }
     
+    private static Feature[] featuresOf(final Func0<Feature[]> featuresBuilder) {
+        return null != featuresBuilder ? featuresBuilder.call() : null;
+    }
+    
+    private static ChannelFutureListener channelFutureListenerOf(
+            final Feature[] applyFeatures) {
+        return new ChannelFutureListener() {
+            @Override
+            public void operationComplete(final ChannelFuture future)
+                    throws Exception {
+                if (future.isSuccess()) {
+                    final ServerChannelAware serverChannelAware = 
+                            InterfaceUtils.compositeIncludeType(ServerChannelAware.class, 
+                                (Object[])applyFeatures);
+                    if (null!=serverChannelAware) {
+                        try {
+                            serverChannelAware.setServerChannel((ServerChannel)future.channel());
+                        } catch (Exception e) {
+                            LOG.warn("exception when invoke setServerChannel for channel ({}), detail: {}",
+                                    future.channel(), ExceptionUtils.exception2detail(e));
+                        }
+                    }
+                }
+            }};
+    }
+
     private final BootstrapCreator _creator;
     private final Feature[] _defaultFeatures;
     

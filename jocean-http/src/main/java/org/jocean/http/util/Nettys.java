@@ -4,6 +4,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
+import io.netty.channel.ServerChannel;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.ssl.SslContext;
@@ -37,6 +38,10 @@ public class Nettys {
     
     public interface ChannelAware {
         public void setChannel(final Channel channel);
+    }
+    
+    public interface ServerChannelAware {
+        public void setServerChannel(final ServerChannel serverChannel);
     }
     
     public interface OnHttpObject {
