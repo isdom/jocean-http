@@ -75,7 +75,7 @@ public class DefaultHttpServer implements HttpServer {
     public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress, 
             final Func0<Feature[]> featuresBuilder) {
-        return defineServer(localAddress, featuresBuilder);
+        return defineServer(localAddress, featuresBuilder, (Feature[])null);
     }
     
     @Override
