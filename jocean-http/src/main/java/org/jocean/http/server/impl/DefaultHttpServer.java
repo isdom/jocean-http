@@ -118,6 +118,7 @@ public class DefaultHttpServer implements HttpServer {
                             subscriber.onNext(createHttpTrade(channel, subscriber));
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
+                    //  TODO, why this not stop http server
                     subscriber.add(RxNettys.subscriptionFrom(future.channel()));
                     RxNettys.<ChannelFuture, HttpTrade>emitErrorOnFailure()
                         .call(future)

@@ -23,6 +23,5 @@ dependencies {
 	
 	testCompile 'junit:junit:4.12'
     testCompile 'ch.qos.logback:logback-classic:1.1.2'
-    testCompile('org.jocean:jocean-j2se:0.0.3-SNAPSHOT') { transitive = false }
     testCompile 'com.google.guava:guava:18.0'
 }
