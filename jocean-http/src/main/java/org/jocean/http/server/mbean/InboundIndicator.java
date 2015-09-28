@@ -50,7 +50,7 @@ public class InboundIndicator extends Feature.AbstractFeature0
             final InetSocketAddress addr = (InetSocketAddress)serverChannel.localAddress();
             this._port = addr.getPort();
             this._bindip = null != addr.getAddress()
-                    ? addr.getAddress().getHostName()
+                    ? addr.getAddress().getHostAddress()
                     : "0.0.0.0";
         }
     }
