@@ -140,15 +140,10 @@ public class RxNettys {
     }
     
     public static Subscription subscriptionFrom(final Channel channel) {
-        return new Subscription() {
+        return new OneshotSubscription() {
             @Override
-            public void unsubscribe() {
+            protected void doUnsubscribe() {
                 channel.close();
-            }
-            @Override
-            public boolean isUnsubscribed() {
-                final boolean isactive = channel.isActive();
-                return !isactive;
             }};
     }
 

@@ -51,6 +51,7 @@ import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.functions.FuncN;
 import rx.functions.Functions;
+import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -118,7 +119,7 @@ public class DefaultHttpServer implements HttpServer {
                             subscriber.onNext(createHttpTrade(channel, subscriber));
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
-                    //  TODO, why this not stop http server
+                    subscriber.add(Subscriptions.from(future));
                     subscriber.add(RxNettys.subscriptionFrom(future.channel()));
                     RxNettys.<ChannelFuture, HttpTrade>emitErrorOnFailure()
                         .call(future)
