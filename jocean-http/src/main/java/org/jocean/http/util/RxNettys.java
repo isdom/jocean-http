@@ -147,7 +147,8 @@ public class RxNettys {
             }
             @Override
             public boolean isUnsubscribed() {
-                return !channel.isActive();
+                final boolean isactive = channel.isActive();
+                return !isactive;
             }};
     }
 
