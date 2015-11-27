@@ -415,6 +415,22 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return request;
     }
     
+    public String[] getRegisteredRequests() {
+        final List<String> ret = new ArrayList<>();
+        for ( @SuppressWarnings("rawtypes") Map.Entry<Class<?>, Triple<Class, String, Func0<Feature[]>>> entry 
+                : _req2pathPrefix.entrySet()) {
+            final StringBuilder sb = new StringBuilder();
+            sb.append(entry.getKey());
+            sb.append("-->");
+            sb.append(entry.getValue().second);
+            sb.append("/");
+            sb.append(entry.getValue().first);
+            ret.add(sb.toString());
+        }
+        
+        return ret.toArray(new String[0]);
+    }
+    
     @SuppressWarnings("rawtypes")
     private final Map<Class<?>, Triple<Class, String, Func0<Feature[]>>> _req2pathPrefix = 
             new ConcurrentHashMap<>();
