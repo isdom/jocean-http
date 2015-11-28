@@ -431,6 +431,22 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return ret.toArray(new String[0]);
     }
     
+    public String[] getEmittedRequests() {
+        final List<String> ret = new ArrayList<>();
+        for (Map.Entry<Class<?>, RequestProcessor> entry 
+                : this._processorCache.snapshot().entrySet()) {
+            final StringBuilder sb = new StringBuilder();
+            sb.append(entry.getKey());
+            sb.append("-->");
+            sb.append(safeGetPathPrefix(entry.getKey()));
+            sb.append("/");
+            sb.append(entry.getValue());
+            ret.add(sb.toString());
+        }
+        
+        return ret.toArray(new String[0]);
+    }
+    
     @SuppressWarnings("rawtypes")
     private final Map<Class<?>, Triple<Class, String, Func0<Feature[]>>> _req2pathPrefix = 
             new ConcurrentHashMap<>();
@@ -490,7 +506,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
 
         public String req2path(final Object request) {
-            final String pathPrefix = safeGetPathPrefix(request);
+            final String pathPrefix = safeGetPathPrefix(request.getClass());
             if ( null == pathPrefix && null == this._pathSuffix ) {
                 // class not registered, return null
                 return null;
@@ -509,12 +525,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }
         }
 
-        private String safeGetPathPrefix(final Object request) {
-            @SuppressWarnings("rawtypes")
-            final Triple<Class, String, ?> triple = _req2pathPrefix.get(request.getClass());
-            return (null != triple ? triple.second : null);
-        }
-        
         public DefaultFullHttpRequest genHttpRequest(final URI uri, final Object request) {
             final DefaultFullHttpRequest httpRequest = genFullHttpRequest(uri);
 
@@ -634,7 +644,27 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         private final PropertyPlaceholderHelper _pathparamReplacer;
         
         private final PlaceholderResolver _pathparamResolver;
+
+        /* (non-Javadoc)
+         * @see java.lang.Object#toString()
+         */
+        @Override
+        public String toString() {
+            StringBuilder builder = new StringBuilder();
+            builder.append("RequestProcessor [queryFields=")
+                    .append(Arrays.toString(_queryFields))
+                    .append(", headerFields=")
+                    .append(Arrays.toString(_headerFields))
+                    .append(", pathSuffix=").append(_pathSuffix).append("]");
+            return builder.toString();
+        }
     };
+    
+    private String safeGetPathPrefix(final Class<?> reqCls) {
+        @SuppressWarnings("rawtypes")
+        final Triple<Class, String, ?> triple = this._req2pathPrefix.get(reqCls);
+        return (null != triple ? triple.second : null);
+    }
     
     /**
      * @param cls
