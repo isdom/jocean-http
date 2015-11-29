@@ -439,6 +439,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             sb.append(entry.getKey());
             sb.append("-->");
             sb.append(safeGetPathPrefix(entry.getKey()));
+            sb.append(entry.getValue()._pathSuffix);
             sb.append("/");
             sb.append(entry.getValue());
             ret.add(sb.toString());
