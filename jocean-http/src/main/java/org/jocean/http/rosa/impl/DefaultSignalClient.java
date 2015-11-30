@@ -137,13 +137,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }};
     }
         
-    public interface SignalConverter {
-
-        public URI req2uri(final Object request);
-
-        public HttpRequest genHttpRequest(URI uri, Object request);
-    }
-    
     public DefaultSignalClient(final HttpClient httpClient) {
         this._httpClient = httpClient;
     }
@@ -170,7 +163,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             @Override
             public void call(final Subscriber<? super Object> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
-                    final URI uri = _converter.req2uri(request);
+                    final URI uri = req2uri(request);
                     
                     final int port = -1 == uri.getPort() ? ( "https".equals(uri.getScheme()) ? 443 : 80 ) : uri.getPort();
                     final InetSocketAddress remoteAddress = new InetSocketAddress(uri.getHost(), port);
@@ -272,7 +265,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         final List<Object> ret = new ArrayList<>();
         if (0 == attachments.length) {
             final HttpRequest httpRequest =
-                    _converter.genHttpRequest(uri, request);
+                    genHttpRequest(uri, request);
             ret.addAll(Arrays.asList(new Object[]{httpRequest}));
             return Pair.of(ret, -1L);
         } else {
@@ -452,37 +445,33 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     private final Map<Class<?>, Triple<Class, String, Func0<Feature[]>>> _req2pathPrefix = 
             new ConcurrentHashMap<>();
     
-    private final SignalConverter _converter = new SignalConverter() {
-
-        @Override
-        public URI req2uri(final Object request) {
-            final String uri = 
-                _processorCache.get(request.getClass())
-                .req2path(request);
-            
-            try {
-                return ( null != uri ? new URI(uri) : null);
-            } catch (Exception e) {
-                LOG.error("exception when generate URI for request({}), detail:{}",
-                        request, ExceptionUtils.exception2detail(e));
-                return null;
-            }
+    private URI req2uri(final Object request) {
+        final String uri = 
+            _processorCache.get(request.getClass())
+            .req2path(request);
+        
+        try {
+            return ( null != uri ? new URI(uri) : null);
+        } catch (Exception e) {
+            LOG.error("exception when generate URI for request({}), detail:{}",
+                    request, ExceptionUtils.exception2detail(e));
+            return null;
         }
+    }
 
-        @Override
-        public HttpRequest genHttpRequest(
-                final URI uri,
-                final Object request) {
-            try {
-                return _processorCache.get(request.getClass())
-                    .genHttpRequest(uri, request);
-            }
-            catch (Exception e) {
-                LOG.error("exception when generate httpRequest for request bean({})",
-                        request);
-                return null;
-            }
-        }};
+    private HttpRequest genHttpRequest(
+            final URI uri,
+            final Object request) {
+        try {
+            return _processorCache.get(request.getClass())
+                .genHttpRequest(uri, request);
+        }
+        catch (Exception e) {
+            LOG.error("exception when generate httpRequest for request bean({})",
+                    request);
+            return null;
+        }
+    }
         
     private final SimpleCache<Class<?>, RequestProcessor> _processorCache = 
         new SimpleCache<Class<?>, RequestProcessor>(
