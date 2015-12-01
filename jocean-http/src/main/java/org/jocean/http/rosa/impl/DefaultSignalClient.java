@@ -782,7 +782,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
 
     @Override
-    public void setBeanHolder(BeanHolder beanHolder) {
+    public void setBeanHolder(final BeanHolder beanHolder) {
         this._beanHolder = beanHolder;
     }
     
