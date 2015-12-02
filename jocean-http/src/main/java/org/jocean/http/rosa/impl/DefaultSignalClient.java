@@ -2,44 +2,27 @@ package org.jocean.http.rosa.impl;
 
 import java.io.File;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-
-import javax.ws.rs.GET;
-import javax.ws.rs.HeaderParam;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.QueryParam;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.util.FeaturesBuilder;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.BeanHolder;
 import org.jocean.idiom.BeanHolderAware;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Pair;
-import org.jocean.idiom.PropertyPlaceholderHelper;
-import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
-import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.SimpleCache;
 import org.jocean.idiom.Triple;
 import org.jocean.idiom.io.FilenameUtils;
@@ -50,9 +33,7 @@ import com.alibaba.fastjson.JSON;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
-import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
@@ -83,12 +64,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClient.class);
 
-    private static final Func1<Object, Boolean> NOT_HTTPOBJECT = new Func1<Object, Boolean>() {
-        @Override
-        public Boolean call(final Object obj) {
-            return !(obj instanceof HttpObject);
-        }};
-        
     private static Func1<Object, Object> convertProgressable(final long uploadTotal) {
         final AtomicLong uploadProgress = new AtomicLong(0);
         final AtomicLong downloadProgress = new AtomicLong(0);
@@ -190,7 +165,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     
                     response.map(convertProgressable(uploadTotal))
                     .doOnNext(retainHttpObjects(httpObjects))
-                    .filter(NOT_HTTPOBJECT)
+                    .filter(RxNettys.NOT_HTTPOBJECT)
                     .doOnCompleted(new Action0() {
                         @Override
                         public void call() {
@@ -386,17 +361,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return (null != triple ? triple.first : null);
     }
 
-    private static DefaultFullHttpRequest genFullHttpRequest(final URI uri) {
-        // Prepare the HTTP request.
-        final String host = uri.getHost() == null ? "localhost" : uri.getHost();
-
-        final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.GET, uri.getRawPath());
-        request.headers().set(HttpHeaders.Names.HOST, host);
-
-        return request;
-    }
-    
     private static DefaultHttpRequest genPostHttpRequest(final URI uri) {
         // Prepare the HTTP request.
         final String host = uri.getHost() == null ? "localhost" : uri.getHost();
@@ -432,7 +396,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             sb.append(entry.getKey());
             sb.append("-->");
             sb.append(safeGetPathPrefix(entry.getKey()));
-            sb.append(entry.getValue()._pathSuffix);
+            sb.append(entry.getValue().pathSuffix());
             sb.append("/");
             sb.append(entry.getValue());
             ret.add(sb.toString());
@@ -478,9 +442,15 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             new Func1<Class<?>, RequestProcessor>() {
                 @Override
                 public RequestProcessor call(final Class<?> reqCls) {
-                    return new RequestProcessor(reqCls);
+                    return new RequestProcessor(reqCls, new Func1<Class<?>, String>() {
+
+                        @Override
+                        public String call(final Class<?> reqCls) {
+                            return safeGetPathPrefix(reqCls);
+                        }});
                 }});
     
+    /*
     private final class RequestProcessor {
 
         RequestProcessor(final Class<?> reqCls) {
@@ -518,7 +488,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         public DefaultFullHttpRequest genHttpRequest(final URI uri, final Object request) {
             final DefaultFullHttpRequest httpRequest = genFullHttpRequest(uri);
 
-            final Class<?> httpMethod = getHttpMethod(request);
+            final Class<?> httpMethod = getHttpMethod(request.getClass());
             if ( null == httpMethod 
                 || GET.class.equals(httpMethod)) {
                 genQueryParamsRequest(request, httpRequest);
@@ -635,9 +605,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         
         private final PlaceholderResolver _pathparamResolver;
 
-        /* (non-Javadoc)
-         * @see java.lang.Object#toString()
-         */
         @Override
         public String toString() {
             StringBuilder builder = new StringBuilder();
@@ -649,6 +616,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             return builder.toString();
         }
     };
+    */
     
     private String safeGetPathPrefix(final Class<?> reqCls) {
         @SuppressWarnings("rawtypes")
@@ -656,131 +624,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return (null != triple ? triple.second : null);
     }
     
-    /**
-     * @param cls
-     */
-    private static String getPathValueOf(final Class<?> cls) {
-        final Path path = cls.getAnnotation(Path.class);
-        return (null != path ? path.value() : null);
-    }
-
-    private static String safeConcatPath(final String pathPrefix, final String pathSuffix) {
-        if ( null == pathSuffix ) {
-            return pathPrefix;
-        }
-        if ( null == pathPrefix ) {
-            return pathSuffix;
-        }
-        return pathPrefix + pathSuffix;
-    }
-
-    /**
-     * @return
-     */
-    private static PlaceholderResolver genPlaceholderResolverOf(
-            Class<?> cls, Class<? extends Annotation> annotationCls) {
-        final Map<String, Field> pathparam2fields = 
-            genPath2FieldMapping(
-                ReflectUtils.getAnnotationFieldsOf(cls, annotationCls));
-        
-        final Map<String, Method> pathparam2methods = 
-            genPath2MethodMapping(cls, 
-                ReflectUtils.getAnnotationMethodsOf(cls, annotationCls));
-        
-        if ( null == pathparam2fields 
-           && null ==  pathparam2methods) {
-            return null;
-        }
-        
-        return new PropertyPlaceholderHelper.PlaceholderResolver() {
-            @Override
-            public String resolvePlaceholder(final Object request,
-                    final String placeholderName) {
-                if (null != pathparam2fields) {
-                    final Field field = pathparam2fields
-                            .get(placeholderName);
-                    if (null != field) {
-                        try {
-                            return String.valueOf(field.get(request));
-                        } catch (Exception e) {
-                            LOG.error("exception when get value for ({}).{}, detail: {}",
-                                    request, field.getName(),
-                                    ExceptionUtils.exception2detail(e));
-                        }
-                    }
-                }
-
-                if ( null != pathparam2methods ) {
-                    final Method method = pathparam2methods
-                            .get(placeholderName);
-                    if (null != method) {
-                        try {
-                            return String.valueOf(method.invoke(request));
-                        } catch (Exception e) {
-                            LOG.error("exception when invoke ({}).{}, detail: {}",
-                                    request, method.getName(),
-                                    ExceptionUtils.exception2detail(e));
-                        }
-                    }
-                }
-
-                // default by empty string, so placeholder will be erased
-                // from uri
-                return "";
-            }
-        };
-    }
-    
-    private static Map<String, Field> genPath2FieldMapping(
-            final Field[] pathparamFields) {
-        if ( null != pathparamFields ) {
-            final Map<String, Field> ret = new HashMap<String, Field>();
-            for ( Field field : pathparamFields ) {
-                ret.put(field.getAnnotation(PathParam.class).value(), field);
-            }
-            return ret;
-        }
-        else {
-            return null;
-        }
-    }
-    
-    private static Map<String, Method> genPath2MethodMapping(
-            final Class<?> cls, 
-            final Method[] pathparamMethods) {
-        if ( null != pathparamMethods ) {
-            final Map<String, Method> ret = new HashMap<String, Method>();
-            for ( Method method : pathparamMethods ) {
-                if ( method.getParameterTypes().length == 0 
-                    && !method.getReturnType().equals(void.class)) {
-                    ret.put(method.getAnnotation(PathParam.class).value(), method);
-                }
-                else {
-                    LOG.warn("class({}).{} can't be invoke as PathParam, just ignore",
-                            cls, method.getName());
-                }
-            }
-            return ( !ret.isEmpty() ?  ret : null);
-        }
-        else {
-            return null;
-        }
-    }
-    
-    /**
-     * @param request
-     */
-    private static Class<?> getHttpMethod(final Object request) {
-        final AnnotationWrapper wrapper = 
-                request.getClass().getAnnotation(AnnotationWrapper.class);
-        if ( null != wrapper ) {
-            return wrapper.value();
-        }
-        else {
-            return null;
-        }
-    }
-
     @Override
     public void setBeanHolder(final BeanHolder beanHolder) {
         this._beanHolder = beanHolder;

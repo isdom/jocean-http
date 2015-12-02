@@ -197,6 +197,12 @@ public class RxNettys {
         }
     }
     
+    public static final Func1<Object, Boolean> NOT_HTTPOBJECT = new Func1<Object, Boolean>() {
+        @Override
+        public Boolean call(final Object obj) {
+            return !(obj instanceof HttpObject);
+        }};
+        
     private static final Func1<Object,Boolean> _ISHTTPOBJ = new Func1<Object, Boolean>() {
         @Override
         public Boolean call(final Object obj) {
