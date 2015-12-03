@@ -7,7 +7,6 @@ import java.net.URI;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,12 +49,10 @@ import io.netty.handler.codec.http.multipart.HttpDataFactory;
 import io.netty.handler.codec.http.multipart.HttpPostRequestEncoder;
 import io.netty.handler.codec.http.multipart.InterfaceHttpData;
 import io.netty.handler.codec.http.multipart.MemoryFileUpload;
-import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Action0;
-import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
 
@@ -101,17 +98,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }};
     }
     
-    private static Action1<Object> retainHttpObjects(
-            final Collection<HttpObject> httpObjects) {
-        return new Action1<Object>() {
-            @Override
-            public void call(final Object obj) {
-                if (obj instanceof HttpObject) {
-                    httpObjects.add(ReferenceCountUtil.retain((HttpObject)obj));
-                }
-            }};
-    }
-        
     public DefaultSignalClient(final HttpClient httpClient) {
         this._httpClient = httpClient;
     }
@@ -164,7 +150,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     final List<HttpObject> httpObjects = new ArrayList<>();
                     
                     response.map(convertProgressable(uploadTotal))
-                    .doOnNext(retainHttpObjects(httpObjects))
+                    .doOnNext(RxNettys.httpObjectsRetainer(httpObjects))
                     .filter(RxNettys.NOT_HTTPOBJECT)
                     .doOnCompleted(new Action0() {
                         @Override
@@ -410,9 +396,8 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             new ConcurrentHashMap<>();
     
     private URI req2uri(final Object request) {
-        final String uri = 
-            _processorCache.get(request.getClass())
-            .req2path(request);
+        final String uri = this._processorCache.get(request.getClass())
+            .req2path(request, safeGetPathPrefix(request.getClass()));
         
         try {
             return ( null != uri ? new URI(uri) : null);
@@ -442,16 +427,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             new Func1<Class<?>, RequestProcessor>() {
                 @Override
                 public RequestProcessor call(final Class<?> reqCls) {
-                    return new RequestProcessor(reqCls, _cls2prefix);
+                    return new RequestProcessor(reqCls);
                 }});
     
-    private final Func1<Class<?>, String> _cls2prefix = new Func1<Class<?>, String>() {
-
-        @Override
-        public String call(final Class<?> reqCls) {
-            return safeGetPathPrefix(reqCls);
-        }};
-        
     private String safeGetPathPrefix(final Class<?> reqCls) {
         @SuppressWarnings("rawtypes")
         final Triple<Class, String, ?> triple = this._req2pathPrefix.get(reqCls);

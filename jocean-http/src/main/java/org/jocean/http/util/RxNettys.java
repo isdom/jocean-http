@@ -34,6 +34,7 @@ import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
 import rx.Subscriber;
 import rx.Subscription;
+import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
@@ -259,6 +260,17 @@ public class RxNettys {
         }
     }
     
+    public static Action1<Object> httpObjectsRetainer(
+            final Collection<HttpObject> httpObjects) {
+        return new Action1<Object>() {
+            @Override
+            public void call(final Object obj) {
+                if (obj instanceof HttpObject) {
+                    httpObjects.add(ReferenceCountUtil.retain((HttpObject)obj));
+                }
+            }};
+    }
+        
     public static Observable<HttpObject> response401Unauthorized(
             final HttpVersion version, final String vlaueOfWWWAuthenticate) {
         final HttpResponse response = new DefaultFullHttpResponse(

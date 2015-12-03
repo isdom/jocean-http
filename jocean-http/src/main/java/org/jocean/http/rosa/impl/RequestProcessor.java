@@ -20,8 +20,8 @@ import javax.ws.rs.QueryParam;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.PropertyPlaceholderHelper;
-import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
+import org.jocean.idiom.ReflectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,15 +33,12 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
-import rx.functions.Func1;
 
 final class RequestProcessor {
     private static final Logger LOG =
             LoggerFactory.getLogger(RequestProcessor.class);
 
-    RequestProcessor(final Class<?> reqCls, final Func1<Class<?>, String> cls2prefix) {
-        this._cls2prefix = cls2prefix;
-        
+    RequestProcessor(final Class<?> reqCls) {
         this._queryFields = ReflectUtils.getAnnotationFieldsOf(reqCls, QueryParam.class);
         this._headerFields = ReflectUtils.getAnnotationFieldsOf(reqCls, HeaderParam.class);
         
@@ -53,8 +50,7 @@ final class RequestProcessor {
                 ( null != this._pathparamResolver ? new PropertyPlaceholderHelper("{", "}") : null);
     }
 
-    public String req2path(final Object request) {
-        final String pathPrefix = this._cls2prefix.call(request.getClass());
+    public String req2path(final Object request, final String pathPrefix) {
         if ( null == pathPrefix && null == this._pathSuffix ) {
             // class not registered, return null
             return null;
@@ -312,8 +308,6 @@ final class RequestProcessor {
             return null;
         }
     }
-    
-    private final Func1<Class<?>, String> _cls2prefix;
     
     private final Field[] _queryFields;
     
