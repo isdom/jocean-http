@@ -37,7 +37,7 @@ import rx.functions.Func1;
 
 final class RequestProcessor {
     private static final Logger LOG =
-            LoggerFactory.getLogger(DefaultSignalClient.class);
+            LoggerFactory.getLogger(RequestProcessor.class);
 
     RequestProcessor(final Class<?> reqCls, final Func1<Class<?>, String> cls2prefix) {
         this._cls2prefix = cls2prefix;
