@@ -29,6 +29,7 @@ import com.alibaba.fastjson.JSON;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpRequest;
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
@@ -73,28 +74,20 @@ final class RequestProcessor {
         return this._pathSuffix;
     }
 
-    public DefaultFullHttpRequest genFullHttpRequest(final URI uri, final Object request) {
-        final DefaultFullHttpRequest httpRequest = 
-                genHttpRequest(uri, getHttpMethodAsNettyForm(request.getClass()), true);
+    @SuppressWarnings("unchecked")
+    public <T extends HttpRequest> T genHttpRequest(final URI uri, final Object request, final boolean isFull) {
+        final HttpRequest httpRequest = 
+                genHttpRequest(uri, getHttpMethodAsNettyForm(request.getClass()), isFull);
 
-        if ( httpRequest.getMethod().equals(HttpMethod.POST)) {
-            fillContentAsJSON(httpRequest, JSON.toJSONBytes(request));
+        if ( isFull && httpRequest.getMethod().equals(HttpMethod.POST)) {
+            fillContentAsJSON((FullHttpRequest)httpRequest, JSON.toJSONBytes(request));
         }
         
-        genQueryParamsRequest(request, httpRequest);
+        applyQueryParams(request, httpRequest);
         applyHeaderParams(request, httpRequest);
-        return httpRequest;
+        return (T)httpRequest;
     }
 
-    public HttpRequest genHttpRequest(final URI uri, final Object request, final HttpMethod httpMethod) {
-        final HttpRequest httpRequest = genHttpRequest(uri, httpMethod, false);
-        
-        genQueryParamsRequest(request, httpRequest);
-        applyHeaderParams(request, httpRequest);
-        
-        return httpRequest;
-    }
-    
     private void applyHeaderParams(
             final Object request,
             final HttpRequest httpRequest) {
@@ -117,7 +110,7 @@ final class RequestProcessor {
     }
 
     private void fillContentAsJSON(
-            final DefaultFullHttpRequest httpRequest,
+            final FullHttpRequest httpRequest,
             final byte[] jsonBytes) {
         final OutputStream os = new ByteBufOutputStream(httpRequest.content());
         try {
@@ -139,7 +132,7 @@ final class RequestProcessor {
         httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/json");
     }
 
-    private void genQueryParamsRequest(
+    private void applyQueryParams(
             final Object request, 
             final HttpRequest httpRequest) {
         if ( null != this._queryFields ) {
@@ -288,7 +281,7 @@ final class RequestProcessor {
                 HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
         } else {
             request = new DefaultHttpRequest(
-                    HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
+                HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
         }
         request.headers().set(HttpHeaders.Names.HOST, host);
 
