@@ -184,46 +184,44 @@ final class RequestProcessor {
 
     private static PlaceholderResolver genPlaceholderResolverOf(
             Class<?> cls, Class<? extends Annotation> annotationCls) {
-        final Map<String, Field> pathparam2fields = 
-            genPath2FieldMapping(
-                ReflectUtils.getAnnotationFieldsOf(cls, annotationCls));
+        final Map<String, Field> pathparam2field = 
+            genPath2Field(ReflectUtils.getAnnotationFieldsOf(cls, annotationCls));
         
-        final Map<String, Method> pathparam2methods = 
-            genPath2MethodMapping(cls, 
-                ReflectUtils.getAnnotationMethodsOf(cls, annotationCls));
+        final Map<String, Method> pathparam2method = 
+            genPath2Method(cls, ReflectUtils.getAnnotationMethodsOf(cls, annotationCls));
         
-        if ( null == pathparam2fields 
-           && null ==  pathparam2methods) {
+        if ( null == pathparam2field 
+           && null ==  pathparam2method) {
             return null;
         }
         
         return new PropertyPlaceholderHelper.PlaceholderResolver() {
             @Override
-            public String resolvePlaceholder(final Object request,
-                    final String placeholderName) {
-                if (null != pathparam2fields) {
-                    final Field field = pathparam2fields
-                            .get(placeholderName);
+            public String resolvePlaceholder(final Object obj,
+                    final String placeholder) {
+                if (null != pathparam2field) {
+                    final Field field = pathparam2field
+                            .get(placeholder);
                     if (null != field) {
                         try {
-                            return String.valueOf(field.get(request));
+                            return String.valueOf(field.get(obj));
                         } catch (Exception e) {
                             LOG.error("exception when get value for ({}).{}, detail: {}",
-                                    request, field.getName(),
+                                    obj, field.getName(),
                                     ExceptionUtils.exception2detail(e));
                         }
                     }
                 }
 
-                if ( null != pathparam2methods ) {
-                    final Method method = pathparam2methods
-                            .get(placeholderName);
+                if ( null != pathparam2method ) {
+                    final Method method = pathparam2method
+                            .get(placeholder);
                     if (null != method) {
                         try {
-                            return String.valueOf(method.invoke(request));
+                            return String.valueOf(method.invoke(obj));
                         } catch (Exception e) {
                             LOG.error("exception when invoke ({}).{}, detail: {}",
-                                    request, method.getName(),
+                                    obj, method.getName(),
                                     ExceptionUtils.exception2detail(e));
                         }
                     }
@@ -236,7 +234,7 @@ final class RequestProcessor {
         };
     }
     
-    private static Map<String, Field> genPath2FieldMapping(
+    private static Map<String, Field> genPath2Field(
             final Field[] pathparamFields) {
         if ( null != pathparamFields ) {
             final Map<String, Field> ret = new HashMap<String, Field>();
@@ -250,7 +248,7 @@ final class RequestProcessor {
         }
     }
     
-    private static Map<String, Method> genPath2MethodMapping(
+    private static Map<String, Method> genPath2Method(
             final Class<?> cls, 
             final Method[] pathparamMethods) {
         if ( null != pathparamMethods ) {
