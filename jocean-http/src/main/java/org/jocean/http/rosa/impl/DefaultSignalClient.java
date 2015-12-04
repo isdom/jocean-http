@@ -34,15 +34,11 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
-import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
-import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
 import io.netty.handler.codec.http.multipart.DiskFileUpload;
 import io.netty.handler.codec.http.multipart.HttpDataFactory;
@@ -218,24 +214,21 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         });
     }
 
-    protected Pair<List<Object>,Long> buildHttpRequest(
+    private Pair<List<Object>,Long> buildHttpRequest(
             final URI uri,
             final Object request, 
             final Attachment[] attachments) throws Exception {
         
         final List<Object> ret = new ArrayList<>();
         if (0 == attachments.length) {
-            final HttpRequest httpRequest =
-                    genHttpRequest(uri, request);
+            final HttpRequest httpRequest = this._processorCache.get(request.getClass())
+                            .genFullHttpRequest(uri, request);
             ret.addAll(Arrays.asList(new Object[]{httpRequest}));
             return Pair.of(ret, -1L);
         } else {
             // multipart
-            
-            final HttpRequest httpRequest = genPostHttpRequest(uri);
-            
-            this._processorCache.get(request.getClass())
-                    .processHttpRequest(request, httpRequest);
+            final HttpRequest httpRequest = this._processorCache.get(request.getClass())
+                    .genHttpRequestForPOST(uri, request);
             
             final HttpDataFactory factory = new DefaultHttpDataFactory(false);
             
@@ -347,17 +340,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return (null != triple ? triple.first : null);
     }
 
-    private static DefaultHttpRequest genPostHttpRequest(final URI uri) {
-        // Prepare the HTTP request.
-        final String host = uri.getHost() == null ? "localhost" : uri.getHost();
-
-        final DefaultHttpRequest request = new DefaultHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, uri.getRawPath());
-        request.headers().set(HttpHeaders.Names.HOST, host);
-
-        return request;
-    }
-    
     public String[] getRegisteredRequests() {
         final List<String> ret = new ArrayList<>();
         for ( @SuppressWarnings("rawtypes") Map.Entry<Class<?>, Triple<Class, String, Func0<Feature[]>>> entry 
@@ -408,20 +390,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
 
-    private HttpRequest genHttpRequest(
-            final URI uri,
-            final Object request) {
-        try {
-            return _processorCache.get(request.getClass())
-                .genHttpRequest(uri, request);
-        }
-        catch (Exception e) {
-            LOG.error("exception when generate httpRequest for request bean({})",
-                    request);
-            return null;
-        }
-    }
-        
     private final SimpleCache<Class<?>, RequestProcessor> _processorCache = 
         new SimpleCache<Class<?>, RequestProcessor>(
             new Func1<Class<?>, RequestProcessor>() {

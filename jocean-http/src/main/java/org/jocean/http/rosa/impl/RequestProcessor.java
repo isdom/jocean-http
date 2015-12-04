@@ -29,6 +29,7 @@ import com.alibaba.fastjson.JSON;
 
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
@@ -73,8 +74,8 @@ final class RequestProcessor {
         return this._pathSuffix;
     }
 
-    public DefaultFullHttpRequest genHttpRequest(final URI uri, final Object request) {
-        final DefaultFullHttpRequest httpRequest = genFullHttpRequest(uri);
+    public DefaultFullHttpRequest genFullHttpRequest(final URI uri, final Object request) {
+        final DefaultFullHttpRequest httpRequest = genFullHttpRequestForGET(uri);
 
         final Class<?> httpMethod = getHttpMethod(request.getClass());
         if ( null == httpMethod 
@@ -89,9 +90,13 @@ final class RequestProcessor {
         return httpRequest;
     }
 
-    public void processHttpRequest(final Object request, final HttpRequest httpRequest) {
+    public HttpRequest genHttpRequestForPOST(final URI uri, final Object request) {
+        final HttpRequest httpRequest = genHttpRequestForPOST(uri);
+        
         genQueryParamsRequest(request, httpRequest);
         applyHeaderParams(request, httpRequest);
+        
+        return httpRequest;
     }
     
     private void applyHeaderParams(
@@ -285,12 +290,23 @@ final class RequestProcessor {
         return (null != path ? path.value() : null);
     }
     
-    private static DefaultFullHttpRequest genFullHttpRequest(final URI uri) {
+    private static DefaultFullHttpRequest genFullHttpRequestForGET(final URI uri) {
         // Prepare the HTTP request.
         final String host = uri.getHost() == null ? "localhost" : uri.getHost();
 
         final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
                 HttpVersion.HTTP_1_1, HttpMethod.GET, uri.getRawPath());
+        request.headers().set(HttpHeaders.Names.HOST, host);
+
+        return request;
+    }
+    
+    private static DefaultHttpRequest genHttpRequestForPOST(final URI uri) {
+        // Prepare the HTTP request.
+        final String host = uri.getHost() == null ? "localhost" : uri.getHost();
+
+        final DefaultHttpRequest request = new DefaultHttpRequest(
+                HttpVersion.HTTP_1_1, HttpMethod.POST, uri.getRawPath());
         request.headers().set(HttpHeaders.Names.HOST, host);
 
         return request;
