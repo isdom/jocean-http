@@ -10,7 +10,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -75,23 +74,20 @@ final class RequestProcessor {
     }
 
     public DefaultFullHttpRequest genFullHttpRequest(final URI uri, final Object request) {
-        final DefaultFullHttpRequest httpRequest = genFullHttpRequestForGET(uri);
+        final DefaultFullHttpRequest httpRequest = 
+                genHttpRequest(uri, getHttpMethodAsNettyForm(request.getClass()), true);
 
-        final Class<?> httpMethod = getHttpMethod(request.getClass());
-        if ( null == httpMethod 
-            || GET.class.equals(httpMethod)) {
-            genQueryParamsRequest(request, httpRequest);
-        }
-        else if (POST.class.equals(httpMethod)) {
-            genPostRequest(request, httpRequest);
+        if ( httpRequest.getMethod().equals(HttpMethod.POST)) {
+            fillContentAsJSON(httpRequest, JSON.toJSONBytes(request));
         }
         
+        genQueryParamsRequest(request, httpRequest);
         applyHeaderParams(request, httpRequest);
         return httpRequest;
     }
 
-    public HttpRequest genHttpRequestForPOST(final URI uri, final Object request) {
-        final HttpRequest httpRequest = genHttpRequestForPOST(uri);
+    public HttpRequest genHttpRequest(final URI uri, final Object request, final HttpMethod httpMethod) {
+        final HttpRequest httpRequest = genHttpRequest(uri, httpMethod, false);
         
         genQueryParamsRequest(request, httpRequest);
         applyHeaderParams(request, httpRequest);
@@ -120,18 +116,7 @@ final class RequestProcessor {
         }
     }
 
-    private void genPostRequest(
-            final Object request,
-            final DefaultFullHttpRequest httpRequest) {
-        final byte[] jsonBytes = JSON.toJSONBytes(request);
-        
-        genContentAsJSON(httpRequest, jsonBytes);
-        genQueryParamsRequest(request, httpRequest);
-        
-        httpRequest.setMethod(HttpMethod.POST);
-    }
-
-    private void genContentAsJSON(
+    private void fillContentAsJSON(
             final DefaultFullHttpRequest httpRequest,
             final byte[] jsonBytes) {
         final OutputStream os = new ByteBufOutputStream(httpRequest.content());
@@ -290,36 +275,34 @@ final class RequestProcessor {
         return (null != path ? path.value() : null);
     }
     
-    private static DefaultFullHttpRequest genFullHttpRequestForGET(final URI uri) {
+    @SuppressWarnings("unchecked")
+    private static <T extends HttpRequest> T genHttpRequest(final URI uri, 
+            final HttpMethod httpMethod, final boolean isFull) {
         // Prepare the HTTP request.
         final String host = uri.getHost() == null ? "localhost" : uri.getHost();
 
-        final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.GET, uri.getRawPath());
+        HttpRequest request;
+        
+        if (isFull) {
+            request = new DefaultFullHttpRequest(
+                HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
+        } else {
+            request = new DefaultHttpRequest(
+                    HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
+        }
         request.headers().set(HttpHeaders.Names.HOST, host);
 
-        return request;
+        return (T)request;
     }
     
-    private static DefaultHttpRequest genHttpRequestForPOST(final URI uri) {
-        // Prepare the HTTP request.
-        final String host = uri.getHost() == null ? "localhost" : uri.getHost();
-
-        final DefaultHttpRequest request = new DefaultHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.POST, uri.getRawPath());
-        request.headers().set(HttpHeaders.Names.HOST, host);
-
-        return request;
-    }
-    
-    private static Class<?> getHttpMethod(final Class<?> reqCls) {
+    private static HttpMethod getHttpMethodAsNettyForm(final Class<?> reqCls) {
         final AnnotationWrapper wrapper = 
                 reqCls.getAnnotation(AnnotationWrapper.class);
         if ( null != wrapper ) {
-            return wrapper.value();
+            return wrapper.value().equals(POST.class) ? HttpMethod.POST : HttpMethod.GET;
         }
         else {
-            return null;
+            return HttpMethod.GET;
         }
     }
     

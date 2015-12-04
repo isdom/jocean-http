@@ -36,6 +36,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
@@ -222,13 +223,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         final List<Object> ret = new ArrayList<>();
         if (0 == attachments.length) {
             final HttpRequest httpRequest = this._processorCache.get(request.getClass())
-                            .genFullHttpRequest(uri, request);
+                    .genFullHttpRequest(uri, request);
             ret.addAll(Arrays.asList(new Object[]{httpRequest}));
             return Pair.of(ret, -1L);
         } else {
             // multipart
             final HttpRequest httpRequest = this._processorCache.get(request.getClass())
-                    .genHttpRequestForPOST(uri, request);
+                    .genHttpRequest(uri, request, HttpMethod.POST);
             
             final HttpDataFactory factory = new DefaultHttpDataFactory(false);
             
