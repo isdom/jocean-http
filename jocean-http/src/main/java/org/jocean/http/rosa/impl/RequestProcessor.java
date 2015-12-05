@@ -1,6 +1,5 @@
 package org.jocean.http.rosa.impl;
 
-import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -24,12 +23,8 @@ import org.jocean.idiom.ReflectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.alibaba.fastjson.JSON;
-
-import io.netty.buffer.ByteBufOutputStream;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpRequest;
-import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
@@ -70,7 +65,7 @@ final class RequestProcessor {
         }
     }
     
-    public String pathSuffix() {
+    String pathSuffix() {
         return this._pathSuffix;
     }
 
@@ -79,10 +74,6 @@ final class RequestProcessor {
         final HttpRequest httpRequest = 
                 genHttpRequest(uri, getHttpMethodAsNettyForm(request.getClass()), isFull);
 
-        if ( isFull && httpRequest.getMethod().equals(HttpMethod.POST)) {
-            fillContentAsJSON((FullHttpRequest)httpRequest, JSON.toJSONBytes(request));
-        }
-        
         applyQueryParams(request, httpRequest);
         applyHeaderParams(request, httpRequest);
         return (T)httpRequest;
@@ -107,29 +98,6 @@ final class RequestProcessor {
             }
             
         }
-    }
-
-    private void fillContentAsJSON(
-            final FullHttpRequest httpRequest,
-            final byte[] jsonBytes) {
-        final OutputStream os = new ByteBufOutputStream(httpRequest.content());
-        try {
-            os.write(jsonBytes);
-            HttpHeaders.setContentLength(httpRequest, jsonBytes.length);
-        }
-        catch (Throwable e) {
-            LOG.warn("exception when write json to response, detail:{}", 
-                    ExceptionUtils.exception2detail(e));
-        }
-        finally {
-            if ( null != os ) {
-                try {
-                    os.close();
-                } catch (Exception e) {
-                }
-            }
-        }
-        httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/json");
     }
 
     private void applyQueryParams(

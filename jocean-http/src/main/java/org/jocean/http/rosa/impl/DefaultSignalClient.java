@@ -2,6 +2,7 @@ package org.jocean.http.rosa.impl;
 
 import java.io.File;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.Charset;
@@ -32,10 +33,14 @@ import com.alibaba.fastjson.JSON;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
+import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
@@ -221,8 +226,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         
         final List<Object> ret = new ArrayList<>();
         if (0 == attachments.length) {
-            final HttpRequest httpRequest = this._processorCache.get(request.getClass())
+            final FullHttpRequest httpRequest = this._processorCache.get(request.getClass())
                     .genHttpRequest(uri, request, true);
+            
+            if ( httpRequest.getMethod().equals(HttpMethod.POST)) {
+                fillContentAsJSON(httpRequest, JSON.toJSONBytes(request));
+            }
+            
             ret.addAll(Arrays.asList(new Object[]{httpRequest}));
             return Pair.of(ret, -1L);
         } else {
@@ -284,6 +294,29 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
 
+    private static void fillContentAsJSON(
+            final FullHttpRequest httpRequest,
+            final byte[] jsonBytes) {
+        final OutputStream os = new ByteBufOutputStream(httpRequest.content());
+        try {
+            os.write(jsonBytes);
+            HttpHeaders.setContentLength(httpRequest, jsonBytes.length);
+        }
+        catch (Throwable e) {
+            LOG.warn("exception when write json to response, detail:{}", 
+                    ExceptionUtils.exception2detail(e));
+        }
+        finally {
+            if ( null != os ) {
+                try {
+                    os.close();
+                } catch (Exception e) {
+                }
+            }
+        }
+        httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/json");
+    }
+    
     public Action0 registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
             final Feature... features) {
         return registerRequestType(reqCls, respCls, pathPrefix, new Func0<Feature[]>() {
