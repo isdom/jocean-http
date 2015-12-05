@@ -13,11 +13,14 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import javax.ws.rs.POST;
+
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.util.FeaturesBuilder;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.BeanHolder;
 import org.jocean.idiom.BeanHolderAware;
 import org.jocean.idiom.ExceptionUtils;
@@ -35,7 +38,9 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
@@ -44,6 +49,7 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
 import io.netty.handler.codec.http.multipart.DiskFileUpload;
 import io.netty.handler.codec.http.multipart.HttpDataFactory;
@@ -225,21 +231,23 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final Attachment[] attachments) throws Exception {
         
         final List<Object> ret = new ArrayList<>();
+        final HttpRequest httpRequest = 
+                genHttpRequest(uri, 
+                        getHttpMethodAsNettyForm(request.getClass()), 
+                        0 == attachments.length);
+        
+        this._processorCache.get(request.getClass())
+            .applyParams(request, httpRequest);
+        
         if (0 == attachments.length) {
-            final FullHttpRequest httpRequest = this._processorCache.get(request.getClass())
-                    .genHttpRequest(uri, request, true);
-            
             if ( httpRequest.getMethod().equals(HttpMethod.POST)) {
-                fillContentAsJSON(httpRequest, JSON.toJSONBytes(request));
+                fillContentAsJSON((FullHttpRequest)httpRequest, JSON.toJSONBytes(request));
             }
             
             ret.addAll(Arrays.asList(new Object[]{httpRequest}));
             return Pair.of(ret, -1L);
         } else {
             // multipart
-            final HttpRequest httpRequest = this._processorCache.get(request.getClass())
-                    .genHttpRequest(uri, request, false);
-            
             final HttpDataFactory factory = new DefaultHttpDataFactory(false);
             
             long total = 0;
@@ -294,6 +302,37 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private static <T extends HttpRequest> T genHttpRequest(final URI uri, 
+            final HttpMethod httpMethod, final boolean isFull) {
+        // Prepare the HTTP request.
+        final String host = uri.getHost() == null ? "localhost" : uri.getHost();
+
+        HttpRequest request;
+        
+        if (isFull) {
+            request = new DefaultFullHttpRequest(
+                HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
+        } else {
+            request = new DefaultHttpRequest(
+                HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
+        }
+        request.headers().set(HttpHeaders.Names.HOST, host);
+
+        return (T)request;
+    }
+    
+    private static HttpMethod getHttpMethodAsNettyForm(final Class<?> reqCls) {
+        final AnnotationWrapper wrapper = 
+                reqCls.getAnnotation(AnnotationWrapper.class);
+        if ( null != wrapper ) {
+            return wrapper.value().equals(POST.class) ? HttpMethod.POST : HttpMethod.GET;
+        }
+        else {
+            return HttpMethod.GET;
+        }
+    }
+    
     private static void fillContentAsJSON(
             final FullHttpRequest httpRequest,
             final byte[] jsonBytes) {

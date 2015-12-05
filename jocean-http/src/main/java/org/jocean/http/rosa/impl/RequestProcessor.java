@@ -3,19 +3,16 @@ package org.jocean.http.rosa.impl;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.net.URI;
 import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 import javax.ws.rs.HeaderParam;
-import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 
-import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.PropertyPlaceholderHelper;
 import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
@@ -23,12 +20,7 @@ import org.jocean.idiom.ReflectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.DefaultHttpRequest;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpVersion;
 
 final class RequestProcessor {
     private static final Logger LOG =
@@ -69,14 +61,9 @@ final class RequestProcessor {
         return this._pathSuffix;
     }
 
-    @SuppressWarnings("unchecked")
-    public <T extends HttpRequest> T genHttpRequest(final URI uri, final Object request, final boolean isFull) {
-        final HttpRequest httpRequest = 
-                genHttpRequest(uri, getHttpMethodAsNettyForm(request.getClass()), isFull);
-
+    public void applyParams(final Object request, final HttpRequest httpRequest) {
         applyQueryParams(request, httpRequest);
         applyHeaderParams(request, httpRequest);
-        return (T)httpRequest;
     }
 
     private void applyHeaderParams(
@@ -234,37 +221,6 @@ final class RequestProcessor {
     private static String getPathValueOf(final Class<?> cls) {
         final Path path = cls.getAnnotation(Path.class);
         return (null != path ? path.value() : null);
-    }
-    
-    @SuppressWarnings("unchecked")
-    private static <T extends HttpRequest> T genHttpRequest(final URI uri, 
-            final HttpMethod httpMethod, final boolean isFull) {
-        // Prepare the HTTP request.
-        final String host = uri.getHost() == null ? "localhost" : uri.getHost();
-
-        HttpRequest request;
-        
-        if (isFull) {
-            request = new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
-        } else {
-            request = new DefaultHttpRequest(
-                HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
-        }
-        request.headers().set(HttpHeaders.Names.HOST, host);
-
-        return (T)request;
-    }
-    
-    private static HttpMethod getHttpMethodAsNettyForm(final Class<?> reqCls) {
-        final AnnotationWrapper wrapper = 
-                reqCls.getAnnotation(AnnotationWrapper.class);
-        if ( null != wrapper ) {
-            return wrapper.value().equals(POST.class) ? HttpMethod.POST : HttpMethod.GET;
-        }
-        else {
-            return HttpMethod.GET;
-        }
     }
     
     private final Field[] _queryFields;
