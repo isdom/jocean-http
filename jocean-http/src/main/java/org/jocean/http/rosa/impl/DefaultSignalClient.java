@@ -1,7 +1,6 @@
 package org.jocean.http.rosa.impl;
 
 import java.io.File;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -34,21 +33,15 @@ import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
 import io.netty.handler.codec.http.multipart.DiskFileUpload;
@@ -159,54 +152,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     response.map(convertProgressable(uploadTotal))
                     .doOnNext(RxNettys.httpObjectsRetainer(httpObjects))
                     .filter(RxNettys.NOT_HTTPOBJECT)
-                    .doOnCompleted(new Action0() {
-                        @Override
-                        public void call() {
-                            final FullHttpResponse httpResp = retainFullHttpResponse(httpObjects);
-                            if (null!=httpResp) {
-                                try {
-                                    final InputStream is = new ByteBufInputStream(httpResp.content());
-                                    try {
-                                        final byte[] bytes = new byte[is.available()];
-                                        @SuppressWarnings("unused")
-                                        final int readed = is.read(bytes);
-                                        if (LOG.isDebugEnabled()) {
-                                            LOG.debug("receive signal response: {}",
-                                                    new String(bytes, Charset.forName("UTF-8")));
-                                        }
-                                        final Object resp = JSON.parseObject(bytes, safeGetResponseClass(request));
-                                        subscriber.onNext(resp);
-                                    } finally {
-                                        is.close();
-                                    }
-                                } catch (Exception e) {
-                                    LOG.warn("exception when parse response {}, detail:{}",
-                                            httpResp, ExceptionUtils.exception2detail(e));
-                                    subscriber.onError(e);
-                                } finally {
-                                    httpResp.release();
-                                }
-                            }
-                        }
-                        private FullHttpResponse retainFullHttpResponse(final List<HttpObject> httpObjs) {
-                            if (httpObjs.size()>0) {
-                                if (httpObjs.get(0) instanceof FullHttpResponse) {
-                                    return ((FullHttpResponse)httpObjs.get(0)).retain();
-                                }
-                                
-                                final HttpResponse resp = (HttpResponse)httpObjs.get(0);
-                                final ByteBuf[] bufs = new ByteBuf[httpObjs.size()-1];
-                                for (int idx = 1; idx<httpObjs.size(); idx++) {
-                                    bufs[idx-1] = ((HttpContent)httpObjs.get(idx)).content().retain();
-                                }
-                                return new DefaultFullHttpResponse(
-                                        resp.getProtocolVersion(), 
-                                        resp.getStatus(),
-                                        Unpooled.wrappedBuffer(bufs));
-                            } else {
-                                return null;
-                            }
-                        }})
+                    .doOnCompleted(new CachedResponse(safeGetResponseClass(request), subscriber, httpObjects))
                     .doOnTerminate(new Action0() {
                         @Override
                         public void call() {
