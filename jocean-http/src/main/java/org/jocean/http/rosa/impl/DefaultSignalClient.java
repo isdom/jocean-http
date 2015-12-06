@@ -1,6 +1,7 @@
 package org.jocean.http.rosa.impl;
 
 import java.io.File;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -33,11 +34,13 @@ import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
 
+import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
@@ -49,6 +52,7 @@ import io.netty.handler.codec.http.multipart.HttpDataFactory;
 import io.netty.handler.codec.http.multipart.HttpPostRequestEncoder;
 import io.netty.handler.codec.http.multipart.InterfaceHttpData;
 import io.netty.handler.codec.http.multipart.MemoryFileUpload;
+import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
@@ -152,6 +156,55 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     final List<HttpObject> httpObjects = new ArrayList<>();
                     
                     response.map(convertProgressable(uploadTotal))
+                    /*
+                    .flatMap(new Func1<Object, Observable<Object>>() {
+                        @Override
+                        public Observable<Object> call(final Object input) {
+                            if (input instanceof HttpObject) {
+                                httpObjects.add(ReferenceCountUtil.retain((HttpObject)input));
+                                return Observable.never();
+                            } else {
+                                return Observable.just(input);
+                            }
+                        }},
+                        new Func1<Throwable, Observable<Object>>() {
+
+                            @Override
+                            public Observable<Object> call(final Throwable e) {
+                                return Observable.error(e);
+                            }},
+                        new Func0<Observable<Object>>() {
+                            @Override
+                            public Observable<Object> call() {
+                                final FullHttpResponse httpResp = RxNettys.retainAsFullHttpResponse(httpObjects);
+                                if (null!=httpResp) {
+                                    try {
+                                        final InputStream is = new ByteBufInputStream(httpResp.content());
+                                        try {
+                                            final byte[] bytes = new byte[is.available()];
+                                            @SuppressWarnings("unused")
+                                            final int readed = is.read(bytes);
+                                            if (LOG.isDebugEnabled()) {
+                                                LOG.debug("receive signal response: {}",
+                                                        new String(bytes, Charset.forName("UTF-8")));
+                                            }
+                                            final Object resp = JSON.parseObject(bytes, safeGetResponseClass(request));
+                                            return Observable.just(resp);
+                                        } finally {
+                                            is.close();
+                                        }
+                                    } catch (Exception e) {
+                                        LOG.warn("exception when parse response {}, detail:{}",
+                                                httpResp, ExceptionUtils.exception2detail(e));
+                                        Observable.error(e);
+                                    } finally {
+                                        httpResp.release();
+                                    }
+                                }
+                                return Observable.error(new RuntimeException("invalid response"));
+                            }}
+                        )
+                    */
                     .doOnNext(RxNettys.httpObjectsRetainer(httpObjects))
                     .filter(RxNettys.NOT_HTTPOBJECT)
                     .doOnCompleted(new CachedResponse(safeGetResponseClass(request), subscriber, httpObjects))
