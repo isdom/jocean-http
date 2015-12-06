@@ -1,5 +1,6 @@
 package org.jocean.http.util;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
@@ -9,6 +10,7 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
@@ -23,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.idiom.rx.OneshotSubscription;
@@ -288,4 +291,23 @@ public class RxNettys {
         return Observable.<HttpObject>just(response);
     }
     
+    public static FullHttpResponse retainAsFullHttpResponse(final List<HttpObject> httpObjs) {
+        if (httpObjs.size()>0) {
+            if (httpObjs.get(0) instanceof FullHttpResponse) {
+                return ((FullHttpResponse)httpObjs.get(0)).retain();
+            }
+            
+            final HttpResponse resp = (HttpResponse)httpObjs.get(0);
+            final ByteBuf[] bufs = new ByteBuf[httpObjs.size()-1];
+            for (int idx = 1; idx<httpObjs.size(); idx++) {
+                bufs[idx-1] = ((HttpContent)httpObjs.get(idx)).content().retain();
+            }
+            return new DefaultFullHttpResponse(
+                    resp.getProtocolVersion(), 
+                    resp.getStatus(),
+                    Unpooled.wrappedBuffer(bufs));
+        } else {
+            return null;
+        }
+    }
 }

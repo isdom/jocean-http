@@ -145,7 +145,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     response = _httpClient.defineInteraction(
                             remoteAddress, 
                             Observable.from(httpRequest),
-                            JOArrays.addFirst(Feature[].class, safeGetRequestFeatures(request), features));
+                            JOArrays.addFirst(Feature[].class, 
+                                    safeGetRequestFeatures(request), 
+                                    features));
                     
                     final List<HttpObject> httpObjects = new ArrayList<>();
                     
@@ -354,7 +356,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     
     private Class<?> safeGetResponseClass(final Object request) {
         @SuppressWarnings("rawtypes")
-        final Triple<Class,String, ?> triple = _req2pathPrefix.get(request.getClass());
+        final Triple<Class,String, ?> triple = this._req2pathPrefix.get(request.getClass());
         return (null != triple ? triple.first : null);
     }
 
