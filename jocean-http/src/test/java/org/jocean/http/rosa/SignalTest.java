@@ -17,10 +17,12 @@ import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.rosa.SignalClient.Attachment;
 import org.jocean.http.rosa.SignalClient.ProgressiveSubscriber;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import rx.Subscriber;
 import rx.Subscription;
 
 /**
@@ -70,7 +72,6 @@ public class SignalTest {
                 new Outbound.ENABLE_PROGRESSIVE(100)
                 );
         
-        /*
         {
             final QueryMyPatientsForDoctorRequest req = new QueryMyPatientsForDoctorRequest();
             req.setDoctorId("8510");
@@ -95,6 +96,7 @@ public class SignalTest {
                 }});
         }
         
+        /*
         final CountDownLatch latch = new CountDownLatch(1);
         
         {
@@ -124,7 +126,6 @@ public class SignalTest {
         }
         latch.await();
         pool.awaitRecycleChannels();
-        */
         {
             final AddMultiMediasToJourneyRequest req = new AddMultiMediasToJourneyRequest();
             req.setCaseId("120");
@@ -165,5 +166,6 @@ public class SignalTest {
             //  TODO, why invoke onCompleted Event? not onError, check
             //  TO BE CONTINUE, 2015-05-13
         }
+        */
     }
 }
