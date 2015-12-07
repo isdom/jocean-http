@@ -1,7 +1,7 @@
 /**
  * 
  */
-package org.jocean.http.rosa;
+package org.jocean.http.rosa.old;
 
 import javax.ws.rs.QueryParam;
 

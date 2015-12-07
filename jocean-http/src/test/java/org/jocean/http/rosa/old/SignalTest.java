@@ -1,7 +1,7 @@
 /**
  * 
  */
-package org.jocean.http.rosa;
+package org.jocean.http.rosa.old;
 
 import static org.jocean.http.Feature.ENABLE_COMPRESSOR;
 import static org.jocean.http.Feature.ENABLE_LOGGING;
