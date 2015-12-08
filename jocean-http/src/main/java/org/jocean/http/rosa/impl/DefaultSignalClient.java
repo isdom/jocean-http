@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -129,8 +130,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 if (!subscriber.isUnsubscribed()) {
                     final URI uri = req2uri(request);
                     
-                    final int port = -1 == uri.getPort() ? ( "https".equals(uri.getScheme()) ? 443 : 80 ) : uri.getPort();
-                    final InetSocketAddress remoteAddress = new InetSocketAddress(uri.getHost(), port);
+                    final SocketAddress remoteAddress = safeGetAddress(request, uri);
                     
                     Pair<List<Object>,Long> pair;
                     
@@ -154,6 +154,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     final List<HttpObject> httpObjects = new ArrayList<>();
                     
                     response.map(convertProgressable(uploadTotal))
+                    /*
                     .flatMap(new Func1<Object, Observable<Object>>() {
                         @Override
                         public Observable<Object> call(final Object input) {
@@ -165,7 +166,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             }
                         }},
                         new Func1<Throwable, Observable<Object>>() {
-
                             @Override
                             public Observable<Object> call(final Throwable e) {
                                 return Observable.error(e);
@@ -201,11 +201,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                                 return Observable.error(new RuntimeException("invalid response"));
                             }}
                         )
-                    /*
+                    */
                     .doOnNext(RxNettys.httpObjectsRetainer(httpObjects))
                     .filter(RxNettys.NOT_HTTPOBJECT)
                     .doOnCompleted(new CachedResponse(safeGetResponseClass(request), subscriber, httpObjects))
-                    */
                     .doOnTerminate(new Action0() {
                         @Override
                         public void call() {
@@ -356,6 +355,18 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     
     public Action0 registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
+            final Func1<URI, SocketAddress> uri2address,
+            final Feature... features) {
+        return registerRequestType(reqCls, respCls, pathPrefix, 
+                new Func0<Feature[]>() {
+                    @Override
+                    public Feature[] call() {
+                        return features;
+                    }},
+                uri2address);
+    }
+    
+    public Action0 registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
             final Feature... features) {
         return registerRequestType(reqCls, respCls, pathPrefix, new Func0<Feature[]>() {
             @Override
@@ -387,7 +398,15 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final Class<?> respCls, 
             final String pathPrefix, 
             final Func0<Feature[]> featuresBuilder) {
-        this._req2profile.put(reqCls, new RequestProfile(respCls, pathPrefix, featuresBuilder));
+        return registerRequestType(reqCls, respCls, pathPrefix, featuresBuilder, _DEFAULT_URI2ADDR);
+    }
+
+    public Action0 registerRequestType(final Class<?> reqCls, 
+            final Class<?> respCls, 
+            final String pathPrefix, 
+            final Func0<Feature[]> featuresBuilder,
+            final Func1<URI, SocketAddress> uri2address) {
+        this._req2profile.put(reqCls, new RequestProfile(respCls, pathPrefix, featuresBuilder, uri2address));
         LOG.info("register request type {} with resp type {}/path {}/features builder {}",
                 reqCls, respCls, pathPrefix, featuresBuilder);
         return new Action0() {
@@ -397,6 +416,15 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 LOG.info("unregister request type {}", reqCls);
             }};
     }
+    
+    private static final Func1<URI, SocketAddress> _DEFAULT_URI2ADDR = new Func1<URI, SocketAddress>() {
+        @Override
+        public SocketAddress call(final URI uri) {
+            final int port = -1 == uri.getPort() ? ( "https".equals(uri.getScheme()) ? 443 : 80 ) : uri.getPort();
+            return new InetSocketAddress(uri.getHost(), port);
+        }
+    };
+    
     
     public String[] getRegisteredRequests() {
         final List<String> ret = new ArrayList<>();
@@ -445,6 +473,11 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     request, ExceptionUtils.exception2detail(e));
             return null;
         }
+    }
+
+    private SocketAddress safeGetAddress(final Object request, final URI uri) {
+        final RequestProfile profile = this._req2profile.get(request.getClass());
+        return (null != profile ? profile.buildAddress(uri) : null);
     }
 
     private String safeGetPathPrefix(final Class<?> reqCls) {
