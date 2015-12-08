@@ -27,7 +27,6 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.SimpleCache;
-import org.jocean.idiom.Triple;
 import org.jocean.idiom.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -384,44 +383,31 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }});
     }
     
-    @SuppressWarnings("rawtypes")
     public Action0 registerRequestType(final Class<?> reqCls, 
             final Class<?> respCls, 
             final String pathPrefix, 
             final Func0<Feature[]> featuresBuilder) {
-        this._req2pathPrefix.put(reqCls, Triple.of((Class)respCls, pathPrefix, featuresBuilder));
+        this._req2profile.put(reqCls, new RequestProfile(respCls, pathPrefix, featuresBuilder));
         LOG.info("register request type {} with resp type {}/path {}/features builder {}",
                 reqCls, respCls, pathPrefix, featuresBuilder);
         return new Action0() {
             @Override
             public void call() {
-                _req2pathPrefix.remove(reqCls);
+                _req2profile.remove(reqCls);
                 LOG.info("unregister request type {}", reqCls);
             }};
     }
     
-    private Feature[] safeGetRequestFeatures(final Object request) {
-        @SuppressWarnings("rawtypes")
-        final Triple<Class,String, Func0<Feature[]>> triple = _req2pathPrefix.get(request.getClass());
-        return (null != triple ? triple.third.call() : Feature.EMPTY_FEATURES);
-    }
-    
-    private Class<?> safeGetResponseClass(final Object request) {
-        @SuppressWarnings("rawtypes")
-        final Triple<Class,String, ?> triple = this._req2pathPrefix.get(request.getClass());
-        return (null != triple ? triple.first : null);
-    }
-
     public String[] getRegisteredRequests() {
         final List<String> ret = new ArrayList<>();
-        for ( @SuppressWarnings("rawtypes") Map.Entry<Class<?>, Triple<Class, String, Func0<Feature[]>>> entry 
-                : _req2pathPrefix.entrySet()) {
+        for ( Map.Entry<Class<?>, RequestProfile> entry 
+                : _req2profile.entrySet()) {
             final StringBuilder sb = new StringBuilder();
             sb.append(entry.getKey());
             sb.append("-->");
-            sb.append(entry.getValue().second);
+            sb.append(entry.getValue().pathPrefix());
             sb.append("/");
-            sb.append(entry.getValue().first);
+            sb.append(entry.getValue().responseType());
             ret.add(sb.toString());
         }
         
@@ -445,8 +431,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return ret.toArray(new String[0]);
     }
     
-    @SuppressWarnings("rawtypes")
-    private final Map<Class<?>, Triple<Class, String, Func0<Feature[]>>> _req2pathPrefix = 
+    private final Map<Class<?>, RequestProfile> _req2profile = 
             new ConcurrentHashMap<>();
     
     private URI req2uri(final Object request) {
@@ -462,6 +447,21 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
 
+    private String safeGetPathPrefix(final Class<?> reqCls) {
+        final RequestProfile profile = this._req2profile.get(reqCls);
+        return (null != profile ? profile.pathPrefix() : null);
+    }
+    
+    private Feature[] safeGetRequestFeatures(final Object request) {
+        final RequestProfile profile = _req2profile.get(request.getClass());
+        return (null != profile ? profile.features() : Feature.EMPTY_FEATURES);
+    }
+    
+    private Class<?> safeGetResponseClass(final Object request) {
+        final RequestProfile profile = this._req2profile.get(request.getClass());
+        return (null != profile ? profile.responseType() : null);
+    }
+
     private final SimpleCache<Class<?>, RequestProcessor> _processorCache = 
         new SimpleCache<Class<?>, RequestProcessor>(
             new Func1<Class<?>, RequestProcessor>() {
@@ -469,12 +469,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 public RequestProcessor call(final Class<?> reqCls) {
                     return new RequestProcessor(reqCls);
                 }});
-    
-    private String safeGetPathPrefix(final Class<?> reqCls) {
-        @SuppressWarnings("rawtypes")
-        final Triple<Class, String, ?> triple = this._req2pathPrefix.get(reqCls);
-        return (null != triple ? triple.second : null);
-    }
     
     @Override
     public void setBeanHolder(final BeanHolder beanHolder) {
