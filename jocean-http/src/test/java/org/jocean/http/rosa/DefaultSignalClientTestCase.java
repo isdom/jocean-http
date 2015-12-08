@@ -6,6 +6,7 @@ import static org.jocean.http.Feature.ENABLE_LOGGING;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
@@ -20,6 +21,9 @@ import org.jocean.http.util.RxNettys;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Charsets;
+import com.google.common.io.Resources;
 
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
@@ -85,7 +89,16 @@ public class DefaultSignalClientTestCase {
                 newHandler);
     }
     
-    public static final byte[] CONTENT = { 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd' };
+    public static byte[] CONTENT;
+    static {
+        try {
+            CONTENT = Resources.asByteSource(
+                    Resources.getResource(DefaultSignalClientTestCase.class, "fetchMetadataResp.json")).read();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        
+    }
     
     @Test
     public void testSignalClient1() throws Exception {
@@ -100,12 +113,11 @@ public class DefaultSignalClientTestCase {
                         if (msg instanceof HttpRequest) {
                             final FullHttpResponse response = new DefaultFullHttpResponse(
                                     HttpVersion.HTTP_1_1, OK, 
-                                    Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
-                            response.headers().set(CONTENT_TYPE, "text/plain");
+                                    Unpooled.wrappedBuffer(CONTENT));
+                            response.headers().set(CONTENT_TYPE, "application/json");
                             //  missing Content-Length
-//                            response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                            response.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
-                            ctx.write(response).addListener(ChannelFutureListener.CLOSE);
+                            response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
+                            ctx.writeAndFlush(response);
                         }
                     }
                 };
@@ -115,8 +127,8 @@ public class DefaultSignalClientTestCase {
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 ENABLE_LOGGING);
         try {
-            final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
-            request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
+            final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+//            request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
             
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
@@ -128,7 +140,8 @@ public class DefaultSignalClientTestCase {
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            System.out.println(new String(bytes, Charsets.UTF_8));
+            assertTrue(Arrays.equals(bytes, CONTENT));
             assertEquals(1, creator.getChannels().size());
         } finally {
             client.close();
