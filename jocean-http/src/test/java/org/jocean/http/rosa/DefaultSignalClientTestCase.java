@@ -3,10 +3,13 @@ package org.jocean.http.rosa;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.jocean.http.Feature.ENABLE_LOGGING;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.concurrent.Callable;
 
 import javax.net.ssl.SSLException;
@@ -57,19 +60,6 @@ public class DefaultSignalClientTestCase {
             return null;
         }
     }
-    
-    private HttpTestServer createTestServerWithDefaultHandler(
-            final boolean enableSSL, 
-            final String acceptId) 
-            throws Exception {
-        return new HttpTestServer(
-                enableSSL, 
-                new LocalAddress(acceptId), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
-                HttpTestServer.DEFAULT_NEW_HANDLER);
-    }
 
     private HttpTestServer createTestServerWith(
             final boolean enableSSL, 
@@ -111,7 +101,6 @@ public class DefaultSignalClientTestCase {
                                     HttpVersion.HTTP_1_1, OK, 
                                     Unpooled.wrappedBuffer(CONTENT));
                             response.headers().set(CONTENT_TYPE, "application/json");
-                            //  missing Content-Length
                             response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
                             ctx.writeAndFlush(response);
                         }
@@ -139,6 +128,7 @@ public class DefaultSignalClientTestCase {
             .toBlocking().single();
         
         System.out.println(resp);
+        assertNotNull(resp);
         
         server.stop();
     }
