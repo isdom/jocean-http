@@ -105,15 +105,18 @@ public class DefaultHttpServer implements HttpServer {
                             return -1000;
                         }
                     }
-                    final Feature[] actualFeatures = JOArrays.addFirst(Feature[].class, 
-                            featuresOf(featuresBuilder), features);
-                    final Feature[] applyFeatures = 
-                            (null != actualFeatures && actualFeatures.length > 0 ) ? actualFeatures : _defaultFeatures;
                     bootstrap.childHandler(new Initializer() {
                         @Override
                         protected void initChannel(final Channel channel) throws Exception {
+                            final Feature[] actualFeatures = JOArrays.addFirst(Feature[].class, 
+                                    featuresOf(featuresBuilder), features);
+                            final Feature[] applyFeatures = 
+                                    (null != actualFeatures && actualFeatures.length > 0 ) ? actualFeatures : _defaultFeatures;
                             for (Feature feature : applyFeatures) {
                                 feature.call(_APPLY_BUILDER, channel.pipeline());
+                                if (LOG.isDebugEnabled()) {
+                                    LOG.debug("initChannel with feature:{}", feature);
+                                }
                             }
                             APPLY_HTTPSERVER.call(_APPLY_BUILDER, channel.pipeline());
                             subscriber.onNext(createHttpTrade(channel, subscriber));
@@ -124,7 +127,7 @@ public class DefaultHttpServer implements HttpServer {
                     RxNettys.<ChannelFuture, HttpTrade>emitErrorOnFailure()
                         .call(future)
                         .subscribe(subscriber);
-                    future.addListener(channelFutureListenerOf(applyFeatures));
+                    future.addListener(channelFutureListenerOf(features));
                 }
             }});
     }
