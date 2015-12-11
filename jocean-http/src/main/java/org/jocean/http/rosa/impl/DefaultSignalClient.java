@@ -148,19 +148,18 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             remoteAddress, 
                             Observable.from(httpRequest),
                             JOArrays.addFirst(Feature[].class, 
-                                    safeGetRequestFeatures(request), 
-                                    features));
+                                safeGetRequestFeatures(request), 
+                                features));
                     
                     final List<HttpObject> httpObjects = new ArrayList<>();
                     
                     response.map(convertProgressable(uploadTotal))
-                    /*
                     .flatMap(new Func1<Object, Observable<Object>>() {
                         @Override
                         public Observable<Object> call(final Object input) {
                             if (input instanceof HttpObject) {
                                 httpObjects.add(ReferenceCountUtil.retain((HttpObject)input));
-                                return Observable.never();
+                                return Observable.empty();
                             } else {
                                 return Observable.just(input);
                             }
@@ -201,10 +200,11 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                                 return Observable.error(new RuntimeException("invalid response"));
                             }}
                         )
-                    */
+                    /*
                     .doOnNext(RxNettys.httpObjectsRetainer(httpObjects))
                     .filter(RxNettys.NOT_HTTPOBJECT)
                     .doOnCompleted(new CachedResponse(safeGetResponseClass(request), subscriber, httpObjects))
+                    */
                     .doOnTerminate(new Action0() {
                         @Override
                         public void call() {

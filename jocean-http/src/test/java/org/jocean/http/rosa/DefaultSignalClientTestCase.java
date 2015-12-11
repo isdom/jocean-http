@@ -41,6 +41,8 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import rx.functions.Action0;
+import rx.functions.Action1;
 import rx.functions.Func1;
 
 public class DefaultSignalClientTestCase {
@@ -126,7 +128,6 @@ public class DefaultSignalClientTestCase {
             signalClient.defineInteraction(new FetchMetadataRequest())
             .compose(RxNettys.<FetchMetadataResponse>filterProgress())
             .toBlocking().single();
-        
         System.out.println(resp);
         assertNotNull(resp);
         
