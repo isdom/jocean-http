@@ -26,6 +26,12 @@ public class ToSignalResponse implements Transformer<Object, Object> {
     
     private static final Logger LOG =
             LoggerFactory.getLogger(ToSignalResponse.class);
+    
+    private static final Func1<Throwable, Observable<Object>> ON_ERROR = new Func1<Throwable, Observable<Object>>() {
+        @Override
+        public Observable<Object> call(final Throwable e) {
+            return Observable.error(e);
+        }};
 
     ToSignalResponse(final Class<?> respCls) {
         this._respCls = respCls;
@@ -35,51 +41,9 @@ public class ToSignalResponse implements Transformer<Object, Object> {
     public Observable<Object> call(final Observable<Object> source) {
         final List<HttpObject> httpObjects = new ArrayList<>();
         
-        return source.flatMap(new Func1<Object, Observable<Object>>() {
-            @Override
-            public Observable<Object> call(final Object input) {
-                if (input instanceof HttpObject) {
-                    httpObjects.add(ReferenceCountUtil.retain((HttpObject)input));
-                    return Observable.empty();
-                } else {
-                    return Observable.just(input);
-                }
-            }},
-            new Func1<Throwable, Observable<Object>>() {
-                @Override
-                public Observable<Object> call(final Throwable e) {
-                    return Observable.error(e);
-                }},
-            new Func0<Observable<Object>>() {
-                @Override
-                public Observable<Object> call() {
-                    final FullHttpResponse httpResp = RxNettys.retainAsFullHttpResponse(httpObjects);
-                    if (null!=httpResp) {
-                        try {
-                            final InputStream is = new ByteBufInputStream(httpResp.content());
-                            try {
-                                final byte[] bytes = new byte[is.available()];
-                                @SuppressWarnings("unused")
-                                final int readed = is.read(bytes);
-                                if (LOG.isDebugEnabled()) {
-                                    LOG.debug("receive signal response: {}",
-                                            new String(bytes, Charset.forName("UTF-8")));
-                                }
-                                final Object resp = JSON.parseObject(bytes, _respCls);
-                                return Observable.just(resp);
-                            } finally {
-                                is.close();
-                            }
-                        } catch (Exception e) {
-                            LOG.warn("exception when parse response {}, detail:{}",
-                                    httpResp, ExceptionUtils.exception2detail(e));
-                            Observable.error(e);
-                        } finally {
-                            httpResp.release();
-                        }
-                    }
-                    return Observable.error(new RuntimeException("invalid response"));
-                }}
+        return source.flatMap(buildOnNext(httpObjects),
+            ON_ERROR,
+            buildOnCompleted(httpObjects)
             )
         .doOnTerminate(new Action0() {
             @Override
@@ -91,6 +55,54 @@ public class ToSignalResponse implements Transformer<Object, Object> {
             public void call() {
                 RxNettys.releaseObjects(httpObjects);                            
             }});
+    }
+
+    private Func0<Observable<Object>> buildOnCompleted(
+            final List<HttpObject> httpObjects) {
+        return new Func0<Observable<Object>>() {
+            @Override
+            public Observable<Object> call() {
+                final FullHttpResponse httpResp = RxNettys.retainAsFullHttpResponse(httpObjects);
+                if (null!=httpResp) {
+                    try {
+                        final InputStream is = new ByteBufInputStream(httpResp.content());
+                        try {
+                            final byte[] bytes = new byte[is.available()];
+                            @SuppressWarnings("unused")
+                            final int readed = is.read(bytes);
+                            if (LOG.isDebugEnabled()) {
+                                LOG.debug("receive signal response: {}",
+                                        new String(bytes, Charset.forName("UTF-8")));
+                            }
+                            final Object resp = JSON.parseObject(bytes, _respCls);
+                            return Observable.just(resp);
+                        } finally {
+                            is.close();
+                        }
+                    } catch (Exception e) {
+                        LOG.warn("exception when parse response {}, detail:{}",
+                                httpResp, ExceptionUtils.exception2detail(e));
+                        Observable.error(e);
+                    } finally {
+                        httpResp.release();
+                    }
+                }
+                return Observable.error(new RuntimeException("invalid response"));
+            }};
+    }
+
+    private Func1<Object, Observable<Object>> buildOnNext(
+            final List<HttpObject> httpObjects) {
+        return new Func1<Object, Observable<Object>>() {
+            @Override
+            public Observable<Object> call(final Object input) {
+                if (input instanceof HttpObject) {
+                    httpObjects.add(ReferenceCountUtil.retain((HttpObject)input));
+                    return Observable.empty();
+                } else {
+                    return Observable.just(input);
+                }
+            }};
     }
 
     private final Class<?> _respCls;
