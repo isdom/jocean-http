@@ -3,14 +3,6 @@
  */
 package org.jocean.http.server.impl;
 
-import io.netty.channel.Channel;
-import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.ReferenceCountUtil;
-
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
@@ -24,16 +16,24 @@ import org.jocean.http.util.Nettys.OnHttpObject;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
-import org.jocean.idiom.rx.OneshotSubscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.channel.Channel;
+import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Subscriber;
 import rx.Subscription;
+import rx.functions.Action0;
 import rx.functions.Func0;
+import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -146,11 +146,11 @@ public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
         public void call(final Subscriber<? super HttpObject> subscriber) {
             if (!subscriber.isUnsubscribed()) {
                 _subscribers.add(subscriber);
-                subscriber.add(new OneshotSubscription() {
+                subscriber.add(Subscriptions.create(new Action0() {
                     @Override
-                    protected void doUnsubscribe() {
+                    public void call() {
                         _subscribers.remove(subscriber);
-                    }});
+                    }}));
             }
         }
     };

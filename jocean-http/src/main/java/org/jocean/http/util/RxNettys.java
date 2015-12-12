@@ -1,5 +1,15 @@
 package org.jocean.http.util;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+
+import org.jocean.http.rosa.SignalClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.CompositeByteBuf;
@@ -20,18 +30,6 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-
-import org.jocean.http.rosa.SignalClient;
-import org.jocean.idiom.rx.OneshotSubscription;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
@@ -145,17 +143,17 @@ public class RxNettys {
     }
     
     public static Subscription subscriptionFrom(final Channel channel) {
-        return new OneshotSubscription() {
+        return Subscriptions.create(new Action0() {
             @Override
-            protected void doUnsubscribe() {
+            public void call() {
                 channel.close();
-            }};
+            }});
     }
 
     public static Subscription removeHandlersSubscription(final Channel channel, final String[] names) {
-        return new OneshotSubscription() {
+        return Subscriptions.create(new Action0() {
             @Override
-            protected void doUnsubscribe() {
+            public void call() {
                 if (channel.eventLoop().inEventLoop()) {
                     doRemove();
                 } else {
@@ -166,7 +164,6 @@ public class RxNettys {
                         }});
                 }
             }
-
             private void doRemove() {
                 final ChannelPipeline pipeline = channel.pipeline();
                 for (String name : names) {
@@ -177,7 +174,7 @@ public class RxNettys {
                         }
                     }
                 }
-            }};
+            }});
     }
     
     public static byte[] httpObjectsAsBytes(final Iterator<HttpObject> itr)

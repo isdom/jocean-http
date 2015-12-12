@@ -1,5 +1,14 @@
 package org.jocean.http.server;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.idiom.ExceptionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
@@ -10,21 +19,12 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-import org.jocean.http.server.HttpServer.HttpTrade;
-import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.rx.OneshotSubscription;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Subscriber;
+import rx.functions.Action0;
+import rx.subscriptions.Subscriptions;
 
 public class CachedRequest {
     
@@ -214,11 +214,11 @@ public class CachedRequest {
                                 subscriber.onCompleted();
                             }
                             _subscribers.add(subscriber);
-                            subscriber.add(new OneshotSubscription() {
+                            subscriber.add(Subscriptions.create(new Action0() {
                                 @Override
-                                protected void doUnsubscribe() {
+                                public void call() {
                                     _subscribers.remove(subscriber);
-                                }});
+                                }}));
                         }
                     }});
             }});

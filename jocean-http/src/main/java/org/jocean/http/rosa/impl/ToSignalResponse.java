@@ -26,7 +26,7 @@ public class ToSignalResponse implements Transformer<Object, Object> {
     private static final Logger LOG =
             LoggerFactory.getLogger(ToSignalResponse.class);
     
-    private static final Func1<Throwable, Observable<Object>> ON_ERROR = new Func1<Throwable, Observable<Object>>() {
+    private static final Func1<Throwable, Observable<Object>> _ON_ERROR = new Func1<Throwable, Observable<Object>>() {
         @Override
         public Observable<Object> call(final Throwable e) {
             return Observable.error(e);
@@ -41,10 +41,10 @@ public class ToSignalResponse implements Transformer<Object, Object> {
         final List<HttpObject> httpObjects = new ArrayList<>();
         
         return source.flatMap(
-                buildOnNext(httpObjects),
-                ON_ERROR,
-                buildOnCompleted(httpObjects) )
-        .compose(RxNettys.releaseAtLast(httpObjects));
+                    buildOnNext(httpObjects),
+                    _ON_ERROR,
+                    buildOnCompleted(httpObjects) )
+                .compose(RxNettys.releaseAtLast(httpObjects));
     }
 
     private Func0<Observable<Object>> buildOnCompleted(

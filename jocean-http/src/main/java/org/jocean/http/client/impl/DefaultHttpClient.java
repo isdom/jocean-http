@@ -3,6 +3,28 @@
  */
 package org.jocean.http.client.impl;
 
+import java.io.IOException;
+import java.net.SocketAddress;
+
+import org.jocean.http.Feature;
+import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.Outbound;
+import org.jocean.http.client.Outbound.ApplyToRequest;
+import org.jocean.http.client.Outbound.ResponseSubscriberAware;
+import org.jocean.http.util.Class2ApplyBuilder;
+import org.jocean.http.util.Nettys;
+import org.jocean.http.util.Nettys.ChannelAware;
+import org.jocean.http.util.Nettys.ToOrdinal;
+import org.jocean.http.util.PipelineApply;
+import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.InterfaceUtils;
+import org.jocean.idiom.JOArrays;
+import org.jocean.idiom.ReflectUtils;
+import org.jocean.idiom.rx.RxFunctions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.buffer.ByteBuf;
@@ -30,40 +52,18 @@ import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
-
-import java.io.IOException;
-import java.net.SocketAddress;
-
-import org.jocean.http.Feature;
-import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.Outbound;
-import org.jocean.http.client.Outbound.ApplyToRequest;
-import org.jocean.http.client.Outbound.ResponseSubscriberAware;
-import org.jocean.http.util.Class2ApplyBuilder;
-import org.jocean.http.util.Nettys;
-import org.jocean.http.util.Nettys.ChannelAware;
-import org.jocean.http.util.Nettys.ToOrdinal;
-import org.jocean.http.util.PipelineApply;
-import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.InterfaceUtils;
-import org.jocean.idiom.JOArrays;
-import org.jocean.idiom.ReflectUtils;
-import org.jocean.idiom.rx.OneshotSubscription;
-import org.jocean.idiom.rx.RxFunctions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.Subscription;
+import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.functions.Func2;
 import rx.functions.FuncN;
 import rx.functions.Functions;
+import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -222,9 +222,9 @@ public class DefaultHttpClient implements HttpClient {
     }
     
     private Subscription recycleChannelSubscription(final Channel channel) {
-        return new OneshotSubscription() {
+        return Subscriptions.create(new Action0() {
             @Override
-            protected void doUnsubscribe() {
+            public void call() {
                 if (channel.eventLoop().inEventLoop()) {
                     ChannelPool.Util.getChannelPool(channel).recycleChannel(channel);
                 } else {
@@ -234,7 +234,8 @@ public class DefaultHttpClient implements HttpClient {
                             ChannelPool.Util.getChannelPool(channel).recycleChannel(channel);
                         }});
                 }
-            }};
+            }
+        });
     }
     
     public DefaultHttpClient(final int processThreadNumber) {
