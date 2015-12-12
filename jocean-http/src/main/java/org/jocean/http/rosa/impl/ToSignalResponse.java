@@ -18,7 +18,6 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.Transformer;
-import rx.functions.Action0;
 import rx.functions.Func0;
 import rx.functions.Func1;
 
@@ -41,20 +40,11 @@ public class ToSignalResponse implements Transformer<Object, Object> {
     public Observable<Object> call(final Observable<Object> source) {
         final List<HttpObject> httpObjects = new ArrayList<>();
         
-        return source.flatMap(buildOnNext(httpObjects),
-            ON_ERROR,
-            buildOnCompleted(httpObjects)
-            )
-        .doOnTerminate(new Action0() {
-            @Override
-            public void call() {
-                RxNettys.releaseObjects(httpObjects);
-            }})
-        .doOnUnsubscribe(new Action0() {
-            @Override
-            public void call() {
-                RxNettys.releaseObjects(httpObjects);                            
-            }});
+        return source.flatMap(
+                buildOnNext(httpObjects),
+                ON_ERROR,
+                buildOnCompleted(httpObjects) )
+        .compose(RxNettys.releaseAtLast(httpObjects));
     }
 
     private Func0<Observable<Object>> buildOnCompleted(

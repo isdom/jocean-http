@@ -147,23 +147,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                                 features));
                     
                     response.map(convertProgressable(uploadTotal))
-                    .compose(new ToSignalResponse(safeGetResponseClass(request)))
-                    /*
-                    .doOnNext(RxNettys.httpObjectsRetainer(httpObjects))
-                    .filter(RxNettys.NOT_HTTPOBJECT)
-                    .doOnCompleted(new CachedResponse(safeGetResponseClass(request), subscriber, httpObjects))
-                    */
-                    .doOnTerminate(new Action0() {
-                        @Override
-                        public void call() {
-                            RxNettys.releaseObjects(httpRequest);
-                        }})
-                    .doOnUnsubscribe(new Action0() {
-                        @Override
-                        public void call() {
-                            RxNettys.releaseObjects(httpRequest);
-                        }})
-                    .subscribe(subscriber);
+                        .compose(new ToSignalResponse(safeGetResponseClass(request)))
+                        .compose(RxNettys.releaseAtLast(httpRequest))
+                        .subscribe(subscriber);
                 }
             }
         });

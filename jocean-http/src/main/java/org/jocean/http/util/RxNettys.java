@@ -37,6 +37,7 @@ import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
 import rx.Subscriber;
 import rx.Subscription;
+import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
@@ -274,6 +275,23 @@ public class RxNettys {
             }};
     }
         
+    public static <E, T> Transformer<? super T, ? extends T> releaseAtLast(final Collection<E> objs) {
+        return new Transformer<T, T>() {
+            @Override
+            public Observable<T> call(final Observable<T> source) {
+                return source.doOnTerminate(new Action0() {
+                        @Override
+                        public void call() {
+                            RxNettys.releaseObjects(objs);
+                        }})
+                    .doOnUnsubscribe(new Action0() {
+                        @Override
+                        public void call() {
+                            RxNettys.releaseObjects(objs);
+                        }});
+            }};
+    }
+    
     public static Observable<HttpObject> response401Unauthorized(
             final HttpVersion version, final String vlaueOfWWWAuthenticate) {
         final HttpResponse response = new DefaultFullHttpResponse(
