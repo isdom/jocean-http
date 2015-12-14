@@ -276,7 +276,7 @@ public class RxNettys {
         return new Transformer<T, T>() {
             @Override
             public Observable<T> call(final Observable<T> source) {
-                return source.doOnTerminate(new Action0() {
+                return source.finallyDo(new Action0() {
                         @Override
                         public void call() {
                             RxNettys.releaseObjects(objs);
