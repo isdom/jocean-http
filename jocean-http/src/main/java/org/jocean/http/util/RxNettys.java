@@ -279,11 +279,17 @@ public class RxNettys {
                 return source.finallyDo(new Action0() {
                         @Override
                         public void call() {
+                            if (LOG.isDebugEnabled() ) {
+                                LOG.debug("finallyDo: releaseObjects for objs:{}", objs);
+                            }
                             RxNettys.releaseObjects(objs);
                         }})
                     .doOnUnsubscribe(new Action0() {
                         @Override
                         public void call() {
+                            if (LOG.isDebugEnabled() ) {
+                                LOG.debug("doOnUnsubscribe: releaseObjects for objs:{}", objs);
+                            }
                             RxNettys.releaseObjects(objs);
                         }});
             }};
