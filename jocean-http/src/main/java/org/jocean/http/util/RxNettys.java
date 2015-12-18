@@ -7,6 +7,9 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.jocean.http.rosa.SignalClient;
+import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.ToString;
+import org.jocean.idiom.UnsafeOp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +31,7 @@ import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.ReferenceCountUtil;
+import io.netty.util.ReferenceCounted;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import rx.Observable;
@@ -248,16 +252,32 @@ public class RxNettys {
     
     public static <T> void releaseObjects(final Collection<T> objs) {
         synchronized (objs) {
-            for ( T obj : objs ) {
-                if (ReferenceCountUtil.release(obj)) {
-                    LOG.debug("({}) is release and deallocated success.", obj); 
-                } else {
-//                    if ( obj instanceof ReferenceCounted) {
-//                        LOG.warn("HttpObject({}) is !NOT! released.", obj); 
-//                    }
+            try {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("start to releaseObjects ({}).", UnsafeOp.toAddress(objs));
+                }
+                for (T obj : objs) {
+                    try {
+                        if (ReferenceCountUtil.release(obj)) {
+                            if (LOG.isDebugEnabled()) {
+                                LOG.debug("({}) released and deallocated success.", obj); 
+                            }
+                        } else {
+                            if ( obj instanceof ReferenceCounted) {
+                                LOG.warn("({}) released BUT refcnt == {} > 0.", obj, ((ReferenceCounted)obj).refCnt()); 
+                            }
+                        }
+                    } catch (Exception e) {
+                        LOG.warn("exception when ReferenceCountUtil.release {}, detail: {}",
+                                obj, ExceptionUtils.exception2detail(e));
+                    }
+                }
+            } finally {
+                objs.clear();
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("end of releaseObjects ({}).", UnsafeOp.toAddress(objs));
                 }
             }
-            objs.clear();
         }
     }
     
@@ -271,7 +291,24 @@ public class RxNettys {
                 }
             }};
     }
-        
+
+    //  TODO
+    public static <E, T> Transformer<? super T, ? extends T> retainAtFirst(final Collection<E> objs, final Class<E> elementCls) {
+        return new Transformer<T, T>() {
+            @Override
+            public Observable<T> call(final Observable<T> source) {
+                return source.doOnNext(new Action1<T>() {
+                    @SuppressWarnings("unchecked")
+                    @Override
+                    public void call(final T input) {
+                        if (input != null && elementCls.isAssignableFrom(input.getClass())) {
+                            objs.add(ReferenceCountUtil.retain((E)input));
+//                            objs.add((E)input);
+                        }
+                    }});
+            }};
+    }
+    
     public static <E, T> Transformer<? super T, ? extends T> releaseAtLast(final Collection<E> objs) {
         return new Transformer<T, T>() {
             @Override
@@ -280,7 +317,7 @@ public class RxNettys {
                         @Override
                         public void call() {
                             if (LOG.isDebugEnabled() ) {
-                                LOG.debug("finallyDo: releaseObjects for objs:{}", objs);
+                                LOG.debug("finallyDo: releaseObjects for objs:{}", ToString.toMultiline(objs));
                             }
                             RxNettys.releaseObjects(objs);
                         }})
@@ -288,7 +325,7 @@ public class RxNettys {
                         @Override
                         public void call() {
                             if (LOG.isDebugEnabled() ) {
-                                LOG.debug("doOnUnsubscribe: releaseObjects for objs:{}", objs);
+                                LOG.debug("doOnUnsubscribe: releaseObjects for objs:{}", ToString.toMultiline(objs));
                             }
                             RxNettys.releaseObjects(objs);
                         }});

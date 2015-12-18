@@ -15,7 +15,6 @@ import com.alibaba.fastjson.JSON;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.Transformer;
 import rx.functions.Func0;
@@ -26,6 +25,15 @@ public class ToSignalResponse implements Transformer<Object, Object> {
     private static final Logger LOG =
             LoggerFactory.getLogger(ToSignalResponse.class);
     
+    private static final Func1<Object, Observable<Object>> _ON_NEXT = new Func1<Object, Observable<Object>>() {
+        @Override
+        public Observable<Object> call(final Object input) {
+            if (input instanceof HttpObject) {
+                return Observable.empty();
+            } else {
+                return Observable.just(input);
+            }
+        }};
     private static final Func1<Throwable, Observable<Object>> _ON_ERROR = new Func1<Throwable, Observable<Object>>() {
         @Override
         public Observable<Object> call(final Throwable e) {
@@ -40,10 +48,8 @@ public class ToSignalResponse implements Transformer<Object, Object> {
     public Observable<Object> call(final Observable<Object> source) {
         final List<HttpObject> httpObjects = new ArrayList<>();
         
-        return source.flatMap(
-                    buildOnNext(httpObjects),
-                    _ON_ERROR,
-                    buildOnCompleted(httpObjects) )
+        return source.compose(RxNettys.retainAtFirst(httpObjects, HttpObject.class))
+                .flatMap(_ON_NEXT, _ON_ERROR, buildOnCompleted(httpObjects) )
                 .compose(RxNettys.releaseAtLast(httpObjects));
     }
 
@@ -78,20 +84,6 @@ public class ToSignalResponse implements Transformer<Object, Object> {
                     }
                 }
                 return Observable.error(new RuntimeException("invalid response"));
-            }};
-    }
-
-    private Func1<Object, Observable<Object>> buildOnNext(
-            final List<HttpObject> httpObjects) {
-        return new Func1<Object, Observable<Object>>() {
-            @Override
-            public Observable<Object> call(final Object input) {
-                if (input instanceof HttpObject) {
-                    httpObjects.add(ReferenceCountUtil.retain((HttpObject)input));
-                    return Observable.empty();
-                } else {
-                    return Observable.just(input);
-                }
             }};
     }
 

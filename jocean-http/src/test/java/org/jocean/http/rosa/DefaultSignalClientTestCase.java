@@ -47,6 +47,8 @@ import rx.functions.Func1;
 
 public class DefaultSignalClientTestCase {
 
+    private static final String TEST_ADDR = "test";
+
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClientTestCase.class);
 
@@ -88,9 +90,15 @@ public class DefaultSignalClientTestCase {
         
     }
     
+    final Func1<URI, SocketAddress> TO_TEST_ADDR = new Func1<URI, SocketAddress>() {
+        @Override
+        public SocketAddress call(final URI uri) {
+            return new LocalAddress(TEST_ADDR);
+        }};
+        
     @Test
     public void testSignalClient1() throws Exception {
-        final HttpTestServer server = createTestServerWith(false, "test",
+        final HttpTestServer server = createTestServerWith(false, TEST_ADDR,
                 new Callable<ChannelInboundHandler> () {
             @Override
             public ChannelInboundHandler call() throws Exception {
@@ -111,18 +119,14 @@ public class DefaultSignalClientTestCase {
             }});
 
         final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient httpclient = new DefaultHttpClient(creator,
-                ENABLE_LOGGING);
+        final DefaultHttpClient httpclient = new DefaultHttpClient(creator);
+//            ,ENABLE_LOGGING);
         
         final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient);
         
         signalClient.registerRequestType(FetchMetadataRequest.class, FetchMetadataResponse.class, 
                 null, 
-                new Func1<URI, SocketAddress>() {
-                    @Override
-                    public SocketAddress call(final URI uri) {
-                        return new LocalAddress("test");
-                    }},
+                TO_TEST_ADDR,
                 Feature.EMPTY_FEATURES);
         final FetchMetadataResponse resp = 
             signalClient.defineInteraction(new FetchMetadataRequest())
@@ -131,6 +135,7 @@ public class DefaultSignalClientTestCase {
         System.out.println(resp);
         assertNotNull(resp);
         
+        Thread.sleep(1000);
         server.stop();
     }
 }
