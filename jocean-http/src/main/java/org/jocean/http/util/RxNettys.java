@@ -281,17 +281,6 @@ public class RxNettys {
         }
     }
     
-    public static Action1<Object> httpObjectsRetainer(
-            final Collection<HttpObject> httpObjects) {
-        return new Action1<Object>() {
-            @Override
-            public void call(final Object obj) {
-                if (obj instanceof HttpObject) {
-                    httpObjects.add(ReferenceCountUtil.retain((HttpObject)obj));
-                }
-            }};
-    }
-
     public static <T, E extends T> Transformer<? super T, ? extends T> retainAtFirst(
             final Collection<E> objs, 
             final Class<E> elementCls) {
