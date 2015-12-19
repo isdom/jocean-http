@@ -48,7 +48,7 @@ public class ToSignalResponse implements Transformer<Object, Object> {
     public Observable<Object> call(final Observable<Object> source) {
         final List<HttpObject> httpObjects = new ArrayList<>();
         
-        return source.compose(RxNettys.retainAtFirst(httpObjects, HttpObject.class))
+        return source.compose(RxNettys.<Object,HttpObject>retainAtFirst(httpObjects, HttpObject.class))
                 .flatMap(_ON_NEXT, _ON_ERROR, buildOnCompleted(httpObjects) )
                 .compose(RxNettys.releaseAtLast(httpObjects));
     }

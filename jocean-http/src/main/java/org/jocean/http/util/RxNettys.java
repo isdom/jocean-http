@@ -292,8 +292,9 @@ public class RxNettys {
             }};
     }
 
-    //  TODO
-    public static <E, T> Transformer<? super T, ? extends T> retainAtFirst(final Collection<E> objs, final Class<E> elementCls) {
+    public static <T, E extends T> Transformer<? super T, ? extends T> retainAtFirst(
+            final Collection<E> objs, 
+            final Class<E> elementCls) {
         return new Transformer<T, T>() {
             @Override
             public Observable<T> call(final Observable<T> source) {
@@ -303,7 +304,6 @@ public class RxNettys {
                     public void call(final T input) {
                         if (input != null && elementCls.isAssignableFrom(input.getClass())) {
                             objs.add(ReferenceCountUtil.retain((E)input));
-//                            objs.add((E)input);
                         }
                     }});
             }};
