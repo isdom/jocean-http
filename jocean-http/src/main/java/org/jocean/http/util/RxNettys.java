@@ -263,8 +263,10 @@ public class RxNettys {
                                 LOG.debug("({}) released and deallocated success.", obj); 
                             }
                         } else {
-                            if ( obj instanceof ReferenceCounted) {
-                                LOG.warn("({}) released BUT refcnt == {} > 0.", obj, ((ReferenceCounted)obj).refCnt()); 
+                            if (LOG.isDebugEnabled()) {
+                                if ( obj instanceof ReferenceCounted) {
+                                    LOG.debug("({}) released BUT refcnt == {} > 0.", obj, ((ReferenceCounted)obj).refCnt()); 
+                                }
                             }
                         }
                     } catch (Exception e) {
@@ -293,6 +295,11 @@ public class RxNettys {
                     public void call(final T input) {
                         if (input != null && elementCls.isAssignableFrom(input.getClass())) {
                             objs.add(ReferenceCountUtil.retain((E)input));
+                            if ( LOG.isDebugEnabled()) {
+                                if ( input instanceof ReferenceCounted) {
+                                    LOG.debug("({}) retaind,so refcnt is {}.", input, ((ReferenceCounted)input).refCnt()); 
+                                }
+                            }
                         }
                     }});
             }};
