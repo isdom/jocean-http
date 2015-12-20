@@ -95,36 +95,6 @@ public class DefaultHttpClient implements HttpClient {
             final Observable<? extends Object> request,
             final Feature... features) {
         final Feature[] applyFeatures = cloneFeatures(features.length > 0 ? features : this._defaultFeatures);
-        final ApplyToRequest applyToRequest = 
-            InterfaceUtils.compositeIncludeType(
-                ApplyToRequest.class,
-                InterfaceUtils.compositeBySource(
-                    ApplyToRequest.class, _CLS2APPLYTOREQUEST, applyFeatures),
-                InterfaceUtils.compositeIncludeType(
-                    ApplyToRequest.class, (Object[])applyFeatures));
-        final Func1<Channel, Observable<ChannelFuture>> transferRequest = 
-                new Func1<Channel, Observable<ChannelFuture>> () {
-            @Override
-            public Observable<ChannelFuture> call(final Channel channel) {
-                return request.doOnNext(doWhenRequest(channel))
-                        .map(RxNettys.<Object>sendMessage(channel));
-            }
-            private final Action1<Object> doWhenRequest(final Channel channel) {
-                return new Action1<Object> () {
-                    @Override
-                    public void call(final Object msg) {
-                        if (msg instanceof HttpRequest) {
-                            _channelPool.beforeSendRequest(channel, (HttpRequest)msg);
-                            if (null!=applyToRequest) {
-                                applyToRequest.call((HttpRequest) msg);
-                            }
-                        }
-                    }
-                };
-            }
-        };
-        final ChannelAware channelAware = InterfaceUtils.compositeIncludeType(ChannelAware.class, 
-                (Object[])applyFeatures);
         return Observable.create(new OnSubscribe<Object>() {
             @Override
             public void call(final Subscriber<Object> responseSubscriber) {
@@ -134,23 +104,14 @@ public class DefaultHttpClient implements HttpClient {
                         _channelPool.retainChannel(remoteAddress)
                             .doOnNext(new Action1<Channel>() {
                                 @Override
-                                public void call(Channel channel) {
+                                public void call(final Channel channel) {
                                     responseSubscriber.add(applyOneoffFeatures(channel, features));
                                 }})
                             .onErrorResumeNext(createChannel(remoteAddress, features))
-                            .doOnNext(new Action1<Channel>() {
-                                @Override
-                                public void call(final Channel channel) {
-                                    if (null!=channelAware) {
-                                        try {
-                                            channelAware.setChannel(channel);
-                                        } catch (Exception e) {
-                                            LOG.warn("exception when invoke setChannel for channel ({}), detail: {}",
-                                                    channel, ExceptionUtils.exception2detail(e));
-                                        }
-                                    }
-                                }})
-                            .flatMap(transferRequest)
+                            .doOnNext(fillChannelAware(
+                                    InterfaceUtils.compositeIncludeType(ChannelAware.class, 
+                                            (Object[])applyFeatures)))
+                            .flatMap(doTransferRequest(request, applyFeatures))
                             .flatMap(RxNettys.<ChannelFuture, Object>emitErrorOnFailure())
                             .subscribe(responseSubscriber);
                     } catch (final Throwable e) {
@@ -158,6 +119,49 @@ public class DefaultHttpClient implements HttpClient {
                     }
                 }
             }});
+    }
+
+    private Func1<Channel, Observable<ChannelFuture>> doTransferRequest(
+            final Observable<? extends Object> request,
+            final Feature[] applyFeatures) {
+        return new Func1<Channel, Observable<ChannelFuture>> () {
+            @Override
+            public Observable<ChannelFuture> call(final Channel channel) {
+                return request.doOnNext(doApplyToRequest(applyFeatures))
+                        .doOnNext(doWhenRequest(channel))
+                        .map(RxNettys.<Object>sendMessage(channel));
+            }
+        };
+    }
+
+    private Action1<Object> doApplyToRequest(final Feature[] applyFeatures) {
+        final ApplyToRequest applyToRequest = 
+                InterfaceUtils.compositeIncludeType(
+                    ApplyToRequest.class,
+                    InterfaceUtils.compositeBySource(
+                        ApplyToRequest.class, _CLS2APPLYTOREQUEST, applyFeatures),
+                    InterfaceUtils.compositeIncludeType(
+                        ApplyToRequest.class, (Object[])applyFeatures));
+        return new Action1<Object> () {
+            @Override
+            public void call(final Object msg) {
+                if (msg instanceof HttpRequest && null!=applyToRequest) {
+                    applyToRequest.call((HttpRequest) msg);
+                }
+            }
+        };
+    }
+    
+    //  TODO rename method for method's intention
+    private final Action1<Object> doWhenRequest(final Channel channel) {
+        return new Action1<Object> () {
+            @Override
+            public void call(final Object msg) {
+                if (msg instanceof HttpRequest) {
+                    _channelPool.beforeSendRequest(channel, (HttpRequest)msg);
+                }
+            }
+        };
     }
 
     private Observable<? extends Channel> createChannel(
@@ -369,6 +373,21 @@ public class DefaultHttpClient implements HttpClient {
             responseSubscriberAware.setResponseSubscriber(responseSubscriber);
         }
         return features;
+    }
+
+    private Action1<Channel> fillChannelAware(final ChannelAware channelAware) {
+        return new Action1<Channel>() {
+            @Override
+            public void call(final Channel channel) {
+                if (null!=channelAware) {
+                    try {
+                        channelAware.setChannel(channel);
+                    } catch (Exception e) {
+                        LOG.warn("exception when invoke setChannel for channel ({}), detail: {}",
+                                channel, ExceptionUtils.exception2detail(e));
+                    }
+                }
+            }};
     }
 
     private final ChannelPool _channelPool;
@@ -622,8 +641,7 @@ public class DefaultHttpClient implements HttpClient {
                          * 因此，无需在channelInactive处，针对该情况做特殊处理
                          */
                         if (LOG.isDebugEnabled()) {
-                            LOG.debug(
-                                    "channelRead0: ch({}) recv LastHttpContent:{}",
+                            LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
                                     ctx.channel(), msg);
                         }
                         final ChannelPool pool = ChannelPool.Util
