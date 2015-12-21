@@ -128,7 +128,7 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public Observable<ChannelFuture> call(final Channel channel) {
                 return request.doOnNext(doApplyToRequest(applyFeatures))
-                        .doOnNext(doWhenRequest(channel))
+                        .doOnNext(doForChannelPool(channel))
                         .map(RxNettys.<Object>sendMessage(channel));
             }
         };
@@ -152,8 +152,7 @@ public class DefaultHttpClient implements HttpClient {
         };
     }
     
-    //  TODO rename method for method's intention
-    private final Action1<Object> doWhenRequest(final Channel channel) {
+    private final Action1<Object> doForChannelPool(final Channel channel) {
         return new Action1<Object> () {
             @Override
             public void call(final Object msg) {
