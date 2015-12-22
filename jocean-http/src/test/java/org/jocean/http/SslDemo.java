@@ -80,7 +80,7 @@ public class SslDemo {
                         new Feature.ENABLE_SSL(sslCtx)
                         )
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 LOG.info("recv:{}", new String(responseAsBytes(itr), cs));
@@ -95,7 +95,7 @@ public class SslDemo {
                         new Feature.ENABLE_SSL(sslCtx)
                         )
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 LOG.info("recv 2nd:{}", new String(responseAsBytes(itr), cs));

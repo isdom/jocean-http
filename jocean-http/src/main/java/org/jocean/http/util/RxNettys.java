@@ -60,7 +60,7 @@ public class RxNettys {
         }};
         
     @SuppressWarnings({ "unchecked", "rawtypes" })
-    public static <T> Func1<T, T> retainMap() {
+    public static <T> Func1<T, T> retainer() {
         return (Func1)RETAIN_OBJ;
     }
         

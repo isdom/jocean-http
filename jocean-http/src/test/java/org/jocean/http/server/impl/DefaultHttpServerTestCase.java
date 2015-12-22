@@ -130,7 +130,7 @@ public class DefaultHttpServerTestCase {
                     Observable.just(request),
                     Feature.ENABLE_LOGGING)
                 .compose(RxNettys.objects2httpobjs())
-                .map(RxNettys.<HttpObject>retainMap())
+                .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);

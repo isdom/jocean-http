@@ -105,7 +105,7 @@ public class DefaultHttpClientTestCase {
                     new LocalAddress("test"), 
                     Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                 .compose(RxNettys.objects2httpobjs())
-                .map(RxNettys.<HttpObject>retainMap())
+                .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -134,7 +134,7 @@ public class DefaultHttpClientTestCase {
                     new LocalAddress("test"), 
                     Observable.just(request))
                 .compose(RxNettys.objects2httpobjs())
-                .map(RxNettys.<HttpObject>retainMap())
+                .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -163,7 +163,7 @@ public class DefaultHttpClientTestCase {
                     new LocalAddress("test"), 
                     Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                 .compose(RxNettys.objects2httpobjs())
-                .map(RxNettys.<HttpObject>retainMap())
+                .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -192,7 +192,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -209,7 +209,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -243,7 +243,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -260,7 +260,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -322,7 +322,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -387,7 +387,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -940,7 +940,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -997,7 +997,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -1149,7 +1149,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -1214,7 +1214,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .compose(RxNettys.objects2httpobjs())
-                    .map(RxNettys.<HttpObject>retainMap())
+                    .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -1266,7 +1266,7 @@ public class DefaultHttpClientTestCase {
                     new LocalAddress("test"), 
                     Observable.just(request))
                 .compose(RxNettys.objects2httpobjs())
-                .map(RxNettys.<HttpObject>retainMap())
+                .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
@@ -1378,7 +1378,7 @@ public class DefaultHttpClientTestCase {
                     new LocalAddress("test"), 
                     Observable.just(request))
                 .compose(RxNettys.objects2httpobjs())
-                .map(RxNettys.<HttpObject>retainMap())
+                .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
