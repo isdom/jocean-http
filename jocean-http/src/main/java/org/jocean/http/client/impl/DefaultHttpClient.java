@@ -102,11 +102,7 @@ public class DefaultHttpClient implements HttpClient {
                     try {
                         final Feature[] features = buildFeatures(applyFeatures, responseSubscriber);
                         _channelPool.retainChannel(remoteAddress)
-                            .doOnNext(new Action1<Channel>() {
-                                @Override
-                                public void call(final Channel channel) {
-                                    responseSubscriber.add(applyOneoffFeatures(channel, features));
-                                }})
+                            .doOnNext(oneoffFeaturesAssembler(responseSubscriber, features))
                             .onErrorResumeNext(createChannel(remoteAddress, features))
                             .doOnNext(fillChannelAware(
                                     InterfaceUtils.compositeIncludeType(ChannelAware.class, 
@@ -389,10 +385,16 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
 
-    private final ChannelPool _channelPool;
-    private final ChannelCreator _channelCreator;
-    private final Feature[] _defaultFeatures;
-    
+    private Action1<Channel> oneoffFeaturesAssembler(
+            final Subscriber<Object> responseSubscriber,
+            final Feature[] features) {
+        return new Action1<Channel>() {
+            @Override
+            public void call(final Channel channel) {
+                responseSubscriber.add(applyOneoffFeatures(channel, features));
+            }};
+    }
+
     private static void applyNononeoffFeatures(
             final Channel channel,
             final Feature[] features) {
@@ -408,6 +410,10 @@ public class DefaultHttpClient implements HttpClient {
             .call(_APPLY_BUILDER_ONEOFF, channel.pipeline());
         return RxNettys.removeHandlersSubscription(channel, diff.call());
     }
+    
+    private final ChannelPool _channelPool;
+    private final ChannelCreator _channelCreator;
+    private final Feature[] _defaultFeatures;
     
     private static final Func1<Channel,Boolean> IS_READY = new Func1<Channel,Boolean>() {
         @Override
