@@ -100,10 +100,10 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Subscriber<Object> responseSubscriber) {
                 if (!responseSubscriber.isUnsubscribed()) {
                     try {
-                        final Feature[] features = buildFeatures(applyFeatures, responseSubscriber);
+                        final Feature[] fullFeatures = buildFeatures(applyFeatures, responseSubscriber);
                         _channelPool.retainChannel(remoteAddress)
-                            .doOnNext(oneoffFeaturesAssembler(responseSubscriber, features))
-                            .onErrorResumeNext(createChannel(remoteAddress, features))
+                            .doOnNext(oneoffFeaturesAssembler(responseSubscriber, fullFeatures))
+                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures))
                             .doOnNext(fillChannelAware(
                                     InterfaceUtils.compositeIncludeType(ChannelAware.class, 
                                             (Object[])applyFeatures)))
