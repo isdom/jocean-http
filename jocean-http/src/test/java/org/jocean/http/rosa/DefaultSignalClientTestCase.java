@@ -17,6 +17,7 @@ import javax.net.ssl.SSLException;
 import org.jocean.http.Feature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
+import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
@@ -119,7 +120,9 @@ public class DefaultSignalClientTestCase {
             }});
 
         final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient httpclient = new DefaultHttpClient(creator);
+        final TestChannelPool pool = new TestChannelPool(1);
+        
+        final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
 //            ,ENABLE_LOGGING);
         
         final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient);
@@ -135,7 +138,9 @@ public class DefaultSignalClientTestCase {
         System.out.println(resp);
         assertNotNull(resp);
         
-        Thread.sleep(1000);
+        pool.awaitRecycleChannels();
+        
+        //Thread.sleep(1000);
         server.stop();
     }
 }
