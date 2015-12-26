@@ -71,16 +71,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
     public boolean recycleChannel(final Channel channel) {
         if (channel.isActive() 
             && ChannelPool.Util.isChannelReady(channel)
-            && null == channel.attr(TRANSACTIONING).get()) {
-//            try {
-//                Observable.from(channel.pipeline()).subscribe(new Action1<Entry<String,ChannelHandler>>(){
-//                    @Override
-//                    public void call(Entry<String, ChannelHandler> entry) {
-//                        LOG.info("recycleChannel({}) handler:{}/{}", channel, entry.getKey(), entry.getValue());
-//                    }});
-//            } catch (Throwable e) {
-//                LOG.error("recycleChannel: {}", e);
-//            }
+            && !isTransactioning(channel)) {
             final SocketAddress address = channel.remoteAddress();
             if (null!=address) {
                 getOrCreateChannels(address).add(channel);
@@ -92,6 +83,10 @@ public class DefaultChannelPool extends AbstractChannelPool {
         channel.close();
         LOG.info("channel({}) has been closed.", channel);
         return false;
+    }
+
+    private boolean isTransactioning(final Channel channel) {
+        return null != channel.attr(TRANSACTIONING).get();
     }
 
     private final ConcurrentMap<SocketAddress, Queue<Channel>> _channels = 
