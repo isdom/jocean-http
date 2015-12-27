@@ -19,22 +19,20 @@ public class DefaultChannelPool extends AbstractChannelPool {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultChannelPool.class);
 
-    private static final AttributeKey<Object> TRANSACTIONING = AttributeKey.valueOf("__TRANSACTIONING");
-    private static final Object OK = new Object();
     private static final AttributeKey<Boolean> KEEPALIVE = AttributeKey.valueOf("__KEEPALIVE");
     
     @Override
     public void beforeSendRequest(final Channel channel, final HttpRequest request) {
         //  当Channel被重用，但由于source cancel等情况，没有发送过request
         //  则此时仍然可以被再次回收
-        channel.attr(TRANSACTIONING).set(OK);
+        transactionBegin(channel);
         channel.attr(KEEPALIVE).set(HttpHeaders.isKeepAlive(request));
     }
 
     @Override
     public void afterReceiveLastContent(final Channel channel) {
         if (channel.attr(KEEPALIVE).get()) {
-            channel.attr(TRANSACTIONING).remove();
+            transactionEnd(channel);
         }
     }
 
@@ -83,6 +81,17 @@ public class DefaultChannelPool extends AbstractChannelPool {
         channel.close();
         LOG.info("channel({}) has been closed.", channel);
         return false;
+    }
+
+    private static final AttributeKey<Object> TRANSACTIONING = AttributeKey.valueOf("__TRANSACTIONING");
+    private static final Object OK = new Object();
+    
+    private void transactionBegin(final Channel channel) {
+        channel.attr(TRANSACTIONING).set(OK);
+    }
+
+    private void transactionEnd(final Channel channel) {
+        channel.attr(TRANSACTIONING).remove();
     }
 
     private boolean isTransactioning(final Channel channel) {
