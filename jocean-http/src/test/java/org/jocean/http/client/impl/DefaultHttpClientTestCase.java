@@ -293,17 +293,20 @@ public class DefaultHttpClientTestCase {
             // first 
             {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+                final CountDownLatch unsubscribed = new CountDownLatch(1);
                 try {
                     client.defineInteraction(
                         new LocalAddress("test"), 
                         Observable.<HttpObject>error(new RuntimeException("test error")))
                     .compose(RxNettys.objects2httpobjs())
+                    .doOnUnsubscribe(new Action0() {
+                        @Override
+                        public void call() {
+                            unsubscribed.countDown();
+                        }})
                     .subscribe(testSubscriber);
-                    // await for unsubscribed
-                    new TestSubscription() {{
-                        testSubscriber.add(this);
-                        pauseConnecting.countDown();
-                    }}.awaitUnsubscribed();
+                    pauseConnecting.countDown();
+                    unsubscribed.await();
                     
                     pool.awaitRecycleChannels();
                 } finally {
