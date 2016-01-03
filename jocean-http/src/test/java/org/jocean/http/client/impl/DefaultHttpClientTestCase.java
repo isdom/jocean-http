@@ -2,9 +2,29 @@ package org.jocean.http.client.impl;
 
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static org.jocean.http.Feature.ENABLE_LOGGING;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+
+import javax.net.ssl.SSLException;
+
+import org.jocean.http.Feature.ENABLE_SSL;
+import org.jocean.http.server.HttpTestServer;
+import org.jocean.http.server.HttpTestServerHandler;
+import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.rx.OnNextSensor;
+import org.jocean.idiom.rx.RxFunctions;
+import org.jocean.idiom.rx.TestSubscription;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
@@ -25,28 +45,8 @@ import io.netty.handler.ssl.NotSslRecordException;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.ReferenceCountUtil;
-
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-
-import javax.net.ssl.SSLException;
-
-import static org.jocean.http.Feature.ENABLE_LOGGING;
-import org.jocean.http.Feature.ENABLE_SSL;
-import org.jocean.http.server.HttpTestServer;
-import org.jocean.http.server.HttpTestServerHandler;
-import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.rx.OnNextSensor;
-import org.jocean.idiom.rx.TestSubscription;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import rx.Observable;
 import rx.Subscription;
-import rx.functions.Action0;
 import rx.observers.TestSubscriber;
 
 public class DefaultHttpClientTestCase {
@@ -299,11 +299,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.<HttpObject>error(new RuntimeException("test error")))
                     .compose(RxNettys.objects2httpobjs())
-                    .doOnUnsubscribe(new Action0() {
-                        @Override
-                        public void call() {
-                            unsubscribed.countDown();
-                        }})
+                    .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                     .subscribe(testSubscriber);
                     pauseConnecting.countDown();
                     unsubscribed.await();
@@ -365,11 +361,7 @@ public class DefaultHttpClientTestCase {
                         new LocalAddress("test"), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .compose(RxNettys.objects2httpobjs())
-                    .doOnUnsubscribe(new Action0() {
-                        @Override
-                        public void call() {
-                            unsubscribed.countDown();
-                        }})
+                    .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                     .subscribe(testSubscriber);
                     pauseConnecting.countDown();
                     unsubscribed.await();
@@ -415,6 +407,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpForNotConnected() throws Exception {
         
         final CountDownLatch pauseConnecting = new CountDownLatch(1);
+        final CountDownLatch unsubscribed = new CountDownLatch(1);
+        
         @SuppressWarnings("resource")
         final TestChannelCreator creator = 
                 new TestChannelCreator().setPauseConnecting(pauseConnecting);
@@ -427,13 +421,12 @@ public class DefaultHttpClientTestCase {
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            // await for unsubscribed
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                LOG.debug("try to start connect channel.");
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            
+            LOG.debug("try to start connect channel.");
+            pauseConnecting.countDown();
+            unsubscribed.await();
             
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
