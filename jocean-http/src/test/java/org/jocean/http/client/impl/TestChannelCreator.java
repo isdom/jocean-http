@@ -27,7 +27,6 @@ public class TestChannelCreator implements ChannelCreator {
     
     final class TestChannel extends LocalChannel {
         
-        /*
         private final AbstractUnsafe _unsafe0 = super.newUnsafe();
         @Override
         protected AbstractUnsafe newUnsafe() {
@@ -67,8 +66,6 @@ public class TestChannelCreator implements ChannelCreator {
             }
             return super.close();
         }
-        
-        */
         
         public void awaitClosed() throws InterruptedException {
             _closed.await();
@@ -124,22 +121,30 @@ public class TestChannelCreator implements ChannelCreator {
         return this;
     }
     
+    public void reset() {
+        this._bootstrap = new Bootstrap()
+            .group(new LocalEventLoopGroup(1))
+            .channelFactory(new ChannelFactory<TestChannel>() {
+                        @Override
+                        public TestChannel newChannel() {
+                            return new TestChannel();
+                        }})
+            .handler(new ChannelInitializer<Channel>() {
+                @Override
+                protected void initChannel(final Channel channel) throws Exception {
+                    LOG.info("processing initChannel for {}", channel);
+                }});
+    }
+    
+    public TestChannelCreator() {
+        reset();
+    }
+    
     private Exception _writeException = null;
     private Exception _connectException = null;
     private CountDownLatch _pauseConnecting = null;
     
-    private final Bootstrap _bootstrap = new Bootstrap()
-        .group(new LocalEventLoopGroup(1))
-        .channelFactory(new ChannelFactory<TestChannel>() {
-                    @Override
-                    public TestChannel newChannel() {
-                        return new TestChannel();
-                    }})
-        .handler(new ChannelInitializer<Channel>() {
-            @Override
-            protected void initChannel(final Channel channel) throws Exception {
-                LOG.info("processing initChannel for {}", channel);
-            }});
+    private Bootstrap _bootstrap;
     
     private final List<TestChannel> _channels = new ArrayList<>();
 }

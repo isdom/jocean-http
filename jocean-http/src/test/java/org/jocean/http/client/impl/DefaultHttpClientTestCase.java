@@ -7,6 +7,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.nio.channels.ClosedChannelException;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.concurrent.CountDownLatch;
@@ -339,6 +340,24 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpSendingError1stAnd2ndHappyPathNotReuseConnection() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+        
+        /*
+            createTestServerWith(false, "test", new Func0<ChannelInboundHandler>() {
+            @Override
+            public ChannelInboundHandler call() {
+                return new HttpTestServerHandler() {
+                    @Override
+                    public void channelActive(final ChannelHandlerContext ctx)
+                            throws Exception {
+                        ctx.channel().close();
+                    }
+
+                    @Override
+                    protected void channelRead0(ChannelHandlerContext ctx,
+                            HttpObject msg) throws Exception {
+                    }};
+            }});
+            */
 
         final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
@@ -369,15 +388,19 @@ public class DefaultHttpClientTestCase {
                     assertEquals(1, testSubscriber.getOnErrorEvents().size());
                     assertEquals(RuntimeException.class, 
                             testSubscriber.getOnErrorEvents().get(0).getClass());
+//                    assertEquals(ClosedChannelException.class, 
+//                          testSubscriber.getOnErrorEvents().get(0).getClass());
                     assertEquals(0, testSubscriber.getOnCompletedEvents().size());
                     assertEquals(0, testSubscriber.getOnNextEvents().size());
                 }
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed();
+            creator.reset();
             //  reset write exception
             creator.setWriteException(null)
                 .setPauseConnecting(null);
+            
             // second
             {
                 final Iterator<HttpObject> itr = 
