@@ -21,6 +21,10 @@ import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.CONTINUE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
+
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
@@ -34,17 +38,14 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpHeaders.Values;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpHeaders.Values;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
-
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.util.concurrent.Callable;
+import rx.functions.Func0;
 
 /**
  * An HTTP server that sends back the content of the received HTTP request
@@ -54,10 +55,10 @@ public final class HttpTestServer {
 
     public static final byte[] CONTENT = { 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd' };
     
-    public static final Callable<ChannelInboundHandler> DEFAULT_NEW_HANDLER = 
-        new Callable<ChannelInboundHandler>() {
+    public static final Func0<ChannelInboundHandler> DEFAULT_NEW_HANDLER = 
+        new Func0<ChannelInboundHandler>() {
             @Override
-            public ChannelInboundHandler call() throws Exception {
+            public ChannelInboundHandler call() {
                 return new HttpTestServerHandler() {
                     @Override
                     protected void channelRead0(
@@ -100,7 +101,7 @@ public final class HttpTestServer {
             final EventLoopGroup bossGroup, 
             final EventLoopGroup workerGroup,
             final Class<? extends ServerChannel> serverChannelType,
-            final Callable<ChannelInboundHandler> newHandler) throws Exception {
+            final Func0<ChannelInboundHandler> newHandler) throws Exception {
         // Configure SSL.
         final SslContext sslCtx;
         if (enableSSL) {

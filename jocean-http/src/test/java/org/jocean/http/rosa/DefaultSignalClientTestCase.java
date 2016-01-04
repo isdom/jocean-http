@@ -2,14 +2,11 @@ package org.jocean.http.rosa;
 
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
-import static org.jocean.http.Feature.ENABLE_LOGGING;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.URI;
-import java.util.Arrays;
 import java.util.concurrent.Callable;
 
 import javax.net.ssl.SSLException;
@@ -42,8 +39,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import rx.functions.Action0;
-import rx.functions.Action1;
+import rx.functions.Func0;
 import rx.functions.Func1;
 
 public class DefaultSignalClientTestCase {
@@ -69,7 +65,7 @@ public class DefaultSignalClientTestCase {
     private HttpTestServer createTestServerWith(
             final boolean enableSSL, 
             final String acceptId,
-            final Callable<ChannelInboundHandler> newHandler) 
+            final Func0<ChannelInboundHandler> newHandler) 
             throws Exception {
         return new HttpTestServer(
                 enableSSL, 
@@ -100,9 +96,9 @@ public class DefaultSignalClientTestCase {
     @Test
     public void testSignalClient1() throws Exception {
         final HttpTestServer server = createTestServerWith(false, TEST_ADDR,
-                new Callable<ChannelInboundHandler> () {
+                new Func0<ChannelInboundHandler> () {
             @Override
-            public ChannelInboundHandler call() throws Exception {
+            public ChannelInboundHandler call() {
                 return new HttpTestServerHandler() {
                     @Override
                     protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 

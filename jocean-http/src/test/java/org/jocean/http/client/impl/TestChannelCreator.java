@@ -27,6 +27,7 @@ public class TestChannelCreator implements ChannelCreator {
     
     final class TestChannel extends LocalChannel {
         
+        /*
         private final AbstractUnsafe _unsafe0 = super.newUnsafe();
         @Override
         protected AbstractUnsafe newUnsafe() {
@@ -66,6 +67,8 @@ public class TestChannelCreator implements ChannelCreator {
             }
             return super.close();
         }
+        
+        */
         
         public void awaitClosed() throws InterruptedException {
             _closed.await();

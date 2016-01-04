@@ -9,7 +9,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 
 import javax.net.ssl.SSLException;
@@ -46,6 +45,7 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Subscription;
+import rx.functions.Func0;
 import rx.observers.TestSubscriber;
 
 public class DefaultHttpClientTestCase {
@@ -82,7 +82,7 @@ public class DefaultHttpClientTestCase {
     private HttpTestServer createTestServerWith(
             final boolean enableSSL, 
             final String acceptId,
-            final Callable<ChannelInboundHandler> newHandler) 
+            final Func0<ChannelInboundHandler> newHandler) 
             throws Exception {
         return new HttpTestServer(
                 enableSSL, 
@@ -603,9 +603,9 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpDisconnectFromServerAfterConnected() throws Exception {
         final HttpTestServer server = createTestServerWith(false, "test",
-                new Callable<ChannelInboundHandler> () {
+                new Func0<ChannelInboundHandler> () {
                     @Override
-                    public ChannelInboundHandler call() throws Exception {
+                    public ChannelInboundHandler call() {
                         return new HttpTestServerHandler() {
                             @Override
                             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
@@ -658,9 +658,9 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpsDisconnectFromServerAfterConnected() throws Exception {
         final HttpTestServer server = createTestServerWith(true, "test",
-                new Callable<ChannelInboundHandler> () {
+                new Func0<ChannelInboundHandler> () {
                     @Override
-                    public ChannelInboundHandler call() throws Exception {
+                    public ChannelInboundHandler call() {
                         return new HttpTestServerHandler() {
                             @Override
                             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
@@ -715,9 +715,9 @@ public class DefaultHttpClientTestCase {
     public void testHttpClientCanceledAfterConnected() throws Exception {
         final CountDownLatch serverRecvd = new CountDownLatch(1);
         final HttpTestServer server = createTestServerWith(false, "test",
-                new Callable<ChannelInboundHandler> () {
+                new Func0<ChannelInboundHandler> () {
                     @Override
-                    public ChannelInboundHandler call() throws Exception {
+                    public ChannelInboundHandler call() {
                         return new HttpTestServerHandler() {
                             @Override
                             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
@@ -768,9 +768,9 @@ public class DefaultHttpClientTestCase {
     public void testHttpsClientCanceledAfterConnected() throws Exception {
         final CountDownLatch serverRecvd = new CountDownLatch(1);
         final HttpTestServer server = createTestServerWith(true, "test",
-                new Callable<ChannelInboundHandler> () {
+                new Func0<ChannelInboundHandler> () {
                     @Override
-                    public ChannelInboundHandler call() throws Exception {
+                    public ChannelInboundHandler call() {
                         return new HttpTestServerHandler() {
                             @Override
                             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
@@ -1231,9 +1231,9 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttp10ConnectionCloseHappyPath() throws Exception {
         final HttpTestServer server = createTestServerWith(false, "test",
-                new Callable<ChannelInboundHandler> () {
+                new Func0<ChannelInboundHandler> () {
             @Override
-            public ChannelInboundHandler call() throws Exception {
+            public ChannelInboundHandler call() {
                 return new HttpTestServerHandler() {
                     @Override
                     protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
@@ -1282,9 +1282,9 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttp10ConnectionCloseBadCaseMissingPartContent() throws Exception {
         final HttpTestServer server = createTestServerWith(false, "test",
-                new Callable<ChannelInboundHandler> () {
+                new Func0<ChannelInboundHandler> () {
             @Override
-            public ChannelInboundHandler call() throws Exception {
+            public ChannelInboundHandler call() {
                 return new HttpTestServerHandler() {
                     @Override
                     protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
@@ -1342,9 +1342,9 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttps10ConnectionCloseHappyPath() throws Exception {
         final HttpTestServer server = createTestServerWith(true, "test",
-                new Callable<ChannelInboundHandler> () {
+                new Func0<ChannelInboundHandler> () {
             @Override
-            public ChannelInboundHandler call() throws Exception {
+            public ChannelInboundHandler call() {
                 return new HttpTestServerHandler() {
                     @Override
                     protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
@@ -1394,9 +1394,9 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttps10ConnectionCloseBadCaseMissingPartContent() throws Exception {
         final HttpTestServer server = createTestServerWith(true, "test",
-                new Callable<ChannelInboundHandler> () {
+                new Func0<ChannelInboundHandler> () {
             @Override
-            public ChannelInboundHandler call() throws Exception {
+            public ChannelInboundHandler call() {
                 return new HttpTestServerHandler() {
                     @Override
                     protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
