@@ -32,16 +32,9 @@ public class TestChannelCreator implements ChannelCreator {
         protected AbstractUnsafe newUnsafe() {
             return new AbstractUnsafe() {
                 @Override
-                public void connect(SocketAddress remoteAddress,
-                        SocketAddress localAddress, ChannelPromise promise) {
-                    if (null != _pauseConnecting) {
-                        try {
-                            LOG.info("before pause connecting for channel:{}", TestChannel.this);
-                            _pauseConnecting.await();
-                            LOG.info("after pause connecting for channel:{}", TestChannel.this);
-                        } catch (InterruptedException e) {
-                        }
-                    }
+                public void connect(final SocketAddress remoteAddress,
+                        final SocketAddress localAddress, 
+                        final ChannelPromise promise) {
                     if (null!=_connectException) {
                         promise.tryFailure(_connectException);
                     }
@@ -52,7 +45,7 @@ public class TestChannelCreator implements ChannelCreator {
         }
         
         @Override
-        protected void doWrite(ChannelOutboundBuffer in) throws Exception {
+        protected void doWrite(final ChannelOutboundBuffer in) throws Exception {
             if (null!=_writeException) {
                 throw _writeException;
             }
@@ -116,11 +109,6 @@ public class TestChannelCreator implements ChannelCreator {
         return this;
     }
     
-    public TestChannelCreator setPauseConnecting(final CountDownLatch pauseConnecting) {
-        this._pauseConnecting = pauseConnecting;
-        return this;
-    }
-    
     public void reset() {
         this._bootstrap = new Bootstrap()
             .group(new LocalEventLoopGroup(1))
@@ -142,7 +130,6 @@ public class TestChannelCreator implements ChannelCreator {
     
     private Exception _writeException = null;
     private Exception _connectException = null;
-    private CountDownLatch _pauseConnecting = null;
     
     private Bootstrap _bootstrap;
     

@@ -280,10 +280,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpOnErrorBeforeSend1stAnd2ndHappyPathKeepAliveReuseConnection() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
@@ -301,7 +299,6 @@ public class DefaultHttpClientTestCase {
                     .compose(RxNettys.objects2httpobjs())
                     .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                     .subscribe(testSubscriber);
-                    pauseConnecting.countDown();
                     unsubscribed.await();
                     
                     pool.awaitRecycleChannels();
@@ -359,10 +356,8 @@ public class DefaultHttpClientTestCase {
             }});
             */
 
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting)
             .setWriteException(new RuntimeException("write error"));
         
         final TestChannelPool pool = new TestChannelPool(1);
@@ -381,15 +376,12 @@ public class DefaultHttpClientTestCase {
                     .compose(RxNettys.objects2httpobjs())
                     .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                     .subscribe(testSubscriber);
-                    pauseConnecting.countDown();
                     unsubscribed.await();
                     pool.awaitRecycleChannels();
                 } finally {
                     assertEquals(1, testSubscriber.getOnErrorEvents().size());
                     assertEquals(RuntimeException.class, 
                             testSubscriber.getOnErrorEvents().get(0).getClass());
-//                    assertEquals(ClosedChannelException.class, 
-//                          testSubscriber.getOnErrorEvents().get(0).getClass());
                     assertEquals(0, testSubscriber.getOnCompletedEvents().size());
                     assertEquals(0, testSubscriber.getOnNextEvents().size());
                 }
@@ -398,8 +390,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertClosed();
             creator.reset();
             //  reset write exception
-            creator.setWriteException(null)
-                .setPauseConnecting(null);
+            creator.setWriteException(null);
             
             // second
             {
@@ -428,12 +419,10 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpForNotConnected() throws Exception {
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         final CountDownLatch unsubscribed = new CountDownLatch(1);
         
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = 
-                new TestChannelCreator().setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator, ENABLE_LOGGING);
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
@@ -446,8 +435,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
             
-            LOG.debug("try to start connect channel.");
-            pauseConnecting.countDown();
             unsubscribed.await();
             
             testSubscriber.awaitTerminalEvent();
@@ -464,10 +451,8 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttpsNotConnected() throws Exception {
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 ENABLE_LOGGING,
                 new ENABLE_SSL(sslCtx));
@@ -483,8 +468,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
             // await for unsubscribed
-            LOG.debug("try to start connect channel.");
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
@@ -503,10 +486,8 @@ public class DefaultHttpClientTestCase {
         // http server
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 new ENABLE_SSL(sslCtx));
@@ -521,7 +502,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
@@ -543,10 +523,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpEmitExceptionWhenConnecting() throws Exception {
         final String errorMsg = "connecting failure";
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting)
             .setConnectException(new RuntimeException(errorMsg));
         
         final DefaultHttpClient client = new DefaultHttpClient(creator);
@@ -562,7 +540,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
@@ -583,10 +560,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpsEmitExceptionWhenConnecting() throws Exception {
         final String errorMsg = "connecting failure";
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting)
             .setConnectException(new RuntimeException(errorMsg));
         
         final DefaultHttpClient client = new DefaultHttpClient(creator,
@@ -603,7 +578,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
@@ -640,10 +614,8 @@ public class DefaultHttpClientTestCase {
                         };
                     }});
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING);
@@ -658,7 +630,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
@@ -695,10 +666,8 @@ public class DefaultHttpClientTestCase {
                         };
                     }});
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING,
@@ -714,7 +683,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
@@ -852,10 +820,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpRequestEmitErrorAfterConnected() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 ENABLE_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
@@ -867,7 +833,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
@@ -887,10 +852,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpsRequestEmitErrorAfterConnected() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING,
@@ -904,7 +867,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
@@ -925,10 +887,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING);
@@ -943,7 +903,6 @@ public class DefaultHttpClientTestCase {
                 .compose(RxNettys.objects2httpobjs())
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
-                pauseConnecting.countDown();
                 unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
                 pool.awaitRecycleChannels();
@@ -981,10 +940,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpsRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING,
@@ -1000,7 +957,6 @@ public class DefaultHttpClientTestCase {
                 .compose(RxNettys.objects2httpobjs())
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
-                pauseConnecting.countDown();
                 unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
                 pool.awaitRecycleChannels();
@@ -1038,10 +994,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpClientWriteAndFlushExceptionAfterConnected() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting)
             .setWriteException(new RuntimeException("doWrite Error for test"));
         
         final DefaultHttpClient client = new DefaultHttpClient(creator,
@@ -1057,7 +1011,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
@@ -1080,10 +1033,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpsClientWriteAndFlushExceptionAfterConnected() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting)
             .setWriteException(new RuntimeException("doWrite Error for test"));
         
         final TestChannelPool pool = new TestChannelPool(1);
@@ -1101,7 +1052,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
@@ -1125,11 +1075,9 @@ public class DefaultHttpClientTestCase {
     public void testHttpClientWriteAndFlushExceptionAfterConnectedAndNewConnection2nd() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting)
-            .setWriteException(new RuntimeException("doWrite Error for test"));
+        final TestChannelCreator creator = 
+            new TestChannelCreator().setWriteException(new RuntimeException("doWrite Error for test"));
         
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
@@ -1147,7 +1095,6 @@ public class DefaultHttpClientTestCase {
                 .compose(RxNettys.objects2httpobjs())
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
-                pauseConnecting.countDown();
                 unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
                 pool.awaitRecycleChannels();
@@ -1163,7 +1110,7 @@ public class DefaultHttpClientTestCase {
                 nextSensor.assertCalled();
             }
             // reset creator
-            creator.setPauseConnecting(null).setWriteException(null);
+            creator.setWriteException(null);
             {
                 // second
                 final Iterator<HttpObject> itr = 
@@ -1190,10 +1137,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpsClientWriteAndFlushExceptionAfterConnectedAndNewConnection2nd() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting)
             .setWriteException(new RuntimeException("doWrite Error for test"));
         
         final TestChannelPool pool = new TestChannelPool(1);
@@ -1212,7 +1157,6 @@ public class DefaultHttpClientTestCase {
                 .compose(RxNettys.objects2httpobjs())
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
-                pauseConnecting.countDown();
                 unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
                 pool.awaitRecycleChannels();
@@ -1228,7 +1172,7 @@ public class DefaultHttpClientTestCase {
                 nextSensor.assertNotCalled();
             }
             // reset creator
-            creator.setPauseConnecting(null).setWriteException(null);
+            creator.setWriteException(null);
             {
                 // second
                 final Iterator<HttpObject> itr = 
@@ -1328,10 +1272,8 @@ public class DefaultHttpClientTestCase {
                 };
             }});
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 ENABLE_LOGGING);
         final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
@@ -1346,7 +1288,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
@@ -1440,10 +1381,8 @@ public class DefaultHttpClientTestCase {
                 };
             }});
         
-        final CountDownLatch pauseConnecting = new CountDownLatch(1);
         @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setPauseConnecting(pauseConnecting);
+        final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING,
@@ -1460,7 +1399,6 @@ public class DefaultHttpClientTestCase {
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            pauseConnecting.countDown();
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
