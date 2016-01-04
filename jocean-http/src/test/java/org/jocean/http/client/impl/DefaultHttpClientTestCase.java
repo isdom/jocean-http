@@ -20,7 +20,6 @@ import org.jocean.http.server.HttpTestServerHandler;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.OnNextSensor;
 import org.jocean.idiom.rx.RxFunctions;
-import org.jocean.idiom.rx.TestSubscription;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -453,17 +452,17 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
             // await for unsubscribed
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                LOG.debug("try to start connect channel.");
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            LOG.debug("try to start connect channel.");
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed();
@@ -491,16 +490,16 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
             assertEquals(1, creator.getChannels().size());
@@ -532,16 +531,16 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
             assertFalse(creator.getChannels().get(0).isActive());
@@ -573,16 +572,16 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
             //  TODO, this case failed!!
@@ -628,16 +627,16 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
             assertEquals(1, creator.getChannels().size());
@@ -684,16 +683,16 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
             assertEquals(1, creator.getChannels().size());
@@ -838,15 +837,15 @@ public class DefaultHttpClientTestCase {
                 ENABLE_LOGGING);
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>error(new RuntimeException("test error")))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();
@@ -875,15 +874,15 @@ public class DefaultHttpClientTestCase {
                 new ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>error(new RuntimeException("test error")))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
             assertEquals(1, creator.getChannels().size());
@@ -914,15 +913,15 @@ public class DefaultHttpClientTestCase {
         try {
             //  first
             {
+                final CountDownLatch unsubscribed = new CountDownLatch(1);
                 client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>error(new RuntimeException("test error")))
                 .compose(RxNettys.objects2httpobjs())
+                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
-                new TestSubscription() {{
-                    testSubscriber.add(this);
-                    pauseConnecting.countDown();
-                }}.awaitUnsubscribed();
+                pauseConnecting.countDown();
+                unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
                 pool.awaitRecycleChannels();
             }
@@ -971,15 +970,15 @@ public class DefaultHttpClientTestCase {
         try {
             //  first
             {
+                final CountDownLatch unsubscribed = new CountDownLatch(1);
                 client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>error(new RuntimeException("test error")))
                 .compose(RxNettys.objects2httpobjs())
+                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
-                new TestSubscription() {{
-                    testSubscriber.add(this);
-                    pauseConnecting.countDown();
-                }}.awaitUnsubscribed();
+                pauseConnecting.countDown();
+                unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
                 pool.awaitRecycleChannels();
             }
@@ -1027,16 +1026,16 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed();
@@ -1071,16 +1070,16 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
             assertEquals(1, creator.getChannels().size());
@@ -1117,16 +1116,16 @@ public class DefaultHttpClientTestCase {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
                 final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
                 // first
+                final CountDownLatch unsubscribed = new CountDownLatch(1);
                 client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                     .doOnNext(nextSensor))
                 .compose(RxNettys.objects2httpobjs())
+                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
-                new TestSubscription() {{
-                    testSubscriber.add(this);
-                    pauseConnecting.countDown();
-                }}.awaitUnsubscribed();
+                pauseConnecting.countDown();
+                unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
                 pool.awaitRecycleChannels();
                 assertEquals(1, creator.getChannels().size());
@@ -1182,16 +1181,16 @@ public class DefaultHttpClientTestCase {
             {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
                 final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
+                final CountDownLatch unsubscribed = new CountDownLatch(1);
                 client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                     .doOnNext(nextSensor))
                 .compose(RxNettys.objects2httpobjs())
+                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
-                new TestSubscription() {{
-                    testSubscriber.add(this);
-                    pauseConnecting.countDown();
-                }}.awaitUnsubscribed();
+                pauseConnecting.countDown();
+                unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
                 pool.awaitRecycleChannels();
                 assertEquals(1, creator.getChannels().size());
@@ -1317,15 +1316,15 @@ public class DefaultHttpClientTestCase {
         
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(request))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed();
@@ -1431,15 +1430,15 @@ public class DefaultHttpClientTestCase {
         
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.<HttpObject>just(request))
             .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
-            new TestSubscription() {{
-                testSubscriber.add(this);
-                pauseConnecting.countDown();
-            }}.awaitUnsubscribed();
+            pauseConnecting.countDown();
+            unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             pool.awaitRecycleChannels();
             assertEquals(1, creator.getChannels().size());
