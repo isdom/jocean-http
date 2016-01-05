@@ -7,7 +7,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import java.nio.channels.ClosedChannelException;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.concurrent.CountDownLatch;
@@ -59,6 +58,7 @@ public class DefaultHttpClientTestCase {
         sslCtx = initSslCtx();
     }
 
+    @SuppressWarnings("deprecation")
     private static SslContext initSslCtx() {
         try {
             return SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
@@ -280,7 +280,6 @@ public class DefaultHttpClientTestCase {
     public void testHttpOnErrorBeforeSend1stAnd2ndHappyPathKeepAliveReuseConnection() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         
         final TestChannelPool pool = new TestChannelPool(1);
@@ -421,7 +420,6 @@ public class DefaultHttpClientTestCase {
         
         final CountDownLatch unsubscribed = new CountDownLatch(1);
         
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator, ENABLE_LOGGING);
         //    NOT setup server for local channel
@@ -451,7 +449,6 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttpsNotConnected() throws Exception {
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 ENABLE_LOGGING,
@@ -486,7 +483,6 @@ public class DefaultHttpClientTestCase {
         // http server
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
@@ -614,7 +610,6 @@ public class DefaultHttpClientTestCase {
                         };
                     }});
         
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
@@ -666,7 +661,6 @@ public class DefaultHttpClientTestCase {
                         };
                     }});
         
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
@@ -820,7 +814,6 @@ public class DefaultHttpClientTestCase {
     public void testHttpRequestEmitErrorAfterConnected() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 ENABLE_LOGGING);
@@ -852,7 +845,6 @@ public class DefaultHttpClientTestCase {
     public void testHttpsRequestEmitErrorAfterConnected() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
@@ -887,7 +879,6 @@ public class DefaultHttpClientTestCase {
     public void testHttpRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
@@ -940,7 +931,6 @@ public class DefaultHttpClientTestCase {
     public void testHttpsRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
@@ -1272,7 +1262,6 @@ public class DefaultHttpClientTestCase {
                 };
             }});
         
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 ENABLE_LOGGING);
@@ -1381,7 +1370,6 @@ public class DefaultHttpClientTestCase {
                 };
             }});
         
-        @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
