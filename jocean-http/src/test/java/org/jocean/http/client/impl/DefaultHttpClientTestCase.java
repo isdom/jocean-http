@@ -1065,9 +1065,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpClientWriteAndFlushExceptionAfterConnectedAndNewConnection2nd() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
-        @SuppressWarnings("resource")
-        final TestChannelCreator creator = 
-            new TestChannelCreator().setWriteException(new RuntimeException("doWrite Error for test"));
+        final TestChannelCreator creator = new TestChannelCreator();
+        creator.setWriteException(new RuntimeException("doWrite Error for test"));
         
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
@@ -1100,7 +1099,9 @@ public class DefaultHttpClientTestCase {
                 nextSensor.assertCalled();
             }
             // reset creator
+            creator.reset();
             creator.setWriteException(null);
+            
             {
                 // second
                 final Iterator<HttpObject> itr = 
