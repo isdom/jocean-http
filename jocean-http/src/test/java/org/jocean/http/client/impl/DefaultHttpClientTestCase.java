@@ -429,14 +429,15 @@ public class DefaultHttpClientTestCase {
             client.defineInteraction(new LocalAddress("test"), 
                 Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
                 .doOnNext(nextSensor))
-            .compose(RxNettys.objects2httpobjs())
-            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-            .subscribe(testSubscriber);
+                .compose(RxNettys.objects2httpobjs())
+                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
+                .subscribe(testSubscriber);
             
             unsubscribed.await();
             
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed();
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
