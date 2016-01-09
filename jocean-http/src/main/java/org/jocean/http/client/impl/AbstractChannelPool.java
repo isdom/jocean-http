@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
 import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
@@ -41,9 +42,13 @@ public abstract class AbstractChannelPool implements ChannelPool {
                     if (channel.eventLoop().inEventLoop()) {
                         runnable.run();
                     } else {
-                        RxNettys.<Future<?>,Channel>emitErrorOnFailure()
-                            .call(channel.eventLoop().submit(runnable))
-                            .subscribe(subscriber);
+//                        RxNettys.<Future<?>,Channel>emitErrorOnFailure()
+//                            .call(channel.eventLoop().submit(runnable))
+//                            .subscribe(subscriber);
+                        @SuppressWarnings("unchecked")
+                        final Future<Object> future = (Future<Object>) channel.eventLoop().submit(runnable);
+                        future.addListener(RxNettys.makeFailure2ErrorListener(subscriber));
+                        subscriber.add(Subscriptions.from(future));
                     }
                 } else {
                     subscriber.onError(new RuntimeException("Nonreused Channel"));

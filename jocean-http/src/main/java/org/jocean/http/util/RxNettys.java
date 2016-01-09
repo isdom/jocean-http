@@ -73,6 +73,19 @@ public class RxNettys {
             }};
     }
     
+    public static <V> GenericFutureListener<Future<V>> makeFailure2ErrorListener(final Subscriber<?> subscriber) {
+        return new GenericFutureListener<Future<V>>() {
+            @Override
+            public void operationComplete(final Future<V> f)
+                    throws Exception {
+                if (!f.isSuccess()) {
+                    subscriber.onError(f.cause());
+                }
+            }
+        };
+    }
+    
+    /*
     private final static Func1<Future<Object>, Observable<Object>> EMITERROR_ONFAILURE = 
     new Func1<Future<Object>, Observable<Object>>() {
         @Override
@@ -97,28 +110,29 @@ public class RxNettys {
     public static <F extends Future<?>,R> Func1<F, Observable<? extends R>> 
         emitErrorOnFailure() {
         return (Func1)EMITERROR_ONFAILURE;
-        /* replace by global one instance
-        return new Func1<F, Observable<? extends R>>() {
-            @Override
-            public Observable<? extends R> call(final F future) {
-                return Observable.create(new OnSubscribe<R> () {
-                    @SuppressWarnings("unchecked")
-                    @Override
-                    public void call(final Subscriber<? super R> subscriber) {
-                        subscriber.add(Subscriptions.from(
-                            future.addListener(new GenericFutureListener<F>() {
-                                @Override
-                                public void operationComplete(final F future)
-                                        throws Exception {
-                                    if (!future.isSuccess()) {
-                                        subscriber.onError(future.cause());
-                                    }
-                                }
-                            })));
-                    }});
-            }};
-            */
     }
+*/
+    /* replace by global one instance
+    return new Func1<F, Observable<? extends R>>() {
+        @Override
+        public Observable<? extends R> call(final F future) {
+            return Observable.create(new OnSubscribe<R> () {
+                @SuppressWarnings("unchecked")
+                @Override
+                public void call(final Subscriber<? super R> subscriber) {
+                    subscriber.add(Subscriptions.from(
+                        future.addListener(new GenericFutureListener<F>() {
+                            @Override
+                            public void operationComplete(final F future)
+                                    throws Exception {
+                                if (!future.isSuccess()) {
+                                    subscriber.onError(future.cause());
+                                }
+                            }
+                        })));
+                }});
+        }};
+        */
     
     private final static Func1<ChannelFuture, Observable<? extends Channel>> EMITNEXTANDCOMPLETED_ONSUCCESS = 
     new Func1<ChannelFuture, Observable<? extends Channel>>() {
