@@ -124,9 +124,7 @@ public class DefaultHttpServer implements HttpServer {
                     final ChannelFuture future = bootstrap.bind(localAddress);
                     subscriber.add(Subscriptions.from(future));
                     subscriber.add(RxNettys.subscriptionFrom(future.channel()));
-                    RxNettys.<ChannelFuture, HttpTrade>emitErrorOnFailure()
-                        .call(future)
-                        .subscribe(subscriber);
+                    future.addListener(RxNettys.makeFailure2ErrorListener(subscriber));
                     future.addListener(channelFutureListenerOf(features));
                 }
             }});
