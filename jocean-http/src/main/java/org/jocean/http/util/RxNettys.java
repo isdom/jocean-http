@@ -153,6 +153,19 @@ public class RxNettys {
                 }});
         }};
         
+    public static ChannelFutureListener makeSuccess2NextCompletedListener(final Subscriber<? super Channel> subscriber) {
+        return new ChannelFutureListener() {
+            @Override
+            public void operationComplete(final ChannelFuture f)
+                    throws Exception {
+                if (f.isSuccess()) {
+                    subscriber.onNext(f.channel());
+                    subscriber.onCompleted();
+                }
+            }
+        };
+    }
+        
     public static Func1<ChannelFuture, Observable<? extends Channel>> 
         emitNextAndCompletedOnSuccess() {
         return  EMITNEXTANDCOMPLETED_ONSUCCESS;
