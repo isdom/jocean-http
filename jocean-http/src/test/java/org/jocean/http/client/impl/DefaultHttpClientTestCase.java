@@ -728,7 +728,7 @@ public class DefaultHttpClientTestCase {
                 client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                    .doOnNext(nextSensor))
+                .doOnNext(nextSensor))
                 .compose(RxNettys.objects2httpobjs())
                 .subscribe(testSubscriber);
             
@@ -784,7 +784,7 @@ public class DefaultHttpClientTestCase {
                 client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                    .doOnNext(nextSensor))
+                .doOnNext(nextSensor))
                 .compose(RxNettys.objects2httpobjs())
                 .subscribe(testSubscriber);
             
