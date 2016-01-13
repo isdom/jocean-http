@@ -103,12 +103,18 @@ public class DefaultHttpClient implements HttpClient {
                         final Feature[] fullFeatures = buildFeatures(applyFeatures, responseSubscriber);
                         _channelPool.retainChannel(remoteAddress)
                             .doOnNext(oneoffFeaturesAssembler(responseSubscriber, fullFeatures))
-                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures))
+                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, responseSubscriber))
                             .doOnNext(fillChannelAware(
                                     InterfaceUtils.compositeIncludeType(ChannelAware.class, 
                                             (Object[])applyFeatures)))
                             .flatMap(doTransferRequest(request, applyFeatures))
                             .flatMap(RxNettys.<ChannelFuture, Object>emitErrorOnFailure())
+//                            .doOnNext(new Action1<ChannelFuture>() {
+//                                @Override
+//                                public void call(final ChannelFuture future) {
+//                                    responseSubscriber.add(Subscriptions.from(future));
+//                                    future.addListener(RxNettys.makeFailure2ErrorListener(responseSubscriber));
+//                                }})
                             .subscribe(responseSubscriber);
                     } catch (final Throwable e) {
                         responseSubscriber.onError(e);
@@ -161,33 +167,41 @@ public class DefaultHttpClient implements HttpClient {
 
     private Observable<? extends Channel> createChannel(
             final SocketAddress remoteAddress, 
-            final Feature[] features) {
+            final Feature[] features, 
+            final Subscriber<?> orgSubscriber) {
         return Observable.create(new OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> channelSubscriber) {
-                prepareChannelSubscriberAware(channelSubscriber, features);
-                prepareFeaturesAware(features);
-
-                final ChannelFuture future = _channelCreator.newChannel();
-                channelSubscriber.add(recycleChannelSubscription(future.channel()));
-                RxNettys.<ChannelFuture,Channel>emitErrorOnFailure()
-                    .call(future)
-                    .subscribe(channelSubscriber);
-                RxNettys.emitNextAndCompletedOnSuccess()
-                    .call(future)
-                    .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
+                if (!channelSubscriber.isUnsubscribed()) {
+                    final ChannelFuture future = _channelCreator.newChannel();
+                    orgSubscriber.add(recycleChannelSubscription(future.channel()));
+                    channelSubscriber.add(Subscriptions.from(future));
+                    future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
+                    future.addListener(RxNettys.makeSuccess2NextCompletedListener(channelSubscriber));
+                }
+            }})
+            .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
+                @Override
+                public Observable<? extends Channel> call(final Channel channel) {
+                    ChannelPool.Util.attachChannelPool(channel, _channelPool);
+                    ChannelPool.Util.attachIsReady(channel, IS_READY);
+                    return Observable.create(new OnSubscribe<Channel>() {
                         @Override
-                        public Observable<? extends Channel> call(final Channel channel) {
-                            ChannelPool.Util.attachChannelPool(channel, _channelPool);
-                            ChannelPool.Util.attachIsReady(channel, IS_READY);
-                            applyNononeoffFeatures(channel, features);
-                            channelSubscriber.add(
-                                applyOneoffFeatures(channel, features));
-                            return RxNettys.<ChannelFuture, Channel>emitErrorOnFailure()
-                                .call(channel.connect(remoteAddress));
-                        }})
-                    .subscribe(channelSubscriber);
-            }});
+                        public void call(final Subscriber<? super Channel> channelSubscriber) {
+                            if (!channelSubscriber.isUnsubscribed()) {
+                                prepareChannelSubscriberAware(channelSubscriber, features);
+                                prepareFeaturesAware(features);
+                                
+                                applyNononeoffFeatures(channel, features);
+                                final Subscription oneoffSubscription = applyOneoffFeatures(channel, features);
+                                //  TODO
+                                orgSubscriber.add(oneoffSubscription);
+                                final ChannelFuture future = channel.connect(remoteAddress);
+                                channelSubscriber.add(Subscriptions.from(future));
+                                future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
+                            }
+                        }});
+                }});
     }
 
     private Feature[] cloneFeatures(final Feature[] features) {

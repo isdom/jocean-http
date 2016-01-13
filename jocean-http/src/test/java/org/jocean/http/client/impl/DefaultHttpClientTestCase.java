@@ -739,6 +739,7 @@ public class DefaultHttpClientTestCase {
             
             // test if close method has been called.
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed();
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
@@ -1284,6 +1285,7 @@ public class DefaultHttpClientTestCase {
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed();
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
