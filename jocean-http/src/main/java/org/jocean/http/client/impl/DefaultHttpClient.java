@@ -5,6 +5,7 @@ package org.jocean.http.client.impl;
 
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
@@ -100,10 +101,21 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Subscriber<Object> responseSubscriber) {
                 if (!responseSubscriber.isUnsubscribed()) {
                     try {
+                        final AtomicReference<Subscription> subscriptionRef = new AtomicReference<Subscription>();
+                        final Action1<Subscription> toRelease = new Action1<Subscription>() {
+                            @Override
+                            public void call(final Subscription subscription) {
+                                if ( null == subscriptionRef.get()) {
+                                    subscriptionRef.set(subscription);
+                                } else {
+                                    subscriptionRef.set(Subscriptions.from(subscriptionRef.get(), subscription));
+                                }
+                            }};
+                        
                         final Feature[] fullFeatures = buildFeatures(applyFeatures, responseSubscriber);
                         _channelPool.retainChannel(remoteAddress)
                             .doOnNext(oneoffFeaturesAssembler(responseSubscriber, fullFeatures))
-                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, responseSubscriber))
+                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, toRelease))
                             .doOnNext(fillChannelAware(
                                     InterfaceUtils.compositeIncludeType(ChannelAware.class, 
                                             (Object[])applyFeatures)))
@@ -115,6 +127,14 @@ public class DefaultHttpClient implements HttpClient {
 //                                    responseSubscriber.add(Subscriptions.from(future));
 //                                    future.addListener(RxNettys.makeFailure2ErrorListener(responseSubscriber));
 //                                }})
+                            .doOnUnsubscribe(new Action0() {
+                                @Override
+                                public void call() {
+                                    final Subscription subscription = subscriptionRef.getAndSet(null);
+                                    if (null!=subscription) {
+                                        subscription.unsubscribe();
+                                    }
+                                }})
                             .subscribe(responseSubscriber);
                     } catch (final Throwable e) {
                         responseSubscriber.onError(e);
@@ -168,14 +188,14 @@ public class DefaultHttpClient implements HttpClient {
     private Observable<? extends Channel> createChannel(
             final SocketAddress remoteAddress, 
             final Feature[] features, 
-            final Subscriber<?> orgSubscriber) {
+            final Action1<Subscription> toRelease) {
         return Observable.create(new OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> channelSubscriber) {
                 if (!channelSubscriber.isUnsubscribed()) {
                     final ChannelFuture future = _channelCreator.newChannel();
-                    orgSubscriber.add(recycleChannelSubscription(future.channel()));
-                    channelSubscriber.add(Subscriptions.from(future));
+                    toRelease.call(recycleChannelSubscription(future.channel()));
+                    toRelease.call(Subscriptions.from(future));
                     future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
                     future.addListener(RxNettys.makeSuccess2NextCompletedListener(channelSubscriber));
                 }
@@ -194,10 +214,9 @@ public class DefaultHttpClient implements HttpClient {
                                 
                                 applyNononeoffFeatures(channel, features);
                                 final Subscription oneoffSubscription = applyOneoffFeatures(channel, features);
-                                //  TODO
-                                orgSubscriber.add(oneoffSubscription);
+                                toRelease.call(oneoffSubscription);
                                 final ChannelFuture future = channel.connect(remoteAddress);
-                                channelSubscriber.add(Subscriptions.from(future));
+                                toRelease.call(Subscriptions.from(future));
                                 future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
                             }
                         }});
