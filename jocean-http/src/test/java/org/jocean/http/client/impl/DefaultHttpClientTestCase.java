@@ -226,6 +226,73 @@ public class DefaultHttpClientTestCase {
     }
     
     @Test
+    public void testHttpHappyPathKeepAliveReuseConnectionTwice() throws Exception {
+        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+
+        final TestChannelCreator creator = new TestChannelCreator();
+    
+        final TestChannelPool pool = new TestChannelPool(1);
+        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
+                ENABLE_LOGGING);
+        try {
+            // first 
+            {
+                final Iterator<HttpObject> itr = 
+                    client.defineInteraction(
+                        new LocalAddress("test"), 
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    .compose(RxNettys.objects2httpobjs())
+                    .map(RxNettys.<HttpObject>retainer())
+                    .toBlocking().toIterable().iterator();
+                
+                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
+                
+                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                pool.awaitRecycleChannelsAndReset(1);
+            }
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertNotClose();
+            // second
+            {
+                final Iterator<HttpObject> itr = 
+                    client.defineInteraction(
+                        new LocalAddress("test"), 
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    .compose(RxNettys.objects2httpobjs())
+                    .map(RxNettys.<HttpObject>retainer())
+                    .toBlocking().toIterable().iterator();
+                
+                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
+                
+                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                pool.awaitRecycleChannelsAndReset(1);
+            }
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertNotClose();
+            // third
+            {
+                final Iterator<HttpObject> itr = 
+                    client.defineInteraction(
+                        new LocalAddress("test"), 
+                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    .compose(RxNettys.objects2httpobjs())
+                    .map(RxNettys.<HttpObject>retainer())
+                    .toBlocking().toIterable().iterator();
+                
+                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
+                
+                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                pool.awaitRecycleChannelsAndReset(1);
+            }
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertNotClose();
+        } finally {
+            client.close();
+            server.stop();
+        }
+    }
+    
+    @Test
     public void testHttpsHappyPathKeepAliveReuseConnection() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
 

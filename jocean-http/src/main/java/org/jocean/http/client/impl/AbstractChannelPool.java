@@ -36,6 +36,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
             try {
                 final Channel channel = reuseChannel(address);
                 if (null!=channel) {
+                    //  TODO
                     subscriber.add(recycleChannelSubscription(channel));
                     final Runnable runnable = buildOnNextRunnable(address, subscriber, channel);
                     if (channel.eventLoop().inEventLoop()) {
