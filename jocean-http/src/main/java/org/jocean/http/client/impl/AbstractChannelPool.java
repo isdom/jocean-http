@@ -11,8 +11,6 @@ import io.netty.util.concurrent.Future;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
-//import rx.Subscription;
-//import rx.functions.Action0;
 import rx.subscriptions.Subscriptions;
 
 public abstract class AbstractChannelPool implements ChannelPool {
@@ -71,23 +69,5 @@ public abstract class AbstractChannelPool implements ChannelPool {
             }};
     }
 
-    /*
-    private Subscription recycleChannelSubscription(final Channel channel) {
-        return Subscriptions.create(new Action0() {
-            @Override
-            public void call() {
-                if (channel.eventLoop().inEventLoop()) {
-                    recycleChannel(channel);
-                } else {
-                    channel.eventLoop().submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            recycleChannel(channel);
-                        }});
-                }
-            }});
-    }
-    */
-    
     protected abstract Channel reuseChannel(final SocketAddress address);
 }
