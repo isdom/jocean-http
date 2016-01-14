@@ -248,7 +248,8 @@ public class DefaultHttpClientTestCase {
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
-                pool.awaitRecycleChannelsAndReset(1);
+                //  await for 1 second
+                pool.awaitRecycleChannelsAndReset(1, 1);
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();
@@ -265,7 +266,8 @@ public class DefaultHttpClientTestCase {
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
-                pool.awaitRecycleChannelsAndReset(1);
+                //  await for 1 second
+                pool.awaitRecycleChannelsAndReset(1, 1);
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();
@@ -282,7 +284,8 @@ public class DefaultHttpClientTestCase {
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
-                pool.awaitRecycleChannelsAndReset(1);
+                //  await for 1 second
+                pool.awaitRecycleChannelsAndReset(1, 1);
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();

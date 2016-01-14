@@ -3,6 +3,7 @@ package org.jocean.http.client.impl;
 import io.netty.channel.Channel;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class TestChannelPool extends DefaultChannelPool {
@@ -24,6 +25,11 @@ public class TestChannelPool extends DefaultChannelPool {
         this._countdownRef.get().await();
     }
 
+    public void awaitRecycleChannelsAndReset(final long timeout, final int recycleChannelCount) throws InterruptedException {
+        this._countdownRef.get().await(timeout, TimeUnit.SECONDS);
+        this._countdownRef.set(new CountDownLatch(recycleChannelCount));
+    }
+    
     public void awaitRecycleChannelsAndReset(final int recycleChannelCount) throws InterruptedException {
         this._countdownRef.get().await();
         this._countdownRef.set(new CountDownLatch(recycleChannelCount));
