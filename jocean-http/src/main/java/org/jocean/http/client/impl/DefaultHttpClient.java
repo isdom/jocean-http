@@ -213,8 +213,7 @@ public class DefaultHttpClient implements HttpClient {
                                 prepareFeaturesAware(features);
                                 
                                 applyNononeoffFeatures(channel, features);
-                                final Subscription oneoffSubscription = applyOneoffFeatures(channel, features);
-                                toRelease.call(oneoffSubscription);
+                                toRelease.call(applyOneoffFeatures(channel, features));
                                 final ChannelFuture future = channel.connect(remoteAddress);
                                 toRelease.call(Subscriptions.from(future));
                                 future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
