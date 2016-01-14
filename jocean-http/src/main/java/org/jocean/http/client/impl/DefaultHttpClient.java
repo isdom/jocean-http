@@ -114,7 +114,7 @@ public class DefaultHttpClient implements HttpClient {
                         
                         final Feature[] fullFeatures = buildFeatures(applyFeatures, responseSubscriber);
                         _channelPool.retainChannel(remoteAddress)
-                            .doOnNext(oneoffFeaturesAssembler(responseSubscriber, fullFeatures))
+                            .doOnNext(oneoffFeaturesAssembler(fullFeatures, toRelease))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, toRelease))
                             .doOnNext(fillChannelAware(
                                     InterfaceUtils.compositeIncludeType(ChannelAware.class, 
@@ -419,12 +419,12 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     private Action1<Channel> oneoffFeaturesAssembler(
-            final Subscriber<Object> responseSubscriber,
-            final Feature[] features) {
+            final Feature[] features,
+            final Action1<Subscription> toRelease) {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
-                responseSubscriber.add(applyOneoffFeatures(channel, features));
+                toRelease.call(applyOneoffFeatures(channel, features));
             }};
     }
 
