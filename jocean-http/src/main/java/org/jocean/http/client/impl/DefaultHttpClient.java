@@ -74,10 +74,6 @@ import rx.subscriptions.Subscriptions;
  */
 public class DefaultHttpClient implements HttpClient {
     
-    public interface FeaturesAware {
-        public void setApplyFeatures(final Feature[] features);
-    }
-    
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
         if (!(InternalLoggerFactory.getDefaultFactory() instanceof Slf4JLoggerFactory)) {
@@ -211,9 +207,6 @@ public class DefaultHttpClient implements HttpClient {
                         @Override
                         public void call(final Subscriber<? super Channel> channelSubscriber) {
                             if (!channelSubscriber.isUnsubscribed()) {
-//                                prepareChannelSubscriberAware(channelSubscriber, features);
-//                                prepareFeaturesAware(features);
-                                
                                 applyNononeoffFeatures(channel, features);
                                 toRelease.call(applyOneoffFeatures(channel, features));
                                 final ChannelFuture future = channel.connect(remoteAddress);
@@ -290,24 +283,6 @@ public class DefaultHttpClient implements HttpClient {
         return cloned;
     }
 
-    private void prepareFeaturesAware(final Feature[] features) {
-        final FeaturesAware featuresAware = 
-                InterfaceUtils.compositeIncludeType(FeaturesAware.class, (Object[])features);
-        if (null!=featuresAware) {
-            featuresAware.setApplyFeatures(features);
-        }
-    }
-
-    private void prepareChannelSubscriberAware(
-            final Subscriber<? super Channel> subscriber,
-            final Feature[] features) {
-        final ChannelSubscriberAware channelSubscriberAware = 
-                InterfaceUtils.compositeIncludeType(ChannelSubscriberAware.class, (Object[])features);
-        if (null!=channelSubscriberAware) {
-            channelSubscriberAware.setChannelSubscriber(subscriber);
-        }
-    }
-    
     private Subscription recycleChannelSubscription(final Channel channel) {
         return Subscriptions.create(new Action0() {
             @Override
@@ -402,29 +377,6 @@ public class DefaultHttpClient implements HttpClient {
 
     private final static Feature APPLY_HTTPCLIENT = new Feature.AbstractFeature0() {};
     
-    private static final class APPLY_READY4INTERACTION_NOTIFIER implements
-            Feature, ChannelSubscriberAware, FeaturesAware {
-        @Override
-        public void setChannelSubscriber(
-                final Subscriber<? super Channel> subscriber) {
-            this._channelSubscriber = subscriber;
-        }
-        
-        @Override
-        public void setApplyFeatures(final Feature[] features) {
-            this._isSSLEnabled = isSSLEnabled(features);
-        }
-
-        @Override
-        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
-            return builder.build(this, pipeline,
-                    this._isSSLEnabled, this._channelSubscriber);
-        }
-
-        private boolean _isSSLEnabled = false;
-        private Subscriber<? super Channel> _channelSubscriber;
-    }
-
     private static final class APPLY_WORKER implements Feature,
             ResponseSubscriberAware {
 
@@ -446,7 +398,6 @@ public class DefaultHttpClient implements HttpClient {
             final Subscriber<Object> responseSubscriber) {
         features = JOArrays.addFirst(Feature[].class, features, 
                 APPLY_HTTPCLIENT, 
-                /* new APPLY_READY4INTERACTION_NOTIFIER(), */ 
                 new APPLY_WORKER());
         final ResponseSubscriberAware responseSubscriberAware = 
                 InterfaceUtils.compositeIncludeType(ResponseSubscriberAware.class, (Object[])features);
@@ -547,75 +498,6 @@ public class DefaultHttpClient implements HttpClient {
         public ChannelHandler call(final Object... args) {
             return new ChunkedWriteHandler();
         }};
-
-    private static final class Ready4InteractionNotifier extends
-            ChannelInboundHandlerAdapter {
-        private final boolean _enableSSL;
-        private final Subscriber<? super Channel> _subscriber;
-
-        private Ready4InteractionNotifier(final boolean enableSSL,
-                final Subscriber<? super Channel> subscriber) {
-            this._enableSSL = enableSSL;
-            this._subscriber = subscriber;
-        }
-
-        private void removeSelf(final ChannelHandlerContext ctx) {
-            final ChannelPipeline pipeline = ctx.pipeline();
-            if (pipeline.context(this) != null) {
-                pipeline.remove(this);
-            }
-        }
-
-        @Override
-        public void channelActive(final ChannelHandlerContext ctx)
-                throws Exception {
-            if (!_enableSSL) {
-                removeSelf(ctx);
-                _subscriber.onNext(ctx.channel());
-                _subscriber.onCompleted();
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug(
-                            "channel({}): Ready4InteractionNotifier.channelActive",
-                            ctx.channel());
-                }
-            }
-            ctx.fireChannelActive();
-        }
-
-        @Override
-        public void userEventTriggered(final ChannelHandlerContext ctx,
-                final Object evt) throws Exception {
-            if (_enableSSL && evt instanceof SslHandshakeCompletionEvent) {
-                final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
-                if (sslComplete.isSuccess()) {
-                    removeSelf(ctx);
-                    _subscriber.onNext(ctx.channel());
-                    _subscriber.onCompleted();
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug(
-                                "channel({}): Ready4InteractionNotifier.userEventTriggered for ssl handshake success",
-                                ctx.channel());
-                    }
-                } else {
-                    _subscriber.onError(sslComplete.cause());
-                    LOG.warn(
-                            "channel({}): Ready4InteractionNotifier.userEventTriggered for ssl handshake failure:{}",
-                            ctx.channel(), ExceptionUtils
-                                    .exception2detail(sslComplete.cause()));
-                }
-            }
-            ctx.fireUserEventTriggered(evt);
-        }
-    }
-
-    private static final Func2<Boolean, Subscriber<? super Channel>, ChannelHandler> READY4INTERACTION_NOTIFIER_FUNC2 = 
-            new Func2<Boolean, Subscriber<? super Channel>, ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Boolean isSSLEnabled,
-                final Subscriber<? super Channel> subscriber) {
-            return new Ready4InteractionNotifier(isSSLEnabled, subscriber);
-        }
-    };
 
     private static final Func2<Subscriber<Object>, Long, ChannelHandler> PROGRESSIVE_FUNC2 = 
             new Func2<Subscriber<Object>, Long, ChannelHandler>() {
@@ -771,7 +653,6 @@ public class DefaultHttpClient implements HttpClient {
         HTTPCLIENT(HTTPCLIENT_CODEC_FUNCN),
         CONTENT_DECOMPRESSOR(CONTENT_DECOMPRESSOR_FUNCN),
         CHUNKED_WRITER(CHUNKED_WRITER_FUNCN),
-        READY4INTERACTION_NOTIFIER(Functions.fromFunc(READY4INTERACTION_NOTIFIER_FUNC2)),
         WORKER(Functions.fromFunc(HTTPCLIENT_WORK_FUNC1)),
         ;
         
@@ -807,7 +688,6 @@ public class DefaultHttpClient implements HttpClient {
         
         _APPLY_BUILDER = new Class2ApplyBuilder();
         _APPLY_BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
-        _APPLY_BUILDER.register(APPLY_READY4INTERACTION_NOTIFIER.class, APPLY.READY4INTERACTION_NOTIFIER);
         _APPLY_BUILDER.register(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
         
         _CLS2APPLYTOREQUEST = new Class2Instance<>();
