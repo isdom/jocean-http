@@ -52,6 +52,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
+import io.netty.util.AttributeKey;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
@@ -190,11 +191,13 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress, 
             final Feature[] features, 
             final Action1<Subscription> toRelease) {
-        return Observable.create(new OnSubscribe<Channel>() {
+        Observable<? extends Channel> channelObservable = Observable.create(new OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> channelSubscriber) {
                 if (!channelSubscriber.isUnsubscribed()) {
                     final ChannelFuture future = _channelCreator.newChannel();
+                    ChannelPool.Util.attachChannelPool(future.channel(), _channelPool);
+                    ChannelPool.Util.attachIsReady(future.channel(), IS_READY);
                     toRelease.call(recycleChannelSubscription(future.channel()));
                     toRelease.call(Subscriptions.from(future));
                     future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
@@ -204,23 +207,75 @@ public class DefaultHttpClient implements HttpClient {
             .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
                 @Override
                 public Observable<? extends Channel> call(final Channel channel) {
-                    ChannelPool.Util.attachChannelPool(channel, _channelPool);
-                    ChannelPool.Util.attachIsReady(channel, IS_READY);
                     return Observable.create(new OnSubscribe<Channel>() {
                         @Override
                         public void call(final Subscriber<? super Channel> channelSubscriber) {
                             if (!channelSubscriber.isUnsubscribed()) {
-                                prepareChannelSubscriberAware(channelSubscriber, features);
-                                prepareFeaturesAware(features);
+//                                prepareChannelSubscriberAware(channelSubscriber, features);
+//                                prepareFeaturesAware(features);
                                 
                                 applyNononeoffFeatures(channel, features);
                                 toRelease.call(applyOneoffFeatures(channel, features));
                                 final ChannelFuture future = channel.connect(remoteAddress);
                                 toRelease.call(Subscriptions.from(future));
                                 future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
+                                future.addListener(RxNettys.makeSuccess2NextCompletedListener(channelSubscriber));
                             }
                         }});
                 }});
+        if (isSSLEnabled(features)) {
+            channelObservable = channelObservable.flatMap(new Func1<Channel, Observable<? extends Channel>> () {
+                @Override
+                public Observable<? extends Channel> call(final Channel channel) {
+                    return Observable.create(new OnSubscribe<Channel>() {
+                        @Override
+                        public void call(final Subscriber<? super Channel> channelSubscriber) {
+                            if (!channelSubscriber.isUnsubscribed()) {
+                                channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+                                    private void removeSelf(final ChannelHandlerContext ctx) {
+                                        final ChannelPipeline pipeline = ctx.pipeline();
+                                        if (pipeline.context(this) != null) {
+                                            pipeline.remove(this);
+                                        }
+                                    }
+
+                                    @Override
+                                    public void userEventTriggered(final ChannelHandlerContext ctx,
+                                            final Object evt) throws Exception {
+                                        if (evt instanceof SslHandshakeCompletionEvent) {
+                                            removeSelf(ctx);
+                                            final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
+                                            if (sslComplete.isSuccess()) {
+                                                setChannelReady(ctx.channel());
+                                                channelSubscriber.onNext(ctx.channel());
+                                                channelSubscriber.onCompleted();
+                                                if (LOG.isDebugEnabled()) {
+                                                    LOG.debug(
+                                                            "channel({}): userEventTriggered for ssl handshake success",
+                                                            ctx.channel());
+                                                }
+                                            } else {
+                                                channelSubscriber.onError(sslComplete.cause());
+                                                LOG.warn(
+                                                        "channel({}): userEventTriggered for ssl handshake failure:{}",
+                                                        ctx.channel(), ExceptionUtils
+                                                                .exception2detail(sslComplete.cause()));
+                                            }
+                                        }
+                                        ctx.fireUserEventTriggered(evt);
+                                    }
+                                });
+                            }
+                        }});
+                }});
+        } else {
+            channelObservable = channelObservable.doOnNext(new Action1<Channel>() {
+                @Override
+                public void call(final Channel channel) {
+                    setChannelReady(channel);
+                }});
+        }
+        return channelObservable;
     }
 
     private Feature[] cloneFeatures(final Feature[] features) {
@@ -390,7 +445,9 @@ public class DefaultHttpClient implements HttpClient {
             Feature[] features,
             final Subscriber<Object> responseSubscriber) {
         features = JOArrays.addFirst(Feature[].class, features, 
-                APPLY_HTTPCLIENT, new APPLY_READY4INTERACTION_NOTIFIER(), new APPLY_WORKER());
+                APPLY_HTTPCLIENT, 
+                /* new APPLY_READY4INTERACTION_NOTIFIER(), */ 
+                new APPLY_WORKER());
         final ResponseSubscriberAware responseSubscriberAware = 
                 InterfaceUtils.compositeIncludeType(ResponseSubscriberAware.class, (Object[])features);
         if (null!=responseSubscriberAware) {
@@ -454,11 +511,17 @@ public class DefaultHttpClient implements HttpClient {
     private final ChannelCreator _channelCreator;
     private final Feature[] _defaultFeatures;
     
+    private static final AttributeKey<Object> READY_ATTR = AttributeKey.valueOf("__READY");
+    
     private static final Func1<Channel,Boolean> IS_READY = new Func1<Channel,Boolean>() {
         @Override
         public Boolean call(final Channel channel) {
-            return (channel.pipeline().names().indexOf(APPLY.READY4INTERACTION_NOTIFIER.name()) == -1);
+            return null != channel.attr(READY_ATTR).get();
         }};
+        
+    private static void setChannelReady(final Channel channel) {
+        channel.attr(READY_ATTR).set(new Object());
+    }
         
     private static final Class2Instance<Feature, ApplyToRequest> _CLS2APPLYTOREQUEST;
     
