@@ -111,7 +111,7 @@ public class DefaultHttpClient implements HttpClient {
                             }};
                         
                         final Feature[] fullFeatures = buildFeatures(applyFeatures, responseSubscriber);
-                        _channelPool.retainChannel(remoteAddress)
+                        _channelPool.retainChannel(remoteAddress, add4release)
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
                             .doOnNext(fillChannelAware(

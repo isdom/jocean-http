@@ -7,11 +7,13 @@ import io.netty.util.AttributeKey;
 import java.net.SocketAddress;
 
 import rx.Observable;
+import rx.Subscription;
+import rx.functions.Action1;
 import rx.functions.Func1;
 
 public interface ChannelPool {
     
-    public Observable<Channel> retainChannel(final SocketAddress address);
+    public Observable<Channel> retainChannel(final SocketAddress address, final Action1<Subscription> add4release);
     
     public boolean recycleChannel(final Channel channel);
     
