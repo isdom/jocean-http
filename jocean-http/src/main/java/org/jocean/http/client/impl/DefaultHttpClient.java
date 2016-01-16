@@ -100,7 +100,7 @@ public class DefaultHttpClient implements HttpClient {
                 if (!responseSubscriber.isUnsubscribed()) {
                     try {
                         final AtomicReference<Subscription> subscriptionRef = new AtomicReference<Subscription>();
-                        final Action1<Subscription> toRelease = new Action1<Subscription>() {
+                        final Action1<Subscription> add4release = new Action1<Subscription>() {
                             @Override
                             public void call(final Subscription subscription) {
                                 if ( null == subscriptionRef.get()) {
@@ -112,8 +112,8 @@ public class DefaultHttpClient implements HttpClient {
                         
                         final Feature[] fullFeatures = buildFeatures(applyFeatures, responseSubscriber);
                         _channelPool.retainChannel(remoteAddress)
-                            .doOnNext(prepareReuseChannel(fullFeatures, toRelease))
-                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, toRelease))
+                            .doOnNext(prepareReuseChannel(fullFeatures, add4release))
+                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
                             .doOnNext(fillChannelAware(
                                     InterfaceUtils.compositeIncludeType(ChannelAware.class, 
                                             (Object[])applyFeatures)))
@@ -186,7 +186,7 @@ public class DefaultHttpClient implements HttpClient {
     private Observable<? extends Channel> createChannel(
             final SocketAddress remoteAddress, 
             final Feature[] features, 
-            final Action1<Subscription> toRelease) {
+            final Action1<Subscription> add4release) {
         Observable<? extends Channel> channelObservable = Observable.create(new OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> channelSubscriber) {
@@ -194,8 +194,8 @@ public class DefaultHttpClient implements HttpClient {
                     final ChannelFuture future = _channelCreator.newChannel();
                     ChannelPool.Util.attachChannelPool(future.channel(), _channelPool);
                     ChannelPool.Util.attachIsReady(future.channel(), IS_READY);
-                    toRelease.call(recycleChannelSubscription(future.channel()));
-                    toRelease.call(Subscriptions.from(future));
+                    add4release.call(recycleChannelSubscription(future.channel()));
+                    add4release.call(Subscriptions.from(future));
                     future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
                     future.addListener(RxNettys.makeSuccess2NextCompletedListener(channelSubscriber));
                 }
@@ -208,9 +208,9 @@ public class DefaultHttpClient implements HttpClient {
                         public void call(final Subscriber<? super Channel> channelSubscriber) {
                             if (!channelSubscriber.isUnsubscribed()) {
                                 applyNononeoffFeatures(channel, features);
-                                toRelease.call(applyOneoffFeatures(channel, features));
+                                add4release.call(applyOneoffFeatures(channel, features));
                                 final ChannelFuture future = channel.connect(remoteAddress);
-                                toRelease.call(Subscriptions.from(future));
+                                add4release.call(Subscriptions.from(future));
                                 future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
                                 future.addListener(RxNettys.makeSuccess2NextCompletedListener(channelSubscriber));
                             }
@@ -424,12 +424,12 @@ public class DefaultHttpClient implements HttpClient {
 
     private Action1<Channel> prepareReuseChannel(
             final Feature[] features,
-            final Action1<Subscription> toRelease) {
+            final Action1<Subscription> add4release) {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
-                toRelease.call(recycleChannelSubscription(channel));
-                toRelease.call(applyOneoffFeatures(channel, features));
+                add4release.call(recycleChannelSubscription(channel));
+                add4release.call(applyOneoffFeatures(channel, features));
             }};
     }
 
