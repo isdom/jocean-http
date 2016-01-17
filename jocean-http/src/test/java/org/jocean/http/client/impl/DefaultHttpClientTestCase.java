@@ -199,7 +199,8 @@ public class DefaultHttpClientTestCase {
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
-                pool.awaitRecycleChannels();
+                //  await for 1 second
+                pool.awaitRecycleChannels(1);
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();
@@ -320,7 +321,8 @@ public class DefaultHttpClientTestCase {
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
-                pool.awaitRecycleChannels();
+                //  await for 1 second
+                pool.awaitRecycleChannels(1);
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();
@@ -370,7 +372,8 @@ public class DefaultHttpClientTestCase {
                     .subscribe(testSubscriber);
                     unsubscribed.await();
                     
-                    pool.awaitRecycleChannels();
+                    //  await for 1 second
+                    pool.awaitRecycleChannels(1);
                 } finally {
                     assertEquals(1, testSubscriber.getOnErrorEvents().size());
                     assertEquals(RuntimeException.class, 
@@ -446,7 +449,9 @@ public class DefaultHttpClientTestCase {
                     .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                     .subscribe(testSubscriber);
                     unsubscribed.await();
-                    pool.awaitRecycleChannels();
+                    
+                    //  await for 1 second
+                    pool.awaitRecycleChannels(1);
                 } finally {
                     assertEquals(1, testSubscriber.getOnErrorEvents().size());
                     assertEquals(RuntimeException.class, 
@@ -572,7 +577,10 @@ public class DefaultHttpClientTestCase {
             .subscribe(testSubscriber);
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
-            pool.awaitRecycleChannels();
+            
+            //  await for 1 second
+            pool.awaitRecycleChannels(1);
+            
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed();
         } finally {
@@ -699,7 +707,9 @@ public class DefaultHttpClientTestCase {
             .subscribe(testSubscriber);
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
-            pool.awaitRecycleChannels();
+            
+            //  await for 1 second
+            pool.awaitRecycleChannels(1);
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed();
         } finally {
@@ -751,7 +761,10 @@ public class DefaultHttpClientTestCase {
             .subscribe(testSubscriber);
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
-            pool.awaitRecycleChannels();
+            
+            //  await for 1 second
+            pool.awaitRecycleChannels(1);
+            
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed();
         } finally {
@@ -864,7 +877,9 @@ public class DefaultHttpClientTestCase {
 //            assertEquals(1, client.getActiveChannelCount());
             //  server !NOT! send back
             subscription.unsubscribe();
-            pool.awaitRecycleChannels();
+            
+            //  await for 1 second
+            pool.awaitRecycleChannels(1);
             
             // test if close method has been called.
             assertEquals(1, creator.getChannels().size());
@@ -934,7 +949,10 @@ public class DefaultHttpClientTestCase {
             .subscribe(testSubscriber);
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
-            pool.awaitRecycleChannels();
+            
+            //  await for 1 second
+            pool.awaitRecycleChannels(1);
+            
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();
         } finally {
@@ -969,7 +987,9 @@ public class DefaultHttpClientTestCase {
                 .subscribe(testSubscriber);
                 unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
-                pool.awaitRecycleChannels();
+                
+                //  await for 1 second
+                pool.awaitRecycleChannels(1);
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();
@@ -1022,7 +1042,9 @@ public class DefaultHttpClientTestCase {
                 .subscribe(testSubscriber);
                 unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
-                pool.awaitRecycleChannels();
+                
+                //  await for 1 second
+                pool.awaitRecycleChannels(1);
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose();
@@ -1118,7 +1140,10 @@ public class DefaultHttpClientTestCase {
             .subscribe(testSubscriber);
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
-            pool.awaitRecycleChannels();
+            
+            //  await for 1 second
+            pool.awaitRecycleChannels(1);
+            
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed();
         } finally {
@@ -1160,7 +1185,10 @@ public class DefaultHttpClientTestCase {
                 .subscribe(testSubscriber);
                 unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
-                pool.awaitRecycleChannels();
+                
+                //  await for 1 second
+                pool.awaitRecycleChannels(1);
+                
                 assertEquals(1, creator.getChannels().size());
                 creator.getChannels().get(0).assertClosed();
                 assertEquals(1, testSubscriber.getOnErrorEvents().size());
@@ -1224,7 +1252,10 @@ public class DefaultHttpClientTestCase {
                 .subscribe(testSubscriber);
                 unsubscribed.await();
                 testSubscriber.awaitTerminalEvent();
-                pool.awaitRecycleChannels();
+                
+                //  await for 1 second
+                pool.awaitRecycleChannels(1);
+                
                 assertEquals(1, creator.getChannels().size());
                 creator.getChannels().get(0).assertClosed();
                 assertEquals(1, testSubscriber.getOnErrorEvents().size());
@@ -1465,7 +1496,10 @@ public class DefaultHttpClientTestCase {
             .subscribe(testSubscriber);
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
-            pool.awaitRecycleChannels();
+            
+            //  await for 1 second
+            pool.awaitRecycleChannels(1);
+            
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed();
         } finally {

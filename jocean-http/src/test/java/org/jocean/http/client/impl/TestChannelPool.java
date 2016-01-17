@@ -25,6 +25,10 @@ public class TestChannelPool extends DefaultChannelPool {
         this._countdownRef.get().await();
     }
 
+    public void awaitRecycleChannels(final long timeout) throws InterruptedException {
+        this._countdownRef.get().await(timeout, TimeUnit.SECONDS);
+    }
+    
     public void awaitRecycleChannelsAndReset(final long timeout, final int recycleChannelCount) throws InterruptedException {
         this._countdownRef.get().await(timeout, TimeUnit.SECONDS);
         this._countdownRef.set(new CountDownLatch(recycleChannelCount));
