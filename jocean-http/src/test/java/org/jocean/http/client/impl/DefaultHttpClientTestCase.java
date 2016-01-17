@@ -203,6 +203,8 @@ public class DefaultHttpClientTestCase {
                 pool.awaitRecycleChannels(1);
             }
             assertEquals(1, creator.getChannels().size());
+            //  try wait for close
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
             // second
             {
@@ -219,6 +221,8 @@ public class DefaultHttpClientTestCase {
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
+            //  try wait for close
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
@@ -512,7 +516,7 @@ public class DefaultHttpClientTestCase {
             
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).awaitClosed();
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
@@ -544,7 +548,7 @@ public class DefaultHttpClientTestCase {
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).awaitClosed();
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
@@ -822,7 +826,7 @@ public class DefaultHttpClientTestCase {
             
             // test if close method has been called.
             assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).awaitClosed();
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
@@ -1099,7 +1103,7 @@ public class DefaultHttpClientTestCase {
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).awaitClosed();
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
@@ -1386,7 +1390,7 @@ public class DefaultHttpClientTestCase {
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).awaitClosed();
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();

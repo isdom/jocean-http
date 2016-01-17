@@ -7,7 +7,6 @@ import static org.junit.Assert.assertNotNull;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.URI;
-import java.util.concurrent.Callable;
 
 import javax.net.ssl.SSLException;
 

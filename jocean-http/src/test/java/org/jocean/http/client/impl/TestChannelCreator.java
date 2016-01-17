@@ -15,6 +15,7 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
@@ -62,6 +63,10 @@ public class TestChannelCreator implements ChannelCreator {
         
         public void awaitClosed() throws InterruptedException {
             _closed.await();
+        }
+        
+        public void awaitClosed(final long timeout) throws InterruptedException {
+            _closed.await(timeout, TimeUnit.SECONDS);
         }
         
         public void assertClosed() {
