@@ -257,6 +257,8 @@ public class DefaultHttpClientTestCase {
                 pool.awaitRecycleChannelsAndReset(1, 1);
             }
             assertEquals(1, creator.getChannels().size());
+            //  try wait for close
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
             // second
             {
@@ -275,6 +277,8 @@ public class DefaultHttpClientTestCase {
                 pool.awaitRecycleChannelsAndReset(1, 1);
             }
             assertEquals(1, creator.getChannels().size());
+            //  try wait for close
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
             // third
             {
@@ -293,6 +297,8 @@ public class DefaultHttpClientTestCase {
                 pool.awaitRecycleChannelsAndReset(1, 1);
             }
             assertEquals(1, creator.getChannels().size());
+            //  try wait for close
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
@@ -329,6 +335,8 @@ public class DefaultHttpClientTestCase {
                 pool.awaitRecycleChannels(1);
             }
             assertEquals(1, creator.getChannels().size());
+            //  try wait for close
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
             // second
             {
@@ -345,6 +353,8 @@ public class DefaultHttpClientTestCase {
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
+            //  try wait for close
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
@@ -387,6 +397,8 @@ public class DefaultHttpClientTestCase {
                 }
             }
             assertEquals(1, creator.getChannels().size());
+            //  try wait for close
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
             // second
             {
@@ -403,6 +415,8 @@ public class DefaultHttpClientTestCase {
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
+            //  try wait for close
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
@@ -465,6 +479,7 @@ public class DefaultHttpClientTestCase {
                 }
             }
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
             creator.reset();
             //  reset write exception
@@ -485,6 +500,8 @@ public class DefaultHttpClientTestCase {
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
             assertEquals(2, creator.getChannels().size());
+            //  try wait for close
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(1).assertNotClose();
         } finally {
             client.close();
@@ -586,6 +603,7 @@ public class DefaultHttpClientTestCase {
             pool.awaitRecycleChannels(1);
             
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
@@ -715,6 +733,7 @@ public class DefaultHttpClientTestCase {
             //  await for 1 second
             pool.awaitRecycleChannels(1);
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
@@ -770,6 +789,7 @@ public class DefaultHttpClientTestCase {
             pool.awaitRecycleChannels(1);
             
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
@@ -887,6 +907,7 @@ public class DefaultHttpClientTestCase {
             
             // test if close method has been called.
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
         } finally {
             // 注意: 一个 try-with-resources 语句可以像普通的 try 语句那样有 catch 和 finally 块。
@@ -921,6 +942,7 @@ public class DefaultHttpClientTestCase {
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
@@ -958,6 +980,7 @@ public class DefaultHttpClientTestCase {
             pool.awaitRecycleChannels(1);
             
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
@@ -996,6 +1019,7 @@ public class DefaultHttpClientTestCase {
                 pool.awaitRecycleChannels(1);
             }
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
@@ -1017,6 +1041,7 @@ public class DefaultHttpClientTestCase {
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
@@ -1051,6 +1076,7 @@ public class DefaultHttpClientTestCase {
                 pool.awaitRecycleChannels(1);
             }
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
@@ -1072,6 +1098,7 @@ public class DefaultHttpClientTestCase {
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertNotClose();
         } finally {
             client.close();
@@ -1149,6 +1176,7 @@ public class DefaultHttpClientTestCase {
             pool.awaitRecycleChannels(1);
             
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
@@ -1194,6 +1222,7 @@ public class DefaultHttpClientTestCase {
                 pool.awaitRecycleChannels(1);
                 
                 assertEquals(1, creator.getChannels().size());
+                creator.getChannels().get(0).awaitClosed(1);
                 creator.getChannels().get(0).assertClosed();
                 assertEquals(1, testSubscriber.getOnErrorEvents().size());
                 assertEquals(RuntimeException.class, 
@@ -1222,6 +1251,7 @@ public class DefaultHttpClientTestCase {
                 
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
                 assertEquals(2, creator.getChannels().size());
+                creator.getChannels().get(0).awaitClosed(1);
                 creator.getChannels().get(1).assertNotClose();
             }
         } finally {
@@ -1261,6 +1291,7 @@ public class DefaultHttpClientTestCase {
                 pool.awaitRecycleChannels(1);
                 
                 assertEquals(1, creator.getChannels().size());
+                creator.getChannels().get(0).awaitClosed(1);
                 creator.getChannels().get(0).assertClosed();
                 assertEquals(1, testSubscriber.getOnErrorEvents().size());
                 assertEquals(SSLException.class, 
@@ -1287,6 +1318,7 @@ public class DefaultHttpClientTestCase {
                 
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
                 assertEquals(2, creator.getChannels().size());
+                creator.getChannels().get(0).awaitClosed(1);
                 creator.getChannels().get(1).assertNotClose();
             }
         } finally {
@@ -1505,6 +1537,7 @@ public class DefaultHttpClientTestCase {
             pool.awaitRecycleChannels(1);
             
             assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).awaitClosed(1);
             creator.getChannels().get(0).assertClosed();
         } finally {
             client.close();
