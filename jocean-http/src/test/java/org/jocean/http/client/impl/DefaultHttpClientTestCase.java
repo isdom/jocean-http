@@ -545,6 +545,38 @@ public class DefaultHttpClientTestCase {
     }
 
     @Test
+    public void testHttpForUnsubscribedBeforeSubscribe() throws Exception {
+        
+        final CountDownLatch unsubscribed = new CountDownLatch(1);
+        
+        final TestChannelCreator creator = new TestChannelCreator();
+        final DefaultHttpClient client = new DefaultHttpClient(creator, ENABLE_LOGGING);
+        //    NOT setup server for local channel
+        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
+        try {
+            testSubscriber.unsubscribe();
+            
+            client.defineInteraction(new LocalAddress("test"), 
+                Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
+                .doOnNext(nextSensor))
+                .compose(RxNettys.objects2httpobjs())
+                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
+                .subscribe(testSubscriber);
+            
+            unsubscribed.await();
+            
+            assertEquals(0, creator.getChannels().size());
+        } finally {
+            client.close();
+            assertEquals(0, testSubscriber.getOnNextEvents().size());
+            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getOnErrorEvents().size());
+            nextSensor.assertNotCalled();
+        }
+    }
+
+    @Test
     public void testHttpsNotConnected() throws Exception {
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
