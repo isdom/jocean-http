@@ -36,6 +36,7 @@ import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
@@ -114,6 +115,7 @@ public class DefaultHttpClient implements HttpClient {
                         _channelPool.retainChannel(remoteAddress, add4release)
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
+                            .doOnNext(attachSubscriber(responseSubscriber, add4release))
                             .doOnNext(fillChannelAware(
                                     InterfaceUtils.compositeIncludeType(ChannelAware.class, 
                                             (Object[])applyFeatures)))
@@ -141,6 +143,28 @@ public class DefaultHttpClient implements HttpClient {
                     LOG.warn("defineInteraction: responseSubscriber {} has unsubscribe", responseSubscriber);
                 }
             }});
+    }
+
+    private Action1<? super Channel> attachSubscriber(
+            final Subscriber<Object> subscriber,
+            final Action1<Subscription> add4release) {
+        return new Action1<Channel>() {
+            @Override
+            public void call(final Channel channel) {
+                final ChannelInboundHandler handler = buildOnSubscribeHandler(subscriber);
+                channel.pipeline().addLast(handler);
+                
+                add4release.call(
+                    Subscriptions.create(
+                        new Action0() {
+                            @Override
+                            public void call() {
+                                final ChannelPipeline pipeline = channel.pipeline();
+                                if (pipeline.context(handler) != null) {
+                                    pipeline.remove(handler);
+                                }
+                            }}));
+            }};
     }
 
     private Func1<Channel, Observable<ChannelFuture>> doTransferRequest(
@@ -281,6 +305,68 @@ public class DefaultHttpClient implements HttpClient {
         };
     }
     
+    private static SimpleChannelInboundHandler<HttpObject> buildOnSubscribeHandler(
+            final Subscriber<? super Object> subscriber) {
+        return new SimpleChannelInboundHandler<HttpObject>() {
+            @Override
+            public void channelInactive(final ChannelHandlerContext ctx)
+                    throws Exception {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channelInactive: ch({})", ctx.channel());
+                }
+                ctx.fireChannelInactive();
+                subscriber.onError(new RuntimeException("peer has closed."));
+            }
+
+            @Override
+            public void exceptionCaught(final ChannelHandlerContext ctx,
+                    final Throwable cause) throws Exception {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("exceptionCaught: ch({}), detail:{}",
+                            ctx.channel(),
+                            ExceptionUtils.exception2detail(cause));
+                }
+                ctx.close();
+                subscriber.onError(cause);
+            }
+
+            @Override
+            protected void channelRead0(final ChannelHandlerContext ctx,
+                    final HttpObject msg) throws Exception {
+                subscriber.onNext(msg);
+                if (msg instanceof LastHttpContent) {
+                    /*
+                     * netty 参考代码:
+                     * https://github.com/netty/netty/blob/netty-
+                     * 4.0.26.Final /codec/src
+                     * /main/java/io/netty/handler/codec
+                     * /ByteToMessageDecoder .java#L274
+                     * https://github.com/netty
+                     * /netty/blob/netty-4.0.26.Final /codec-http
+                     * /src/main/java
+                     * /io/netty/handler/codec/http/HttpObjectDecoder
+                     * .java#L398 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件
+                     * currentState == State.READ_VARIABLE_LENGTH_CONTENT &&
+                     * !in.isReadable() && !chunked
+                     * 即没有指定Content-Length头域，也不是CHUNKED传输模式
+                     * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
+                     * 因此，无需在channelInactive处，针对该情况做特殊处理
+                     */
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
+                                ctx.channel(), msg);
+                    }
+                    final ChannelPool pool = ChannelPool.Util
+                            .getChannelPool(ctx.channel());
+                    if (null != pool) {
+                        pool.afterReceiveLastContent(ctx.channel());
+                    }
+                    subscriber.onCompleted();
+                }
+            }
+        };
+    }
+    
     private Feature[] cloneFeatures(final Feature[] features) {
         final Feature[] cloned = new Feature[features.length];
         for (int idx = 0; idx < cloned.length; idx++) {
@@ -387,28 +473,10 @@ public class DefaultHttpClient implements HttpClient {
 
     private final static Feature APPLY_HTTPCLIENT = new Feature.AbstractFeature0() {};
     
-    private static final class APPLY_WORKER implements Feature,
-            ResponseSubscriberAware {
-
-        @Override
-        public void setResponseSubscriber(final Subscriber<Object> subscriber) {
-            this._responseSubscriber = subscriber;
-        }
-
-        @Override
-        public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
-            return builder.build(this, pipeline, this._responseSubscriber);
-        }
-
-        private Subscriber<Object> _responseSubscriber;
-    }
-    
     private Feature[] buildFeatures(
             Feature[] features,
             final Subscriber<Object> responseSubscriber) {
-        features = JOArrays.addFirst(Feature[].class, features, 
-                APPLY_HTTPCLIENT, 
-                new APPLY_WORKER());
+        features = JOArrays.addFirst(Feature[].class, features, APPLY_HTTPCLIENT);
         final ResponseSubscriberAware responseSubscriberAware = 
                 InterfaceUtils.compositeIncludeType(ResponseSubscriberAware.class, (Object[])features);
         if (null!=responseSubscriberAware) {
@@ -593,71 +661,6 @@ public class DefaultHttpClient implements HttpClient {
 
     };
 
-    private static final Func1<Subscriber<? super Object>, ChannelHandler> HTTPCLIENT_WORK_FUNC1 = 
-            new Func1<Subscriber<? super Object>, ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Subscriber<? super Object> subscriber) {
-            return new SimpleChannelInboundHandler<HttpObject>() {
-                @Override
-                public void channelInactive(final ChannelHandlerContext ctx)
-                        throws Exception {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("channelInactive: ch({})", ctx.channel());
-                    }
-                    ctx.fireChannelInactive();
-                    subscriber.onError(new RuntimeException("peer has closed."));
-                }
-
-                @Override
-                public void exceptionCaught(final ChannelHandlerContext ctx,
-                        final Throwable cause) throws Exception {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("exceptionCaught: ch({}), detail:{}",
-                                ctx.channel(),
-                                ExceptionUtils.exception2detail(cause));
-                    }
-                    ctx.close();
-                    subscriber.onError(cause);
-                }
-
-                @Override
-                protected void channelRead0(final ChannelHandlerContext ctx,
-                        final HttpObject msg) throws Exception {
-                    subscriber.onNext(msg);
-                    if (msg instanceof LastHttpContent) {
-                        /*
-                         * netty 参考代码:
-                         * https://github.com/netty/netty/blob/netty-
-                         * 4.0.26.Final /codec/src
-                         * /main/java/io/netty/handler/codec
-                         * /ByteToMessageDecoder .java#L274
-                         * https://github.com/netty
-                         * /netty/blob/netty-4.0.26.Final /codec-http
-                         * /src/main/java
-                         * /io/netty/handler/codec/http/HttpObjectDecoder
-                         * .java#L398 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件
-                         * currentState == State.READ_VARIABLE_LENGTH_CONTENT &&
-                         * !in.isReadable() && !chunked
-                         * 即没有指定Content-Length头域，也不是CHUNKED传输模式
-                         * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
-                         * 因此，无需在channelInactive处，针对该情况做特殊处理
-                         */
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
-                                    ctx.channel(), msg);
-                        }
-                        final ChannelPool pool = ChannelPool.Util
-                                .getChannelPool(ctx.channel());
-                        if (null != pool) {
-                            pool.afterReceiveLastContent(ctx.channel());
-                        }
-                        subscriber.onCompleted();
-                    }
-                }
-            };
-        }
-    };
-        
     private static enum APPLY implements PipelineApply {
         LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
         PROGRESSIVE(Functions.fromFunc(PROGRESSIVE_FUNC2)),
@@ -665,8 +668,7 @@ public class DefaultHttpClient implements HttpClient {
         SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
         HTTPCLIENT(HTTPCLIENT_CODEC_FUNCN),
         CONTENT_DECOMPRESSOR(CONTENT_DECOMPRESSOR_FUNCN),
-        CHUNKED_WRITER(CHUNKED_WRITER_FUNCN),
-        WORKER(Functions.fromFunc(HTTPCLIENT_WORK_FUNC1)),
+        CHUNKED_WRITER(CHUNKED_WRITER_FUNCN)
         ;
         
         public static final ToOrdinal TO_ORDINAL = Nettys.ordinal(APPLY.class);
@@ -697,7 +699,6 @@ public class DefaultHttpClient implements HttpClient {
         _APPLY_BUILDER_ONEOFF.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
         _APPLY_BUILDER_ONEOFF.register(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
         _APPLY_BUILDER_ONEOFF.register(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
-        _APPLY_BUILDER_ONEOFF.register(APPLY_WORKER.class, APPLY.WORKER);
         
         _APPLY_BUILDER = new Class2ApplyBuilder();
         _APPLY_BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
