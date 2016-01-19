@@ -41,15 +41,12 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
@@ -151,7 +148,7 @@ public class DefaultHttpClient implements HttpClient {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
-                final ChannelInboundHandler handler = buildOnSubscribeHandler(subscriber);
+                final ChannelInboundHandler handler = new OnSubscribeHandler(subscriber);
                 channel.pipeline().addLast(handler);
                 
                 add4release.call(
@@ -301,68 +298,6 @@ public class DefaultHttpClient implements HttpClient {
                     }
                 }
                 ctx.fireUserEventTriggered(evt);
-            }
-        };
-    }
-    
-    private static SimpleChannelInboundHandler<HttpObject> buildOnSubscribeHandler(
-            final Subscriber<? super Object> subscriber) {
-        return new SimpleChannelInboundHandler<HttpObject>() {
-            @Override
-            public void channelInactive(final ChannelHandlerContext ctx)
-                    throws Exception {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("channelInactive: ch({})", ctx.channel());
-                }
-                ctx.fireChannelInactive();
-                subscriber.onError(new RuntimeException("peer has closed."));
-            }
-
-            @Override
-            public void exceptionCaught(final ChannelHandlerContext ctx,
-                    final Throwable cause) throws Exception {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("exceptionCaught: ch({}), detail:{}",
-                            ctx.channel(),
-                            ExceptionUtils.exception2detail(cause));
-                }
-                ctx.close();
-                subscriber.onError(cause);
-            }
-
-            @Override
-            protected void channelRead0(final ChannelHandlerContext ctx,
-                    final HttpObject msg) throws Exception {
-                subscriber.onNext(msg);
-                if (msg instanceof LastHttpContent) {
-                    /*
-                     * netty 参考代码:
-                     * https://github.com/netty/netty/blob/netty-
-                     * 4.0.26.Final /codec/src
-                     * /main/java/io/netty/handler/codec
-                     * /ByteToMessageDecoder .java#L274
-                     * https://github.com/netty
-                     * /netty/blob/netty-4.0.26.Final /codec-http
-                     * /src/main/java
-                     * /io/netty/handler/codec/http/HttpObjectDecoder
-                     * .java#L398 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件
-                     * currentState == State.READ_VARIABLE_LENGTH_CONTENT &&
-                     * !in.isReadable() && !chunked
-                     * 即没有指定Content-Length头域，也不是CHUNKED传输模式
-                     * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
-                     * 因此，无需在channelInactive处，针对该情况做特殊处理
-                     */
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("channelRead0: ch({}) recv LastHttpContent:{}",
-                                ctx.channel(), msg);
-                    }
-                    final ChannelPool pool = ChannelPool.Util
-                            .getChannelPool(ctx.channel());
-                    if (null != pool) {
-                        pool.afterReceiveLastContent(ctx.channel());
-                    }
-                    subscriber.onCompleted();
-                }
             }
         };
     }
