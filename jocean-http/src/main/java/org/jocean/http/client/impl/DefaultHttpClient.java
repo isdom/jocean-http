@@ -91,9 +91,7 @@ public class DefaultHttpClient implements HttpClient {
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
                             .doOnNext(attachSubscriberToChannel(responseSubscriber, add4release))
-                            .doOnNext(fillChannelAware(
-                                    InterfaceUtils.compositeIncludeType(ChannelAware.class, 
-                                            (Object[])applyFeatures)))
+                            .doOnNext(fillChannelAware(applyFeatures))
                             .flatMap(doTransferRequest(request, applyFeatures))
                             .flatMap(RxNettys.<ChannelFuture, Object>emitErrorOnFailure())
 //                            .doOnNext(new Action1<ChannelFuture>() {
@@ -144,25 +142,25 @@ public class DefaultHttpClient implements HttpClient {
 
     private Func1<Channel, Observable<ChannelFuture>> doTransferRequest(
             final Observable<? extends Object> request,
-            final Feature[] applyFeatures) {
+            final Feature[] features) {
+        final ApplyToRequest applyToRequest = 
+                InterfaceUtils.compositeIncludeType(
+                    ApplyToRequest.class,
+                    InterfaceUtils.compositeBySource(
+                        ApplyToRequest.class, HttpClientConstants._CLS_TO_APPLY2REQ, features),
+                    InterfaceUtils.compositeIncludeType(
+                        ApplyToRequest.class, (Object[])features));
         return new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
             public Observable<ChannelFuture> call(final Channel channel) {
-                return request.doOnNext(doApplyToRequest(applyFeatures))
+                return request.doOnNext(doApplyToRequest(applyToRequest))
                         .doOnNext(doForChannelPool(channel))
                         .map(RxNettys.<Object>sendMessage(channel));
             }
         };
     }
 
-    private Action1<Object> doApplyToRequest(final Feature[] applyFeatures) {
-        final ApplyToRequest applyToRequest = 
-                InterfaceUtils.compositeIncludeType(
-                    ApplyToRequest.class,
-                    InterfaceUtils.compositeBySource(
-                        ApplyToRequest.class, HttpClientConstants._CLS_TO_APPLY2REQ, applyFeatures),
-                    InterfaceUtils.compositeIncludeType(
-                        ApplyToRequest.class, (Object[])applyFeatures));
+    private Action1<Object> doApplyToRequest(final ApplyToRequest applyToRequest) {
         return new Action1<Object> () {
             @Override
             public void call(final Object msg) {
@@ -360,7 +358,10 @@ public class DefaultHttpClient implements HttpClient {
         return features;
     }
 
-    private Action1<Channel> fillChannelAware(final ChannelAware channelAware) {
+    private Action1<Channel> fillChannelAware(final Feature[] features) {
+        final ChannelAware channelAware = 
+            InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
+        
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
