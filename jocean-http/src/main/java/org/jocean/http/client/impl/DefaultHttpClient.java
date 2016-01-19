@@ -137,6 +137,8 @@ public class DefaultHttpClient implements HttpClient {
                     } catch (final Throwable e) {
                         responseSubscriber.onError(e);
                     }
+                } else {
+                    LOG.warn("defineInteraction: responseSubscriber {} has unsubscribe", responseSubscriber);
                 }
             }});
     }
@@ -198,6 +200,8 @@ public class DefaultHttpClient implements HttpClient {
                     add4release.call(Subscriptions.from(future));
                     future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
                     future.addListener(RxNettys.makeSuccess2NextCompletedListener(channelSubscriber));
+                } else {
+                    LOG.warn("newChannel: channelSubscriber {} has unsubscribe", channelSubscriber);
                 }
             }})
             .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
@@ -213,6 +217,8 @@ public class DefaultHttpClient implements HttpClient {
                                 add4release.call(Subscriptions.from(future));
                                 future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
                                 future.addListener(RxNettys.makeSuccess2NextCompletedListener(channelSubscriber));
+                            } else {
+                                LOG.warn("applyFeatures: channelSubscriber {} has unsubscribe", channelSubscriber);
                             }
                         }});
                 }});
@@ -224,40 +230,9 @@ public class DefaultHttpClient implements HttpClient {
                         @Override
                         public void call(final Subscriber<? super Channel> channelSubscriber) {
                             if (!channelSubscriber.isUnsubscribed()) {
-                                channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
-                                    private void removeSelf(final ChannelHandlerContext ctx) {
-                                        final ChannelPipeline pipeline = ctx.pipeline();
-                                        if (pipeline.context(this) != null) {
-                                            pipeline.remove(this);
-                                        }
-                                    }
-
-                                    @Override
-                                    public void userEventTriggered(final ChannelHandlerContext ctx,
-                                            final Object evt) throws Exception {
-                                        if (evt instanceof SslHandshakeCompletionEvent) {
-                                            removeSelf(ctx);
-                                            final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
-                                            if (sslComplete.isSuccess()) {
-                                                setChannelReady(ctx.channel());
-                                                channelSubscriber.onNext(ctx.channel());
-                                                channelSubscriber.onCompleted();
-                                                if (LOG.isDebugEnabled()) {
-                                                    LOG.debug(
-                                                            "channel({}): userEventTriggered for ssl handshake success",
-                                                            ctx.channel());
-                                                }
-                                            } else {
-                                                channelSubscriber.onError(sslComplete.cause());
-                                                LOG.warn(
-                                                        "channel({}): userEventTriggered for ssl handshake failure:{}",
-                                                        ctx.channel(), ExceptionUtils
-                                                                .exception2detail(sslComplete.cause()));
-                                            }
-                                        }
-                                        ctx.fireUserEventTriggered(evt);
-                                    }
-                                });
+                                channel.pipeline().addLast(buildSslHandshakeNotifier(channelSubscriber));
+                            } else {
+                                LOG.warn("SslHandshakeNotifier: channelSubscriber {} has unsubscribe", channelSubscriber);
                             }
                         }});
                 }});
@@ -271,6 +246,41 @@ public class DefaultHttpClient implements HttpClient {
         return channelObservable;
     }
 
+    private ChannelInboundHandlerAdapter buildSslHandshakeNotifier(
+            final Subscriber<? super Channel> channelSubscriber) {
+        return new ChannelInboundHandlerAdapter() {
+            private void removeSelf(final ChannelHandlerContext ctx) {
+                final ChannelPipeline pipeline = ctx.pipeline();
+                if (pipeline.context(this) != null) {
+                    pipeline.remove(this);
+                }
+            }
+
+            @Override
+            public void userEventTriggered(final ChannelHandlerContext ctx,
+                    final Object evt) throws Exception {
+                if (evt instanceof SslHandshakeCompletionEvent) {
+                    removeSelf(ctx);
+                    final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
+                    if (sslComplete.isSuccess()) {
+                        setChannelReady(ctx.channel());
+                        channelSubscriber.onNext(ctx.channel());
+                        channelSubscriber.onCompleted();
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("channel({}): userEventTriggered for ssl handshake success",
+                                    ctx.channel());
+                        }
+                    } else {
+                        channelSubscriber.onError(sslComplete.cause());
+                        LOG.warn("channel({}): userEventTriggered for ssl handshake failure:{}",
+                                ctx.channel(), ExceptionUtils.exception2detail(sslComplete.cause()));
+                    }
+                }
+                ctx.fireUserEventTriggered(evt);
+            }
+        };
+    }
+    
     private Feature[] cloneFeatures(final Feature[] features) {
         final Feature[] cloned = new Feature[features.length];
         for (int idx = 0; idx < cloned.length; idx++) {
