@@ -69,13 +69,15 @@ public class TestChannelCreator implements ChannelCreator {
             _closed.await(timeout, TimeUnit.SECONDS);
         }
         
-        public void assertClosed() {
+        public void assertClosed(final long timeout) throws InterruptedException {
+            awaitClosed(timeout);
             if (!this._isClosed.get()) {
                 throw new AssertionError("Channel Not Close");
             }
         }
         
-        public void assertNotClose() {
+        public void assertNotClose(final long timeout) throws InterruptedException {
+            awaitClosed(timeout);
             if (this._isClosed.get()) {
                 throw new AssertionError("Channel Closed");
             }

@@ -82,7 +82,7 @@ public class UnpoolHttpClientTestCase {
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed();
+            creator.getChannels().get(0).assertClosed(1);
             // second
             {
                 final Iterator<HttpObject> itr = 
@@ -98,7 +98,7 @@ public class UnpoolHttpClientTestCase {
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
             assertEquals(2, creator.getChannels().size());
-            creator.getChannels().get(1).assertClosed();
+            creator.getChannels().get(1).assertClosed(1);
         } finally {
             client.close();
             server.stop();
@@ -134,7 +134,7 @@ public class UnpoolHttpClientTestCase {
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed();
+            creator.getChannels().get(0).assertClosed(1);
             // second
             {
                 final Iterator<HttpObject> itr = 
@@ -150,7 +150,7 @@ public class UnpoolHttpClientTestCase {
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             }
             assertEquals(2, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed();
+            creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
             server.stop();
