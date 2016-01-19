@@ -50,7 +50,6 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
-import io.netty.util.AttributeKey;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
@@ -216,7 +215,6 @@ public class DefaultHttpClient implements HttpClient {
                 if (!channelSubscriber.isUnsubscribed()) {
                     final ChannelFuture future = _channelCreator.newChannel();
                     ChannelPool.Util.attachChannelPool(future.channel(), _channelPool);
-                    ChannelPool.Util.attachIsReady(future.channel(), IS_READY);
                     add4release.call(recycleChannelSubscription(future.channel()));
                     add4release.call(Subscriptions.from(future));
                     future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
@@ -261,7 +259,7 @@ public class DefaultHttpClient implements HttpClient {
             channelObservable = channelObservable.doOnNext(new Action1<Channel>() {
                 @Override
                 public void call(final Channel channel) {
-                    setChannelReady(channel);
+                    ChannelPool.Util.setChannelReady(channel);
                 }});
         }
         return channelObservable;
@@ -284,7 +282,7 @@ public class DefaultHttpClient implements HttpClient {
                     removeSelf(ctx);
                     final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
                     if (sslComplete.isSuccess()) {
-                        setChannelReady(ctx.channel());
+                        ChannelPool.Util.setChannelReady(ctx.channel());
                         channelSubscriber.onNext(ctx.channel());
                         channelSubscriber.onCompleted();
                         if (LOG.isDebugEnabled()) {
@@ -478,18 +476,6 @@ public class DefaultHttpClient implements HttpClient {
     private final ChannelCreator _channelCreator;
     private final Feature[] _defaultFeatures;
     
-    private static final AttributeKey<Object> READY_ATTR = AttributeKey.valueOf("__READY");
-    
-    private static final Func1<Channel,Boolean> IS_READY = new Func1<Channel,Boolean>() {
-        @Override
-        public Boolean call(final Channel channel) {
-            return null != channel.attr(READY_ATTR).get();
-        }};
-        
-    private static void setChannelReady(final Channel channel) {
-        channel.attr(READY_ATTR).set(new Object());
-    }
-        
     private static final Class2Instance<Feature, ApplyToRequest> _CLS2APPLYTOREQUEST;
     
     private static final Class2ApplyBuilder _APPLY_BUILDER_ONEOFF;

@@ -1,15 +1,13 @@
 package org.jocean.http.client.impl;
 
+import java.net.SocketAddress;
+
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
-
-import java.net.SocketAddress;
-
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
-import rx.functions.Func1;
 
 public interface ChannelPool {
     
@@ -23,7 +21,7 @@ public interface ChannelPool {
     
     public static class Util {
         private static final AttributeKey<ChannelPool> POOL_ATTR = AttributeKey.valueOf("__POOL");
-        private static final AttributeKey<Func1<Channel, Boolean>> ISREADY_ATTR = AttributeKey.valueOf("__ISREADY");
+        private static final AttributeKey<Object> READY_ATTR = AttributeKey.valueOf("__READY");
         
         public static void attachChannelPool(final Channel channel, final ChannelPool pool) {
             channel.attr(POOL_ATTR).set(pool);
@@ -33,13 +31,12 @@ public interface ChannelPool {
             return  channel.attr(POOL_ATTR).get();
         }
         
-        public static void attachIsReady(final Channel channel, final Func1<Channel, Boolean> isReady) {
-            channel.attr(ISREADY_ATTR).set(isReady);
+        public static void setChannelReady(final Channel channel) {
+            channel.attr(READY_ATTR).set(new Object());
         }
         
         public static boolean isChannelReady(final Channel channel) {
-            final Func1<Channel, Boolean> isReady = channel.attr(ISREADY_ATTR).get();
-            return  null != isReady ? isReady.call(channel) : false;
+            return null != channel.attr(READY_ATTR).get();
         }
     }
 }
