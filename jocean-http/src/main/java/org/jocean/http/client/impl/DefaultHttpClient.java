@@ -112,7 +112,7 @@ public class DefaultHttpClient implements HttpClient {
                         _channelPool.retainChannel(remoteAddress, add4release)
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
-                            .doOnNext(attachSubscriber(responseSubscriber, add4release))
+                            .doOnNext(attachSubscriberToChannel(responseSubscriber, add4release))
                             .doOnNext(fillChannelAware(
                                     InterfaceUtils.compositeIncludeType(ChannelAware.class, 
                                             (Object[])applyFeatures)))
@@ -142,7 +142,7 @@ public class DefaultHttpClient implements HttpClient {
             }});
     }
 
-    private Action1<? super Channel> attachSubscriber(
+    private Action1<? super Channel> attachSubscriberToChannel(
             final Subscriber<Object> subscriber,
             final Action1<Subscription> add4release) {
         return new Action1<Channel>() {
