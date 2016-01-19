@@ -10,7 +10,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.LastHttpContent;
 import rx.Subscriber;
 
-class OnSubscribeHandler extends SimpleChannelInboundHandler<HttpObject> {
+final class OnSubscribeHandler extends SimpleChannelInboundHandler<HttpObject> {
     private static final Logger LOG =
             LoggerFactory.getLogger(OnSubscribeHandler.class);
     

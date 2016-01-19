@@ -37,7 +37,6 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoopGroup;
@@ -48,7 +47,6 @@ import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.logging.LoggingHandler;
-import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
@@ -249,7 +247,7 @@ public class DefaultHttpClient implements HttpClient {
                         @Override
                         public void call(final Subscriber<? super Channel> channelSubscriber) {
                             if (!channelSubscriber.isUnsubscribed()) {
-                                channel.pipeline().addLast(buildSslHandshakeNotifier(channelSubscriber));
+                                channel.pipeline().addLast(new SslHandshakeNotifier(channelSubscriber));
                             } else {
                                 LOG.warn("SslHandshakeNotifier: channelSubscriber {} has unsubscribe", channelSubscriber);
                             }
@@ -265,41 +263,6 @@ public class DefaultHttpClient implements HttpClient {
         return channelObservable;
     }
 
-    private ChannelInboundHandlerAdapter buildSslHandshakeNotifier(
-            final Subscriber<? super Channel> channelSubscriber) {
-        return new ChannelInboundHandlerAdapter() {
-            private void removeSelf(final ChannelHandlerContext ctx) {
-                final ChannelPipeline pipeline = ctx.pipeline();
-                if (pipeline.context(this) != null) {
-                    pipeline.remove(this);
-                }
-            }
-
-            @Override
-            public void userEventTriggered(final ChannelHandlerContext ctx,
-                    final Object evt) throws Exception {
-                if (evt instanceof SslHandshakeCompletionEvent) {
-                    removeSelf(ctx);
-                    final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
-                    if (sslComplete.isSuccess()) {
-                        ChannelPool.Util.setChannelReady(ctx.channel());
-                        channelSubscriber.onNext(ctx.channel());
-                        channelSubscriber.onCompleted();
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("channel({}): userEventTriggered for ssl handshake success",
-                                    ctx.channel());
-                        }
-                    } else {
-                        channelSubscriber.onError(sslComplete.cause());
-                        LOG.warn("channel({}): userEventTriggered for ssl handshake failure:{}",
-                                ctx.channel(), ExceptionUtils.exception2detail(sslComplete.cause()));
-                    }
-                }
-                ctx.fireUserEventTriggered(evt);
-            }
-        };
-    }
-    
     private Feature[] cloneFeatures(final Feature[] features) {
         final Feature[] cloned = new Feature[features.length];
         for (int idx = 0; idx < cloned.length; idx++) {
