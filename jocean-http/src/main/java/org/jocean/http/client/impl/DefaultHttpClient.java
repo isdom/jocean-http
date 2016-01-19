@@ -160,7 +160,7 @@ public class DefaultHttpClient implements HttpClient {
                 InterfaceUtils.compositeIncludeType(
                     ApplyToRequest.class,
                     InterfaceUtils.compositeBySource(
-                        ApplyToRequest.class, HttpClientConstants._CLS2APPLYTOREQUEST, applyFeatures),
+                        ApplyToRequest.class, HttpClientConstants._CLS_TO_APPLY2REQ, applyFeatures),
                     InterfaceUtils.compositeIncludeType(
                         ApplyToRequest.class, (Object[])applyFeatures));
         return new Action1<Object> () {
@@ -209,8 +209,8 @@ public class DefaultHttpClient implements HttpClient {
                         @Override
                         public void call(final Subscriber<? super Channel> channelSubscriber) {
                             if (!channelSubscriber.isUnsubscribed()) {
-                                applyNononeoffFeatures(channel, features);
-                                add4release.call(applyOneoffFeatures(channel, features));
+                                applyChannelFeatures(channel, features);
+                                add4release.call(applyInteractionFeatures(channel, features));
                                 final ChannelFuture future = channel.connect(remoteAddress);
                                 add4release.call(Subscriptions.from(future));
                                 future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
@@ -382,23 +382,23 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public void call(final Channel channel) {
                 add4release.call(recycleChannelSubscription(channel));
-                add4release.call(applyOneoffFeatures(channel, features));
+                add4release.call(applyInteractionFeatures(channel, features));
             }};
     }
 
-    private static void applyNononeoffFeatures(
+    private static void applyChannelFeatures(
             final Channel channel,
             final Feature[] features) {
         InterfaceUtils.combineImpls(Feature.class, features)
-            .call(HttpClientConstants._APPLY_BUILDER, channel.pipeline());
+            .call(HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, channel.pipeline());
     }
 
-    private static Subscription applyOneoffFeatures(
+    private static Subscription applyInteractionFeatures(
             final Channel channel,
             final Feature[] features) {
         final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
         InterfaceUtils.combineImpls(Feature.class, features)
-            .call(HttpClientConstants._APPLY_BUILDER_ONEOFF, channel.pipeline());
+            .call(HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline());
         return RxNettys.removeHandlersSubscription(channel, diff.call());
     }
     

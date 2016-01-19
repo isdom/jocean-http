@@ -31,11 +31,11 @@ import rx.functions.Functions;
 final class HttpClientConstants {
     final static Feature APPLY_HTTPCLIENT = new Feature.AbstractFeature0() {};
 
-    static final Class2Instance<Feature, ApplyToRequest> _CLS2APPLYTOREQUEST;
+    static final Class2Instance<Feature, ApplyToRequest> _CLS_TO_APPLY2REQ;
     
-    static final Class2ApplyBuilder _APPLY_BUILDER_ONEOFF;
+    static final Class2ApplyBuilder _APPLY_BUILDER_PER_INTERACTION;
         
-    static final Class2ApplyBuilder _APPLY_BUILDER;
+    static final Class2ApplyBuilder _APPLY_BUILDER_PER_CHANNEL;
     
 
     private static enum APPLY implements PipelineApply {
@@ -169,19 +169,19 @@ final class HttpClientConstants {
     };
     
     static {
-        _APPLY_BUILDER_ONEOFF = new Class2ApplyBuilder();
-        _APPLY_BUILDER_ONEOFF.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
-        _APPLY_BUILDER_ONEOFF.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_DECOMPRESSOR);
-        _APPLY_BUILDER_ONEOFF.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
-        _APPLY_BUILDER_ONEOFF.register(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
-        _APPLY_BUILDER_ONEOFF.register(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
+        _APPLY_BUILDER_PER_INTERACTION = new Class2ApplyBuilder();
+        _APPLY_BUILDER_PER_INTERACTION.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
+        _APPLY_BUILDER_PER_INTERACTION.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_DECOMPRESSOR);
+        _APPLY_BUILDER_PER_INTERACTION.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
+        _APPLY_BUILDER_PER_INTERACTION.register(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
+        _APPLY_BUILDER_PER_INTERACTION.register(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
         
-        _APPLY_BUILDER = new Class2ApplyBuilder();
-        _APPLY_BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
-        _APPLY_BUILDER.register(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
+        _APPLY_BUILDER_PER_CHANNEL = new Class2ApplyBuilder();
+        _APPLY_BUILDER_PER_CHANNEL.register(Feature.ENABLE_SSL.class, APPLY.SSL);
+        _APPLY_BUILDER_PER_CHANNEL.register(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
         
-        _CLS2APPLYTOREQUEST = new Class2Instance<>();
-        _CLS2APPLYTOREQUEST.register(Feature.ENABLE_COMPRESSOR.getClass(), 
+        _CLS_TO_APPLY2REQ = new Class2Instance<>();
+        _CLS_TO_APPLY2REQ.register(Feature.ENABLE_COMPRESSOR.getClass(), 
             new ApplyToRequest() {
                 @Override
                 public void call(final HttpRequest request) {
