@@ -460,6 +460,9 @@ public class DefaultHttpClient implements HttpClient {
     }
     
     private static boolean isSSLEnabled(final Feature[] features) {
+        if (null == features) {
+            return false;
+        }
         for (Feature feature : features) {
             if (feature instanceof ENABLE_SSL) {
                 return true;
