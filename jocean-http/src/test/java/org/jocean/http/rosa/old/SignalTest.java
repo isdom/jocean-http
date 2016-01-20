@@ -15,8 +15,8 @@ import org.jocean.http.client.impl.AbstractChannelCreator;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.rosa.SignalClient.Attachment;
-import org.jocean.http.rosa.SignalClient.ProgressiveSubscriber;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
+import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
@@ -76,8 +76,7 @@ public class SignalTest {
             final QueryMyPatientsForDoctorRequest req = new QueryMyPatientsForDoctorRequest();
             req.setDoctorId("8510");
             
-            client.defineInteraction(req)
-                .compose(RxNettys.<QueryMyPatientsForDoctorResponse>filterProgress())
+            ((SignalClient)client).<QueryMyPatientsForDoctorResponse>defineInteraction(req)
                 .subscribe(new Subscriber<QueryMyPatientsForDoctorResponse>() {
     
                 @Override

@@ -20,44 +20,46 @@ import rx.Observable.Transformer;
 import rx.functions.Func0;
 import rx.functions.Func1;
 
-public class ToSignalResponse implements Transformer<Object, Object> {
+public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
     
     private static final Logger LOG =
             LoggerFactory.getLogger(ToSignalResponse.class);
     
-    private static final Func1<Object, Observable<Object>> _ON_NEXT = new Func1<Object, Observable<Object>>() {
+    private Func1<HttpObject, Observable<RESP>> buildOnNext() {
+        return new Func1<HttpObject, Observable<RESP>>() {
         @Override
-        public Observable<Object> call(final Object input) {
-            if (input instanceof HttpObject) {
-                return Observable.empty();
-            } else {
-                return Observable.just(input);
-            }
+        public Observable<RESP> call(final HttpObject input) {
+            return Observable.empty();
         }};
-    private static final Func1<Throwable, Observable<Object>> _ON_ERROR = new Func1<Throwable, Observable<Object>>() {
+    }
+    
+    private Func1<Throwable, Observable<RESP>> buildOnError() {
+        return new Func1<Throwable, Observable<RESP>>() {
         @Override
-        public Observable<Object> call(final Throwable e) {
+        public Observable<RESP> call(final Throwable e) {
             return Observable.error(e);
         }};
+    }
 
     ToSignalResponse(final Class<?> respCls) {
         this._respCls = respCls;
     }
     
     @Override
-    public Observable<Object> call(final Observable<Object> source) {
+    public Observable<RESP> call(final Observable<HttpObject> source) {
         final List<HttpObject> httpObjects = new ArrayList<>();
         
-        return source.compose(RxNettys.<Object,HttpObject>retainAtFirst(httpObjects, HttpObject.class))
-                .flatMap(_ON_NEXT, _ON_ERROR, buildOnCompleted(httpObjects) )
-                .compose(RxNettys.releaseAtLast(httpObjects));
+        return source.compose(RxNettys.<HttpObject,HttpObject>retainAtFirst(httpObjects, HttpObject.class))
+                .flatMap(buildOnNext(), buildOnError(), buildOnCompleted(httpObjects) )
+                .compose(RxNettys.<HttpObject,RESP>releaseAtLast(httpObjects));
     }
 
-    private Func0<Observable<Object>> buildOnCompleted(
+    private Func0<Observable<RESP>> buildOnCompleted(
             final List<HttpObject> httpObjects) {
-        return new Func0<Observable<Object>>() {
+        return new Func0<Observable<RESP>>() {
+            @SuppressWarnings("unchecked")
             @Override
-            public Observable<Object> call() {
+            public Observable<RESP> call() {
                 final FullHttpResponse httpResp = RxNettys.retainAsFullHttpResponse(httpObjects);
                 if (null!=httpResp) {
                     try {
@@ -71,7 +73,7 @@ public class ToSignalResponse implements Transformer<Object, Object> {
                                         new String(bytes, Charset.forName("UTF-8")));
                             }
                             final Object resp = JSON.parseObject(bytes, _respCls);
-                            return Observable.just(resp);
+                            return Observable.just((RESP)resp);
                         } finally {
                             is.close();
                         }

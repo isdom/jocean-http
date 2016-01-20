@@ -6,7 +6,6 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
-import org.jocean.http.rosa.SignalClient;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
@@ -268,25 +267,6 @@ public class RxNettys {
         
     public static Transformer<Object, HttpObject> objects2httpobjs() {
         return _OBJS2HTTPOBJS;
-    }
-    
-    private static final Func1<Object,Boolean> _PROGRESS = new Func1<Object, Boolean>() {
-        @Override
-        public Boolean call(final Object obj) {
-            return !(obj instanceof SignalClient.Progressable);
-        }};
-            
-    public static <T> Transformer<Object, T> filterProgress() {
-        return new Transformer<Object, T>() {
-            @Override
-            public Observable<T> call(final Observable<Object> objs) {
-                return objs.filter(_PROGRESS).map(new Func1<Object, T> (){
-                    @SuppressWarnings("unchecked")
-                    @Override
-                    public T call(final Object obj) {
-                        return (T)obj;
-                    }});
-            }};
     }
     
     public static <T> void releaseObjects(final Collection<T> objs) {

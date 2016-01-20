@@ -39,6 +39,7 @@ import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
@@ -64,26 +65,26 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     
     @Override
-    public Observable<? extends Object> defineInteraction(final Object request) {
+    public <RESP> Observable<? extends RESP> defineInteraction(final Object request) {
         return defineInteraction(request, Feature.EMPTY_FEATURES, new Attachment[0]);
     }
     
     @Override
-    public Observable<? extends Object> defineInteraction(final Object request, final Feature... features) {
+    public <RESP> Observable<? extends RESP> defineInteraction(final Object request, final Feature... features) {
         return defineInteraction(request, features, new Attachment[0]);
     }
 
     @Override
-    public Observable<? extends Object> defineInteraction(final Object request, final Attachment... attachments) {
+    public <RESP> Observable<? extends RESP> defineInteraction(final Object request, final Attachment... attachments) {
         return defineInteraction(request, Feature.EMPTY_FEATURES, attachments);
     }
     
     @Override
-    public Observable<? extends Object> defineInteraction(final Object request, final Feature[] features, final Attachment[] attachments) {
-        return Observable.create(new OnSubscribe<Object>() {
+    public <RESP> Observable<? extends RESP> defineInteraction(final Object request, final Feature[] features, final Attachment[] attachments) {
+        return Observable.create(new OnSubscribe<RESP>() {
 
             @Override
-            public void call(final Subscriber<? super Object> subscriber) {
+            public void call(final Subscriber<? super RESP> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final URI uri = req2uri(request);
                     
@@ -102,15 +103,15 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     final long uploadTotal = pair.second;
                     final List<Object> httpRequest = pair.first;
                     
-                    final Observable<? extends Object>  response = _httpClient.defineInteraction(
+                    final Observable<? extends HttpObject>  response = _httpClient.defineInteraction(
                             remoteAddress, 
                             Observable.from(httpRequest),
                             JOArrays.addFirst(Feature[].class, 
                                 safeGetRequestFeatures(request), 
                                 features));
                     
-                    response.compose(new ToSignalResponse(safeGetResponseClass(request)))
-                        .compose(RxNettys.releaseAtLast(httpRequest))
+                    response.compose(new ToSignalResponse<RESP>(safeGetResponseClass(request)))
+                        .compose(RxNettys.<Object,RESP>releaseAtLast(httpRequest))
                         .subscribe(subscriber);
                 }
             }

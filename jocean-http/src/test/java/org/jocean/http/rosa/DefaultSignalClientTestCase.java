@@ -127,8 +127,7 @@ public class DefaultSignalClientTestCase {
                 TO_TEST_ADDR,
                 Feature.EMPTY_FEATURES);
         final FetchMetadataResponse resp = 
-            signalClient.defineInteraction(new FetchMetadataRequest())
-            .compose(RxNettys.<FetchMetadataResponse>filterProgress())
+            ((SignalClient)signalClient).<FetchMetadataResponse>defineInteraction(new FetchMetadataRequest())
             .toBlocking().single();
         System.out.println(resp);
         assertNotNull(resp);
