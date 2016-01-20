@@ -1,12 +1,8 @@
 package org.jocean.http.client;
 
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelPipeline;
-import io.netty.handler.codec.http.HttpRequest;
-
 import org.jocean.http.Feature;
 
-import rx.Subscriber;
+import io.netty.handler.codec.http.HttpRequest;
 import rx.functions.Action1;
 
 public class Outbound {
@@ -17,9 +13,9 @@ public class Outbound {
     public interface ApplyToRequest extends Action1<HttpRequest> {
     }
     
-    public interface ResponseSubscriberAware {
-        public void setResponseSubscriber(final Subscriber<Object> subscriber);
-    }
+//    public interface ResponseSubscriberAware {
+//        public void setResponseSubscriber(final Subscriber<Object> subscriber);
+//    }
     
     public static final Feature ENABLE_MULTIPART = new Feature.AbstractFeature0() {
         @Override
@@ -28,6 +24,7 @@ public class Outbound {
         }
     };
     
+    /*
     public static final class ENABLE_PROGRESSIVE implements 
         Feature, ResponseSubscriberAware, Cloneable {
         public ENABLE_PROGRESSIVE(final long minIntervalInMs) {
@@ -56,5 +53,9 @@ public class Outbound {
         
         private final long _minIntervalInMs;
         private Subscriber<Object> _responseSubscriber = null;
+    }
+    */
+    
+    public interface InteractionMeterFeature extends Feature, InteractionMeter {
     }
 }

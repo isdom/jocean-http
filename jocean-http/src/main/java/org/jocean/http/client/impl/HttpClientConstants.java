@@ -1,30 +1,22 @@
 package org.jocean.http.client.impl;
 
 import org.jocean.http.Feature;
-import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys;
-import org.jocean.http.util.PipelineApply;
 import org.jocean.http.util.Nettys.ToOrdinal;
+import org.jocean.http.util.PipelineApply;
 import org.jocean.idiom.rx.RxFunctions;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufHolder;
-import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
-import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.stream.ChunkedWriteHandler;
-import rx.Subscriber;
-import rx.functions.Func2;
 import rx.functions.FuncN;
 import rx.functions.Functions;
 
@@ -38,9 +30,10 @@ final class HttpClientConstants {
     static final Class2ApplyBuilder _APPLY_BUILDER_PER_CHANNEL;
     
 
-    private static enum APPLY implements PipelineApply {
+    static enum APPLY implements PipelineApply {
         LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
-        PROGRESSIVE(Functions.fromFunc(PROGRESSIVE_FUNC2)),
+        INTERACTIONMETER(INTERACTIONMETER_FUNCN),
+//        PROGRESSIVE(Functions.fromFunc(PROGRESSIVE_FUNC2)),
         CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC1)),
         SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
         HTTPCLIENT(HTTPCLIENT_CODEC_FUNCN),
@@ -69,6 +62,12 @@ final class HttpClientConstants {
         private final FuncN<ChannelHandler> _factory;
     }
     
+    private static final FuncN<ChannelHandler> INTERACTIONMETER_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new InteractionMeterHandler();
+        }};
+        
     private static final FuncN<ChannelHandler> HTTPCLIENT_CODEC_FUNCN = new FuncN<ChannelHandler>() {
         @Override
         public ChannelHandler call(final Object... args) {
@@ -87,6 +86,7 @@ final class HttpClientConstants {
             return new ChunkedWriteHandler();
         }};
 
+    /*
     private static final Func2<Subscriber<Object>, Long, ChannelHandler> PROGRESSIVE_FUNC2 = 
             new Func2<Subscriber<Object>, Long, ChannelHandler>() {
         @Override
@@ -167,14 +167,16 @@ final class HttpClientConstants {
         }
 
     };
+    */
     
     static {
         _APPLY_BUILDER_PER_INTERACTION = new Class2ApplyBuilder();
         _APPLY_BUILDER_PER_INTERACTION.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
         _APPLY_BUILDER_PER_INTERACTION.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_DECOMPRESSOR);
         _APPLY_BUILDER_PER_INTERACTION.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
-        _APPLY_BUILDER_PER_INTERACTION.register(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
+//        _APPLY_BUILDER_PER_INTERACTION.register(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
         _APPLY_BUILDER_PER_INTERACTION.register(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
+        _APPLY_BUILDER_PER_INTERACTION.register(InteractionMeterProxy.class, APPLY.INTERACTIONMETER);
         
         _APPLY_BUILDER_PER_CHANNEL = new Class2ApplyBuilder();
         _APPLY_BUILDER_PER_CHANNEL.register(Feature.ENABLE_SSL.class, APPLY.SSL);

@@ -68,8 +68,8 @@ public class SignalTest {
                 AddMultiMediasToJourneyResponse.class,
 //                "http://jumpbox.medtap.cn:8888",
                 "http://127.0.0.1:9090",
-                Outbound.ENABLE_MULTIPART,
-                new Outbound.ENABLE_PROGRESSIVE(100)
+                Outbound.ENABLE_MULTIPART
+                //,new Outbound.ENABLE_PROGRESSIVE(100)
                 );
         
         {

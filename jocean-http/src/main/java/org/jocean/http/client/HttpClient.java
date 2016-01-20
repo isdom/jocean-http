@@ -75,7 +75,7 @@ public interface HttpClient extends Closeable {
      * @return Observable<Object> response: Observable of HttpObject, 
      * 推送内容为 HttpResponse + 0~N (HttpContent)
      */
-    public Observable<? extends Object> defineInteraction(
+    public Observable<? extends HttpObject> defineInteraction(
             final SocketAddress remoteAddress, 
             final Observable<? extends Object> request,
             final Feature... features);

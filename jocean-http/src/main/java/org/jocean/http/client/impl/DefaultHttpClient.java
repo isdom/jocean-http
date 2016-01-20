@@ -10,8 +10,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.InteractionMeter;
 import org.jocean.http.client.Outbound.ApplyToRequest;
-import org.jocean.http.client.Outbound.ResponseSubscriberAware;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
@@ -26,11 +26,12 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInboundHandler;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
@@ -65,14 +66,14 @@ public class DefaultHttpClient implements HttpClient {
      * eg: new SocketAddress(this._uri.getHost(), this._uri.getPort()))
      */
     @Override
-    public Observable<? extends Object> defineInteraction(
+    public Observable<? extends HttpObject> defineInteraction(
             final SocketAddress remoteAddress,
             final Observable<? extends Object> request,
             final Feature... features) {
         final Feature[] applyFeatures = cloneFeatures(features.length > 0 ? features : this._defaultFeatures);
-        return Observable.create(new OnSubscribe<Object>() {
+        return Observable.create(new OnSubscribe<HttpObject>() {
             @Override
-            public void call(final Subscriber<Object> responseSubscriber) {
+            public void call(final Subscriber<? super HttpObject> responseSubscriber) {
                 if (!responseSubscriber.isUnsubscribed()) {
                     try {
                         final AtomicReference<Subscription> subscriptionRef = new AtomicReference<Subscription>();
@@ -86,14 +87,19 @@ public class DefaultHttpClient implements HttpClient {
                                 }
                             }};
                         
-                        final Feature[] fullFeatures = buildFeatures(applyFeatures, responseSubscriber);
+                        final Feature[] fullFeatures = 
+                                JOArrays.addFirst(Feature[].class, 
+                                        applyFeatures, 
+                                        HttpClientConstants.APPLY_HTTPCLIENT);
+//                        buildFeatures(applyFeatures, responseSubscriber);
                         _channelPool.retainChannel(remoteAddress, add4release)
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
                             .doOnNext(attachSubscriberToChannel(responseSubscriber, add4release))
                             .doOnNext(fillChannelAware(applyFeatures))
+                            .doOnNext(hookInteractionMeter(applyFeatures, add4release))
                             .flatMap(doTransferRequest(request, applyFeatures))
-                            .flatMap(RxNettys.<ChannelFuture, Object>emitErrorOnFailure())
+                            .flatMap(RxNettys.<ChannelFuture, HttpObject>emitErrorOnFailure())
 //                            .doOnNext(new Action1<ChannelFuture>() {
 //                                @Override
 //                                public void call(final ChannelFuture future) {
@@ -118,13 +124,121 @@ public class DefaultHttpClient implements HttpClient {
             }});
     }
 
-    private Action1<? super Channel> attachSubscriberToChannel(
-            final Subscriber<Object> subscriber,
+    /*
+    private Feature[] buildFeatures(
+            Feature[] features,
+            final Subscriber<Object> responseSubscriber) {
+        features = JOArrays.addFirst(Feature[].class, features, HttpClientConstants.APPLY_HTTPCLIENT);
+        final ResponseSubscriberAware responseSubscriberAware = 
+                InterfaceUtils.compositeIncludeType(ResponseSubscriberAware.class, (Object[])features);
+        if (null!=responseSubscriberAware) {
+            responseSubscriberAware.setResponseSubscriber(responseSubscriber);
+        }
+        return features;
+    }
+    */
+
+    private Action1<Channel> fillChannelAware(final Feature[] features) {
+        final ChannelAware channelAware = 
+            InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
+        
+        return new Action1<Channel>() {
+            @Override
+            public void call(final Channel channel) {
+                if (null!=channelAware) {
+                    try {
+                        channelAware.setChannel(channel);
+                    } catch (Exception e) {
+                        LOG.warn("exception when invoke setChannel for channel ({}), detail: {}",
+                                channel, ExceptionUtils.exception2detail(e));
+                    }
+                }
+            }};
+    }
+
+    private Action1<? super Channel> hookInteractionMeter(
+            final Feature[] features, final Action1<Subscription> add4release) {
+        final InteractionMeterAware interactionMeterAware = 
+                InterfaceUtils.compositeIncludeType(InteractionMeterAware.class, (Object[])features);
+            
+        return new Action1<Channel>() {
+            @Override
+            public void call(final Channel channel) {
+                if (null!=interactionMeterAware) {
+                    try {
+                        interactionMeterAware.setInteractionMeter(buildInteractionMeter(channel, add4release));
+                    } catch (Exception e) {
+                        LOG.warn("exception when invoke setInteractionMeter for channel ({}), detail: {}",
+                                channel, ExceptionUtils.exception2detail(e));
+                    }
+                }
+            }};
+    }
+
+    private InteractionMeter buildInteractionMeter(final Channel channel, 
+            final Action1<Subscription> add4release) {
+        final InteractionMeterHandler handler = 
+                (InteractionMeterHandler)HttpClientConstants.APPLY.INTERACTIONMETER.applyTo(channel.pipeline());
+        
+        add4release.call(
+            Subscriptions.create(
+                new Action0() {
+                    @Override
+                    public void call() {
+                        final ChannelPipeline pipeline = channel.pipeline();
+                        if (pipeline.context(handler) != null) {
+                            pipeline.remove(handler);
+                        }
+                    }}));
+        return handler;
+    }
+
+    private Action1<Channel> prepareReuseChannel(
+            final Feature[] features,
             final Action1<Subscription> add4release) {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
-                final ChannelInboundHandler handler = new OnSubscribeHandler(subscriber);
+                add4release.call(recycleChannelSubscription(channel));
+                add4release.call(applyInteractionFeatures(channel, features));
+            }};
+    }
+
+    private static void applyChannelFeatures(
+            final Channel channel,
+            final Feature[] features) {
+        InterfaceUtils.combineImpls(Feature.class, features)
+            .call(HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, channel.pipeline());
+    }
+
+    private static Subscription applyInteractionFeatures(
+            final Channel channel,
+            final Feature[] features) {
+        final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
+        InterfaceUtils.combineImpls(Feature.class, features)
+            .call(HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline());
+        return RxNettys.removeHandlersSubscription(channel, diff.call());
+    }
+    
+    private static boolean isSSLEnabled(final Feature[] features) {
+        if (null == features) {
+            return false;
+        }
+        for (Feature feature : features) {
+            if (feature instanceof ENABLE_SSL) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Action1<? super Channel> attachSubscriberToChannel(
+            final Subscriber<? super HttpObject> responseSubscriber,
+            final Action1<Subscription> add4release) {
+        return new Action1<Channel>() {
+            @Override
+            public void call(final Channel channel) {
+                final ChannelHandler handler = new OnSubscribeHandler(responseSubscriber);
                 channel.pipeline().addLast(handler);
                 
                 add4release.call(
@@ -346,75 +460,6 @@ public class DefaultHttpClient implements HttpClient {
         this._channelCreator.close();
     }
     
-    private Feature[] buildFeatures(
-            Feature[] features,
-            final Subscriber<Object> responseSubscriber) {
-        features = JOArrays.addFirst(Feature[].class, features, HttpClientConstants.APPLY_HTTPCLIENT);
-        final ResponseSubscriberAware responseSubscriberAware = 
-                InterfaceUtils.compositeIncludeType(ResponseSubscriberAware.class, (Object[])features);
-        if (null!=responseSubscriberAware) {
-            responseSubscriberAware.setResponseSubscriber(responseSubscriber);
-        }
-        return features;
-    }
-
-    private Action1<Channel> fillChannelAware(final Feature[] features) {
-        final ChannelAware channelAware = 
-            InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
-        
-        return new Action1<Channel>() {
-            @Override
-            public void call(final Channel channel) {
-                if (null!=channelAware) {
-                    try {
-                        channelAware.setChannel(channel);
-                    } catch (Exception e) {
-                        LOG.warn("exception when invoke setChannel for channel ({}), detail: {}",
-                                channel, ExceptionUtils.exception2detail(e));
-                    }
-                }
-            }};
-    }
-
-    private Action1<Channel> prepareReuseChannel(
-            final Feature[] features,
-            final Action1<Subscription> add4release) {
-        return new Action1<Channel>() {
-            @Override
-            public void call(final Channel channel) {
-                add4release.call(recycleChannelSubscription(channel));
-                add4release.call(applyInteractionFeatures(channel, features));
-            }};
-    }
-
-    private static void applyChannelFeatures(
-            final Channel channel,
-            final Feature[] features) {
-        InterfaceUtils.combineImpls(Feature.class, features)
-            .call(HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, channel.pipeline());
-    }
-
-    private static Subscription applyInteractionFeatures(
-            final Channel channel,
-            final Feature[] features) {
-        final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
-        InterfaceUtils.combineImpls(Feature.class, features)
-            .call(HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline());
-        return RxNettys.removeHandlersSubscription(channel, diff.call());
-    }
-    
-    private static boolean isSSLEnabled(final Feature[] features) {
-        if (null == features) {
-            return false;
-        }
-        for (Feature feature : features) {
-            if (feature instanceof ENABLE_SSL) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
     private final Feature[] _defaultFeatures;
