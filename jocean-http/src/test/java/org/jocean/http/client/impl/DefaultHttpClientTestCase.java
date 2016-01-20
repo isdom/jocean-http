@@ -4,6 +4,7 @@ import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.jocean.http.Feature.ENABLE_LOGGING;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -14,6 +15,7 @@ import java.util.concurrent.CountDownLatch;
 import javax.net.ssl.SSLException;
 
 import org.jocean.http.Feature.ENABLE_SSL;
+import org.jocean.http.client.Outbound.InteractionMeterFeature;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
 import org.jocean.http.util.RxNettys;
@@ -531,7 +533,7 @@ public class DefaultHttpClientTestCase {
     }
 
     @Test
-    public void testHttpForMeter() throws Exception {
+    public void testInteractionMeterWhenHttpAndNotConnected() throws Exception {
         
         final CountDownLatch unsubscribed = new CountDownLatch(1);
         
@@ -541,16 +543,12 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
+            final InteractionMeterFeature meter = HttpClientUtil.buildInteractionMeter();
+            
             client.defineInteraction(new LocalAddress("test"), 
-                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor)
-                /*
-                , new Outbound.ENABLE_METER() {
-                    @Override
-                    public void setInteractionMeter(final InteractionMeter meter) {
-                        //  TODO 2016-01-19
-                    }
-                }
-                */)
+                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor),
+                meter
+                )
                 .compose(RxNettys.objects2httpobjs())
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
@@ -560,12 +558,44 @@ public class DefaultHttpClientTestCase {
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed(1);
+            assertEquals(0, meter.uploadBytes());
+            assertEquals(0, meter.downloadBytes());
         } finally {
             client.close();
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             nextSensor.assertNotCalled();
+        }
+    }
+    
+    @Test
+    public void testInteractionMeterWhenHttpHappyPathOnce() throws Exception {
+        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+
+        final InteractionMeterFeature meter = HttpClientUtil.buildInteractionMeter();
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
+                ENABLE_LOGGING,
+                meter);
+        try {
+            final Iterator<HttpObject> itr = 
+                client.defineInteraction(
+                    new LocalAddress("test"), 
+                    Observable.just(fullHttpRequest()))
+                .compose(RxNettys.objects2httpobjs())
+                .map(RxNettys.<HttpObject>retainer())
+                .toBlocking().toIterable().iterator();
+            
+            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
+            
+            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            assertTrue(0 < meter.uploadBytes());
+            assertTrue(0 < meter.downloadBytes());
+            LOG.debug("meter.uploadBytes: {}", meter.uploadBytes());
+            LOG.debug("meter.downloadBytes: {}", meter.downloadBytes());
+        } finally {
+            client.close();
+            server.stop();
         }
     }
     

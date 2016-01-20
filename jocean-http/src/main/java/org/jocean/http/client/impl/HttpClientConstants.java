@@ -176,7 +176,6 @@ final class HttpClientConstants {
         _APPLY_BUILDER_PER_INTERACTION.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
 //        _APPLY_BUILDER_PER_INTERACTION.register(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
         _APPLY_BUILDER_PER_INTERACTION.register(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
-        _APPLY_BUILDER_PER_INTERACTION.register(InteractionMeterProxy.class, APPLY.INTERACTIONMETER);
         
         _APPLY_BUILDER_PER_CHANNEL = new Class2ApplyBuilder();
         _APPLY_BUILDER_PER_CHANNEL.register(Feature.ENABLE_SSL.class, APPLY.SSL);
