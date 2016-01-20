@@ -94,6 +94,10 @@ public class DefaultHttpClientTestCase {
                 newHandler);
     }
     
+    private DefaultFullHttpRequest fullHttpRequest() {
+        return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+    }
+
     //  Happy Path
     @Test
     public void testHttpHappyPathOnce() throws Exception {
@@ -104,7 +108,7 @@ public class DefaultHttpClientTestCase {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
                     new LocalAddress("test"), 
-                    Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    Observable.just(fullHttpRequest()))
                 .compose(RxNettys.objects2httpobjs())
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
@@ -162,7 +166,7 @@ public class DefaultHttpClientTestCase {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
                     new LocalAddress("test"), 
-                    Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                    Observable.just(fullHttpRequest()))
                 .compose(RxNettys.objects2httpobjs())
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
@@ -191,7 +195,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -209,7 +213,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -242,7 +246,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -261,7 +265,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -280,7 +284,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -316,7 +320,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -335,7 +339,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -394,7 +398,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -449,7 +453,7 @@ public class DefaultHttpClientTestCase {
                 try {
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                     .subscribe(testSubscriber);
@@ -476,7 +480,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -507,8 +511,46 @@ public class DefaultHttpClientTestCase {
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             client.defineInteraction(new LocalAddress("test"), 
-                Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
+                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
+            .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
+            .subscribe(testSubscriber);
+            
+            unsubscribed.await();
+            
+            testSubscriber.awaitTerminalEvent();
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertClosed(1);
+        } finally {
+            client.close();
+            assertEquals(0, testSubscriber.getOnNextEvents().size());
+            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(1, testSubscriber.getOnErrorEvents().size());
+            nextSensor.assertNotCalled();
+        }
+    }
+
+    @Test
+    public void testHttpForMeter() throws Exception {
+        
+        final CountDownLatch unsubscribed = new CountDownLatch(1);
+        
+        final TestChannelCreator creator = new TestChannelCreator();
+        final DefaultHttpClient client = new DefaultHttpClient(creator, ENABLE_LOGGING);
+        //    NOT setup server for local channel
+        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
+        try {
+            client.defineInteraction(new LocalAddress("test"), 
+                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor)
+                /*
+                , new Outbound.ENABLE_METER() {
+                    @Override
+                    public void setInteractionMeter(final InteractionMeter meter) {
+                        //  TODO 2016-01-19
+                    }
+                }
+                */)
                 .compose(RxNettys.objects2httpobjs())
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
@@ -526,7 +568,7 @@ public class DefaultHttpClientTestCase {
             nextSensor.assertNotCalled();
         }
     }
-
+    
     @Test
     public void testHttpForUnsubscribedBeforeSubscribe() throws Exception {
         
@@ -541,11 +583,10 @@ public class DefaultHttpClientTestCase {
             testSubscriber.unsubscribe();
             
             client.defineInteraction(new LocalAddress("test"), 
-                Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
-                .compose(RxNettys.objects2httpobjs())
-                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-                .subscribe(testSubscriber);
+                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
+            .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
+            .subscribe(testSubscriber);
             
             unsubscribed.await();
             
@@ -571,8 +612,7 @@ public class DefaultHttpClientTestCase {
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(new LocalAddress("test"), 
-                Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
+                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -605,8 +645,7 @@ public class DefaultHttpClientTestCase {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
-                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
+                Observable.just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -646,8 +685,7 @@ public class DefaultHttpClientTestCase {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
-                Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
+                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -684,11 +722,10 @@ public class DefaultHttpClientTestCase {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
-                Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
-                .compose(RxNettys.objects2httpobjs())
-                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-                .subscribe(testSubscriber);
+                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
+            .compose(RxNettys.objects2httpobjs())
+            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
+            .subscribe(testSubscriber);
             unsubscribed.await();
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
@@ -733,8 +770,7 @@ public class DefaultHttpClientTestCase {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
-                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
+                Observable.just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -787,8 +823,7 @@ public class DefaultHttpClientTestCase {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
-                Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
+                Observable.just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -843,8 +878,7 @@ public class DefaultHttpClientTestCase {
             final Subscription subscription = 
                 client.defineInteraction(
                     new LocalAddress("test"), 
-                    Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
+                    Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
                 .compose(RxNettys.objects2httpobjs())
                 .subscribe(testSubscriber);
             
@@ -899,8 +933,7 @@ public class DefaultHttpClientTestCase {
             final Subscription subscription = 
                 client.defineInteraction(
                     new LocalAddress("test"), 
-                    Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
+                    Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
                 .compose(RxNettys.objects2httpobjs())
                 .subscribe(testSubscriber);
             
@@ -1035,7 +1068,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -1090,7 +1123,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -1123,8 +1156,7 @@ public class DefaultHttpClientTestCase {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
-                Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
+                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -1164,8 +1196,7 @@ public class DefaultHttpClientTestCase {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
                 new LocalAddress("test"), 
-                Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                .doOnNext(nextSensor))
+                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxNettys.objects2httpobjs())
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -1209,8 +1240,7 @@ public class DefaultHttpClientTestCase {
                 final CountDownLatch unsubscribed = new CountDownLatch(1);
                 client.defineInteraction(
                     new LocalAddress("test"), 
-                    Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                    .doOnNext(nextSensor))
+                    Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
                 .compose(RxNettys.objects2httpobjs())
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
@@ -1240,7 +1270,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -1276,8 +1306,7 @@ public class DefaultHttpClientTestCase {
                 final CountDownLatch unsubscribed = new CountDownLatch(1);
                 client.defineInteraction(
                     new LocalAddress("test"), 
-                    Observable.<HttpObject>just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"))
-                    .doOnNext(nextSensor))
+                    Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
                 .compose(RxNettys.objects2httpobjs())
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
@@ -1305,7 +1334,7 @@ public class DefaultHttpClientTestCase {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
+                        Observable.just(fullHttpRequest()))
                     .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
