@@ -27,7 +27,6 @@ import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -180,16 +179,7 @@ public class DefaultHttpClient implements HttpClient {
         final InteractionMeterHandler handler = 
                 (InteractionMeterHandler)HttpClientConstants.APPLY.INTERACTIONMETER.applyTo(channel.pipeline());
         
-        add4release.call(
-            Subscriptions.create(
-                new Action0() {
-                    @Override
-                    public void call() {
-                        final ChannelPipeline pipeline = channel.pipeline();
-                        if (pipeline.context(handler) != null) {
-                            pipeline.remove(handler);
-                        }
-                    }}));
+        add4release.call(RxNettys.buildHandlerReleaser(channel, handler));
         return handler;
     }
 
@@ -241,16 +231,7 @@ public class DefaultHttpClient implements HttpClient {
                 final ChannelHandler handler = new OnSubscribeHandler(responseSubscriber);
                 channel.pipeline().addLast(handler);
                 
-                add4release.call(
-                    Subscriptions.create(
-                        new Action0() {
-                            @Override
-                            public void call() {
-                                final ChannelPipeline pipeline = channel.pipeline();
-                                if (pipeline.context(handler) != null) {
-                                    pipeline.remove(handler);
-                                }
-                            }}));
+                add4release.call(RxNettys.buildHandlerReleaser(channel, handler));
             }};
     }
 
