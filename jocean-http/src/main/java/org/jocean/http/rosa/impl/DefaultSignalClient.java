@@ -11,7 +11,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 import javax.ws.rs.POST;
 
@@ -60,43 +59,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClient.class);
 
-    private static Func1<Object, Object> convertProgressable(final long uploadTotal) {
-        final AtomicLong uploadProgress = new AtomicLong(0);
-        final AtomicLong downloadProgress = new AtomicLong(0);
-        
-        return new Func1<Object,Object>() {
-            @Override
-            public Object call(final Object input) {
-                if (input instanceof HttpClient.UploadProgressable) {
-                    final long progress =
-                            uploadProgress.addAndGet(((HttpClient.UploadProgressable)input).progress());
-                    return new UploadProgressable() {
-                        @Override
-                        public long progress() {
-                            return progress;
-                        }
-                        @Override
-                        public long total() {
-                            return uploadTotal;
-                        }};
-                } else if (input instanceof HttpClient.DownloadProgressable) {
-                    final long progress = 
-                            downloadProgress.addAndGet(((HttpClient.DownloadProgressable)input).progress());
-                    return new DownloadProgressable() {
-                        @Override
-                        public long progress() {
-                            return progress;
-                        }
-                        @Override
-                        public long total() {
-                            return -1;
-                        }};
-                } else {
-                    return input;
-                }
-        }};
-    }
-    
     public DefaultSignalClient(final HttpClient httpClient) {
         this._httpClient = httpClient;
     }
@@ -136,6 +98,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                         return;
                     }
                     
+                    //  TODO
                     final long uploadTotal = pair.second;
                     final List<Object> httpRequest = pair.first;
                     
@@ -146,8 +109,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                                 safeGetRequestFeatures(request), 
                                 features));
                     
-                    response.map(convertProgressable(uploadTotal))
-                        .compose(new ToSignalResponse(safeGetResponseClass(request)))
+                    response.compose(new ToSignalResponse(safeGetResponseClass(request)))
                         .compose(RxNettys.releaseAtLast(httpRequest))
                         .subscribe(subscriber);
                 }

@@ -35,14 +35,14 @@ final class SslHandshakeNotifier extends ChannelInboundHandlerAdapter {
             final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
             if (sslComplete.isSuccess()) {
                 ChannelPool.Util.setChannelReady(ctx.channel());
-                _subscriber.onNext(ctx.channel());
-                _subscriber.onCompleted();
+                this._subscriber.onNext(ctx.channel());
+                this._subscriber.onCompleted();
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("channel({}): userEventTriggered for ssl handshake success",
                             ctx.channel());
                 }
             } else {
-                _subscriber.onError(sslComplete.cause());
+                this._subscriber.onError(sslComplete.cause());
                 LOG.warn("channel({}): userEventTriggered for ssl handshake failure:{}",
                         ctx.channel(),
                         ExceptionUtils.exception2detail(sslComplete.cause()));

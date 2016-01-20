@@ -27,7 +27,7 @@ final class OnSubscribeHandler extends SimpleChannelInboundHandler<HttpObject> {
             LOG.debug("channelInactive: ch({})", ctx.channel());
         }
         ctx.fireChannelInactive();
-        _subscriber.onError(new RuntimeException("peer has closed."));
+        this._subscriber.onError(new RuntimeException("peer has closed."));
     }
 
     @Override
@@ -38,13 +38,13 @@ final class OnSubscribeHandler extends SimpleChannelInboundHandler<HttpObject> {
                     ExceptionUtils.exception2detail(cause));
         }
         ctx.close();
-        _subscriber.onError(cause);
+        this._subscriber.onError(cause);
     }
 
     @Override
     protected void channelRead0(final ChannelHandlerContext ctx,
             final HttpObject msg) throws Exception {
-        _subscriber.onNext(msg);
+        this._subscriber.onNext(msg);
         if (msg instanceof LastHttpContent) {
             /*
              * netty 参考代码: https://github.com/netty/netty/blob/netty-
@@ -67,7 +67,7 @@ final class OnSubscribeHandler extends SimpleChannelInboundHandler<HttpObject> {
             if (null != pool) {
                 pool.afterReceiveLastContent(ctx.channel());
             }
-            _subscriber.onCompleted();
+            this._subscriber.onCompleted();
         }
     }
 }

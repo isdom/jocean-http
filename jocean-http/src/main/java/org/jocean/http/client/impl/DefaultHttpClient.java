@@ -90,7 +90,6 @@ public class DefaultHttpClient implements HttpClient {
                                 JOArrays.addFirst(Feature[].class, 
                                         applyFeatures, 
                                         HttpClientConstants.APPLY_HTTPCLIENT);
-//                        buildFeatures(applyFeatures, responseSubscriber);
                         _channelPool.retainChannel(remoteAddress, add4release)
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
@@ -122,20 +121,6 @@ public class DefaultHttpClient implements HttpClient {
                 }
             }});
     }
-
-    /*
-    private Feature[] buildFeatures(
-            Feature[] features,
-            final Subscriber<Object> responseSubscriber) {
-        features = JOArrays.addFirst(Feature[].class, features, HttpClientConstants.APPLY_HTTPCLIENT);
-        final ResponseSubscriberAware responseSubscriberAware = 
-                InterfaceUtils.compositeIncludeType(ResponseSubscriberAware.class, (Object[])features);
-        if (null!=responseSubscriberAware) {
-            responseSubscriberAware.setResponseSubscriber(responseSubscriber);
-        }
-        return features;
-    }
-    */
 
     private Action1<Channel> fillChannelAware(final Feature[] features) {
         final ChannelAware channelAware = 

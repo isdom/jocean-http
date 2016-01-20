@@ -33,7 +33,6 @@ final class HttpClientConstants {
     static enum APPLY implements PipelineApply {
         LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
         INTERACTIONMETER(INTERACTIONMETER_FUNCN),
-//        PROGRESSIVE(Functions.fromFunc(PROGRESSIVE_FUNC2)),
         CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC1)),
         SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
         HTTPCLIENT(HTTPCLIENT_CODEC_FUNCN),
@@ -85,96 +84,12 @@ final class HttpClientConstants {
         public ChannelHandler call(final Object... args) {
             return new ChunkedWriteHandler();
         }};
-
-    /*
-    private static final Func2<Subscriber<Object>, Long, ChannelHandler> PROGRESSIVE_FUNC2 = 
-            new Func2<Subscriber<Object>, Long, ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Subscriber<Object> subscriber,
-                final Long minIntervalInMs) {
-            return new ChannelDuplexHandler() {
-                long _lastTimestamp = -1;
-                long _uploadProgress = 0;
-                long _downloadProgress = 0;
-
-                private void onNext4UploadProgress(
-                        final Subscriber<Object> subscriber) {
-                    final long uploadProgress = this._uploadProgress;
-                    this._uploadProgress = 0;
-                    subscriber.onNext(new HttpClient.UploadProgressable() {
-                        @Override
-                        public long progress() {
-                            return uploadProgress;
-                        }
-                    });
-                }
-
-                private void notifyUploadProgress(final ByteBuf byteBuf) {
-                    this._uploadProgress += byteBuf.readableBytes();
-                    final long now = System.currentTimeMillis();
-                    if (this._lastTimestamp > 0
-                            && (now - this._lastTimestamp) < minIntervalInMs) {
-                        return;
-                    }
-                    this._lastTimestamp = now;
-                    onNext4UploadProgress(subscriber);
-                }
-
-                private void notifyDownloadProgress(final ByteBuf byteBuf) {
-                    if (this._uploadProgress > 0) {
-                        onNext4UploadProgress(subscriber);
-                    }
-
-                    this._downloadProgress += byteBuf.readableBytes();
-                    final long now = System.currentTimeMillis();
-                    if (this._lastTimestamp > 0
-                            && (now - this._lastTimestamp) < minIntervalInMs) {
-                        return;
-                    }
-                    this._lastTimestamp = now;
-                    final long downloadProgress = this._downloadProgress;
-                    this._downloadProgress = 0;
-                    subscriber.onNext(new HttpClient.DownloadProgressable() {
-                        @Override
-                        public long progress() {
-                            return downloadProgress;
-                        }
-                    });
-                }
-
-                @Override
-                public void channelRead(final ChannelHandlerContext ctx,
-                        final Object msg) throws Exception {
-                    if (msg instanceof ByteBuf) {
-                        notifyDownloadProgress((ByteBuf) msg);
-                    } else if (msg instanceof ByteBufHolder) {
-                        notifyDownloadProgress(((ByteBufHolder) msg).content());
-                    }
-                    ctx.fireChannelRead(msg);
-                }
-
-                @Override
-                public void write(final ChannelHandlerContext ctx, Object msg,
-                        final ChannelPromise promise) throws Exception {
-                    if (msg instanceof ByteBuf) {
-                        notifyUploadProgress((ByteBuf) msg);
-                    } else if (msg instanceof ByteBufHolder) {
-                        notifyUploadProgress(((ByteBufHolder) msg).content());
-                    }
-                    ctx.write(msg, promise);
-                }
-            };
-        }
-
-    };
-    */
     
     static {
         _APPLY_BUILDER_PER_INTERACTION = new Class2ApplyBuilder();
         _APPLY_BUILDER_PER_INTERACTION.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
         _APPLY_BUILDER_PER_INTERACTION.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_DECOMPRESSOR);
         _APPLY_BUILDER_PER_INTERACTION.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
-//        _APPLY_BUILDER_PER_INTERACTION.register(Outbound.ENABLE_PROGRESSIVE.class, APPLY.PROGRESSIVE);
         _APPLY_BUILDER_PER_INTERACTION.register(Outbound.ENABLE_MULTIPART.getClass(), APPLY.CHUNKED_WRITER);
         
         _APPLY_BUILDER_PER_CHANNEL = new Class2ApplyBuilder();
