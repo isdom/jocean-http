@@ -69,7 +69,6 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress,
             final Observable<? extends Object> request,
             final Feature... features) {
-        final Feature[] applyFeatures = cloneFeatures(features.length > 0 ? features : this._defaultFeatures);
         return Observable.create(new OnSubscribe<HttpObject>() {
             @Override
             public void call(final Subscriber<? super HttpObject> responseSubscriber) {
@@ -88,15 +87,15 @@ public class DefaultHttpClient implements HttpClient {
                         
                         final Feature[] fullFeatures = 
                                 JOArrays.addFirst(Feature[].class, 
-                                        applyFeatures, 
+                                        cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
                                         HttpClientConstants.APPLY_HTTPCLIENT);
                         _channelPool.retainChannel(remoteAddress, add4release)
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
                             .doOnNext(attachSubscriberToChannel(responseSubscriber, add4release))
-                            .doOnNext(fillChannelAware(applyFeatures))
-                            .doOnNext(hookInteractionMeter(applyFeatures, add4release))
-                            .flatMap(doTransferRequest(request, applyFeatures))
+                            .doOnNext(fillChannelAware(fullFeatures))
+                            .doOnNext(hookInteractionMeter(fullFeatures, add4release))
+                            .flatMap(doTransferRequest(request, fullFeatures))
                             .flatMap(RxNettys.<ChannelFuture, HttpObject>emitErrorOnFailure())
 //                            .doOnNext(new Action1<ChannelFuture>() {
 //                                @Override
