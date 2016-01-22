@@ -39,7 +39,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-public class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
+class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
     
     @Override
     public String toString() {
