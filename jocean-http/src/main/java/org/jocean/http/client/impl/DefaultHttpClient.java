@@ -12,7 +12,6 @@ import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.InteractionMeter;
 import org.jocean.http.client.Outbound.ApplyToRequest;
-import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
@@ -40,7 +39,6 @@ import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
@@ -78,10 +76,12 @@ public class DefaultHttpClient implements HttpClient {
                         final Action1<Subscription> add4release = new Action1<Subscription>() {
                             @Override
                             public void call(final Subscription subscription) {
-                                if ( null == subscriptionRef.get()) {
-                                    subscriptionRef.set(subscription);
-                                } else {
-                                    subscriptionRef.set(Subscriptions.from(subscriptionRef.get(), subscription));
+                                if (null != subscription) {
+                                    if ( null == subscriptionRef.get()) {
+                                        subscriptionRef.set(subscription);
+                                    } else {
+                                        subscriptionRef.set(Subscriptions.from(subscriptionRef.get(), subscription));
+                                    }
                                 }
                             }};
                         
@@ -174,7 +174,7 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public void call(final Channel channel) {
                 add4release.call(recycleChannelSubscription(channel));
-                add4release.call(applyInteractionFeatures(channel, features));
+                applyInteractionFeatures(channel, features, add4release);
             }};
     }
 
@@ -185,13 +185,15 @@ public class DefaultHttpClient implements HttpClient {
             .call(HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, channel.pipeline());
     }
 
-    private static Subscription applyInteractionFeatures(
+    private static void applyInteractionFeatures(
             final Channel channel,
-            final Feature[] features) {
-        final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
-        InterfaceUtils.combineImpls(Feature.class, features)
-            .call(HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline());
-        return RxNettys.removeHandlersSubscription(channel, diff.call());
+            final Feature[] features,
+            final Action1<Subscription> add4release) {
+        for (Feature feature : features) {
+            add4release.call(
+                RxNettys.buildHandlerReleaser(channel, 
+                    feature.call(HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline())));
+        }
     }
     
     private static boolean isSSLEnabled(final Feature[] features) {
@@ -287,7 +289,7 @@ public class DefaultHttpClient implements HttpClient {
                         public void call(final Subscriber<? super Channel> channelSubscriber) {
                             if (!channelSubscriber.isUnsubscribed()) {
                                 applyChannelFeatures(channel, features);
-                                add4release.call(applyInteractionFeatures(channel, features));
+                                applyInteractionFeatures(channel, features, add4release);
                                 final ChannelFuture future = channel.connect(remoteAddress);
                                 add4release.call(Subscriptions.from(future));
                                 future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
