@@ -20,7 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
-import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
@@ -82,8 +81,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
         for (Subscriber<? super HttpObject> subscriber : this._subscribers) {
             if (!subscriber.isUnsubscribed()) {
                 subscriber.onNext(httpObject);
-                if ( (httpObject instanceof FullHttpRequest) 
-                    || (httpObject instanceof LastHttpContent)) {
+                if (httpObject instanceof LastHttpContent) {
                     subscriber.onCompleted();
                 }
             }
