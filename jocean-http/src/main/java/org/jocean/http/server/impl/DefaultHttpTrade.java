@@ -3,6 +3,7 @@
  */
 package org.jocean.http.server.impl;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
@@ -30,7 +31,6 @@ import rx.Observer;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
-import rx.functions.Func0;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -39,6 +39,8 @@ import rx.subscriptions.Subscriptions;
  */
 class DefaultHttpTrade implements HttpServer.HttpTrade, Nettys.OnHttpObject {
     
+    private static final Subscription[] EMPTY_SUBSCRIPTIONS = new Subscription[0];
+
     @Override
     public String toString() {
         return "DefaultHttpTrade [channel=" + _channel + ", request's subscribers.size="
@@ -60,11 +62,18 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, Nettys.OnHttpObject {
         if (null!=onHttpObjectAware) {
             onHttpObjectAware.setOnHttpObject(this);
         }
-        final Func0<String[]> diff = Nettys.namesDifferenceBuilder(channel);
+        
+        final List<Subscription> subscriptions = new ArrayList<>();
         for (Feature feature : features) {
-            feature.call(builder, channel.pipeline());
+            final Subscription subscription = 
+                    RxNettys.buildHandlerReleaser(channel, feature.call(builder, channel.pipeline()));
+            if (null != subscription) {
+                subscriptions.add(subscription);
+            }
         }
-        this._removeHandlers = RxNettys.removeHandlersSubscription(channel, diff.call());
+        this._removeHandlers = Subscriptions.from(subscriptions.toArray(EMPTY_SUBSCRIPTIONS));
+        //  TODO, unsubscribe execute in eventloop?
+        // RxNettys.removeHandlersSubscription(channel, diff.call());
     }
 
     @Override
