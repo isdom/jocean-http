@@ -12,7 +12,6 @@ import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.impl.DefaultHttpServer.ChannelRecycler;
 import org.jocean.http.util.Nettys;
-import org.jocean.http.util.Nettys.OnHttpObject;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
@@ -38,7 +37,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
+class DefaultHttpTrade implements HttpServer.HttpTrade, Nettys.OnHttpObject {
     
     @Override
     public String toString() {
@@ -80,9 +79,14 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
         }
         for (Subscriber<? super HttpObject> subscriber : this._subscribers) {
             if (!subscriber.isUnsubscribed()) {
-                subscriber.onNext(httpObject);
-                if (httpObject instanceof LastHttpContent) {
-                    subscriber.onCompleted();
+                try {
+                    subscriber.onNext(httpObject);
+                    if (httpObject instanceof LastHttpContent) {
+                        subscriber.onCompleted();
+                    }
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke subscriber({}).onNext/onCompleted, detail:{}",
+                            subscriber, ExceptionUtils.exception2detail(e));
                 }
             }
         }
@@ -93,7 +97,12 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, OnHttpObject {
         LOG.warn("trade({}).onError, detail:{}",
                 this, ExceptionUtils.exception2detail(e));
         for (Subscriber<? super HttpObject> subscriber : this._subscribers) {
-            subscriber.onError(e);
+            try {
+                subscriber.onError(e);
+            } catch (Exception e1) {
+                LOG.warn("exception when invoke subscriber({}).onError, detail:{}",
+                        subscriber, ExceptionUtils.exception2detail(e1));
+            }
         }
     }
     
