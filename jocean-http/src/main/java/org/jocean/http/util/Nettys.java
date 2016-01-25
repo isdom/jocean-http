@@ -1,5 +1,16 @@
 package org.jocean.http.util;
 
+import java.net.SocketAddress;
+import java.util.Iterator;
+import java.util.Map.Entry;
+
+import org.jocean.http.client.impl.AbstractChannelPool;
+import org.jocean.http.client.impl.ChannelPool;
+import org.jocean.idiom.Ordered;
+import org.jocean.idiom.PairedVisitor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -11,20 +22,6 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.ReferenceCounted;
-
-import java.net.SocketAddress;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map.Entry;
-
-import org.jocean.http.client.impl.AbstractChannelPool;
-import org.jocean.http.client.impl.ChannelPool;
-import org.jocean.idiom.Ordered;
-import org.jocean.idiom.PairedVisitor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.functions.Func2;
 
@@ -147,17 +144,6 @@ public class Nettys {
                 else {
                     return Enum.valueOf(cls, name).ordinal();
                 }
-            }};
-    }
-    
-    public static Func0<String[]> namesDifferenceBuilder(final Channel channel) {
-        final List<String> orgs = channel.pipeline().names();
-        return new Func0<String[]>() {
-            @Override
-            public String[] call() {
-                final List<String> current = channel.pipeline().names();
-                current.removeAll(orgs);
-                return current.toArray(new String[0]);
             }};
     }
     
