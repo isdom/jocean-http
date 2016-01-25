@@ -194,6 +194,7 @@ public class RxNettys {
             }});
     }
 
+    //  TO BE removed
     public static Subscription removeHandlersSubscription(final Channel channel, final String[] names) {
         return Subscriptions.create(new Action0() {
             @Override
