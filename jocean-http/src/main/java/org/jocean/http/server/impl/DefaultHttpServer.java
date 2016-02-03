@@ -3,6 +3,25 @@
  */
 package org.jocean.http.server.impl;
 
+import java.io.IOException;
+import java.net.SocketAddress;
+
+import org.jocean.http.Feature;
+import org.jocean.http.server.HttpServer;
+import org.jocean.http.util.Class2ApplyBuilder;
+import org.jocean.http.util.Nettys;
+import org.jocean.http.util.Nettys.ServerChannelAware;
+import org.jocean.http.util.Nettys.ToOrdinal;
+import org.jocean.http.util.PipelineApply;
+import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.InterfaceUtils;
+import org.jocean.idiom.JOArrays;
+import org.jocean.idiom.Ordered;
+import org.jocean.idiom.rx.RxFunctions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -20,32 +39,13 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpServerCodec;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
-
-import java.io.IOException;
-import java.net.SocketAddress;
-
-import org.jocean.http.Feature;
-import org.jocean.http.server.HttpServer;
-import org.jocean.http.util.Class2ApplyBuilder;
-import org.jocean.http.util.Nettys;
-import org.jocean.http.util.Nettys.OnHttpObject;
-import org.jocean.http.util.Nettys.ServerChannelAware;
-import org.jocean.http.util.Nettys.ToOrdinal;
-import org.jocean.http.util.PipelineApply;
-import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.InterfaceUtils;
-import org.jocean.idiom.JOArrays;
-import org.jocean.idiom.Ordered;
-import org.jocean.idiom.rx.RxFunctions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import rx.Observable;
 import rx.Observable.OnSubscribe;
+import rx.Observer;
 import rx.Subscriber;
 import rx.functions.Func0;
 import rx.functions.Func1;
@@ -250,10 +250,10 @@ public class DefaultHttpServer implements HttpServer {
         }
     };
             
-    public static final Func1<OnHttpObject, ChannelHandler> HTTPSERVER_WORK_FUNC1 = 
-            new Func1<OnHttpObject, ChannelHandler>() {
+    public static final Func1<Observer<HttpObject>, ChannelHandler> HTTPSERVER_WORK_FUNC1 = 
+            new Func1<Observer<HttpObject>, ChannelHandler>() {
         @Override
-        public ChannelHandler call(final OnHttpObject onHttpObject) {
+        public ChannelHandler call(final Observer<HttpObject> httpObjectObserver) {
             return new SimpleChannelInboundHandler<HttpObject>() {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx,
@@ -261,8 +261,8 @@ public class DefaultHttpServer implements HttpServer {
                     LOG.warn("exceptionCaught at channel({})/handler({}), detail:{}, and call onHttpObject({}).onError with TransportException.", 
                             ctx.channel(), this,
                             ExceptionUtils.exception2detail(cause), 
-                            onHttpObject);
-                    onHttpObject.onError(new TransportException("exceptionCaught", cause));
+                            httpObjectObserver);
+                    httpObjectObserver.onError(new TransportException("exceptionCaught", cause));
                     ctx.close();
                 }
 
@@ -276,9 +276,9 @@ public class DefaultHttpServer implements HttpServer {
                         throws Exception {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("channel({})/handler({}): channelInactive and call onHttpObject({}).onError with TransportException.", 
-                                ctx.channel(), this, onHttpObject);
+                                ctx.channel(), this, httpObjectObserver);
                     }
-                    onHttpObject.onError(new TransportException("channelInactive"));
+                    httpObjectObserver.onError(new TransportException("channelInactive"));
                 }
 
                 @Override
@@ -286,9 +286,15 @@ public class DefaultHttpServer implements HttpServer {
                         final HttpObject msg) throws Exception {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("channel({})/handler({}): channelRead0 and call onHttpObject({}).onHttpObject with msg({}).", 
-                                ctx.channel(), this, onHttpObject, msg);
+                                ctx.channel(), this, httpObjectObserver, msg);
                     }
-                    onHttpObject.onHttpObject(msg);
+                    //  TODO, try ... catch
+                    httpObjectObserver.onNext(msg);
+                    
+                    if (msg instanceof LastHttpContent) {
+                        //  TODO, try ... catch
+                        httpObjectObserver.onCompleted();
+                    }
                 }
 
                 // @Override
@@ -332,20 +338,20 @@ public class DefaultHttpServer implements HttpServer {
     private final static Feature APPLY_HTTPSERVER = new Feature.AbstractFeature0() {};
 
     private static final class APPLY_WORKER 
-        implements Feature, OnHttpObjectAware {
+        implements Feature, HttpObjectObserverAware {
 
         @Override
         public ChannelHandler call(final HandlerBuilder builder,
                 final ChannelPipeline pipeline) {
-            return APPLY.WORKER.applyTo(pipeline, this._onHttpObject);
+            return APPLY.WORKER.applyTo(pipeline, this._httpObjectObserver);
         }
 
         @Override
-        public void setOnHttpObject(final OnHttpObject onHttpObject) {
-            this._onHttpObject = onHttpObject;
+        public void setHttpObjectObserver(final Observer<HttpObject> httpObjectObserver) {
+            this._httpObjectObserver = httpObjectObserver;
         }
         
-        private OnHttpObject _onHttpObject;
+        private Observer<HttpObject> _httpObjectObserver;
     }
     
     static {

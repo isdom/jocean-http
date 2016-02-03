@@ -37,14 +37,14 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpTrade implements HttpServer.HttpTrade, Nettys.OnHttpObject {
+class DefaultHttpTrade implements HttpServer.HttpTrade, Observer<HttpObject> {
     
     private static final Subscription[] EMPTY_SUBSCRIPTIONS = new Subscription[0];
 
     @Override
     public String toString() {
         return "DefaultHttpTrade [channel=" + _channel + ", request's subscribers.size="
-                + _subscribers.size() + ", isKeepAlive=" + _isKeepAlive + "]";
+                + _requestSubscribers.size() + ", isKeepAlive=" + _isKeepAlive + "]";
     }
 
     private static final Logger LOG =
@@ -57,10 +57,10 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, Nettys.OnHttpObject {
             final Feature... features) {
         this._channelRecycler = channelRecycler;
         this._channel = channel;
-        final OnHttpObjectAware onHttpObjectAware = 
-                InterfaceUtils.compositeIncludeType(OnHttpObjectAware.class, (Object[])features);
+        final HttpObjectObserverAware onHttpObjectAware = 
+                InterfaceUtils.compositeIncludeType(HttpObjectObserverAware.class, (Object[])features);
         if (null!=onHttpObjectAware) {
-            onHttpObjectAware.setOnHttpObject(this);
+            onHttpObjectAware.setHttpObjectObserver(this);
         }
         
         final List<Subscription> subscriptions = new ArrayList<>();
@@ -81,6 +81,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, Nettys.OnHttpObject {
         return this._channel;
     }
     
+    /*
     @Override
     public void onHttpObject(final HttpObject httpObject) {
         if (httpObject instanceof HttpRequest) {
@@ -100,14 +101,55 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, Nettys.OnHttpObject {
             }
         }
     }
+    */
 
+    @Override
+    public void onCompleted() {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("trade({}).onCompleted", this);
+        }
+        for (Subscriber<? super HttpObject> subscriber : this._requestSubscribers) {
+            try {
+                if (!subscriber.isUnsubscribed()) {
+                    subscriber.onCompleted();
+                }
+            } catch (Exception e) {
+                LOG.warn("exception when invoke subscriber({}).onCompleted, detail:{}",
+                        subscriber, ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+
+    @Override
+    public void onNext(final HttpObject httpObject) {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("trade({}).onNext, httpobj:{}",
+                    this, httpObject);
+        }
+        if (httpObject instanceof HttpRequest) {
+            this._isKeepAlive = HttpHeaders.isKeepAlive((HttpRequest)httpObject);
+        }
+        for (Subscriber<? super HttpObject> subscriber : this._requestSubscribers) {
+            try {
+                if (!subscriber.isUnsubscribed()) {
+                    subscriber.onNext(httpObject);
+                }
+            } catch (Exception e) {
+                LOG.warn("exception when invoke subscriber({}).onNext, detail:{}",
+                        subscriber, ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+    
     @Override
     public void onError(final Throwable e) {
         LOG.warn("trade({}).onError, detail:{}",
                 this, ExceptionUtils.exception2detail(e));
-        for (Subscriber<? super HttpObject> subscriber : this._subscribers) {
+        for (Subscriber<? super HttpObject> subscriber : this._requestSubscribers) {
             try {
-                subscriber.onError(e);
+                if (!subscriber.isUnsubscribed()) {
+                    subscriber.onError(e);
+                }
             } catch (Exception e1) {
                 LOG.warn("exception when invoke subscriber({}).onError, detail:{}",
                         subscriber, ExceptionUtils.exception2detail(e1));
@@ -151,8 +193,9 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, Nettys.OnHttpObject {
             }};
     }
     
+    //  TODO: dont't usin channel direct, wrap it and recycler
     private final Channel _channel;
-    private final List<Subscriber<? super HttpObject>> _subscribers = new CopyOnWriteArrayList<>();
+    private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
     private volatile boolean _isKeepAlive = false;
     private final ChannelRecycler _channelRecycler;
     private final Subscription _removeHandlers;
@@ -161,11 +204,11 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, Nettys.OnHttpObject {
         @Override
         public void call(final Subscriber<? super HttpObject> subscriber) {
             if (!subscriber.isUnsubscribed()) {
-                _subscribers.add(subscriber);
+                _requestSubscribers.add(subscriber);
                 subscriber.add(Subscriptions.create(new Action0() {
                     @Override
                     public void call() {
-                        _subscribers.remove(subscriber);
+                        _requestSubscribers.remove(subscriber);
                     }}));
             }
         }
