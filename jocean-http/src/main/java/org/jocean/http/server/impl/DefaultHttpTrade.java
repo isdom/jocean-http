@@ -35,7 +35,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpTrade implements HttpServer.HttpTrade, Observer<HttpObject> {
+class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     private static final Subscription[] EMPTY_SUBSCRIPTIONS = new Subscription[0];
 
@@ -58,7 +58,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, Observer<HttpObject> {
         final HttpObjectObserverAware onHttpObjectAware = 
                 InterfaceUtils.compositeIncludeType(HttpObjectObserverAware.class, (Object[])features);
         if (null!=onHttpObjectAware) {
-            onHttpObjectAware.setHttpObjectObserver(this);
+            onHttpObjectAware.setHttpObjectObserver(this._httpObjectObserver);
         }
         
         final List<Subscription> subscriptions = new ArrayList<>();
@@ -77,82 +77,6 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, Observer<HttpObject> {
     @Override
     public Object transport() {
         return this._channel;
-    }
-    
-    /*
-    @Override
-    public void onHttpObject(final HttpObject httpObject) {
-        if (httpObject instanceof HttpRequest) {
-            this._isKeepAlive = HttpHeaders.isKeepAlive((HttpRequest)httpObject);
-        }
-        for (Subscriber<? super HttpObject> subscriber : this._subscribers) {
-            if (!subscriber.isUnsubscribed()) {
-                try {
-                    subscriber.onNext(httpObject);
-                    if (httpObject instanceof LastHttpContent) {
-                        subscriber.onCompleted();
-                    }
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke subscriber({}).onNext/onCompleted, detail:{}",
-                            subscriber, ExceptionUtils.exception2detail(e));
-                }
-            }
-        }
-    }
-    */
-
-    @Override
-    public void onCompleted() {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("trade({}).onCompleted", this);
-        }
-        for (Subscriber<? super HttpObject> subscriber : this._requestSubscribers) {
-            try {
-                if (!subscriber.isUnsubscribed()) {
-                    subscriber.onCompleted();
-                }
-            } catch (Exception e) {
-                LOG.warn("exception when invoke subscriber({}).onCompleted, detail:{}",
-                        subscriber, ExceptionUtils.exception2detail(e));
-            }
-        }
-    }
-
-    @Override
-    public void onNext(final HttpObject httpObject) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("trade({}).onNext, httpobj:{}",
-                    this, httpObject);
-        }
-        if (httpObject instanceof HttpRequest) {
-            this._isKeepAlive = HttpHeaders.isKeepAlive((HttpRequest)httpObject);
-        }
-        for (Subscriber<? super HttpObject> subscriber : this._requestSubscribers) {
-            try {
-                if (!subscriber.isUnsubscribed()) {
-                    subscriber.onNext(httpObject);
-                }
-            } catch (Exception e) {
-                LOG.warn("exception when invoke subscriber({}).onNext, detail:{}",
-                        subscriber, ExceptionUtils.exception2detail(e));
-            }
-        }
-    }
-    
-    @Override
-    public void onError(final Throwable e) {
-        LOG.warn("trade({}).onError, detail:{}",
-                this, ExceptionUtils.exception2detail(e));
-        for (Subscriber<? super HttpObject> subscriber : this._requestSubscribers) {
-            try {
-                if (!subscriber.isUnsubscribed()) {
-                    subscriber.onError(e);
-                }
-            } catch (Exception e1) {
-                LOG.warn("exception when invoke subscriber({}).onError, detail:{}",
-                        subscriber, ExceptionUtils.exception2detail(e1));
-            }
-        }
     }
     
     @Override
@@ -211,4 +135,60 @@ class DefaultHttpTrade implements HttpServer.HttpTrade, Observer<HttpObject> {
             }
         }
     };
+    
+    private final Observer<HttpObject> _httpObjectObserver = new Observer<HttpObject>() {
+
+        @Override
+        public void onCompleted() {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("trade({}).onCompleted", this);
+            }
+            for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
+                try {
+                    if (!subscriber.isUnsubscribed()) {
+                        subscriber.onCompleted();
+                    }
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke subscriber({}).onCompleted, detail:{}",
+                            subscriber, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }
+
+        @Override
+        public void onNext(final HttpObject httpObject) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("trade({}).onNext, httpobj:{}",
+                        this, httpObject);
+            }
+            if (httpObject instanceof HttpRequest) {
+                _isKeepAlive = HttpHeaders.isKeepAlive((HttpRequest)httpObject);
+            }
+            for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
+                try {
+                    if (!subscriber.isUnsubscribed()) {
+                        subscriber.onNext(httpObject);
+                    }
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke subscriber({}).onNext, detail:{}",
+                            subscriber, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }
+        
+        @Override
+        public void onError(final Throwable e) {
+            LOG.warn("trade({}).onError, detail:{}",
+                    this, ExceptionUtils.exception2detail(e));
+            for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
+                try {
+                    if (!subscriber.isUnsubscribed()) {
+                        subscriber.onError(e);
+                    }
+                } catch (Exception e1) {
+                    LOG.warn("exception when invoke subscriber({}).onError, detail:{}",
+                            subscriber, ExceptionUtils.exception2detail(e1));
+                }
+            }
+        }};
 }
