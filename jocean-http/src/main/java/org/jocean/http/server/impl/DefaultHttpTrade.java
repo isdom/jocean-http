@@ -11,18 +11,15 @@ import java.util.concurrent.Executor;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.server.HttpServer;
-import org.jocean.http.server.impl.DefaultHttpServer.ChannelRecycler;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
@@ -41,7 +38,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
 
     @Override
     public String toString() {
-        return "DefaultHttpTrade [channel=" + _channel + ", request's subscribers.size="
+        return "DefaultHttpTrade [transport=" + _transport + ", request's subscribers.size="
                 + _requestSubscribers.size() + ", isKeepAlive=" + _isKeepAlive + "]";
     }
 
@@ -49,12 +46,16 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
     public DefaultHttpTrade(
-            final Channel channel, 
-            final ChannelRecycler channelRecycler,
+            final OutputChannel output, 
+            final Object    transport,
+            final Executor  requestExecutor,
             final HandlerBuilder builder,
             final Feature... features) {
-        this._channelRecycler = channelRecycler;
-        this._channel = channel;
+        this._output = output;
+        this._transport = transport;
+        this._requestExecutor = requestExecutor;
+//        this._channelRecycler = channelRecycler;
+//        this._channel = channel;
         final HttpObjectObserverAware onHttpObjectAware = 
                 InterfaceUtils.compositeIncludeType(HttpObjectObserverAware.class, (Object[])features);
         if (null!=onHttpObjectAware) {
@@ -64,7 +65,8 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         final List<Subscription> subscriptions = new ArrayList<>();
         for (Feature feature : features) {
             final Subscription subscription = 
-                    RxNettys.buildHandlerReleaser(channel, feature.call(builder, channel.pipeline()));
+                    RxNettys.buildHandlerReleaser(this._output.channel(), 
+                            feature.call(builder, this._output.channel().pipeline()));
             if (null != subscription) {
                 subscriptions.add(subscription);
             }
@@ -76,7 +78,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
 
     @Override
     public Object transport() {
-        return this._channel;
+        return this._transport;
     }
     
     @Override
@@ -86,7 +88,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
 
     @Override
     public Executor requestExecutor() {
-        return this._channel.eventLoop();
+        return this._requestExecutor;
     }
     
     @Override
@@ -95,11 +97,14 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     }
     
     //  TODO: dont't usin channel direct, wrap it and recycler
-    private final Channel _channel;
+//    private final Channel _channel;
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
     private volatile boolean _isKeepAlive = false;
-    private final ChannelRecycler _channelRecycler;
+//    private final ChannelRecycler _channelRecycler;
     private final Subscription _removeHandlers;
+    private final Executor _requestExecutor;
+    private final Object   _transport;
+    private final OutputChannel _output;
     
     private final OnSubscribe<HttpObject> _onSubscribeRequest = new OnSubscribe<HttpObject>() {
         @Override
@@ -120,7 +125,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         @Override
         public void onCompleted() {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("trade({}).onCompleted", this);
+                LOG.debug("trade({}) requestObserver.onCompleted", this);
             }
             for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
                 try {
@@ -137,7 +142,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         @Override
         public void onNext(final HttpObject httpObject) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("trade({}).onNext, httpobj:{}",
+                LOG.debug("trade({}) requestObserver.onNext, httpobj:{}",
                         this, httpObject);
             }
             if (httpObject instanceof HttpRequest) {
@@ -157,7 +162,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         
         @Override
         public void onError(final Throwable e) {
-            LOG.warn("trade({}).onError, detail:{}",
+            LOG.warn("trade({}) requestObserver.onError, detail:{}",
                     this, ExceptionUtils.exception2detail(e));
             for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
                 try {
@@ -176,7 +181,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         @Override
         public void onCompleted() {
             _removeHandlers.unsubscribe();
-            _channelRecycler.onResponseCompleted(_channel, _isKeepAlive);
+            _output.onResponseCompleted(_isKeepAlive);
         }
 
         @Override
@@ -184,12 +189,13 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
             LOG.warn("trade({})'s responseObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             _removeHandlers.unsubscribe();
-            _channelRecycler.onResponseCompleted(_channel, _isKeepAlive);
+            _output.onResponseCompleted(_isKeepAlive);
         }
 
         @Override
         public void onNext(final HttpObject msg) {
-            _channel.write(ReferenceCountUtil.retain(msg));
+            _output.output(msg);
+//            _channel.write(ReferenceCountUtil.retain(msg));
             //  TODO check write future's isSuccess
         }};
 }

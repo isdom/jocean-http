@@ -41,6 +41,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.logging.LoggingHandler;
+import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
@@ -133,10 +134,30 @@ public class DefaultHttpServer implements HttpServer {
     private DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        return new DefaultHttpTrade(channel, 
-                createChannelRecycler(subscriber),
+        return new DefaultHttpTrade(
+                outputChannel(channel, subscriber),
+                channel,
+                channel.eventLoop(),
                 _APPLY_BUILDER, 
                 new APPLY_WORKER());
+    }
+
+    private OutputChannel outputChannel(final Channel channel,
+            final Subscriber<? super HttpTrade> subscriber) {
+        final ChannelRecycler recycler = createChannelRecycler(subscriber);
+        return new OutputChannel() {
+            @Override
+            public void output(final Object msg) {
+                channel.write(ReferenceCountUtil.retain(msg));
+            }
+            @Override
+            public void onResponseCompleted(final boolean isKeepAlive) {
+                recycler.onResponseCompleted(channel, isKeepAlive);
+            }
+            @Override
+            public Channel channel() {
+                return channel;
+            }};
     }
 
     private ChannelRecycler createChannelRecycler(final Subscriber<? super HttpTrade> subscriber) {
