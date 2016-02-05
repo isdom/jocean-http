@@ -58,7 +58,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         final HttpObjectObserverAware onHttpObjectAware = 
                 InterfaceUtils.compositeIncludeType(HttpObjectObserverAware.class, (Object[])features);
         if (null!=onHttpObjectAware) {
-            onHttpObjectAware.setHttpObjectObserver(this._httpObjectObserver);
+            onHttpObjectAware.setHttpObjectObserver(this._requestObserver);
         }
         
         final List<Subscription> subscriptions = new ArrayList<>();
@@ -91,28 +91,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     @Override
     public Observer<HttpObject> responseObserver() {
-        
-        return new Subscriber<HttpObject>() {
-
-            @Override
-            public void onCompleted() {
-                _removeHandlers.unsubscribe();
-                _channelRecycler.onResponseCompleted(_channel, _isKeepAlive);
-            }
-
-            @Override
-            public void onError(final Throwable e) {
-                LOG.warn("trade({})'s responseObserver.onError, detail:{}",
-                        DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-                _removeHandlers.unsubscribe();
-                _channelRecycler.onResponseCompleted(_channel, _isKeepAlive);
-            }
-
-            @Override
-            public void onNext(final HttpObject msg) {
-                _channel.write(ReferenceCountUtil.retain(msg));
-                //  TODO check write future's isSuccess
-            }};
+        return _responseObserver;
     }
     
     //  TODO: dont't usin channel direct, wrap it and recycler
@@ -136,7 +115,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         }
     };
     
-    private final Observer<HttpObject> _httpObjectObserver = new Observer<HttpObject>() {
+    private final Observer<HttpObject> _requestObserver = new Observer<HttpObject>() {
 
         @Override
         public void onCompleted() {
@@ -190,5 +169,27 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
                             subscriber, ExceptionUtils.exception2detail(e1));
                 }
             }
+        }};
+        
+    final Subscriber<HttpObject> _responseObserver = new Subscriber<HttpObject>() {
+
+        @Override
+        public void onCompleted() {
+            _removeHandlers.unsubscribe();
+            _channelRecycler.onResponseCompleted(_channel, _isKeepAlive);
+        }
+
+        @Override
+        public void onError(final Throwable e) {
+            LOG.warn("trade({})'s responseObserver.onError, detail:{}",
+                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
+            _removeHandlers.unsubscribe();
+            _channelRecycler.onResponseCompleted(_channel, _isKeepAlive);
+        }
+
+        @Override
+        public void onNext(final HttpObject msg) {
+            _channel.write(ReferenceCountUtil.retain(msg));
+            //  TODO check write future's isSuccess
         }};
 }
