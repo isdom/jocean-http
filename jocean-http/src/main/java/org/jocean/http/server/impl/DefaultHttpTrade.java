@@ -201,7 +201,6 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
                 LOG.warn("exception when ({}).output message({}), detail:{}",
                         _output, msg, ExceptionUtils.exception2detail(e));
             }
-//            _channel.write(ReferenceCountUtil.retain(msg));
             //  TODO check write future's isSuccess
         }};
 }
