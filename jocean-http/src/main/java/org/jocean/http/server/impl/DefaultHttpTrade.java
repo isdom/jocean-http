@@ -54,8 +54,6 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         this._output = output;
         this._transport = transport;
         this._requestExecutor = requestExecutor;
-//        this._channelRecycler = channelRecycler;
-//        this._channel = channel;
         final HttpObjectObserverAware onHttpObjectAware = 
                 InterfaceUtils.compositeIncludeType(HttpObjectObserverAware.class, (Object[])features);
         if (null!=onHttpObjectAware) {
@@ -97,10 +95,8 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     }
     
     //  TODO: dont't usin channel direct, wrap it and recycler
-//    private final Channel _channel;
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
     private volatile boolean _isKeepAlive = false;
-//    private final ChannelRecycler _channelRecycler;
     private final Subscription _removeHandlers;
     private final Executor _requestExecutor;
     private final Object   _transport;
@@ -189,12 +185,22 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
             LOG.warn("trade({})'s responseObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             _removeHandlers.unsubscribe();
-            _output.onResponseCompleted(_isKeepAlive);
+            try {
+                _output.onResponseCompleted(_isKeepAlive);
+            } catch (Exception e1) {
+                LOG.warn("exception when ({}).onResponseCompleted with keepAlive({}), detail:{}",
+                        _output, _isKeepAlive, ExceptionUtils.exception2detail(e1));
+            }
         }
 
         @Override
         public void onNext(final HttpObject msg) {
-            _output.output(msg);
+            try {
+                _output.output(msg);
+            } catch (Exception e) {
+                LOG.warn("exception when ({}).output message({}), detail:{}",
+                        _output, msg, ExceptionUtils.exception2detail(e));
+            }
 //            _channel.write(ReferenceCountUtil.retain(msg));
             //  TODO check write future's isSuccess
         }};
