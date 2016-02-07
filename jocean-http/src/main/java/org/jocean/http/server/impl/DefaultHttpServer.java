@@ -48,6 +48,7 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Subscriber;
+import rx.Subscription;
 import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.functions.FuncN;
@@ -134,12 +135,20 @@ public class DefaultHttpServer implements HttpServer {
     private DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        return new DefaultHttpTrade(
+        final DefaultHttpTrade trade = new DefaultHttpTrade(
                 outputChannel(channel, subscriber),
                 channel,
-                channel.eventLoop(),
-                _APPLY_BUILDER, 
-                new APPLY_WORKER());
+                channel.eventLoop());
+        final APPLY_WORKER worker = new APPLY_WORKER();
+        worker.setHttpObjectObserver(trade.requestObserver());
+        
+        final Subscription subscription = 
+                RxNettys.buildHandlerReleaser(channel, 
+                        worker.call(_APPLY_BUILDER, channel.pipeline()));
+        trade.setReleaser(subscription);
+        //  TODO, unsubscribe execute in eventloop?
+        // RxNettys.removeHandlersSubscription(channel, diff.call());
+        return trade;
     }
 
     private OutputChannel outputChannel(final Channel channel,
@@ -153,10 +162,6 @@ public class DefaultHttpServer implements HttpServer {
             @Override
             public void onResponseCompleted(final boolean isKeepAlive) {
                 recycler.onResponseCompleted(channel, isKeepAlive);
-            }
-            @Override
-            public Channel channel() {
-                return channel;
             }};
     }
 

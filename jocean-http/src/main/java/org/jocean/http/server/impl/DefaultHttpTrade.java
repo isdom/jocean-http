@@ -3,17 +3,12 @@
  */
 package org.jocean.http.server.impl;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 
-import org.jocean.http.Feature;
-import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.server.HttpServer;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.InterfaceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +29,7 @@ import rx.subscriptions.Subscriptions;
  */
 class DefaultHttpTrade implements HttpServer.HttpTrade {
     
-    private static final Subscription[] EMPTY_SUBSCRIPTIONS = new Subscription[0];
+//    private static final Subscription[] EMPTY_SUBSCRIPTIONS = new Subscription[0];
 
     @Override
     public String toString() {
@@ -48,32 +43,20 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     public DefaultHttpTrade(
             final OutputChannel output, 
             final Object    transport,
-            final Executor  requestExecutor,
-            final HandlerBuilder builder,
-            final Feature... features) {
+            final Executor  requestExecutor) {
         this._output = output;
         this._transport = transport;
         this._requestExecutor = requestExecutor;
-        final HttpObjectObserverAware onHttpObjectAware = 
-                InterfaceUtils.compositeIncludeType(HttpObjectObserverAware.class, (Object[])features);
-        if (null!=onHttpObjectAware) {
-            onHttpObjectAware.setHttpObjectObserver(this._requestObserver);
-        }
-        
-        final List<Subscription> subscriptions = new ArrayList<>();
-        for (Feature feature : features) {
-            final Subscription subscription = 
-                    RxNettys.buildHandlerReleaser(this._output.channel(), 
-                            feature.call(builder, this._output.channel().pipeline()));
-            if (null != subscription) {
-                subscriptions.add(subscription);
-            }
-        }
-        this._removeHandlers = Subscriptions.from(subscriptions.toArray(EMPTY_SUBSCRIPTIONS));
-        //  TODO, unsubscribe execute in eventloop?
-        // RxNettys.removeHandlersSubscription(channel, diff.call());
     }
 
+    Observer<HttpObject> requestObserver() {
+        return this._requestObserver;
+    }
+    
+    void setReleaser(final Subscription subscription) {
+        this._removeHandlers = subscription;
+    }
+    
     @Override
     public Object transport() {
         return this._transport;
@@ -91,13 +74,13 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     @Override
     public Observer<HttpObject> responseObserver() {
-        return _responseObserver;
+        return this._responseObserver;
     }
     
     //  TODO: dont't usin channel direct, wrap it and recycler
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
     private volatile boolean _isKeepAlive = false;
-    private final Subscription _removeHandlers;
+    private Subscription _removeHandlers;
     private final Executor _requestExecutor;
     private final Object   _transport;
     private final OutputChannel _output;
