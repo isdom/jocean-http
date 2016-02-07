@@ -68,10 +68,6 @@ public class DefaultHttpServer implements HttpServer {
         }
     }
     
-    interface ChannelRecycler {
-        public void onResponseCompleted(final Channel channel, final boolean isKeepAlive);
-    }
-    
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpServer.class);
     
@@ -153,7 +149,6 @@ public class DefaultHttpServer implements HttpServer {
 
     private OutputChannel outputChannel(final Channel channel,
             final Subscriber<? super HttpTrade> subscriber) {
-        final ChannelRecycler recycler = createChannelRecycler(subscriber);
         return new OutputChannel() {
             @Override
             public void output(final Object msg) {
@@ -161,15 +156,6 @@ public class DefaultHttpServer implements HttpServer {
             }
             @Override
             public void onResponseCompleted(final boolean isKeepAlive) {
-                recycler.onResponseCompleted(channel, isKeepAlive);
-            }};
-    }
-
-    private ChannelRecycler createChannelRecycler(final Subscriber<? super HttpTrade> subscriber) {
-        return new ChannelRecycler() {
-            @Override
-            public void onResponseCompleted(
-                    final Channel channel, final boolean isKeepAlive) {
                 //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
                 //  Detail:
                 //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
