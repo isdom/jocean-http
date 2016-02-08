@@ -5,6 +5,7 @@ package org.jocean.http.server.impl;
 
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.Feature;
 import org.jocean.http.server.HttpServer;
@@ -149,34 +150,45 @@ public class DefaultHttpServer implements HttpServer {
 
     private OutputChannel outputChannel(final Channel channel,
             final Subscriber<? super HttpTrade> subscriber) {
+        final AtomicBoolean isRecycled = new AtomicBoolean(false);
+        
         return new OutputChannel() {
             @Override
-            public void output(final Object msg) {
-                channel.write(ReferenceCountUtil.retain(msg));
+            public synchronized void output(final Object msg) {
+                if ( !isRecycled.get()) {
+                    channel.write(ReferenceCountUtil.retain(msg));
+                } else {
+                    LOG.warn("output msg{} on recycled channel({})",
+                        msg, channel);
+                }
             }
             @Override
-            public void onResponseCompleted(final boolean isKeepAlive) {
-                //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
-                //  Detail:
-                //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
-                //
-                //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
-                //
-                // See https://github.com/netty/netty/issues/2983 for more information.
-                if (isKeepAlive && !subscriber.isUnsubscribed()) {
-                    channel.flush();
-                    if (channel.eventLoop().inEventLoop()) {
-                        subscriber.onNext(createHttpTrade(channel, subscriber));
+            public synchronized void onResponseCompleted(final boolean isKeepAlive) {
+                if (isRecycled.compareAndSet(false, true)) {
+                    //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
+                    //  Detail:
+                    //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
+                    //
+                    //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+                    //
+                    // See https://github.com/netty/netty/issues/2983 for more information.
+                    if (isKeepAlive && !subscriber.isUnsubscribed()) {
+                        channel.flush();
+                        if (channel.eventLoop().inEventLoop()) {
+                            subscriber.onNext(createHttpTrade(channel, subscriber));
+                        } else {
+                            channel.eventLoop().submit(new Runnable() {
+                                @Override
+                                public void run() {
+                                    subscriber.onNext(createHttpTrade(channel, subscriber));
+                                }});
+                        }
                     } else {
-                        channel.eventLoop().submit(new Runnable() {
-                            @Override
-                            public void run() {
-                                subscriber.onNext(createHttpTrade(channel, subscriber));
-                            }});
+                        channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
+                            .addListener(ChannelFutureListener.CLOSE);
                     }
                 } else {
-                    channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
-                        .addListener(ChannelFutureListener.CLOSE);
+                    LOG.warn("onResponseCompleted on recycled channel({})", channel);
                 }
             }};
     }
