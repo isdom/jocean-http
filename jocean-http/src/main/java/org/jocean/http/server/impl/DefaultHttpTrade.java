@@ -19,7 +19,6 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Subscriber;
-import rx.Subscription;
 import rx.functions.Action0;
 import rx.subscriptions.Subscriptions;
 
@@ -51,10 +50,6 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         return this._requestObserver;
     }
     
-    void setReleaser(final Subscription subscription) {
-        this._removeHandlers = subscription;
-    }
-    
     @Override
     public Object transport() {
         return this._transport;
@@ -75,10 +70,8 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         return this._responseObserver;
     }
     
-    //  TODO: dont't usin channel direct, wrap it and recycler
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
     private volatile boolean _isKeepAlive = false;
-    private Subscription _removeHandlers;
     private final Executor _requestExecutor;
     private final Object   _transport;
     private final OutputChannel _output;
@@ -158,7 +151,6 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         @Override
         public void onCompleted() {
             try {
-                _removeHandlers.unsubscribe();
                 _output.onResponseCompleted(_isKeepAlive);
             } catch (Exception e) {
                 LOG.warn("exception when ({}).onResponseCompleted with keepAlive({}), detail:{}",
@@ -171,7 +163,6 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
             LOG.warn("trade({})'s responseObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             try {
-                _removeHandlers.unsubscribe();
                 _output.onResponseCompleted(_isKeepAlive);
             } catch (Exception e1) {
                 LOG.warn("exception when ({}).onResponseCompleted with keepAlive({}), detail:{}",

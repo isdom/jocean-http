@@ -132,65 +132,18 @@ public class DefaultHttpServer implements HttpServer {
     private DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
+        final OutputChannelImpl output = new OutputChannelImpl(channel, subscriber);
         final DefaultHttpTrade trade = new DefaultHttpTrade(
-                outputChannel(channel, subscriber),
+                output,
                 channel,
                 channel.eventLoop());
         final APPLY_WORKER worker = new APPLY_WORKER();
         worker.setHttpObjectObserver(trade.requestObserver());
         
-        final Subscription subscription = 
+        output._removeHandlers =
                 RxNettys.buildHandlerReleaser(channel, 
                         worker.call(_APPLY_BUILDER, channel.pipeline()));
-        trade.setReleaser(subscription);
-        //  TODO, unsubscribe execute in eventloop?
-        // RxNettys.removeHandlersSubscription(channel, diff.call());
         return trade;
-    }
-
-    private OutputChannel outputChannel(final Channel channel,
-            final Subscriber<? super HttpTrade> subscriber) {
-        final AtomicBoolean isRecycled = new AtomicBoolean(false);
-        
-        return new OutputChannel() {
-            @Override
-            public synchronized void output(final Object msg) {
-                if ( !isRecycled.get()) {
-                    channel.write(ReferenceCountUtil.retain(msg));
-                } else {
-                    LOG.warn("output msg{} on recycled channel({})",
-                        msg, channel);
-                }
-            }
-            @Override
-            public synchronized void onResponseCompleted(final boolean isKeepAlive) {
-                if (isRecycled.compareAndSet(false, true)) {
-                    //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
-                    //  Detail:
-                    //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
-                    //
-                    //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
-                    //
-                    // See https://github.com/netty/netty/issues/2983 for more information.
-                    if (isKeepAlive && !subscriber.isUnsubscribed()) {
-                        channel.flush();
-                        if (channel.eventLoop().inEventLoop()) {
-                            subscriber.onNext(createHttpTrade(channel, subscriber));
-                        } else {
-                            channel.eventLoop().submit(new Runnable() {
-                                @Override
-                                public void run() {
-                                    subscriber.onNext(createHttpTrade(channel, subscriber));
-                                }});
-                        }
-                    } else {
-                        channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
-                            .addListener(ChannelFutureListener.CLOSE);
-                    }
-                } else {
-                    LOG.warn("onResponseCompleted on recycled channel({})", channel);
-                }
-            }};
     }
 
     public DefaultHttpServer() {
@@ -329,6 +282,64 @@ public class DefaultHttpServer implements HttpServer {
         }
     };
     
+    private final class OutputChannelImpl implements OutputChannel {
+        private final AtomicBoolean _isRecycled = new AtomicBoolean(false);
+        private final Subscriber<? super HttpTrade> _subscriber;
+        private final Channel _channel;
+        Subscription _removeHandlers;
+
+        private OutputChannelImpl(final Channel channel, final Subscriber<? super HttpTrade> subscriber) {
+            this._subscriber = subscriber;
+            this._channel = channel;
+        }
+
+        @Override
+        public synchronized void output(final Object msg) {
+            if ( !_isRecycled.get()) {
+                _channel.write(ReferenceCountUtil.retain(msg));
+            } else {
+                LOG.warn("output msg{} on recycled channel({})",
+                    msg, _channel);
+            }
+        }
+
+        @Override
+        public synchronized void onResponseCompleted(final boolean isKeepAlive) {
+            if (_isRecycled.compareAndSet(false, true)) {
+                //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
+                //  Detail:
+                //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
+                //
+                //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+                //
+                // See https://github.com/netty/netty/issues/2983 for more information.
+                if (null != this._removeHandlers) {
+                    //  TODO, unsubscribe execute in eventloop?
+                    // RxNettys.removeHandlersSubscription(channel, diff.call());
+                    this._removeHandlers.unsubscribe();
+                }
+                
+                if (isKeepAlive && !_subscriber.isUnsubscribed()) {
+                    _channel.flush();
+                    if (_channel.eventLoop().inEventLoop()) {
+                        _subscriber.onNext(createHttpTrade(_channel, _subscriber));
+                    } else {
+                        _channel.eventLoop().submit(new Runnable() {
+                            @Override
+                            public void run() {
+                                _subscriber.onNext(createHttpTrade(_channel, _subscriber));
+                            }});
+                    }
+                } else {
+                    _channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
+                        .addListener(ChannelFutureListener.CLOSE);
+                }
+            } else {
+                LOG.warn("onResponseCompleted on recycled channel({})", _channel);
+            }
+        }
+    }
+
     private static enum APPLY implements PipelineApply {
         LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
         CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC1)),
