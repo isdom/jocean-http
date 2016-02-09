@@ -29,8 +29,6 @@ import rx.subscriptions.Subscriptions;
  */
 class DefaultHttpTrade implements HttpServer.HttpTrade {
     
-//    private static final Subscription[] EMPTY_SUBSCRIPTIONS = new Subscription[0];
-
     @Override
     public String toString() {
         return "DefaultHttpTrade [transport=" + _transport + ", request's subscribers.size="
@@ -159,16 +157,21 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
 
         @Override
         public void onCompleted() {
-            _removeHandlers.unsubscribe();
-            _output.onResponseCompleted(_isKeepAlive);
+            try {
+                _removeHandlers.unsubscribe();
+                _output.onResponseCompleted(_isKeepAlive);
+            } catch (Exception e) {
+                LOG.warn("exception when ({}).onResponseCompleted with keepAlive({}), detail:{}",
+                        _output, _isKeepAlive, ExceptionUtils.exception2detail(e));
+            }
         }
 
         @Override
         public void onError(final Throwable e) {
             LOG.warn("trade({})'s responseObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-            _removeHandlers.unsubscribe();
             try {
+                _removeHandlers.unsubscribe();
                 _output.onResponseCompleted(_isKeepAlive);
             } catch (Exception e1) {
                 LOG.warn("exception when ({}).onResponseCompleted with keepAlive({}), detail:{}",
