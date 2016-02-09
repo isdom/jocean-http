@@ -129,6 +129,7 @@ public class DefaultHttpServer implements HttpServer {
             }});
     }
 
+    @SuppressWarnings("unchecked")
     private DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
@@ -138,7 +139,29 @@ public class DefaultHttpServer implements HttpServer {
                 channel,
                 channel.eventLoop());
         final APPLY_WORKER worker = new APPLY_WORKER();
-        worker.setHttpObjectObserver(trade.requestObserver());
+        worker.setHttpObjectObserver(
+                InterfaceUtils.combineImpls(Observer.class, 
+                new Observer<HttpObject>() {
+                    @Override
+                    public void onCompleted() {
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("inner request onCompleted({})");
+                        }
+                    }
+                    @Override
+                    public void onError(final Throwable e) {
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("inner request onError({})", 
+                                    ExceptionUtils.exception2detail(e));
+                        }
+                    }
+                    @Override
+                    public void onNext(final HttpObject httpobj) {
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("inner request onNext({})", httpobj);
+                        }
+                    }},
+                trade.requestObserver()));
         
         output._removeHandlers =
                 RxNettys.buildHandlerReleaser(channel, 
