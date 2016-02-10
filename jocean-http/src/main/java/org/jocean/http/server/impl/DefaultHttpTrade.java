@@ -30,8 +30,13 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     @Override
     public String toString() {
-        return "DefaultHttpTrade [transport=" + _transport + ", request's subscribers.size="
-                + _requestSubscribers.size() + ", isKeepAlive=" + _isKeepAlive + "]";
+        StringBuilder builder = new StringBuilder();
+        builder.append("DefaultHttpTrade [request's subscribers.size=")
+                .append(_requestSubscribers.size()).append(", isKeepAlive=")
+                .append(_isKeepAlive).append(", requestExecutor=")
+                .append(_requestExecutor).append(", transport=")
+                .append(_transport).append("]");
+        return builder.toString();
     }
 
     private static final Logger LOG =
