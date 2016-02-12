@@ -12,9 +12,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
@@ -33,7 +31,6 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpTrade [request's subscribers.size=")
                 .append(_requestSubscribers.size()).append(", isKeepAlive=")
-                .append(_isKeepAlive).append(", requestExecutor=")
                 .append(_requestExecutor).append(", transport=")
                 .append(_transport).append("]");
         return builder.toString();
@@ -76,7 +73,6 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     }
     
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
-    private volatile boolean _isKeepAlive = false;
     private final Executor _requestExecutor;
     private final Object   _transport;
     private final OutputChannel _output;
@@ -120,9 +116,6 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
                 LOG.debug("trade({}) requestObserver.onNext, httpobj:{}",
                         this, httpObject);
             }
-            if (httpObject instanceof HttpRequest) {
-                _isKeepAlive = HttpHeaders.isKeepAlive((HttpRequest)httpObject);
-            }
             for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
                 try {
                     if (!subscriber.isUnsubscribed()) {
@@ -156,10 +149,10 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         @Override
         public void onCompleted() {
             try {
-                _output.onResponseCompleted(_isKeepAlive);
+                _output.onResponseCompleted();
             } catch (Exception e) {
-                LOG.warn("exception when ({}).onResponseCompleted with keepAlive({}), detail:{}",
-                        _output, _isKeepAlive, ExceptionUtils.exception2detail(e));
+                LOG.warn("exception when ({}).onResponseCompleted, detail:{}",
+                        _output, ExceptionUtils.exception2detail(e));
             }
         }
 
@@ -168,10 +161,10 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
             LOG.warn("trade({})'s responseObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             try {
-                _output.onResponseCompleted(_isKeepAlive);
+                _output.onResponseCompleted();
             } catch (Exception e1) {
-                LOG.warn("exception when ({}).onResponseCompleted with keepAlive({}), detail:{}",
-                        _output, _isKeepAlive, ExceptionUtils.exception2detail(e1));
+                LOG.warn("exception when ({}).onResponseCompleted, detail:{}",
+                        _output, ExceptionUtils.exception2detail(e1));
             }
         }
 

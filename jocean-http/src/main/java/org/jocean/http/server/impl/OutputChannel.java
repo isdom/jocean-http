@@ -2,5 +2,5 @@ package org.jocean.http.server.impl;
 
 public interface OutputChannel {
     public void output(final Object msg);
-    public void onResponseCompleted(final boolean isKeepAlive);
+    public void onResponseCompleted();
 }

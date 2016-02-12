@@ -38,7 +38,9 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpContentCompressor;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.logging.LoggingHandler;
@@ -134,7 +136,8 @@ public class DefaultHttpServer implements HttpServer {
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
         final AtomicBoolean requestCompleted = new AtomicBoolean(false);
-        final OutputChannelImpl output = new OutputChannelImpl(requestCompleted, channel, subscriber);
+        final AtomicBoolean isKeepAlive = new AtomicBoolean(false);
+        final OutputChannelImpl output = new OutputChannelImpl(requestCompleted, isKeepAlive, channel, subscriber);
         final DefaultHttpTrade trade = new DefaultHttpTrade(
                 output,
                 channel,
@@ -156,12 +159,15 @@ public class DefaultHttpServer implements HttpServer {
                             LOG.debug("inner request onError({})", 
                                     ExceptionUtils.exception2detail(e));
                         }
-                        output.onResponseCompleted(false);
+                        output.onResponseCompleted();
                     }
                     @Override
                     public void onNext(final HttpObject httpobj) {
                         if (LOG.isDebugEnabled()) {
                             LOG.debug("inner request onNext({})", httpobj);
+                        }
+                        if (httpobj instanceof HttpRequest) {
+                            isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpobj));
                         }
                     }},
                 trade.requestObserver()));
@@ -311,15 +317,18 @@ public class DefaultHttpServer implements HttpServer {
     private final class OutputChannelImpl implements OutputChannel {
         private final AtomicBoolean _isRecycled = new AtomicBoolean(false);
         private final AtomicBoolean _requestCompleted;
+        private final AtomicBoolean _isKeepAlive;
         private final Subscriber<? super HttpTrade> _subscriber;
         private final Channel _channel;
         Subscription _removeHandlers;
 
         private OutputChannelImpl(
                 final AtomicBoolean requestCompleted, 
+                final AtomicBoolean isKeepAlive, 
                 final Channel channel, 
                 final Subscriber<? super HttpTrade> subscriber) {
             this._requestCompleted = requestCompleted;
+            this._isKeepAlive = isKeepAlive;
             this._subscriber = subscriber;
             this._channel = channel;
         }
@@ -335,7 +344,7 @@ public class DefaultHttpServer implements HttpServer {
         }
 
         @Override
-        public synchronized void onResponseCompleted(final boolean isKeepAlive) {
+        public synchronized void onResponseCompleted() {
             if (this._isRecycled.compareAndSet(false, true)) {
                 //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
                 //  Detail:
@@ -350,7 +359,7 @@ public class DefaultHttpServer implements HttpServer {
                     this._removeHandlers.unsubscribe();
                 }
                 
-                if (this._requestCompleted.get() && isKeepAlive && !this._subscriber.isUnsubscribed()) {
+                if (this._requestCompleted.get() && this._isKeepAlive.get() && !this._subscriber.isUnsubscribed()) {
                     this._channel.flush();
                     if (this._channel.eventLoop().inEventLoop()) {
                         this._subscriber.onNext(createHttpTrade(this._channel, this._subscriber));
