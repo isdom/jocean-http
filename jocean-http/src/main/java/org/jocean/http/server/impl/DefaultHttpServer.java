@@ -133,7 +133,8 @@ public class DefaultHttpServer implements HttpServer {
     private DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        final OutputChannelImpl output = new OutputChannelImpl(channel, subscriber);
+        final AtomicBoolean requestCompleted = new AtomicBoolean(false);
+        final OutputChannelImpl output = new OutputChannelImpl(requestCompleted, channel, subscriber);
         final DefaultHttpTrade trade = new DefaultHttpTrade(
                 output,
                 channel,
@@ -147,6 +148,7 @@ public class DefaultHttpServer implements HttpServer {
                         if (LOG.isDebugEnabled()) {
                             LOG.debug("inner request onCompleted({})");
                         }
+                        requestCompleted.set(true);
                     }
                     @Override
                     public void onError(final Throwable e) {
@@ -154,6 +156,7 @@ public class DefaultHttpServer implements HttpServer {
                             LOG.debug("inner request onError({})", 
                                     ExceptionUtils.exception2detail(e));
                         }
+                        output.onResponseCompleted(false);
                     }
                     @Override
                     public void onNext(final HttpObject httpobj) {
@@ -307,19 +310,24 @@ public class DefaultHttpServer implements HttpServer {
     
     private final class OutputChannelImpl implements OutputChannel {
         private final AtomicBoolean _isRecycled = new AtomicBoolean(false);
+        private final AtomicBoolean _requestCompleted;
         private final Subscriber<? super HttpTrade> _subscriber;
         private final Channel _channel;
         Subscription _removeHandlers;
 
-        private OutputChannelImpl(final Channel channel, final Subscriber<? super HttpTrade> subscriber) {
+        private OutputChannelImpl(
+                final AtomicBoolean requestCompleted, 
+                final Channel channel, 
+                final Subscriber<? super HttpTrade> subscriber) {
+            this._requestCompleted = requestCompleted;
             this._subscriber = subscriber;
             this._channel = channel;
         }
 
         @Override
         public synchronized void output(final Object msg) {
-            if ( !_isRecycled.get()) {
-                _channel.write(ReferenceCountUtil.retain(msg));
+            if ( !this._isRecycled.get()) {
+                this._channel.write(ReferenceCountUtil.retain(msg));
             } else {
                 LOG.warn("output msg{} on recycled channel({})",
                     msg, _channel);
@@ -328,7 +336,7 @@ public class DefaultHttpServer implements HttpServer {
 
         @Override
         public synchronized void onResponseCompleted(final boolean isKeepAlive) {
-            if (_isRecycled.compareAndSet(false, true)) {
+            if (this._isRecycled.compareAndSet(false, true)) {
                 //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
                 //  Detail:
                 //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
@@ -342,19 +350,19 @@ public class DefaultHttpServer implements HttpServer {
                     this._removeHandlers.unsubscribe();
                 }
                 
-                if (isKeepAlive && !_subscriber.isUnsubscribed()) {
-                    _channel.flush();
-                    if (_channel.eventLoop().inEventLoop()) {
-                        _subscriber.onNext(createHttpTrade(_channel, _subscriber));
+                if (this._requestCompleted.get() && isKeepAlive && !this._subscriber.isUnsubscribed()) {
+                    this._channel.flush();
+                    if (this._channel.eventLoop().inEventLoop()) {
+                        this._subscriber.onNext(createHttpTrade(this._channel, this._subscriber));
                     } else {
-                        _channel.eventLoop().submit(new Runnable() {
+                        this._channel.eventLoop().submit(new Runnable() {
                             @Override
                             public void run() {
                                 _subscriber.onNext(createHttpTrade(_channel, _subscriber));
                             }});
                     }
                 } else {
-                    _channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
+                    this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
                         .addListener(ChannelFutureListener.CLOSE);
                 }
             } else {
