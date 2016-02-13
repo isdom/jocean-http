@@ -135,21 +135,18 @@ public class DefaultHttpServer implements HttpServer {
     private DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        final AtomicBoolean requestCompleted = new AtomicBoolean(false);
-        final AtomicBoolean isKeepAlive = new AtomicBoolean(false);
-        final OutputChannelImpl output = new OutputChannelImpl(requestCompleted, isKeepAlive, channel, subscriber);
+        final RequestHook hook = new RequestHook(channel, subscriber);
         final DefaultHttpTrade trade = new DefaultHttpTrade(
-                output,
+                hook,
                 channel,
                 channel.eventLoop());
         final APPLY_WORKER worker = new APPLY_WORKER();
-        final Observer<HttpObject> requestObserver = new RequestHook(requestCompleted, isKeepAlive, output);
         worker.setHttpObjectObserver(
                 InterfaceUtils.combineImpls(Observer.class, 
-                requestObserver,
+                hook,
                 trade.requestObserver()));
         
-        output._removeHandlers =
+        hook._removeHandlers =
                 RxNettys.buildHandlerReleaser(channel, 
                         worker.call(_APPLY_BUILDER, channel.pipeline()));
         return trade;
@@ -291,18 +288,19 @@ public class DefaultHttpServer implements HttpServer {
         }
     };
     
-    private static final class RequestHook implements Observer<HttpObject> {
-        private final AtomicBoolean _requestCompleted;
-        private final AtomicBoolean _isKeepAlive;
-        private final OutputChannelImpl _output;
+    private final class RequestHook implements Observer<HttpObject>, OutputChannel {
+        private final AtomicBoolean _requestCompleted = new AtomicBoolean(false);
+        private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
+        private final AtomicBoolean _isRecycled = new AtomicBoolean(false);
+        private final Subscriber<? super HttpTrade> _subscriber;
+        private final Channel _channel;
+        Subscription _removeHandlers;
 
         private RequestHook(
-                final AtomicBoolean requestCompleted,
-                final AtomicBoolean isKeepAlive, 
-                final OutputChannelImpl output) {
-            this._requestCompleted = requestCompleted;
-            this._isKeepAlive = isKeepAlive;
-            this._output = output;
+                final Channel channel, 
+                final Subscriber<? super HttpTrade> subscriber) {
+            this._channel = channel;
+            this._subscriber = subscriber;
         }
 
         @Override
@@ -319,7 +317,7 @@ public class DefaultHttpServer implements HttpServer {
                 LOG.debug("inner request onError({})", 
                         ExceptionUtils.exception2detail(e));
             }
-            this._output.onResponseCompleted();
+            onResponseCompleted();
         }
 
         @Override
@@ -331,27 +329,7 @@ public class DefaultHttpServer implements HttpServer {
                 this._isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpobj));
             }
         }
-    }
-
-    private final class OutputChannelImpl implements OutputChannel {
-        private final AtomicBoolean _isRecycled = new AtomicBoolean(false);
-        private final AtomicBoolean _requestCompleted;
-        private final AtomicBoolean _isKeepAlive;
-        private final Subscriber<? super HttpTrade> _subscriber;
-        private final Channel _channel;
-        Subscription _removeHandlers;
-
-        private OutputChannelImpl(
-                final AtomicBoolean requestCompleted, 
-                final AtomicBoolean isKeepAlive, 
-                final Channel channel, 
-                final Subscriber<? super HttpTrade> subscriber) {
-            this._requestCompleted = requestCompleted;
-            this._isKeepAlive = isKeepAlive;
-            this._subscriber = subscriber;
-            this._channel = channel;
-        }
-
+        
         @Override
         public synchronized void output(final Object msg) {
             if ( !this._isRecycled.get()) {
