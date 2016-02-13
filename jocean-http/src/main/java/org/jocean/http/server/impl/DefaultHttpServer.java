@@ -143,33 +143,10 @@ public class DefaultHttpServer implements HttpServer {
                 channel,
                 channel.eventLoop());
         final APPLY_WORKER worker = new APPLY_WORKER();
+        final Observer<HttpObject> requestObserver = new RequestHook(requestCompleted, isKeepAlive, output);
         worker.setHttpObjectObserver(
                 InterfaceUtils.combineImpls(Observer.class, 
-                new Observer<HttpObject>() {
-                    @Override
-                    public void onCompleted() {
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("inner request onCompleted({})");
-                        }
-                        requestCompleted.set(true);
-                    }
-                    @Override
-                    public void onError(final Throwable e) {
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("inner request onError({})", 
-                                    ExceptionUtils.exception2detail(e));
-                        }
-                        output.onResponseCompleted();
-                    }
-                    @Override
-                    public void onNext(final HttpObject httpobj) {
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("inner request onNext({})", httpobj);
-                        }
-                        if (httpobj instanceof HttpRequest) {
-                            isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpobj));
-                        }
-                    }},
+                requestObserver,
                 trade.requestObserver()));
         
         output._removeHandlers =
@@ -314,6 +291,48 @@ public class DefaultHttpServer implements HttpServer {
         }
     };
     
+    private static final class RequestHook implements Observer<HttpObject> {
+        private final AtomicBoolean _requestCompleted;
+        private final AtomicBoolean _isKeepAlive;
+        private final OutputChannelImpl _output;
+
+        private RequestHook(
+                final AtomicBoolean requestCompleted,
+                final AtomicBoolean isKeepAlive, 
+                final OutputChannelImpl output) {
+            this._requestCompleted = requestCompleted;
+            this._isKeepAlive = isKeepAlive;
+            this._output = output;
+        }
+
+        @Override
+        public void onCompleted() {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("inner request onCompleted({})");
+            }
+            this._requestCompleted.set(true);
+        }
+
+        @Override
+        public void onError(final Throwable e) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("inner request onError({})", 
+                        ExceptionUtils.exception2detail(e));
+            }
+            this._output.onResponseCompleted();
+        }
+
+        @Override
+        public void onNext(final HttpObject httpobj) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("inner request onNext({})", httpobj);
+            }
+            if (httpobj instanceof HttpRequest) {
+                this._isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpobj));
+            }
+        }
+    }
+
     private final class OutputChannelImpl implements OutputChannel {
         private final AtomicBoolean _isRecycled = new AtomicBoolean(false);
         private final AtomicBoolean _requestCompleted;
