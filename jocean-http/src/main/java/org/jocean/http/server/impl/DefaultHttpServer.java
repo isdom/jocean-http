@@ -317,7 +317,7 @@ public class DefaultHttpServer implements HttpServer {
                 LOG.debug("inner request onError({})", 
                         ExceptionUtils.exception2detail(e));
             }
-            onResponseCompleted();
+            onTradeCompleted();
         }
 
         @Override
@@ -341,7 +341,7 @@ public class DefaultHttpServer implements HttpServer {
         }
 
         @Override
-        public synchronized void onResponseCompleted() {
+        public synchronized void onTradeCompleted() {
             if (this._isRecycled.compareAndSet(false, true)) {
                 //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
                 //  Detail:

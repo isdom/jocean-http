@@ -149,7 +149,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         @Override
         public void onCompleted() {
             try {
-                _output.onResponseCompleted();
+                _output.onTradeCompleted();
             } catch (Exception e) {
                 LOG.warn("exception when ({}).onResponseCompleted, detail:{}",
                         _output, ExceptionUtils.exception2detail(e));
@@ -161,7 +161,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
             LOG.warn("trade({})'s responseObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             try {
-                _output.onResponseCompleted();
+                _output.onTradeCompleted();
             } catch (Exception e1) {
                 LOG.warn("exception when ({}).onResponseCompleted, detail:{}",
                         _output, ExceptionUtils.exception2detail(e1));
