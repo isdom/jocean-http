@@ -317,7 +317,7 @@ public class DefaultHttpServer implements HttpServer {
                 LOG.debug("inner request onError({})", 
                         ExceptionUtils.exception2detail(e));
             }
-            onTradeCompleted();
+            onTradeFinished(false);
         }
 
         @Override
@@ -341,7 +341,7 @@ public class DefaultHttpServer implements HttpServer {
         }
 
         @Override
-        public synchronized void onTradeCompleted() {
+        public synchronized void onTradeFinished(final boolean isResponseCompleted) {
             if (this._isRecycled.compareAndSet(false, true)) {
                 //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
                 //  Detail:
@@ -356,7 +356,10 @@ public class DefaultHttpServer implements HttpServer {
                     this._removeHandlers.unsubscribe();
                 }
                 
-                if (this._requestCompleted.get() && this._isKeepAlive.get() && !this._subscriber.isUnsubscribed()) {
+                if (this._requestCompleted.get() 
+                    && isResponseCompleted 
+                    && this._isKeepAlive.get() 
+                    && !this._subscriber.isUnsubscribed()) {
                     this._channel.flush();
                     if (this._channel.eventLoop().inEventLoop()) {
                         this._subscriber.onNext(createHttpTrade(this._channel, this._subscriber));
