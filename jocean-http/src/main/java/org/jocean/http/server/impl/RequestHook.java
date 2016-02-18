@@ -17,16 +17,15 @@ import io.netty.util.ReferenceCountUtil;
 import rx.Observer;
 import rx.Subscriber;
 import rx.Subscription;
+import rx.functions.Action0;
 
 final class RequestHook implements Observer<HttpObject>, OutputChannel {
     
     private static final Logger LOG =
             LoggerFactory.getLogger(RequestHook.class);
     
-    /**
-     * 
-     */
-    private final DefaultHttpServer _defaultHttpServer;
+//    private final DefaultHttpServer _defaultHttpServer;
+    private final Action0 _reuseChannel;
     private final AtomicBoolean _requestCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
     private final AtomicBoolean _isRecycled = new AtomicBoolean(false);
@@ -34,10 +33,11 @@ final class RequestHook implements Observer<HttpObject>, OutputChannel {
     private final Channel _channel;
     Subscription _removeHandlers;
 
-    RequestHook(
-            DefaultHttpServer defaultHttpServer, final Channel channel, 
+    RequestHook(final Action0 reuseChannel, 
+            final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        this._defaultHttpServer = defaultHttpServer;
+//        this._defaultHttpServer = defaultHttpServer;
+        this._reuseChannel = reuseChannel;
         this._channel = channel;
         this._subscriber = subscriber;
     }
@@ -100,15 +100,7 @@ final class RequestHook implements Observer<HttpObject>, OutputChannel {
                 && this._isKeepAlive.get() 
                 && !this._subscriber.isUnsubscribed()) {
                 this._channel.flush();
-                if (this._channel.eventLoop().inEventLoop()) {
-                    this._subscriber.onNext(this._defaultHttpServer.createHttpTrade(this._channel, this._subscriber));
-                } else {
-                    this._channel.eventLoop().submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            _subscriber.onNext(RequestHook.this._defaultHttpServer.createHttpTrade(_channel, _subscriber));
-                        }});
-                }
+                this._reuseChannel.call();
             } else {
                 this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
                     .addListener(ChannelFutureListener.CLOSE);

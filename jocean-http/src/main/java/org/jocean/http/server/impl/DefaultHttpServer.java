@@ -46,6 +46,7 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Subscriber;
+import rx.functions.Action0;
 import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.functions.FuncN;
@@ -128,7 +129,20 @@ public class DefaultHttpServer implements HttpServer {
     @SuppressWarnings("unchecked") DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        final RequestHook hook = new RequestHook(this, channel, subscriber);
+        final RequestHook hook = new RequestHook(new Action0() {
+            @Override
+            public void call() {
+                if (channel.eventLoop().inEventLoop()) {
+                    subscriber.onNext(createHttpTrade(channel, subscriber));
+                } else {
+                    channel.eventLoop().submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            subscriber.onNext(createHttpTrade(channel, subscriber));
+                        }
+                    });
+                }
+            }}, channel, subscriber);
         final DefaultHttpTrade trade = new DefaultHttpTrade(
                 hook,
                 channel,
