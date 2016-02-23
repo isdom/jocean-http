@@ -6,15 +6,15 @@ package org.jocean.http.client.impl;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
-import org.jocean.http.client.InteractionMeter;
+import org.jocean.http.client.TrafficCounter;
 import org.jocean.http.client.Outbound;
 
 /**
  * @author isdom
  *
  */
-class InteractionMeterProxy extends Feature.AbstractFeature0 
-    implements Outbound.InteractionMeterFeature, InteractionMeterAware {
+class TrafficCounterProxy extends Feature.AbstractFeature0 
+    implements Outbound.TrafficCounterFeature, TrafficCounterAware {
 
     @Override
     public String toString() {
@@ -26,7 +26,7 @@ class InteractionMeterProxy extends Feature.AbstractFeature0
      */
     @Override
     public long uploadBytes() {
-        final InteractionMeter impl = this._ref.get();
+        final TrafficCounter impl = this._ref.get();
         
         return null != impl ? impl.uploadBytes() : 0;
     }
@@ -36,14 +36,15 @@ class InteractionMeterProxy extends Feature.AbstractFeature0
      */
     @Override
     public long downloadBytes() {
-        final InteractionMeter impl = this._ref.get();
+        final TrafficCounter impl = this._ref.get();
         
         return null != impl ? impl.downloadBytes() : 0;
     }
 
-    public void setInteractionMeter(final InteractionMeter ref) {
+    public void setTrafficCounter(final TrafficCounter ref) {
         this._ref.set(ref);
     }
     
-    private final AtomicReference<InteractionMeter> _ref = new AtomicReference<InteractionMeter>();
+    private final AtomicReference<TrafficCounter> _ref = 
+            new AtomicReference<TrafficCounter>();
 }

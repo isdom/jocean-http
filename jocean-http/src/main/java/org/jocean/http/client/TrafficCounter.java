@@ -1,6 +1,6 @@
 package org.jocean.http.client;
 
-public interface InteractionMeter {
+public interface TrafficCounter {
     
     public long uploadBytes();
     

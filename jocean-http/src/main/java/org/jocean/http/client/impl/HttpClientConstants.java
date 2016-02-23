@@ -32,7 +32,7 @@ final class HttpClientConstants {
 
     static enum APPLY implements PipelineApply {
         LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
-        INTERACTIONMETER(INTERACTIONMETER_FUNCN),
+        TRAFFICCOUNTER(TRAFFICCOUNTER_FUNCN),
         CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC1)),
         SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
         HTTPCLIENT(HTTPCLIENT_CODEC_FUNCN),
@@ -61,10 +61,10 @@ final class HttpClientConstants {
         private final FuncN<ChannelHandler> _factory;
     }
     
-    private static final FuncN<ChannelHandler> INTERACTIONMETER_FUNCN = new FuncN<ChannelHandler>() {
+    private static final FuncN<ChannelHandler> TRAFFICCOUNTER_FUNCN = new FuncN<ChannelHandler>() {
         @Override
         public ChannelHandler call(final Object... args) {
-            return new InteractionMeterHandler();
+            return new TrafficCounterHandler();
         }};
         
     private static final FuncN<ChannelHandler> HTTPCLIENT_CODEC_FUNCN = new FuncN<ChannelHandler>() {

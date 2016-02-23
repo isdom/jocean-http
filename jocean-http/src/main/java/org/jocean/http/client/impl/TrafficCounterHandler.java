@@ -2,7 +2,7 @@ package org.jocean.http.client.impl;
 
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.jocean.http.client.InteractionMeter;
+import org.jocean.http.client.TrafficCounter;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
@@ -10,8 +10,8 @@ import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 
-final class InteractionMeterHandler extends ChannelDuplexHandler 
-    implements InteractionMeter {
+final class TrafficCounterHandler extends ChannelDuplexHandler 
+    implements TrafficCounter {
 
     @Override
     public long uploadBytes() {
@@ -58,7 +58,7 @@ final class InteractionMeterHandler extends ChannelDuplexHandler
      */
     @Override
     public String toString() {
-        return "InteractionMeterHandler";
+        return "TrafficCounterHandler";
     }
 
     private final AtomicLong _uploadBytes = new AtomicLong(0);

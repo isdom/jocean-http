@@ -14,7 +14,7 @@ import java.util.concurrent.CountDownLatch;
 import javax.net.ssl.SSLException;
 
 import org.jocean.http.Feature.ENABLE_SSL;
-import org.jocean.http.client.Outbound.InteractionMeterFeature;
+import org.jocean.http.client.Outbound.TrafficCounterFeature;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
 import org.jocean.http.util.RxNettys;
@@ -532,7 +532,7 @@ public class DefaultHttpClientTestCase {
     }
 
     @Test
-    public void testInteractionMeterWhenHttpAndNotConnected() throws Exception {
+    public void testTrafficCounterWhenHttpAndNotConnected() throws Exception {
         
         final CountDownLatch unsubscribed = new CountDownLatch(1);
         
@@ -542,11 +542,11 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            final InteractionMeterFeature meter = HttpClientUtil.buildInteractionMeter();
+            final TrafficCounterFeature counter = HttpClientUtil.buildTrafficCounterFeature();
             
             client.defineInteraction(new LocalAddress("test"), 
                 Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor),
-                meter
+                counter
                 )
                 .compose(RxNettys.objects2httpobjs())
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
@@ -557,8 +557,8 @@ public class DefaultHttpClientTestCase {
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed(1);
-            assertEquals(0, meter.uploadBytes());
-            assertEquals(0, meter.downloadBytes());
+            assertEquals(0, counter.uploadBytes());
+            assertEquals(0, counter.downloadBytes());
         } finally {
             client.close();
             assertEquals(0, testSubscriber.getOnNextEvents().size());
@@ -569,13 +569,13 @@ public class DefaultHttpClientTestCase {
     }
     
     @Test
-    public void testInteractionMeterWhenHttpHappyPathOnce() throws Exception {
+    public void testTrafficCounterWhenHttpHappyPathOnce() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
-        final InteractionMeterFeature meter = HttpClientUtil.buildInteractionMeter();
+        final TrafficCounterFeature counter = HttpClientUtil.buildTrafficCounterFeature();
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
                 ENABLE_LOGGING,
-                meter);
+                counter);
         try {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
@@ -588,10 +588,10 @@ public class DefaultHttpClientTestCase {
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
             assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
-            assertTrue(0 < meter.uploadBytes());
-            assertTrue(0 < meter.downloadBytes());
-            LOG.debug("meter.uploadBytes: {}", meter.uploadBytes());
-            LOG.debug("meter.downloadBytes: {}", meter.downloadBytes());
+            assertTrue(0 < counter.uploadBytes());
+            assertTrue(0 < counter.downloadBytes());
+            LOG.debug("meter.uploadBytes: {}", counter.uploadBytes());
+            LOG.debug("meter.downloadBytes: {}", counter.downloadBytes());
         } finally {
             client.close();
             server.stop();

@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.InteractionMeter;
+import org.jocean.http.client.TrafficCounter;
 import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
@@ -94,7 +94,7 @@ public class DefaultHttpClient implements HttpClient {
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
                             .doOnNext(attachSubscriberToChannel(responseSubscriber, add4release))
                             .doOnNext(fillChannelAware(fullFeatures))
-                            .doOnNext(hookInteractionMeter(fullFeatures, add4release))
+                            .doOnNext(hookTrafficCounter(fullFeatures, add4release))
                             .flatMap(doTransferRequest(request, fullFeatures))
                             .flatMap(RxNettys.<ChannelFuture, HttpObject>emitErrorOnFailure())
 //                            .doOnNext(new Action1<ChannelFuture>() {
@@ -139,29 +139,29 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
 
-    private Action1<? super Channel> hookInteractionMeter(
+    private Action1<? super Channel> hookTrafficCounter(
             final Feature[] features, final Action1<Subscription> add4release) {
-        final InteractionMeterAware interactionMeterAware = 
-                InterfaceUtils.compositeIncludeType(InteractionMeterAware.class, (Object[])features);
+        final TrafficCounterAware trafficCounterAware = 
+                InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])features);
             
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
-                if (null!=interactionMeterAware) {
+                if (null!=trafficCounterAware) {
                     try {
-                        interactionMeterAware.setInteractionMeter(buildInteractionMeter(channel, add4release));
+                        trafficCounterAware.setTrafficCounter(buildTrafficCounter(channel, add4release));
                     } catch (Exception e) {
-                        LOG.warn("exception when invoke setInteractionMeter for channel ({}), detail: {}",
+                        LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
                                 channel, ExceptionUtils.exception2detail(e));
                     }
                 }
             }};
     }
 
-    private InteractionMeter buildInteractionMeter(final Channel channel, 
+    private TrafficCounter buildTrafficCounter(final Channel channel, 
             final Action1<Subscription> add4release) {
-        final InteractionMeterHandler handler = 
-                (InteractionMeterHandler)HttpClientConstants.APPLY.INTERACTIONMETER.applyTo(channel.pipeline());
+        final TrafficCounterHandler handler = 
+                (TrafficCounterHandler)HttpClientConstants.APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
         
         add4release.call(RxNettys.buildHandlerReleaser(channel, handler));
         return handler;

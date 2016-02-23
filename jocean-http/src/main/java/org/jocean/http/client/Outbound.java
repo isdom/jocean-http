@@ -20,6 +20,6 @@ public class Outbound {
         }
     };
     
-    public interface InteractionMeterFeature extends Feature, InteractionMeter {
+    public interface TrafficCounterFeature extends Feature, TrafficCounter {
     }
 }

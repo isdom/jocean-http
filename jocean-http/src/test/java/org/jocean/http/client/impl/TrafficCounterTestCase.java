@@ -2,30 +2,30 @@ package org.jocean.http.client.impl;
 
 import static org.junit.Assert.*;
 
-import org.jocean.http.client.InteractionMeter;
+import org.jocean.http.client.TrafficCounter;
 import org.junit.Test;
 
-public class InteractionMeterTestCase {
+public class TrafficCounterTestCase {
 
     @Test
-    public final void testInteractionMeterProxyUploadBytes() {
-        final InteractionMeterProxy proxy = new InteractionMeterProxy();
+    public final void testTrafficCounterProxyUploadBytes() {
+        final TrafficCounterProxy proxy = new TrafficCounterProxy();
         
         assertEquals(proxy.uploadBytes(), 0);
     }
 
     @Test
-    public final void testInteractionMeterProxyDownloadBytes() {
-        final InteractionMeterProxy proxy = new InteractionMeterProxy();
+    public final void testTrafficCounterProxyDownloadBytes() {
+        final TrafficCounterProxy proxy = new TrafficCounterProxy();
         
         assertEquals(proxy.downloadBytes(), 0);
     }
 
     @Test
-    public final void testInteractionMeterProxyAssignRefUploadBytes() {
-        final InteractionMeterProxy proxy = new InteractionMeterProxy();
+    public final void testTrafficCounterProxyAssignRefUploadBytes() {
+        final TrafficCounterProxy proxy = new TrafficCounterProxy();
         
-        proxy.setInteractionMeter(new InteractionMeter() {
+        proxy.setTrafficCounter(new TrafficCounter() {
             @Override
             public long uploadBytes() {
                 return 100;
@@ -38,10 +38,10 @@ public class InteractionMeterTestCase {
     }
 
     @Test
-    public final void testInteractionMeterProxyAssignRefDownloadBytes() {
-        final InteractionMeterProxy proxy = new InteractionMeterProxy();
+    public final void testTrafficCounterProxyAssignRefDownloadBytes() {
+        final TrafficCounterProxy proxy = new TrafficCounterProxy();
         
-        proxy.setInteractionMeter(new InteractionMeter() {
+        proxy.setTrafficCounter(new TrafficCounter() {
             @Override
             public long uploadBytes() {
                 return 100;
