@@ -129,7 +129,7 @@ public class DefaultHttpServer implements HttpServer {
     @SuppressWarnings("unchecked") DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        final RequestHook hook = new RequestHook(new Action0() {
+        final TradeTransport hook = new TradeTransport(new Action0() {
             @Override
             public void call() {
                 if (channel.eventLoop().inEventLoop()) {

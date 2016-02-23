@@ -40,10 +40,10 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
     public DefaultHttpTrade(
-            final OutputChannel output, 
+            final ResponseSender sender, 
             final Object    transport,
             final Executor  requestExecutor) {
-        this._output = output;
+        this._sender = sender;
         this._transport = transport;
         this._requestExecutor = requestExecutor;
     }
@@ -75,7 +75,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
     private final Executor _requestExecutor;
     private final Object   _transport;
-    private final OutputChannel _output;
+    private final ResponseSender _sender;
     
     private final OnSubscribe<HttpObject> _onSubscribeRequest = new OnSubscribe<HttpObject>() {
         @Override
@@ -149,10 +149,10 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         @Override
         public void onCompleted() {
             try {
-                _output.onTradeFinished(true);
+                _sender.onTradeFinished(true);
             } catch (Exception e) {
                 LOG.warn("exception when ({}).onResponseCompleted, detail:{}",
-                        _output, ExceptionUtils.exception2detail(e));
+                        _sender, ExceptionUtils.exception2detail(e));
             }
         }
 
@@ -161,20 +161,20 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
             LOG.warn("trade({})'s responseObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             try {
-                _output.onTradeFinished(false);
+                _sender.onTradeFinished(false);
             } catch (Exception e1) {
                 LOG.warn("exception when ({}).onResponseCompleted, detail:{}",
-                        _output, ExceptionUtils.exception2detail(e1));
+                        _sender, ExceptionUtils.exception2detail(e1));
             }
         }
 
         @Override
         public void onNext(final HttpObject msg) {
             try {
-                _output.output(msg);
+                _sender.send(msg);
             } catch (Exception e) {
                 LOG.warn("exception when ({}).output message({}), detail:{}",
-                        _output, msg, ExceptionUtils.exception2detail(e));
+                        _sender, msg, ExceptionUtils.exception2detail(e));
             }
             //  TODO check write future's isSuccess
         }};

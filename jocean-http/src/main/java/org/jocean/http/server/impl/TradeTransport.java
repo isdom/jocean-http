@@ -19,12 +19,11 @@ import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 
-final class RequestHook implements Observer<HttpObject>, OutputChannel {
+final class TradeTransport implements Observer<HttpObject>, ResponseSender {
     
     private static final Logger LOG =
-            LoggerFactory.getLogger(RequestHook.class);
+            LoggerFactory.getLogger(TradeTransport.class);
     
-//    private final DefaultHttpServer _defaultHttpServer;
     private final Action0 _reuseChannel;
     private final AtomicBoolean _requestCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
@@ -33,10 +32,9 @@ final class RequestHook implements Observer<HttpObject>, OutputChannel {
     private final Channel _channel;
     Subscription _removeHandlers;
 
-    RequestHook(final Action0 reuseChannel, 
+    TradeTransport(final Action0 reuseChannel, 
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-//        this._defaultHttpServer = defaultHttpServer;
         this._reuseChannel = reuseChannel;
         this._channel = channel;
         this._subscriber = subscriber;
@@ -70,7 +68,7 @@ final class RequestHook implements Observer<HttpObject>, OutputChannel {
     }
     
     @Override
-    public synchronized void output(final Object msg) {
+    public synchronized void send(final Object msg) {
         if ( !this._isRecycled.get()) {
             this._channel.write(ReferenceCountUtil.retain(msg));
         } else {
