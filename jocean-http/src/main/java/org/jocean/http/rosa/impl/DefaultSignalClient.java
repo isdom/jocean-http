@@ -16,6 +16,8 @@ import javax.ws.rs.POST;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.PayloadCounter;
+import org.jocean.http.client.impl.PayloadCounterAware;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.util.FeaturesBuilder;
 import org.jocean.http.util.RxNettys;
@@ -23,6 +25,7 @@ import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.BeanHolder;
 import org.jocean.idiom.BeanHolderAware;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.SimpleCache;
@@ -99,9 +102,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                         return;
                     }
                     
-                    //  TODO
                     final long uploadTotal = pair.second;
                     final List<Object> httpRequest = pair.first;
+                    
+                    hookPayloadCounter(uploadTotal, features);
                     
                     final Observable<? extends HttpObject>  response = _httpClient.defineInteraction(
                             remoteAddress, 
@@ -118,6 +122,32 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         });
     }
 
+    private void hookPayloadCounter(final long uploadTotal, final Feature[] features) {
+        final PayloadCounterAware payloadCounterAware = 
+                InterfaceUtils.compositeIncludeType(PayloadCounterAware.class, (Object[])features);
+            
+        if (null!=payloadCounterAware) {
+            try {
+                payloadCounterAware.setPayloadCounter(buildPayloadCounter(uploadTotal));
+            } catch (Exception e) {
+                LOG.warn("exception when invoke setPayloadCounter, detail: {}",
+                        ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+
+    private PayloadCounter buildPayloadCounter(final long uploadTotal) {
+        return new PayloadCounter() {
+            @Override
+            public long totalUploadBytes() {
+                return uploadTotal;
+            }
+            @Override
+            public long totalDownloadBytes() {
+                return -1;
+            }};
+    }
+    
     private Pair<List<Object>,Long> buildHttpRequest(
             final URI uri,
             final Object request, 
