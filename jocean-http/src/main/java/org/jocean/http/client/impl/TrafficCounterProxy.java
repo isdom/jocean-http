@@ -18,7 +18,7 @@ class TrafficCounterProxy extends Feature.AbstractFeature0
 
     @Override
     public String toString() {
-        return "INTERACTION_METER";
+        return "TRAFFIC_COUNTER";
     }
     
     /* (non-Javadoc)
