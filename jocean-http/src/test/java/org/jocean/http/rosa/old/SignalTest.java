@@ -5,23 +5,26 @@ package org.jocean.http.rosa.old;
 
 import static org.jocean.http.Feature.ENABLE_COMPRESSOR;
 import static org.jocean.http.Feature.ENABLE_LOGGING;
-import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.nio.NioSocketChannel;
 
+import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
+import org.jocean.http.client.Outbound.PayloadCounterFeature;
+import org.jocean.http.client.Outbound.TrafficCounterFeature;
 import org.jocean.http.client.impl.AbstractChannelCreator;
 import org.jocean.http.client.impl.DefaultHttpClient;
+import org.jocean.http.client.impl.HttpClientUtil;
 import org.jocean.http.client.impl.TestChannelPool;
+import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.SignalClient.Attachment;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
-import org.jocean.http.rosa.SignalClient;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioSocketChannel;
 import rx.Subscriber;
 import rx.Subscription;
 
@@ -66,10 +69,9 @@ public class SignalTest {
         client.registerRequestType(
                 AddMultiMediasToJourneyRequest.class, 
                 AddMultiMediasToJourneyResponse.class,
-//                "http://jumpbox.medtap.cn:8888",
-                "http://127.0.0.1:9090",
+                "http://jumpbox.medtap.cn:8888",
+//                "http://127.0.0.1:9090",
                 Outbound.ENABLE_MULTIPART
-                //,new Outbound.ENABLE_PROGRESSIVE(100)
                 );
         
         {
@@ -125,17 +127,22 @@ public class SignalTest {
         }
         latch.await();
         pool.awaitRecycleChannels();
+        */
         {
+            
+            final TrafficCounterFeature trafficCounter = HttpClientUtil.buildTrafficCounterFeature();
+            final PayloadCounterFeature payloadCounter = HttpClientUtil.buildPayloadCounterFeature();
+            
             final AddMultiMediasToJourneyRequest req = new AddMultiMediasToJourneyRequest();
             req.setCaseId("120");
             req.setJourneyId("1");
             
             final Subscription subscription = 
-            client.defineInteraction(req, 
-                    new Attachment("/Users/isdom/Desktop/997df3df73797e91dea4853c228fcbdee36ceb8a38cc8-1vxyhE_fw236.jpeg", "image/jpeg"))
-//                    new Attachment("/Users/isdom/Pictures/2015-05-23-胜利实验一(1)班临安杨溪村亲子活动/11850523/DSC06443.JPG", "image/jpeg"))
-                    
-                .subscribe(new ProgressiveSubscriber<AddMultiMediasToJourneyResponse>() {
+            client.<AddMultiMediasToJourneyResponse>defineInteraction(req, 
+//                    new Attachment("/Users/isdom/Desktop/997df3df73797e91dea4853c228fcbdee36ceb8a38cc8-1vxyhE_fw236.jpeg", "image/jpeg"))
+                    new Feature[]{trafficCounter, payloadCounter},
+                    new Attachment[]{new Attachment("/Users/isdom/Pictures/IMG_3492.JPG", "image/jpeg")}                    )
+                .subscribe(new Subscriber<AddMultiMediasToJourneyResponse>() {
     
                 @Override
                 public void onCompleted() {
@@ -146,7 +153,13 @@ public class SignalTest {
                 public void onError(Throwable e) {
                     LOG.debug("AddMultiMediasToJourneyRequest: onError: {}", ExceptionUtils.exception2detail(e));
                 }
+
+                @Override
+                public void onNext(final AddMultiMediasToJourneyResponse resp) {
+                    LOG.debug("AddMultiMediasToJourneyRequest: onNext: {}", resp);
+                }}
     
+                /*
                 @Override
                 public void onUploadProgress(long progress, long total) {
                     LOG.debug("AddMultiMediasToJourneyRequest->onUploadProgress: {}/{}", progress, total);
@@ -160,11 +173,15 @@ public class SignalTest {
                 @Override
                 public void onResponse(AddMultiMediasToJourneyResponse response) {
                     LOG.debug("AddMultiMediasToJourneyRequest: onNext: {}", response);
-                }});
+                }
+                */
+                );
 //            subscription.unsubscribe();
             //  TODO, why invoke onCompleted Event? not onError, check
             //  TO BE CONTINUE, 2015-05-13
+            LOG.debug("traffic: upload: {}/download: {}", trafficCounter.uploadBytes(), trafficCounter.downloadBytes());
+            LOG.debug("payload: totalUpload: {}/totalDownload: {}", payloadCounter.totalUploadBytes(), 
+                    payloadCounter.totalDownloadBytes());
         }
-        */
     }
 }
