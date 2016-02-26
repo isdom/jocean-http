@@ -12,7 +12,6 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observer;
-import rx.Subscription;
 import rx.functions.Action1;
 
 final class TradeTransport implements Observer<HttpObject>, ResponseSender {
@@ -21,15 +20,16 @@ final class TradeTransport implements Observer<HttpObject>, ResponseSender {
             LoggerFactory.getLogger(TradeTransport.class);
     
     private final Channel _channel;
-    private final Action1<Boolean> _recycleChannelAction;
+    private Action1<Boolean> _recycleChannelAction;
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
     private final AtomicBoolean _isClosed = new AtomicBoolean(false);
-    Subscription _removeHandlers;
 
-    TradeTransport(final Channel channel, 
-            final Action1<Boolean> recycleChannelAction) {
+    TradeTransport(final Channel channel) {
         this._channel = channel;
+    }
+    
+    void setRecycleChannelAction(final Action1<Boolean> recycleChannelAction) {
         this._recycleChannelAction = recycleChannelAction;
     }
 
@@ -96,19 +96,6 @@ final class TradeTransport implements Observer<HttpObject>, ResponseSender {
     @Override
     public synchronized void onTradeClosed(final boolean isResponseCompleted) {
         if (checkActiveAndTryClose()) {
-            //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
-            //  Detail:
-            //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
-            //
-            //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
-            //
-            // See https://github.com/netty/netty/issues/2983 for more information.
-            if (null != this._removeHandlers) {
-                //  TODO, unsubscribe execute in eventloop?
-                // RxNettys.removeHandlersSubscription(channel, diff.call());
-                this._removeHandlers.unsubscribe();
-            }
-            
             final boolean canReuseChannel = 
                     this._isRequestCompleted.get() 
                     && isResponseCompleted 

@@ -47,6 +47,7 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Subscriber;
+import rx.Subscription;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
@@ -131,43 +132,53 @@ public class DefaultHttpServer implements HttpServer {
     private DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        final TradeTransport transport = new TradeTransport(
-                channel, 
-                buildReuseChannelAction(channel, subscriber));
+        final TradeTransport transport = new TradeTransport(channel);
         final DefaultHttpTrade trade = new DefaultHttpTrade(
                 transport,
                 channel.eventLoop());
         final APPLY_WORKER worker = new APPLY_WORKER();
         worker.setHttpObjectObserver(
                 InterfaceUtils.combineImpls(Observer.class, 
-                transport,
-                trade.requestObserver()));
+                    transport,
+                    trade.requestObserver()));
         
-        transport._removeHandlers =
+        transport.setRecycleChannelAction(
+            buildRecycleChannelAction(channel, subscriber, 
                 RxNettys.buildHandlerReleaser(channel, 
-                        worker.call(_APPLY_BUILDER, channel.pipeline()));
+                    worker.call(_APPLY_BUILDER, channel.pipeline()))));
+                
         return trade;
     }
 
-    private Action1<Boolean> buildReuseChannelAction(
+    private Action1<Boolean> buildRecycleChannelAction(
             final Channel channel,
-            final Subscriber<? super HttpTrade> subscriber) {
+            final Subscriber<? super HttpTrade> subscriber,
+            final Subscription subscription) {
         return new Action1<Boolean>() {
             @Override
             public void call(final Boolean canReuseChannel) {
                 if (canReuseChannel && !subscriber.isUnsubscribed()) {
                     channel.flush();
                     if (channel.eventLoop().inEventLoop()) {
+                        subscription.unsubscribe();
                         subscriber.onNext(createHttpTrade(channel, subscriber));
                     } else {
                         channel.eventLoop().submit(new Runnable() {
                             @Override
                             public void run() {
+                                subscription.unsubscribe();
                                 subscriber.onNext(createHttpTrade(channel, subscriber));
                             }
                         });
                     }
                 } else {
+                    //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
+                    //  Detail:
+                    //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
+                    //
+                    //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+                    //
+                    // See https://github.com/netty/netty/issues/2983 for more information.
                     channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
                         .addListener(ChannelFutureListener.CLOSE);
                 }
