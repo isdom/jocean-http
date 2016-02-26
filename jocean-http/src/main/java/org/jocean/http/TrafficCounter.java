@@ -1,4 +1,4 @@
-package org.jocean.http.client;
+package org.jocean.http;
 
 public interface TrafficCounter {
     

@@ -1,20 +1,19 @@
 /**
  * 
  */
-package org.jocean.http.client.impl;
+package org.jocean.http.util;
 
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
-import org.jocean.http.client.TrafficCounter;
-import org.jocean.http.client.Outbound;
+import org.jocean.http.TrafficCounter;
 
 /**
  * @author isdom
  *
  */
 class TrafficCounterProxy extends Feature.AbstractFeature0 
-    implements Outbound.TrafficCounterFeature, TrafficCounterAware {
+    implements Feature.TrafficCounterFeature, TrafficCounterAware {
 
     @Override
     public String toString() {

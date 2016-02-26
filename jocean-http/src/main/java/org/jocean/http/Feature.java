@@ -82,4 +82,10 @@ public interface Feature extends Func2<Feature.HandlerBuilder, ChannelPipeline, 
         
         private final SslContext _sslCtx;
     }
+
+    interface TrafficCounterFeature extends Feature, TrafficCounter {
+    }
+
+    interface PayloadCounterFeature extends Feature, PayloadCounter {
+    }
 }

@@ -8,12 +8,13 @@ import java.net.SocketAddress;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
+import org.jocean.http.TrafficCounter;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.TrafficCounter;
 import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
+import org.jocean.http.util.TrafficCounterAware;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;

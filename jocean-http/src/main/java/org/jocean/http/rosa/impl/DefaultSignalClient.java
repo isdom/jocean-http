@@ -15,11 +15,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.ws.rs.POST;
 
 import org.jocean.http.Feature;
+import org.jocean.http.PayloadCounter;
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.PayloadCounter;
-import org.jocean.http.client.impl.PayloadCounterAware;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.util.FeaturesBuilder;
+import org.jocean.http.util.PayloadCounterAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.BeanHolder;

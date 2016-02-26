@@ -13,10 +13,12 @@ import java.util.concurrent.CountDownLatch;
 
 import javax.net.ssl.SSLException;
 
+import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
-import org.jocean.http.client.Outbound.TrafficCounterFeature;
+import org.jocean.http.Feature.TrafficCounterFeature;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
+import org.jocean.http.util.HttpUtil;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.OnNextSensor;
 import org.jocean.idiom.rx.RxFunctions;
@@ -542,7 +544,7 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            final TrafficCounterFeature counter = HttpClientUtil.buildTrafficCounterFeature();
+            final Feature.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
             
             client.defineInteraction(new LocalAddress("test"), 
                 Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor),
@@ -572,7 +574,7 @@ public class DefaultHttpClientTestCase {
     public void testTrafficCounterWhenHttpHappyPathOnce() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
-        final TrafficCounterFeature counter = HttpClientUtil.buildTrafficCounterFeature();
+        final Feature.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
                 ENABLE_LOGGING,
                 counter);

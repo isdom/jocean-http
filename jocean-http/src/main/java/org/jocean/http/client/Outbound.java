@@ -19,10 +19,4 @@ public class Outbound {
             return "ENABLE_MULTIPART";
         }
     };
-    
-    public interface TrafficCounterFeature extends Feature, TrafficCounter {
-    }
-
-    public interface PayloadCounterFeature extends Feature, PayloadCounter {
-    }
 }

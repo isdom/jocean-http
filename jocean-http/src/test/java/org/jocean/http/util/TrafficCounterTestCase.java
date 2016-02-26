@@ -1,8 +1,9 @@
-package org.jocean.http.client.impl;
+package org.jocean.http.util;
 
 import static org.junit.Assert.*;
 
-import org.jocean.http.client.TrafficCounter;
+import org.jocean.http.TrafficCounter;
+import org.jocean.http.util.TrafficCounterProxy;
 import org.junit.Test;
 
 public class TrafficCounterTestCase {

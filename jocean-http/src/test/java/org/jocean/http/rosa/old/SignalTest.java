@@ -7,17 +7,17 @@ import static org.jocean.http.Feature.ENABLE_COMPRESSOR;
 import static org.jocean.http.Feature.ENABLE_LOGGING;
 
 import org.jocean.http.Feature;
+import org.jocean.http.Feature.PayloadCounterFeature;
+import org.jocean.http.Feature.TrafficCounterFeature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
-import org.jocean.http.client.Outbound.PayloadCounterFeature;
-import org.jocean.http.client.Outbound.TrafficCounterFeature;
 import org.jocean.http.client.impl.AbstractChannelCreator;
 import org.jocean.http.client.impl.DefaultHttpClient;
-import org.jocean.http.client.impl.HttpClientUtil;
 import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.SignalClient.Attachment;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
+import org.jocean.http.util.HttpUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -130,8 +130,8 @@ public class SignalTest {
         */
         {
             
-            final TrafficCounterFeature trafficCounter = HttpClientUtil.buildTrafficCounterFeature();
-            final PayloadCounterFeature payloadCounter = HttpClientUtil.buildPayloadCounterFeature();
+            final Feature.TrafficCounterFeature trafficCounter = HttpUtil.buildTrafficCounterFeature();
+            final Feature.PayloadCounterFeature payloadCounter = HttpUtil.buildPayloadCounterFeature();
             
             final AddMultiMediasToJourneyRequest req = new AddMultiMediasToJourneyRequest();
             req.setCaseId("120");

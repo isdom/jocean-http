@@ -1,20 +1,19 @@
 /**
  * 
  */
-package org.jocean.http.client.impl;
+package org.jocean.http.util;
 
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
-import org.jocean.http.client.Outbound;
-import org.jocean.http.client.PayloadCounter;
+import org.jocean.http.PayloadCounter;
 
 /**
  * @author isdom
  *
  */
 class PayloadCounterProxy extends Feature.AbstractFeature0 
-    implements Outbound.PayloadCounterFeature, PayloadCounterAware {
+    implements Feature.PayloadCounterFeature, PayloadCounterAware {
 
     @Override
     public String toString() {

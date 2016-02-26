@@ -2,7 +2,7 @@ package org.jocean.http.client.impl;
 
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.jocean.http.client.TrafficCounter;
+import org.jocean.http.TrafficCounter;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
