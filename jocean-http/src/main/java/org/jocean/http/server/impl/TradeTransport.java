@@ -40,6 +40,20 @@ final class TradeTransport implements Observer<HttpObject>, ResponseSender {
         this._subscriber = subscriber;
     }
 
+    /* (non-Javadoc)
+     * @see java.lang.Object#toString()
+     */
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append("TradeTransport [requestCompleted=")
+                .append(_requestCompleted.get()).append(", isKeepAlive=")
+                .append(_isKeepAlive.get()).append(", isRecycled=")
+                .append(_isRecycled.get()).append(", channel=").append(_channel)
+                .append("]");
+        return builder.toString();
+    }
+
     @Override
     public void onCompleted() {
         if (LOG.isDebugEnabled()) {
@@ -104,7 +118,7 @@ final class TradeTransport implements Observer<HttpObject>, ResponseSender {
                     .addListener(ChannelFutureListener.CLOSE);
             }
         } else {
-            LOG.warn("onResponseCompleted on recycled channel({})", _channel);
+            LOG.warn("onTradeFinished on recycled channel({})", this._channel);
         }
     }
 }

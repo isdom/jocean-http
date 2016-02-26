@@ -30,9 +30,9 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     public String toString() {
         StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpTrade [request's subscribers.size=")
-                .append(_requestSubscribers.size()).append(", isKeepAlive=")
-                .append(_requestExecutor).append(", transport=")
-                .append(_transport).append("]");
+                .append(_requestSubscribers.size()).append(", requestExecutor=")
+                .append(_requestExecutor).append(", sender=")
+                .append(_sender).append("]");
         return builder.toString();
     }
 
@@ -41,10 +41,8 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     public DefaultHttpTrade(
             final ResponseSender sender, 
-            final Object    transport,
             final Executor  requestExecutor) {
         this._sender = sender;
-        this._transport = transport;
         this._requestExecutor = requestExecutor;
     }
 
@@ -54,7 +52,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     @Override
     public Object transport() {
-        return this._transport;
+        return this._sender;
     }
     
     @Override
@@ -74,7 +72,6 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
     private final Executor _requestExecutor;
-    private final Object   _transport;
     private final ResponseSender _sender;
     
     private final OnSubscribe<HttpObject> _onSubscribeRequest = new OnSubscribe<HttpObject>() {

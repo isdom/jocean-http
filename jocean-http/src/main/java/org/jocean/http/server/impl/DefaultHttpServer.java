@@ -129,7 +129,28 @@ public class DefaultHttpServer implements HttpServer {
     @SuppressWarnings("unchecked") DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        final TradeTransport hook = new TradeTransport(new Action0() {
+        final TradeTransport transport = new TradeTransport(
+                buildReuseChannelAction(channel, subscriber), 
+                channel, 
+                subscriber);
+        final DefaultHttpTrade trade = new DefaultHttpTrade(
+                transport,
+                channel.eventLoop());
+        final APPLY_WORKER worker = new APPLY_WORKER();
+        worker.setHttpObjectObserver(
+                InterfaceUtils.combineImpls(Observer.class, 
+                transport,
+                trade.requestObserver()));
+        
+        transport._removeHandlers =
+                RxNettys.buildHandlerReleaser(channel, 
+                        worker.call(_APPLY_BUILDER, channel.pipeline()));
+        return trade;
+    }
+
+    private Action0 buildReuseChannelAction(final Channel channel,
+            final Subscriber<? super HttpTrade> subscriber) {
+        return new Action0() {
             @Override
             public void call() {
                 if (channel.eventLoop().inEventLoop()) {
@@ -142,21 +163,7 @@ public class DefaultHttpServer implements HttpServer {
                         }
                     });
                 }
-            }}, channel, subscriber);
-        final DefaultHttpTrade trade = new DefaultHttpTrade(
-                hook,
-                channel,
-                channel.eventLoop());
-        final APPLY_WORKER worker = new APPLY_WORKER();
-        worker.setHttpObjectObserver(
-                InterfaceUtils.combineImpls(Observer.class, 
-                hook,
-                trade.requestObserver()));
-        
-        hook._removeHandlers =
-                RxNettys.buildHandlerReleaser(channel, 
-                        worker.call(_APPLY_BUILDER, channel.pipeline()));
-        return trade;
+            }};
     }
 
     public DefaultHttpServer() {
