@@ -27,6 +27,7 @@ public interface HttpClient extends Closeable {
      */
     public Observable<? extends HttpObject> defineInteraction(
             final SocketAddress remoteAddress, 
+            //  wide type for custom http object , eg: HttpPostRequestEncoder used by DefaultSignalClient
             final Observable<? extends Object> request,
             final Feature... features);
 }
