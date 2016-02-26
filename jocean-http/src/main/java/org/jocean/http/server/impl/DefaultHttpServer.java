@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -46,7 +47,7 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Subscriber;
-import rx.functions.Action0;
+import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.functions.FuncN;
@@ -126,13 +127,13 @@ public class DefaultHttpServer implements HttpServer {
             }});
     }
 
-    @SuppressWarnings("unchecked") DefaultHttpTrade createHttpTrade(
+    @SuppressWarnings("unchecked") 
+    private DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
         final TradeTransport transport = new TradeTransport(
-                buildReuseChannelAction(channel, subscriber), 
                 channel, 
-                subscriber);
+                buildReuseChannelAction(channel, subscriber));
         final DefaultHttpTrade trade = new DefaultHttpTrade(
                 transport,
                 channel.eventLoop());
@@ -148,20 +149,27 @@ public class DefaultHttpServer implements HttpServer {
         return trade;
     }
 
-    private Action0 buildReuseChannelAction(final Channel channel,
+    private Action1<Boolean> buildReuseChannelAction(
+            final Channel channel,
             final Subscriber<? super HttpTrade> subscriber) {
-        return new Action0() {
+        return new Action1<Boolean>() {
             @Override
-            public void call() {
-                if (channel.eventLoop().inEventLoop()) {
-                    subscriber.onNext(createHttpTrade(channel, subscriber));
+            public void call(final Boolean canReuseChannel) {
+                if (canReuseChannel && !subscriber.isUnsubscribed()) {
+                    channel.flush();
+                    if (channel.eventLoop().inEventLoop()) {
+                        subscriber.onNext(createHttpTrade(channel, subscriber));
+                    } else {
+                        channel.eventLoop().submit(new Runnable() {
+                            @Override
+                            public void run() {
+                                subscriber.onNext(createHttpTrade(channel, subscriber));
+                            }
+                        });
+                    }
                 } else {
-                    channel.eventLoop().submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            subscriber.onNext(createHttpTrade(channel, subscriber));
-                        }
-                    });
+                    channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
+                        .addListener(ChannelFutureListener.CLOSE);
                 }
             }};
     }

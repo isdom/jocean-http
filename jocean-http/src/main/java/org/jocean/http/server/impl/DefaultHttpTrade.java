@@ -32,7 +32,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         builder.append("DefaultHttpTrade [request's subscribers.size=")
                 .append(_requestSubscribers.size()).append(", requestExecutor=")
                 .append(_requestExecutor).append(", sender=")
-                .append(_sender).append("]");
+                .append(_responseSender).append("]");
         return builder.toString();
     }
 
@@ -42,7 +42,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     public DefaultHttpTrade(
             final ResponseSender sender, 
             final Executor  requestExecutor) {
-        this._sender = sender;
+        this._responseSender = sender;
         this._requestExecutor = requestExecutor;
     }
 
@@ -52,7 +52,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     @Override
     public Object transport() {
-        return this._sender;
+        return this._responseSender;
     }
     
     @Override
@@ -72,7 +72,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
     private final Executor _requestExecutor;
-    private final ResponseSender _sender;
+    private final ResponseSender _responseSender;
     
     private final OnSubscribe<HttpObject> _onSubscribeRequest = new OnSubscribe<HttpObject>() {
         @Override
@@ -146,10 +146,10 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         @Override
         public void onCompleted() {
             try {
-                _sender.onTradeFinished(true);
+                _responseSender.onTradeClosed(true);
             } catch (Exception e) {
-                LOG.warn("exception when ({}).onResponseCompleted, detail:{}",
-                        _sender, ExceptionUtils.exception2detail(e));
+                LOG.warn("exception when ({}).onTradeClosed, detail:{}",
+                        _responseSender, ExceptionUtils.exception2detail(e));
             }
         }
 
@@ -158,21 +158,21 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
             LOG.warn("trade({})'s responseObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             try {
-                _sender.onTradeFinished(false);
+                _responseSender.onTradeClosed(false);
             } catch (Exception e1) {
-                LOG.warn("exception when ({}).onResponseCompleted, detail:{}",
-                        _sender, ExceptionUtils.exception2detail(e1));
+                LOG.warn("exception when ({}).onTradeClosed, detail:{}",
+                        _responseSender, ExceptionUtils.exception2detail(e1));
             }
         }
 
         @Override
         public void onNext(final HttpObject msg) {
             try {
-                _sender.send(msg);
+                //  TODO check write future's isSuccess
+                _responseSender.send(msg);
             } catch (Exception e) {
-                LOG.warn("exception when ({}).output message({}), detail:{}",
-                        _sender, msg, ExceptionUtils.exception2detail(e));
+                LOG.warn("exception when ({}).send message({}), detail:{}",
+                        _responseSender, msg, ExceptionUtils.exception2detail(e));
             }
-            //  TODO check write future's isSuccess
         }};
 }
