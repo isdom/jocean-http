@@ -139,7 +139,7 @@ public class DefaultHttpServer implements HttpServer {
         final APPLY_WORKER worker = new APPLY_WORKER();
         worker.setHttpObjectObserver(
                 InterfaceUtils.combineImpls(Observer.class, 
-                    transport,
+                    transport.requestObserver(),
                     trade.requestObserver()));
         
         transport.setRecycleChannelAction(
