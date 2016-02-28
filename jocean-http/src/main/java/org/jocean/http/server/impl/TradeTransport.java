@@ -14,7 +14,7 @@ import io.netty.util.ReferenceCountUtil;
 import rx.Observer;
 import rx.functions.Action1;
 
-final class TradeTransport implements ResponseSender {
+final class TradeTransport {
     
     private static final Logger LOG =
             LoggerFactory.getLogger(TradeTransport.class);
@@ -47,7 +47,7 @@ final class TradeTransport implements ResponseSender {
         return builder.toString();
     }
 
-    final private Observer<HttpObject> _requestObserver = new Observer<HttpObject>() {
+    private final Observer<HttpObject> _requestObserver = new Observer<HttpObject>() {
         @Override
         public void onCompleted() {
             if (LOG.isDebugEnabled()) {
@@ -81,16 +81,44 @@ final class TradeTransport implements ResponseSender {
         return this._requestObserver;
     }
     
-    @Override
-    public synchronized void send(final Object msg) {
-        if (isActive()) {
-            this._channel.write(ReferenceCountUtil.retain(msg));
-        } else {
-            LOG.warn("sendback msg({}) on closed transport[channel: {}]",
-                msg, this._channel);
+    private final Observer<HttpObject> _responseObserver = new Observer<HttpObject>() {
+        @Override
+        public void onCompleted() {
+            try {
+                onTradeClosed(true);
+            } catch (Exception e) {
+                LOG.warn("exception when ({}).onTradeClosed, detail:{}",
+                        TradeTransport.this, ExceptionUtils.exception2detail(e));
+            }
         }
-    }
 
+        @Override
+        public void onError(final Throwable e) {
+            LOG.warn("trade({})'s responseObserver.onError, detail:{}",
+                    TradeTransport.this, ExceptionUtils.exception2detail(e));
+            try {
+                onTradeClosed(false);
+            } catch (Exception e1) {
+                LOG.warn("exception when ({}).onTradeClosed, detail:{}",
+                        TradeTransport.this, ExceptionUtils.exception2detail(e1));
+            }
+        }
+
+        @Override
+        public void onNext(final HttpObject msg) {
+            if (isActive()) {
+                _channel.write(ReferenceCountUtil.retain(msg));
+            } else {
+                LOG.warn("sendback msg({}) on closed transport[channel: {}]",
+                    msg, _channel);
+            }
+        }
+    };
+    
+    Observer<HttpObject> responseObserver() {
+        return this._responseObserver;
+    }
+    
     private boolean isActive() {
         return !this._isClosed.get();
     }
@@ -99,8 +127,7 @@ final class TradeTransport implements ResponseSender {
         return this._isClosed.compareAndSet(false, true);
     }
     
-    @Override
-    public synchronized void onTradeClosed(final boolean isResponseCompleted) {
+    private synchronized void onTradeClosed(final boolean isResponseCompleted) {
         if (checkActiveAndTryClose()) {
             final boolean canReuseChannel = 
                     this._isRequestCompleted.get() 

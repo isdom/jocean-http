@@ -31,8 +31,8 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpTrade [request's subscribers.size=")
                 .append(_requestSubscribers.size()).append(", requestExecutor=")
-                .append(_requestExecutor).append(", sender=")
-                .append(_responseSender).append("]");
+                .append(_requestExecutor).append(", responseObserver=")
+                .append(_responseObserver).append("]");
         return builder.toString();
     }
 
@@ -40,9 +40,9 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
     public DefaultHttpTrade(
-            final ResponseSender sender, 
+            final Observer<HttpObject> responseObserver,
             final Executor  requestExecutor) {
-        this._responseSender = sender;
+        this._responseObserver = responseObserver;
         this._requestExecutor = requestExecutor;
     }
 
@@ -52,7 +52,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     @Override
     public Object transport() {
-        return this._responseSender;
+        return this._responseObserver;
     }
     
     @Override
@@ -72,7 +72,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
     private final Executor _requestExecutor;
-    private final ResponseSender _responseSender;
+    private final Observer<HttpObject> _responseObserver;
     
     private final OnSubscribe<HttpObject> _onSubscribeRequest = new OnSubscribe<HttpObject>() {
         @Override
@@ -138,41 +138,6 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
                     LOG.warn("exception when invoke subscriber({}).onError, detail:{}",
                             subscriber, ExceptionUtils.exception2detail(e1));
                 }
-            }
-        }};
-        
-    final Subscriber<HttpObject> _responseObserver = new Subscriber<HttpObject>() {
-
-        @Override
-        public void onCompleted() {
-            try {
-                _responseSender.onTradeClosed(true);
-            } catch (Exception e) {
-                LOG.warn("exception when ({}).onTradeClosed, detail:{}",
-                        _responseSender, ExceptionUtils.exception2detail(e));
-            }
-        }
-
-        @Override
-        public void onError(final Throwable e) {
-            LOG.warn("trade({})'s responseObserver.onError, detail:{}",
-                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-            try {
-                _responseSender.onTradeClosed(false);
-            } catch (Exception e1) {
-                LOG.warn("exception when ({}).onTradeClosed, detail:{}",
-                        _responseSender, ExceptionUtils.exception2detail(e1));
-            }
-        }
-
-        @Override
-        public void onNext(final HttpObject msg) {
-            try {
-                //  TODO check write future's isSuccess
-                _responseSender.send(msg);
-            } catch (Exception e) {
-                LOG.warn("exception when ({}).send message({}), detail:{}",
-                        _responseSender, msg, ExceptionUtils.exception2detail(e));
             }
         }};
 }

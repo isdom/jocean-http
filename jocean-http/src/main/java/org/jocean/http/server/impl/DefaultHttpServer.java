@@ -134,7 +134,7 @@ public class DefaultHttpServer implements HttpServer {
             final Subscriber<? super HttpTrade> subscriber) {
         final TradeTransport transport = new TradeTransport(channel);
         final DefaultHttpTrade trade = new DefaultHttpTrade(
-                transport,
+                transport.responseObserver(),
                 channel.eventLoop());
         final APPLY_WORKER worker = new APPLY_WORKER();
         worker.setHttpObjectObserver(
