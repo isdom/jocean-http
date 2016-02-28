@@ -47,36 +47,38 @@ final class TradeTransport implements ResponseSender {
         return builder.toString();
     }
 
+    final private Observer<HttpObject> _requestObserver = new Observer<HttpObject>() {
+        @Override
+        public void onCompleted() {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("TradeTransport: request onCompleted, channel: ({})", _channel);
+            }
+            _isRequestCompleted.set(true);
+        }
+    
+        @Override
+        public void onError(final Throwable e) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("TradeTransport: request onError, channel: ({}), detail: {}", 
+                        _channel,
+                        ExceptionUtils.exception2detail(e));
+            }
+            onTradeClosed(false);
+        }
+    
+        @Override
+        public void onNext(final HttpObject httpobj) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("TradeTransport: request onNext: httpobj ({})", httpobj);
+            }
+            if (httpobj instanceof HttpRequest) {
+                _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpobj));
+            }
+        }
+    };
+    
     Observer<HttpObject> requestObserver() {
-        return new Observer<HttpObject>() {
-            @Override
-            public void onCompleted() {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("TradeTransport: request onCompleted, channel: ({})", _channel);
-                }
-                _isRequestCompleted.set(true);
-            }
-        
-            @Override
-            public void onError(final Throwable e) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("TradeTransport: request onError, channel: ({}), detail: {}", 
-                            _channel,
-                            ExceptionUtils.exception2detail(e));
-                }
-                onTradeClosed(false);
-            }
-        
-            @Override
-            public void onNext(final HttpObject httpobj) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("TradeTransport: request onNext: httpobj ({})", httpobj);
-                }
-                if (httpobj instanceof HttpRequest) {
-                    _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpobj));
-                }
-            }
-        };
+        return this._requestObserver;
     }
     
     @Override
