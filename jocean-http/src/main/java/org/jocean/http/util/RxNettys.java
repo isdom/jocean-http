@@ -40,6 +40,7 @@ import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.functions.Actions;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
@@ -64,6 +65,21 @@ public class RxNettys {
                             }
                         }})
                 : null;
+    }
+    
+    public static Action0 actionToRemoveHandler(
+        final Channel channel,
+        final ChannelHandler handler) {
+        return null != handler 
+                ? new Action0() {
+                    @Override
+                    public void call() {
+                        final ChannelPipeline pipeline = channel.pipeline();
+                        if (pipeline.context(handler) != null) {
+                            pipeline.remove(handler);
+                        }
+                    }}
+                : Actions.empty();
     }
     
     public static final Func1<Object, Object> RETAIN_OBJ = 
@@ -333,7 +349,7 @@ public class RxNettys {
         return new Transformer<T, T>() {
             @Override
             public Observable<T> call(final Observable<T> source) {
-                return source.finallyDo(new Action0() {
+                return source.doAfterTerminate(new Action0() {
                         @Override
                         public void call() {
                             if (LOG.isDebugEnabled() ) {

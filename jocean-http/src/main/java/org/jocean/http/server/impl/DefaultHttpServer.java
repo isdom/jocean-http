@@ -18,6 +18,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
+import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -137,36 +138,35 @@ public class DefaultHttpServer implements HttpServer {
                 transport.responseObserver(),
                 channel.eventLoop());
         final APPLY_WORKER worker = new APPLY_WORKER();
+        
         worker.setHttpObjectObserver(
                 InterfaceUtils.combineImpls(Observer.class, 
                     transport.requestObserver(),
                     trade.requestObserver()));
         
         transport.setRecycleChannelAction(
-            buildRecycleChannelAction(channel, subscriber, 
-                RxNettys.buildHandlerReleaser(channel, 
-                    worker.call(_APPLY_BUILDER, channel.pipeline()))));
+            InterfaceUtils.combineImpls(Action1.class, 
+                RxActions.fromAction0(RxNettys.actionToRemoveHandler(channel, 
+                            worker.call(_APPLY_BUILDER, channel.pipeline()))),
+                buildRecycleChannelAction(channel, subscriber)));
                 
         return trade;
     }
 
     private Action1<Boolean> buildRecycleChannelAction(
             final Channel channel,
-            final Subscriber<? super HttpTrade> subscriber,
-            final Subscription subscription) {
+            final Subscriber<? super HttpTrade> subscriber) {
         return new Action1<Boolean>() {
             @Override
             public void call(final Boolean canReuseChannel) {
                 if (canReuseChannel && !subscriber.isUnsubscribed()) {
                     channel.flush();
                     if (channel.eventLoop().inEventLoop()) {
-                        subscription.unsubscribe();
                         subscriber.onNext(createHttpTrade(channel, subscriber));
                     } else {
                         channel.eventLoop().submit(new Runnable() {
                             @Override
                             public void run() {
-                                subscription.unsubscribe();
                                 subscriber.onNext(createHttpTrade(channel, subscriber));
                             }
                         });
