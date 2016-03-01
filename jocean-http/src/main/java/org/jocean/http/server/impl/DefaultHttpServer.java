@@ -303,12 +303,20 @@ public class DefaultHttpServer implements HttpServer {
                         LOG.debug("channel({})/handler({}): channelRead0 and call onHttpObject({}).onHttpObject with msg({}).", 
                                 ctx.channel(), this, httpObjectObserver, msg);
                     }
-                    //  TODO, try ... catch
-                    httpObjectObserver.onNext(msg);
+                    try {
+                        httpObjectObserver.onNext(msg);
+                    } catch (Exception e) {
+                        LOG.warn("exception when invoke onNext for channel({})/msg ({}), detail: {}.", 
+                                ctx.channel(), msg, ExceptionUtils.exception2detail(e));
+                    }
                     
                     if (msg instanceof LastHttpContent) {
-                        //  TODO, try ... catch
-                        httpObjectObserver.onCompleted();
+                        try {
+                            httpObjectObserver.onCompleted();
+                        } catch (Exception e) {
+                            LOG.warn("exception when invoke onCompleted for channel({}), detail: {}.", 
+                                    ctx.channel(), ExceptionUtils.exception2detail(e));
+                        }
                     }
                 }
 
