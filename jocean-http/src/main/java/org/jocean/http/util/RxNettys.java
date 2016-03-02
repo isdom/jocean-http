@@ -20,6 +20,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
@@ -75,8 +76,13 @@ public class RxNettys {
                     @Override
                     public void call() {
                         final ChannelPipeline pipeline = channel.pipeline();
-                        if (pipeline.context(handler) != null) {
+                        final ChannelHandlerContext ctx = pipeline.context(handler);
+                        if (ctx != null) {
                             pipeline.remove(handler);
+                            if (LOG.isDebugEnabled()) {
+                                LOG.debug("actionToRemoveHandler: channel ({}) remove handler({}) success.", 
+                                        channel, ctx.name());
+                            }
                         }
                     }}
                 : Actions.empty();

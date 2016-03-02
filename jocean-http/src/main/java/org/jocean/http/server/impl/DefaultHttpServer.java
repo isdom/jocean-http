@@ -18,7 +18,6 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
-import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,26 +131,32 @@ public class DefaultHttpServer implements HttpServer {
     private DefaultHttpTrade createHttpTrade(
             final Channel channel, 
             final Subscriber<? super HttpTrade> subscriber) {
-        final TradeTransport transport = new TradeTransport(channel);
+        final TradeTransport transport = new TradeTransport(channel,
+                buildRecycleChannelAction(channel, subscriber));
         final DefaultHttpTrade trade = new DefaultHttpTrade(
                 transport.responseObserver(),
                 channel.eventLoop());
-        final APPLY_WORKER worker = new APPLY_WORKER();
         
-        worker.setHttpObjectObserver(
-                InterfaceUtils.combineImpls(Observer.class, 
-                    transport.requestObserver(),
-                    trade.requestObserver()));
-        
-        transport.setRecycleChannelAction(
-            InterfaceUtils.combineImpls(Action1.class, 
-                RxActions.fromAction0(RxNettys.actionToRemoveHandler(channel, 
-                            worker.call(_APPLY_BUILDER, channel.pipeline()))),
-                buildRecycleChannelAction(channel, subscriber)));
+        buildRequestObservable(channel).subscribe(
+            InterfaceUtils.combineImpls(Observer.class, 
+                transport.requestObserver(),
+                trade.requestObserver()));
                 
         return trade;
     }
 
+    Observable<HttpObject> buildRequestObservable(final Channel channel) {
+        return Observable.create(new OnSubscribe<HttpObject>() {
+            @Override
+            public void call(final Subscriber<? super HttpObject> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    final ChannelHandler handler = APPLY.WORKER.applyTo(channel.pipeline(), subscriber);
+                    subscriber.add(
+                        Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
+                }
+            }} );
+    }
+    
     private Action1<Boolean> buildRecycleChannelAction(
             final Channel channel,
             final Subscriber<? super HttpTrade> subscriber) {
@@ -360,23 +365,6 @@ public class DefaultHttpServer implements HttpServer {
     
     private final static Feature APPLY_HTTPSERVER = new Feature.AbstractFeature0() {};
 
-    private static final class APPLY_WORKER 
-        implements Feature, HttpObjectObserverAware {
-
-        @Override
-        public ChannelHandler call(final HandlerBuilder builder,
-                final ChannelPipeline pipeline) {
-            return APPLY.WORKER.applyTo(pipeline, this._httpObjectObserver);
-        }
-
-        @Override
-        public void setHttpObjectObserver(final Observer<HttpObject> httpObjectObserver) {
-            this._httpObjectObserver = httpObjectObserver;
-        }
-        
-        private Observer<HttpObject> _httpObjectObserver;
-    }
-    
     static {
         _APPLY_BUILDER = new Class2ApplyBuilder();
         _APPLY_BUILDER.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);

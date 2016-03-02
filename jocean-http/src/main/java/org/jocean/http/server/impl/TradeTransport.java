@@ -20,19 +20,16 @@ final class TradeTransport {
             LoggerFactory.getLogger(TradeTransport.class);
     
     private final Channel _channel;
-    private Action1<Boolean> _recycleChannelAction;
+    private final Action1<Boolean> _recycleChannelAction;
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
     private final AtomicBoolean _isClosed = new AtomicBoolean(false);
 
-    TradeTransport(final Channel channel) {
+    TradeTransport(final Channel channel, final Action1<Boolean> recycleChannelAction) {
         this._channel = channel;
-    }
-    
-    void setRecycleChannelAction(final Action1<Boolean> recycleChannelAction) {
         this._recycleChannelAction = recycleChannelAction;
     }
-
+    
     /* (non-Javadoc)
      * @see java.lang.Object#toString()
      */

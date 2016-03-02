@@ -136,6 +136,7 @@ public class DefaultHttpServerTestCase {
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
             assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            Thread.sleep(1000*10);
         } finally {
             client.close();
             testServer.unsubscribe();
