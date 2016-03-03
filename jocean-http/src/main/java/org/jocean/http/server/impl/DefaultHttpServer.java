@@ -117,7 +117,7 @@ public class DefaultHttpServer implements HttpServer {
                                     LOG.debug("initChannel with feature:{}", feature);
                                 }
                             }
-                            APPLY_HTTPSERVER.call(_APPLY_BUILDER, channel.pipeline());
+                            APPLY.HTTPSERVER.applyTo(channel.pipeline());
                             APPLY.GUIDE.applyTo(channel.pipeline(), buildDoTradeAction(channel, subscriber));
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
@@ -408,15 +408,12 @@ public class DefaultHttpServer implements HttpServer {
         private final FuncN<ChannelHandler> _factory;
     }
     
-    private final static Feature APPLY_HTTPSERVER = new Feature.AbstractFeature0() {};
-
     static {
         _APPLY_BUILDER = new Class2ApplyBuilder();
         _APPLY_BUILDER.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
         _APPLY_BUILDER.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
         _APPLY_BUILDER.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
         _APPLY_BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
-        _APPLY_BUILDER.register(APPLY_HTTPSERVER.getClass(), APPLY.HTTPSERVER);
         
     }
 }
