@@ -146,12 +146,12 @@ public class DefaultHttpServer implements HttpServer {
             final Channel channel, 
             final Subscriber<? super HttpTrade> tradeSubscriber) {
         final TradeTransport transport = new TradeTransport(channel,
-                buildRecycleChannelAction(channel, tradeSubscriber));
+                recycleChannelAction(channel, tradeSubscriber));
         final DefaultHttpTrade trade = new DefaultHttpTrade(
                 transport.responseObserver(),
                 channel.eventLoop());
         
-        buildRequestObservable(channel).subscribe(
+        requestObservable(channel).subscribe(
             InterfaceUtils.combineImpls(Observer.class, 
                 transport.requestObserver(),
                 trade.requestObserver()));
@@ -159,19 +159,7 @@ public class DefaultHttpServer implements HttpServer {
         return trade;
     }
 
-    Observable<HttpObject> buildRequestObservable(final Channel channel) {
-        return Observable.create(new OnSubscribe<HttpObject>() {
-            @Override
-            public void call(final Subscriber<? super HttpObject> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    final ChannelHandler handler = APPLY.WORKER.applyTo(channel.pipeline(), subscriber);
-                    subscriber.add(
-                        Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
-                }
-            }} );
-    }
-    
-    private Action1<Boolean> buildRecycleChannelAction(
+    private Action1<Boolean> recycleChannelAction(
             final Channel channel,
             final Subscriber<? super HttpTrade> tradeSubscriber) {
         return new Action1<Boolean>() {
@@ -193,7 +181,19 @@ public class DefaultHttpServer implements HttpServer {
                 }
             }};
     }
-
+    
+    private Observable<HttpObject> requestObservable(final Channel channel) {
+        return Observable.create(new OnSubscribe<HttpObject>() {
+            @Override
+            public void call(final Subscriber<? super HttpObject> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    final ChannelHandler handler = APPLY.WORKER.applyTo(channel.pipeline(), subscriber);
+                    subscriber.add(
+                        Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
+                }
+            }} );
+    }
+    
     public DefaultHttpServer() {
         this(1, 0, Feature.EMPTY_FEATURES);
     }
