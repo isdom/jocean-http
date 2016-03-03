@@ -117,17 +117,10 @@ public class DefaultHttpServerTestCase {
                 }});
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
         try {
-        
-            final ByteBuf content = Unpooled.buffer(0);
-            content.writeBytes(HttpTestServer.CONTENT);
-            final DefaultFullHttpRequest request = 
-                    new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
-            HttpHeaders.setContentLength(request, content.readableBytes());
-            
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
                     new LocalAddress("test"), 
-                    Observable.just(request),
+                    Observable.just(buildFullRequest(HttpTestServer.CONTENT)),
                     Feature.ENABLE_LOGGING)
                 .compose(RxNettys.objects2httpobjs())
                 .map(RxNettys.<HttpObject>retainer())
@@ -144,4 +137,115 @@ public class DefaultHttpServerTestCase {
         }
     }
 
+    @Test
+    public void testHttpHappyPathTwice() throws Exception {
+        final HttpServer server = new DefaultHttpServer(
+                new AbstractBootstrapCreator(
+                new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
+            @Override
+            protected void initializeBootstrap(final ServerBootstrap bootstrap) {
+                bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
+                bootstrap.channel(LocalServerChannel.class);
+            }});
+        
+        final Subscription testServer = 
+                server.defineServer(new LocalAddress("test"),
+                Feature.ENABLE_LOGGING,
+                Feature.ENABLE_COMPRESSOR)
+            .subscribe(new Action1<HttpTrade>() {
+                @Override
+                public void call(final HttpTrade trade) {
+                    trade.request().subscribe(new Subscriber<HttpObject>() {
+                        private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
+                        @Override
+                        public void onCompleted() {
+                            final FullHttpRequest req = retainFullHttpRequest();
+                            if (null!=req) {
+                                try {
+                                    final InputStream is = new ByteBufInputStream(req.content());
+                                    final byte[] bytes = new byte[is.available()];
+                                    is.read(bytes);
+                                    final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
+                                            Unpooled.wrappedBuffer(bytes));
+                                    response.headers().set(CONTENT_TYPE, "text/plain");
+                                    response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                                    Observable.<HttpObject>just(response).subscribe(trade.responseObserver());
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                } finally {
+                                    req.release();
+                                }
+                            }
+                        }
+                        @Override
+                        public void onError(Throwable e) {
+                        }
+                        private FullHttpRequest retainFullHttpRequest() {
+                            if (this._reqHttpObjects.size()>0) {
+                                if (this._reqHttpObjects.get(0) instanceof FullHttpRequest) {
+                                    return ((FullHttpRequest)this._reqHttpObjects.get(0)).retain();
+                                }
+                                
+                                final HttpRequest req = (HttpRequest)this._reqHttpObjects.get(0);
+                                final ByteBuf[] bufs = new ByteBuf[this._reqHttpObjects.size()-1];
+                                for (int idx = 1; idx<this._reqHttpObjects.size(); idx++) {
+                                    bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
+                                }
+                                return new DefaultFullHttpRequest(
+                                        req.getProtocolVersion(), 
+                                        req.getMethod(), 
+                                        req.getUri(), 
+                                        Unpooled.wrappedBuffer(bufs));
+                            } else {
+                                return null;
+                            }
+                        }
+                        @Override
+                        public void onNext(final HttpObject msg) {
+                            this._reqHttpObjects.add(ReferenceCountUtil.retain(msg));
+                        }});
+                }});
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
+        try {
+        
+            final Iterator<HttpObject> itr = 
+                client.defineInteraction(
+                    new LocalAddress("test"), 
+                    Observable.just(buildFullRequest(HttpTestServer.CONTENT)),
+                    Feature.ENABLE_LOGGING)
+                .compose(RxNettys.objects2httpobjs())
+                .map(RxNettys.<HttpObject>retainer())
+                .toBlocking().toIterable().iterator();
+            
+            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
+            
+            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            
+            final Iterator<HttpObject> itr2 = 
+                    client.defineInteraction(
+                        new LocalAddress("test"), 
+                        Observable.just(buildFullRequest(HttpTestServer.CONTENT)),
+                        Feature.ENABLE_LOGGING)
+                    .compose(RxNettys.objects2httpobjs())
+                    .map(RxNettys.<HttpObject>retainer())
+                    .toBlocking().toIterable().iterator();
+                
+                final byte[] bytes2 = RxNettys.httpObjectsAsBytes(itr2);
+                
+                assertTrue(Arrays.equals(bytes2, HttpTestServer.CONTENT));
+        } finally {
+            client.close();
+            testServer.unsubscribe();
+            server.close();
+        }
+    }
+
+    private DefaultFullHttpRequest buildFullRequest(final byte[] bytes) {
+        final ByteBuf content = Unpooled.buffer(0);
+        content.writeBytes(bytes);
+        final DefaultFullHttpRequest request = 
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
+        HttpHeaders.setContentLength(request, content.readableBytes());
+        return request;
+    }
 }
