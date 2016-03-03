@@ -29,6 +29,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
@@ -47,6 +48,7 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Subscriber;
+import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
@@ -116,7 +118,11 @@ public class DefaultHttpServer implements HttpServer {
                                 }
                             }
                             APPLY_HTTPSERVER.call(_APPLY_BUILDER, channel.pipeline());
-                            subscriber.onNext(createHttpTrade(channel, subscriber));
+                            APPLY.GUIDE.applyTo(channel.pipeline(), new Action0() {
+                                @Override
+                                public void call() {
+                                    subscriber.onNext(createHttpTrade(channel, subscriber));
+                                }});
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
                     subscriber.add(RxNettys.subscriptionFrom(future.channel()));
@@ -269,8 +275,49 @@ public class DefaultHttpServer implements HttpServer {
             return new HttpContentCompressor();
         }
     };
-            
-    public static final Func1<Observer<HttpObject>, ChannelHandler> HTTPSERVER_WORK_FUNC1 = 
+
+    private static final Func1<Action0, ChannelHandler> HTTPSERVER_GUIDE_FUNC1 = 
+            new Func1<Action0, ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Action0 doWork) {
+            return new ChannelInboundHandlerAdapter() {
+                @Override
+                public void exceptionCaught(ChannelHandlerContext ctx,
+                        Throwable cause) throws Exception {
+                    LOG.warn("HTTPSERVER_GUIDE_FUNC1: exceptionCaught at channel({})/handler({}), detail:{}", 
+                            ctx.channel(), this,
+                            ExceptionUtils.exception2detail(cause));
+                    ctx.close();
+                }
+
+                @Override
+                public void channelInactive(final ChannelHandlerContext ctx)
+                        throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("HTTPSERVER_GUIDE_FUNC1: channel({})/handler({}): channelInactive.", 
+                                ctx.channel(), ctx.name());
+                    }
+                    ctx.close();
+                }
+
+                @Override
+                public void channelRead(ChannelHandlerContext ctx, final Object msg) throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("HTTPSERVER_GUIDE_FUNC1: channel({})/handler({}): channelRead with msg({}).", 
+                                ctx.channel(), ctx.name(), msg);
+                    }
+                    try {
+                        doWork.call();
+                        ctx.fireChannelRead(msg);
+                    } finally {
+                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
+                    }
+                }
+            };
+        }
+    };
+    
+    private static final Func1<Observer<HttpObject>, ChannelHandler> HTTPSERVER_WORK_FUNC1 = 
             new Func1<Observer<HttpObject>, ChannelHandler>() {
         @Override
         public ChannelHandler call(final Observer<HttpObject> httpObjectObserver) {
@@ -279,7 +326,7 @@ public class DefaultHttpServer implements HttpServer {
                 public void exceptionCaught(ChannelHandlerContext ctx,
                         Throwable cause) throws Exception {
                     LOG.warn("exceptionCaught at channel({})/handler({}), detail:{}, and call onHttpObject({}).onError with TransportException.", 
-                            ctx.channel(), this,
+                            ctx.channel(), ctx.name(),
                             ExceptionUtils.exception2detail(cause), 
                             httpObjectObserver);
                     httpObjectObserver.onError(new TransportException("exceptionCaught", cause));
@@ -296,7 +343,7 @@ public class DefaultHttpServer implements HttpServer {
                         throws Exception {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("channel({})/handler({}): channelInactive and call onHttpObject({}).onError with TransportException.", 
-                                ctx.channel(), this, httpObjectObserver);
+                                ctx.channel(), ctx.name(), httpObjectObserver);
                     }
                     httpObjectObserver.onError(new TransportException("channelInactive"));
                 }
@@ -306,7 +353,7 @@ public class DefaultHttpServer implements HttpServer {
                         final HttpObject msg) throws Exception {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("channel({})/handler({}): channelRead0 and call onHttpObject({}).onHttpObject with msg({}).", 
-                                ctx.channel(), this, httpObjectObserver, msg);
+                                ctx.channel(), ctx.name(), httpObjectObserver, msg);
                     }
                     try {
                         httpObjectObserver.onNext(msg);
@@ -339,6 +386,7 @@ public class DefaultHttpServer implements HttpServer {
         SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
         HTTPSERVER(HTTPSERVER_CODEC_FUNCN),
         CONTENT_COMPRESSOR(CONTENT_COMPRESSOR_FUNCN),
+        GUIDE(Functions.fromFunc(HTTPSERVER_GUIDE_FUNC1)),
         WORKER(Functions.fromFunc(HTTPSERVER_WORK_FUNC1)),
         ;
         
