@@ -118,7 +118,7 @@ public class DefaultHttpServer implements HttpServer {
                                 }
                             }
                             APPLY.HTTPSERVER.applyTo(channel.pipeline());
-                            applyGuideHandlerToChannel(channel, subscriber);
+                            waitforIncomingRequest(channel, subscriber);
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
                     subscriber.add(RxNettys.subscriptionFrom(future.channel()));
@@ -129,7 +129,7 @@ public class DefaultHttpServer implements HttpServer {
             }});
     }
 
-    private void applyGuideHandlerToChannel(final Channel channel,
+    private void waitforIncomingRequest(final Channel channel,
             final Subscriber<? super HttpTrade> tradeSubscriber) {
         APPLY.GUIDE.applyTo(channel.pipeline(), 
             new Action0() {
@@ -179,7 +179,7 @@ public class DefaultHttpServer implements HttpServer {
             public void call(final Boolean canReuseChannel) {
                 if (canReuseChannel && !tradeSubscriber.isUnsubscribed()) {
                     channel.flush();
-                    applyGuideHandlerToChannel(channel, tradeSubscriber);
+                    waitforIncomingRequest(channel, tradeSubscriber);
                 } else {
                     //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
                     //  Detail:
