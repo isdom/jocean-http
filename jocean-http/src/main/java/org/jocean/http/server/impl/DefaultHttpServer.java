@@ -118,11 +118,7 @@ public class DefaultHttpServer implements HttpServer {
                                 }
                             }
                             APPLY_HTTPSERVER.call(_APPLY_BUILDER, channel.pipeline());
-                            APPLY.GUIDE.applyTo(channel.pipeline(), new Action0() {
-                                @Override
-                                public void call() {
-                                    subscriber.onNext(createHttpTrade(channel, subscriber));
-                                }});
+                            APPLY.GUIDE.applyTo(channel.pipeline(), buildDoTradeAction(channel, subscriber));
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
                     subscriber.add(RxNettys.subscriptionFrom(future.channel()));
@@ -171,16 +167,7 @@ public class DefaultHttpServer implements HttpServer {
             public void call(final Boolean canReuseChannel) {
                 if (canReuseChannel && !subscriber.isUnsubscribed()) {
                     channel.flush();
-                    if (channel.eventLoop().inEventLoop()) {
-                        subscriber.onNext(createHttpTrade(channel, subscriber));
-                    } else {
-                        channel.eventLoop().submit(new Runnable() {
-                            @Override
-                            public void run() {
-                                subscriber.onNext(createHttpTrade(channel, subscriber));
-                            }
-                        });
-                    }
+                    APPLY.GUIDE.applyTo(channel.pipeline(), buildDoTradeAction(channel, subscriber));
                 } else {
                     //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
                     //  Detail:
@@ -192,6 +179,16 @@ public class DefaultHttpServer implements HttpServer {
                     channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
                         .addListener(ChannelFutureListener.CLOSE);
                 }
+            }};
+    }
+
+    private Action0 buildDoTradeAction(
+            final Channel channel,
+            final Subscriber<? super HttpTrade> subscriber) {
+        return new Action0() {
+            @Override
+            public void call() {
+                subscriber.onNext(createHttpTrade(channel, subscriber));
             }};
     }
 
