@@ -118,7 +118,7 @@ public class DefaultHttpServer implements HttpServer {
                                 }
                             }
                             APPLY.HTTPSERVER.applyTo(channel.pipeline());
-                            APPLY.GUIDE.applyTo(channel.pipeline(), buildDoTradeAction(channel, subscriber));
+                            applyGuideHandlerToChannel(channel, subscriber);
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
                     subscriber.add(RxNettys.subscriptionFrom(future.channel()));
@@ -129,12 +129,24 @@ public class DefaultHttpServer implements HttpServer {
             }});
     }
 
+    private void applyGuideHandlerToChannel(final Channel channel,
+            final Subscriber<? super HttpTrade> tradeSubscriber) {
+        APPLY.GUIDE.applyTo(channel.pipeline(), 
+            new Action0() {
+                @Override
+                public void call() {
+                    if (!tradeSubscriber.isUnsubscribed()) {
+                        tradeSubscriber.onNext(createHttpTrade(channel, tradeSubscriber));
+                    }
+                }});
+    }
+
     @SuppressWarnings("unchecked") 
     private DefaultHttpTrade createHttpTrade(
             final Channel channel, 
-            final Subscriber<? super HttpTrade> subscriber) {
+            final Subscriber<? super HttpTrade> tradeSubscriber) {
         final TradeTransport transport = new TradeTransport(channel,
-                buildRecycleChannelAction(channel, subscriber));
+                buildRecycleChannelAction(channel, tradeSubscriber));
         final DefaultHttpTrade trade = new DefaultHttpTrade(
                 transport.responseObserver(),
                 channel.eventLoop());
@@ -161,13 +173,13 @@ public class DefaultHttpServer implements HttpServer {
     
     private Action1<Boolean> buildRecycleChannelAction(
             final Channel channel,
-            final Subscriber<? super HttpTrade> subscriber) {
+            final Subscriber<? super HttpTrade> tradeSubscriber) {
         return new Action1<Boolean>() {
             @Override
             public void call(final Boolean canReuseChannel) {
-                if (canReuseChannel && !subscriber.isUnsubscribed()) {
+                if (canReuseChannel && !tradeSubscriber.isUnsubscribed()) {
                     channel.flush();
-                    APPLY.GUIDE.applyTo(channel.pipeline(), buildDoTradeAction(channel, subscriber));
+                    applyGuideHandlerToChannel(channel, tradeSubscriber);
                 } else {
                     //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
                     //  Detail:
@@ -179,16 +191,6 @@ public class DefaultHttpServer implements HttpServer {
                     channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
                         .addListener(ChannelFutureListener.CLOSE);
                 }
-            }};
-    }
-
-    private Action0 buildDoTradeAction(
-            final Channel channel,
-            final Subscriber<? super HttpTrade> subscriber) {
-        return new Action0() {
-            @Override
-            public void call() {
-                subscriber.onNext(createHttpTrade(channel, subscriber));
             }};
     }
 
