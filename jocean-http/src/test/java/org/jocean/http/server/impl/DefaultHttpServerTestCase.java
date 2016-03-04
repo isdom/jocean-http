@@ -47,6 +47,71 @@ import rx.Subscription;
 import rx.functions.Action1;
 
 public class DefaultHttpServerTestCase {
+    private Action1<HttpTrade> echoReactor() {
+        return new Action1<HttpTrade>() {
+            @Override
+            public void call(final HttpTrade trade) {
+                trade.request().subscribe(new Subscriber<HttpObject>() {
+                    private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
+                    @Override
+                    public void onCompleted() {
+                        final FullHttpRequest req = retainFullHttpRequest();
+                        if (null!=req) {
+                            try {
+                                final InputStream is = new ByteBufInputStream(req.content());
+                                final byte[] bytes = new byte[is.available()];
+                                is.read(bytes);
+                                final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
+                                        Unpooled.wrappedBuffer(bytes));
+                                response.headers().set(CONTENT_TYPE, "text/plain");
+                                response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                                Observable.<HttpObject>just(response).subscribe(trade.responseObserver());
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            } finally {
+                                req.release();
+                            }
+                        }
+                    }
+                    @Override
+                    public void onError(Throwable e) {
+                    }
+                    private FullHttpRequest retainFullHttpRequest() {
+                        if (this._reqHttpObjects.size()>0) {
+                            if (this._reqHttpObjects.get(0) instanceof FullHttpRequest) {
+                                return ((FullHttpRequest)this._reqHttpObjects.get(0)).retain();
+                            }
+                            
+                            final HttpRequest req = (HttpRequest)this._reqHttpObjects.get(0);
+                            final ByteBuf[] bufs = new ByteBuf[this._reqHttpObjects.size()-1];
+                            for (int idx = 1; idx<this._reqHttpObjects.size(); idx++) {
+                                bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
+                            }
+                            return new DefaultFullHttpRequest(
+                                    req.getProtocolVersion(), 
+                                    req.getMethod(), 
+                                    req.getUri(), 
+                                    Unpooled.wrappedBuffer(bufs));
+                        } else {
+                            return null;
+                        }
+                    }
+                    @Override
+                    public void onNext(final HttpObject msg) {
+                        this._reqHttpObjects.add(ReferenceCountUtil.retain(msg));
+                    }});
+            }};
+    }
+
+    private DefaultFullHttpRequest buildFullRequest(final byte[] bytes) {
+        final ByteBuf content = Unpooled.buffer(0);
+        content.writeBytes(bytes);
+        final DefaultFullHttpRequest request = 
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
+        HttpHeaders.setContentLength(request, content.readableBytes());
+        return request;
+    }
+    
     @Test
     public void testHttpHappyPathOnce() throws Exception {
         final HttpServer server = new DefaultHttpServer(
@@ -62,59 +127,7 @@ public class DefaultHttpServerTestCase {
                 server.defineServer(new LocalAddress("test"),
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR)
-            .subscribe(new Action1<HttpTrade>() {
-                @Override
-                public void call(final HttpTrade trade) {
-                    trade.request().subscribe(new Subscriber<HttpObject>() {
-                        private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
-                        @Override
-                        public void onCompleted() {
-                            final FullHttpRequest req = retainFullHttpRequest();
-                            if (null!=req) {
-                                try {
-                                    final InputStream is = new ByteBufInputStream(req.content());
-                                    final byte[] bytes = new byte[is.available()];
-                                    is.read(bytes);
-                                    final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
-                                            Unpooled.wrappedBuffer(bytes));
-                                    response.headers().set(CONTENT_TYPE, "text/plain");
-                                    response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                                    Observable.<HttpObject>just(response).subscribe(trade.responseObserver());
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                } finally {
-                                    req.release();
-                                }
-                            }
-                        }
-                        @Override
-                        public void onError(Throwable e) {
-                        }
-                        private FullHttpRequest retainFullHttpRequest() {
-                            if (this._reqHttpObjects.size()>0) {
-                                if (this._reqHttpObjects.get(0) instanceof FullHttpRequest) {
-                                    return ((FullHttpRequest)this._reqHttpObjects.get(0)).retain();
-                                }
-                                
-                                final HttpRequest req = (HttpRequest)this._reqHttpObjects.get(0);
-                                final ByteBuf[] bufs = new ByteBuf[this._reqHttpObjects.size()-1];
-                                for (int idx = 1; idx<this._reqHttpObjects.size(); idx++) {
-                                    bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
-                                }
-                                return new DefaultFullHttpRequest(
-                                        req.getProtocolVersion(), 
-                                        req.getMethod(), 
-                                        req.getUri(), 
-                                        Unpooled.wrappedBuffer(bufs));
-                            } else {
-                                return null;
-                            }
-                        }
-                        @Override
-                        public void onNext(final HttpObject msg) {
-                            this._reqHttpObjects.add(ReferenceCountUtil.retain(msg));
-                        }});
-                }});
+            .subscribe(echoReactor());
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
         try {
             final Iterator<HttpObject> itr = 
@@ -129,7 +142,6 @@ public class DefaultHttpServerTestCase {
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
             assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
-            Thread.sleep(1000*10);
         } finally {
             client.close();
             testServer.unsubscribe();
@@ -152,59 +164,7 @@ public class DefaultHttpServerTestCase {
                 server.defineServer(new LocalAddress("test"),
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR)
-            .subscribe(new Action1<HttpTrade>() {
-                @Override
-                public void call(final HttpTrade trade) {
-                    trade.request().subscribe(new Subscriber<HttpObject>() {
-                        private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
-                        @Override
-                        public void onCompleted() {
-                            final FullHttpRequest req = retainFullHttpRequest();
-                            if (null!=req) {
-                                try {
-                                    final InputStream is = new ByteBufInputStream(req.content());
-                                    final byte[] bytes = new byte[is.available()];
-                                    is.read(bytes);
-                                    final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
-                                            Unpooled.wrappedBuffer(bytes));
-                                    response.headers().set(CONTENT_TYPE, "text/plain");
-                                    response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                                    Observable.<HttpObject>just(response).subscribe(trade.responseObserver());
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                } finally {
-                                    req.release();
-                                }
-                            }
-                        }
-                        @Override
-                        public void onError(Throwable e) {
-                        }
-                        private FullHttpRequest retainFullHttpRequest() {
-                            if (this._reqHttpObjects.size()>0) {
-                                if (this._reqHttpObjects.get(0) instanceof FullHttpRequest) {
-                                    return ((FullHttpRequest)this._reqHttpObjects.get(0)).retain();
-                                }
-                                
-                                final HttpRequest req = (HttpRequest)this._reqHttpObjects.get(0);
-                                final ByteBuf[] bufs = new ByteBuf[this._reqHttpObjects.size()-1];
-                                for (int idx = 1; idx<this._reqHttpObjects.size(); idx++) {
-                                    bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
-                                }
-                                return new DefaultFullHttpRequest(
-                                        req.getProtocolVersion(), 
-                                        req.getMethod(), 
-                                        req.getUri(), 
-                                        Unpooled.wrappedBuffer(bufs));
-                            } else {
-                                return null;
-                            }
-                        }
-                        @Override
-                        public void onNext(final HttpObject msg) {
-                            this._reqHttpObjects.add(ReferenceCountUtil.retain(msg));
-                        }});
-                }});
+            .subscribe(echoReactor());
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
         try {
         
@@ -238,14 +198,5 @@ public class DefaultHttpServerTestCase {
             testServer.unsubscribe();
             server.close();
         }
-    }
-
-    private DefaultFullHttpRequest buildFullRequest(final byte[] bytes) {
-        final ByteBuf content = Unpooled.buffer(0);
-        content.writeBytes(bytes);
-        final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
-        HttpHeaders.setContentLength(request, content.readableBytes());
-        return request;
     }
 }
