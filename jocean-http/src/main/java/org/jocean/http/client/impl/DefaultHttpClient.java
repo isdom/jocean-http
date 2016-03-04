@@ -164,7 +164,7 @@ public class DefaultHttpClient implements HttpClient {
         final TrafficCounterHandler handler = 
                 (TrafficCounterHandler)HttpClientConstants.APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
         
-        add4release.call(RxNettys.buildHandlerReleaser(channel, handler));
+        add4release.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
         return handler;
     }
 
@@ -192,8 +192,9 @@ public class DefaultHttpClient implements HttpClient {
             final Action1<Subscription> add4release) {
         for (Feature feature : features) {
             add4release.call(
-                RxNettys.buildHandlerReleaser(channel, 
-                    feature.call(HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline())));
+                Subscriptions.create(
+                    RxNettys.actionToRemoveHandler(channel, 
+                    feature.call(HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline()))));
         }
     }
     
@@ -218,7 +219,7 @@ public class DefaultHttpClient implements HttpClient {
                 final ChannelHandler handler = new OnSubscribeHandler(responseSubscriber);
                 channel.pipeline().addLast(handler);
                 
-                add4release.call(RxNettys.buildHandlerReleaser(channel, handler));
+                add4release.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
             }};
     }
 

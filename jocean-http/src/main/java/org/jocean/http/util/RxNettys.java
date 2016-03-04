@@ -52,22 +52,6 @@ public class RxNettys {
         throw new IllegalStateException("No instances!");
     }
 
-    public static Subscription buildHandlerReleaser(
-        final Channel channel,
-        final ChannelHandler handler) {
-        return null != handler 
-                ? Subscriptions.create(
-                    new Action0() {
-                        @Override
-                        public void call() {
-                            final ChannelPipeline pipeline = channel.pipeline();
-                            if (pipeline.context(handler) != null) {
-                                pipeline.remove(handler);
-                            }
-                        }})
-                : null;
-    }
-    
     public static Action0 actionToRemoveHandler(
         final Channel channel,
         final ChannelHandler handler) {
