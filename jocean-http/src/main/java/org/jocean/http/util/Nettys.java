@@ -40,12 +40,6 @@ public class Nettys {
         public void setServerChannel(final ServerChannel serverChannel);
     }
     
-//    public interface OnHttpObject {
-//        //@GuardPaired(paired={"org.jocean.http.util.Nettys._NETTY_REFCOUNTED_GUARD"})
-//        public void onHttpObject(final HttpObject httpObject);
-//        public void onError(Throwable e);
-//    }
-    
     public static ChannelPool unpoolChannels() {
         return new AbstractChannelPool() {
             @Override

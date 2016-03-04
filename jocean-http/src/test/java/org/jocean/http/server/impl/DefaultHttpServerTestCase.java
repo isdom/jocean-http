@@ -5,11 +5,31 @@ import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import static org.junit.Assert.assertTrue;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.jocean.http.Feature;
+import org.jocean.http.client.impl.DefaultHttpClient;
+import org.jocean.http.client.impl.TestChannelCreator;
+import org.jocean.http.server.HttpServer;
+import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.http.server.HttpTestServer;
+import org.jocean.http.util.Nettys.ServerChannelAware;
+import org.jocean.http.util.RxNettys;
+import org.junit.Test;
+
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.ServerChannel;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
@@ -24,33 +44,19 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.ReferenceCountUtil;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-
-import org.jocean.http.Feature;
-import org.jocean.http.client.impl.DefaultHttpClient;
-import org.jocean.http.client.impl.TestChannelCreator;
-import org.jocean.http.server.HttpServer;
-import org.jocean.http.server.HttpServer.HttpTrade;
-import org.jocean.http.server.HttpTestServer;
-import org.jocean.http.util.RxNettys;
-import org.junit.Test;
-
 import rx.Observable;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action1;
 
 public class DefaultHttpServerTestCase {
-    private Action1<HttpTrade> echoReactor() {
+    private Action1<HttpTrade> echoReactor(final AtomicReference<Object> transportRef) {
         return new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade trade) {
+                if (null!=transportRef) {
+                    transportRef.set(trade.transport());
+                }
                 trade.request().subscribe(new Subscriber<HttpObject>() {
                     private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
                     @Override
@@ -127,7 +133,7 @@ public class DefaultHttpServerTestCase {
                 server.defineServer(new LocalAddress("test"),
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR)
-            .subscribe(echoReactor());
+            .subscribe(echoReactor(null));
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
         try {
             final Iterator<HttpObject> itr = 
@@ -159,12 +165,13 @@ public class DefaultHttpServerTestCase {
                 bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
                 bootstrap.channel(LocalServerChannel.class);
             }});
+        final AtomicReference<Object> transportRef = new AtomicReference<Object>();
         
         final Subscription testServer = 
                 server.defineServer(new LocalAddress("test"),
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR)
-            .subscribe(echoReactor());
+            .subscribe(echoReactor(transportRef));
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
         try {
         
@@ -181,6 +188,8 @@ public class DefaultHttpServerTestCase {
             
             assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
             
+            final Object channel1 = transportRef.get();
+            
             final Iterator<HttpObject> itr2 = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
@@ -193,6 +202,10 @@ public class DefaultHttpServerTestCase {
                 final byte[] bytes2 = RxNettys.httpObjectsAsBytes(itr2);
                 
                 assertTrue(Arrays.equals(bytes2, HttpTestServer.CONTENT));
+                
+                final Object channel2 = transportRef.get();
+                assertTrue(channel1 == channel2);
+                
         } finally {
             client.close();
             testServer.unsubscribe();

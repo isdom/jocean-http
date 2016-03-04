@@ -60,7 +60,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     @Override
     public Object transport() {
-        return this._responseObserver;
+        return this._channel;
     }
     
     @Override
