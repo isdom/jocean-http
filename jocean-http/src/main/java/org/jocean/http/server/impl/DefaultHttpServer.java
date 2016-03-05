@@ -185,9 +185,7 @@ public class DefaultHttpServer implements HttpServer {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
-                    final ChannelHandler handler = APPLY.WORKER.applyTo(channel.pipeline(), subscriber);
-                    subscriber.add(
-                        Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
+                    APPLY.WORKER.applyTo(channel.pipeline(), subscriber);
                 }
             }} );
     }
@@ -360,6 +358,8 @@ public class DefaultHttpServer implements HttpServer {
                     }
                     
                     if (msg instanceof LastHttpContent) {
+                        //  remove handler itself
+                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
                         try {
                             httpObjectObserver.onCompleted();
                         } catch (Exception e) {

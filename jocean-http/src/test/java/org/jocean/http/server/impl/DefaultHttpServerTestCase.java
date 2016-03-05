@@ -20,7 +20,6 @@ import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.server.HttpTestServer;
-import org.jocean.http.util.Nettys.ServerChannelAware;
 import org.jocean.http.util.RxNettys;
 import org.junit.Test;
 
@@ -29,7 +28,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelOption;
-import io.netty.channel.ServerChannel;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
@@ -190,6 +188,9 @@ public class DefaultHttpServerTestCase {
             
             final Object channel1 = transportRef.get();
             
+            //  TODO
+            //  TOBE fix, client maybe not reused, so server channel not reused, 
+            //  so ensure client channel will be reused
             final Iterator<HttpObject> itr2 = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
