@@ -12,15 +12,18 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
+import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.rx.RxFunctions;
 import org.junit.Test;
 
 import io.netty.bootstrap.ServerBootstrap;
@@ -139,7 +142,6 @@ public class DefaultHttpServerTestCase {
                     new LocalAddress("test"), 
                     Observable.just(buildFullRequest(HttpTestServer.CONTENT)),
                     Feature.ENABLE_LOGGING)
-                .compose(RxNettys.objects2httpobjs())
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
             
@@ -170,15 +172,18 @@ public class DefaultHttpServerTestCase {
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR)
             .subscribe(echoReactor(transportRef));
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator());
+        final TestChannelPool pool = new TestChannelPool(1);
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), pool);
         try {
         
+            final CountDownLatch unsubscribed = new CountDownLatch(1);
+            
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
                     new LocalAddress("test"), 
                     Observable.just(buildFullRequest(HttpTestServer.CONTENT)),
                     Feature.ENABLE_LOGGING)
-                .compose(RxNettys.objects2httpobjs())
+                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
             
@@ -188,6 +193,10 @@ public class DefaultHttpServerTestCase {
             
             final Object channel1 = transportRef.get();
             
+            unsubscribed.await();
+            //  await for 1 second
+            pool.awaitRecycleChannels(1);
+            
             //  TODO
             //  TOBE fix, client maybe not reused, so server channel not reused, 
             //  so ensure client channel will be reused
@@ -196,7 +205,6 @@ public class DefaultHttpServerTestCase {
                         new LocalAddress("test"), 
                         Observable.just(buildFullRequest(HttpTestServer.CONTENT)),
                         Feature.ENABLE_LOGGING)
-                    .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
