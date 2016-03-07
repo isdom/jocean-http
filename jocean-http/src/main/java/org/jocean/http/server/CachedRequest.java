@@ -3,6 +3,7 @@ package org.jocean.http.server;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.idiom.ExceptionUtils;
@@ -51,6 +52,8 @@ public class CachedRequest {
     }
     
     public CachedRequest(final HttpTrade trade, final int maxBlockSize) {
+        this._currentBlock.set(new ArrayList<HttpContent>());
+        this._reqHttpObjects.set(new ArrayList<HttpObject>());
         this._maxBlockSize = maxBlockSize > 0 ? maxBlockSize : _MAX_BLOCK_SIZE;
         this._trade = trade;
         trade.request().subscribe(new Observer<HttpObject>() {
@@ -104,37 +107,50 @@ public class CachedRequest {
     }
     
     private HttpContent buildCurrentBlockAndReset() {
-        try {
-            if (this._currentBlock.size()>1) {
-                final ByteBuf[] bufs = new ByteBuf[this._currentBlock.size()];
-                for (int idx = 0; idx<this._currentBlock.size(); idx++) {
-                    bufs[idx] = this._currentBlock.get(idx).content();
+        //  TODO synchronized
+        final List<HttpContent> currentBlock = this._currentBlock.get();
+        if (null != currentBlock) {
+            try {
+                if (currentBlock.size()>1) {
+                    final ByteBuf[] bufs = new ByteBuf[currentBlock.size()];
+                    for (int idx = 0; idx<currentBlock.size(); idx++) {
+                        bufs[idx] = currentBlock.get(idx).content();
+                    }
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("build block: assemble {} HttpContent to composite content with size {} KB",
+                                bufs.length, (float)_currentBlockSize / 1024f);
+                    }
+                    return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs.length, bufs));
+                } else {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("build block: only one HttpContent with {} KB to build block, so pass through",
+                                (float)_currentBlockSize / 1024f);
+                    }
+                    return currentBlock.get(0);
                 }
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("build block: assemble {} HttpContent to composite content with size {} KB",
-                            bufs.length, (float)_currentBlockSize / 1024f);
-                }
-                return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs.length, bufs));
-            } else {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("build block: only one HttpContent with {} KB to build block, so pass through",
-                            (float)_currentBlockSize / 1024f);
-                }
-                return this._currentBlock.get(0);
+            } finally {
+                currentBlock.clear();
+                this._currentBlockSize = 0;
             }
-        } finally {
-            this._currentBlock.clear();
-            this._currentBlockSize = 0;
+        } else {
+            return null;
         }
     }
 
     private void updateCurrentBlock(final HttpContent content) {
-        this._currentBlock.add(content);
-        this._currentBlockSize += content.content().readableBytes();
+        //  TODO synchronized
+        final List<HttpContent> currentBlock = this._currentBlock.get();
+        if (null != currentBlock) {
+            currentBlock.add(content);
+            this._currentBlockSize += content.content().readableBytes();
+        }
     }
 
     private void addHttpObjectAndNotifySubscribers(final HttpObject httpobj) {
-        this._reqHttpObjects.add(httpobj);
+        final List<HttpObject> reqs = this._reqHttpObjects.get();
+        //  TODO synchronized
+        reqs.add(httpobj);
+        
         for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
             try {
                 subscriber.onNext(httpobj);
@@ -145,18 +161,18 @@ public class CachedRequest {
         }
     }
 
-    public void destroy() {
-        this._trade.requestExecutor().execute(new Runnable() {
-            @Override
-            public void run() {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("destroy CachedRequest with {} HttpObject.",
-                            _reqHttpObjects.size());
-                }
-                clearHttpObjs(_currentBlock);
-                // release all HttpObjects of request
-                clearHttpObjs(_reqHttpObjects);
-            }});
+    public synchronized void destroy() {
+        //  TODO
+        //  synchronized
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("destroy CachedRequest with {} HttpObject.",
+                    this._reqHttpObjects.get().size());
+        }
+        //  TODO atomic replaced this._currentBlock
+        clearHttpObjs(this._currentBlock.get());
+        //  TODO atomic replaced this._currentBlock
+        // release all HttpObjects of request
+        clearHttpObjs(this._reqHttpObjects.get());
     }
     
     private static void clearHttpObjs(final List<? extends HttpObject> httpobjs) {
@@ -168,23 +184,29 @@ public class CachedRequest {
 
     
     public FullHttpRequest retainFullHttpRequest() {
-        if (this._isCompleted && this._reqHttpObjects.size()>0) {
-            if (this._reqHttpObjects.get(0) instanceof FullHttpRequest) {
-                return ((FullHttpRequest)this._reqHttpObjects.get(0)).retain();
+        //  TODO synchronized
+        final List<HttpObject> reqs = this._reqHttpObjects.get();
+        if (null!=reqs) {
+            if (this._isCompleted && reqs.size()>0) {
+                if (reqs.get(0) instanceof FullHttpRequest) {
+                    return ((FullHttpRequest)reqs.get(0)).retain();
+                }
+                
+                final HttpRequest req = (HttpRequest)reqs.get(0);
+                final ByteBuf[] bufs = new ByteBuf[reqs.size()-1];
+                for (int idx = 1; idx<reqs.size(); idx++) {
+                    bufs[idx-1] = ((HttpContent)reqs.get(idx)).content().retain();
+                }
+                final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
+                        req.getProtocolVersion(), 
+                        req.getMethod(), 
+                        req.getUri(), 
+                        Unpooled.wrappedBuffer(bufs));
+                fullreq.headers().add(req.headers());
+                return fullreq;
+            } else {
+                return null;
             }
-            
-            final HttpRequest req = (HttpRequest)this._reqHttpObjects.get(0);
-            final ByteBuf[] bufs = new ByteBuf[this._reqHttpObjects.size()-1];
-            for (int idx = 1; idx<this._reqHttpObjects.size(); idx++) {
-                bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
-            }
-            final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
-                    req.getProtocolVersion(), 
-                    req.getMethod(), 
-                    req.getUri(), 
-                    Unpooled.wrappedBuffer(bufs));
-            fullreq.headers().add(req.headers());
-            return fullreq;
         } else {
             return null;
         }
@@ -207,7 +229,9 @@ public class CachedRequest {
                                 }
                                 return;
                             }
-                            for (HttpObject httpObj : _reqHttpObjects ) {
+                            //  TODO synchronized
+                            final List<HttpObject> reqs = _reqHttpObjects.get();
+                            for (HttpObject httpObj : reqs ) {
                                 subscriber.onNext(httpObj);
                             }
                             if (_isCompleted) {
@@ -228,10 +252,11 @@ public class CachedRequest {
     
     private final int _maxBlockSize;
     
-    private final List<HttpContent> _currentBlock = new ArrayList<>();
+    private final AtomicReference<List<HttpContent>> _currentBlock = 
+            new AtomicReference<>();
     private int _currentBlockSize = 0;
     
-    private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
+    private final AtomicReference<List<HttpObject>> _reqHttpObjects = new AtomicReference<>();
     private final List<Subscriber<? super HttpObject>> _subscribers = new CopyOnWriteArrayList<>();
     private boolean _isCompleted = false;
     private volatile Throwable _error = null;
