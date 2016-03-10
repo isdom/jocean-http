@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
-import org.jocean.idiom.DestroyableRef;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.StatefulRef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -107,7 +107,7 @@ public class CachedRequest {
     }
     
     private HttpContent buildCurrentBlockAndReset() {
-        return this._currentBlockRef.callIfNotNull(new Func1<List<HttpContent>,HttpContent>() {
+        return this._currentBlockRef.callWhenActive(new Func1<List<HttpContent>,HttpContent>() {
             @Override
             public HttpContent call(final List<HttpContent> currentBlock) {
                 try {
@@ -132,20 +132,21 @@ public class CachedRequest {
                     currentBlock.clear();
                     _currentBlockSize = 0;
                 }
-            }}, null);
+            }}).call();
     }
 
     private void updateCurrentBlock(final HttpContent content) {
-        this._currentBlockRef.submitIfNotNull(new Action1<List<HttpContent>>() {
+        this._currentBlockRef.submitWhenActive(new Action1<List<HttpContent>>() {
             @Override
             public void call(final List<HttpContent> currentBlock) {
                 currentBlock.add(content);
                 _currentBlockSize += content.content().readableBytes();
-            }});
+            }})
+        .call();
     }
 
     private void addHttpObjectAndNotifySubscribers(final HttpObject httpobj) {
-        this._reqHttpObjectsRef.submitIfNotNull(new Action1<List<HttpObject>>() {
+        this._reqHttpObjectsRef.submitWhenActive(new Action1<List<HttpObject>>() {
             @Override
             public void call(final List<HttpObject> reqs) {
                 reqs.add(httpobj);
@@ -157,7 +158,8 @@ public class CachedRequest {
                             subscriber, ExceptionUtils.exception2detail(e));
                     }
                 }
-            }});
+            }})
+        .call();;
     }
 
     public void destroy() {
@@ -186,7 +188,7 @@ public class CachedRequest {
     }
     
     public FullHttpRequest retainFullHttpRequest() {
-        return this._reqHttpObjectsRef.callIfNotNull(new Func1<List<HttpObject>,FullHttpRequest>() {
+        return this._reqHttpObjectsRef.callWhenActive(new Func1<List<HttpObject>,FullHttpRequest>() {
             @Override
             public FullHttpRequest call(final List<HttpObject> reqs) {
                 if (_isCompleted && reqs.size()>0) {
@@ -209,7 +211,7 @@ public class CachedRequest {
                 } else {
                     return null;
                 }
-            }}, null);
+            }}).call();
     }
     
     public Observable<HttpObject> request() {
@@ -229,13 +231,13 @@ public class CachedRequest {
                                 }
                                 return;
                             }
-                            _reqHttpObjectsRef.submitIfNotNull(new Action1<List<HttpObject>>() {
+                            _reqHttpObjectsRef.submitWhenActive(new Action1<List<HttpObject>>() {
                                 @Override
                                 public void call(final List<HttpObject> reqs) {
                                     for (HttpObject httpObj : reqs ) {
                                         subscriber.onNext(httpObj);
                                     }
-                                }});
+                                }}).call();
                             if (_isCompleted) {
                                 subscriber.onCompleted();
                             }
@@ -254,12 +256,12 @@ public class CachedRequest {
     
     private final int _maxBlockSize;
     
-    private final DestroyableRef<List<HttpContent>> _currentBlockRef = 
-            new DestroyableRef<>((List<HttpContent>)new ArrayList<HttpContent>());
+    private final StatefulRef<List<HttpContent>> _currentBlockRef = 
+            new StatefulRef<>((List<HttpContent>)new ArrayList<HttpContent>());
     private int _currentBlockSize = 0;
     
-    private final DestroyableRef<List<HttpObject>> _reqHttpObjectsRef = 
-            new DestroyableRef<>((List<HttpObject>)new ArrayList<HttpObject>());
+    private final StatefulRef<List<HttpObject>> _reqHttpObjectsRef = 
+            new StatefulRef<>((List<HttpObject>)new ArrayList<HttpObject>());
     
     private final List<Subscriber<? super HttpObject>> _subscribers = new CopyOnWriteArrayList<>();
     private boolean _isCompleted = false;
