@@ -13,6 +13,7 @@ import org.jocean.http.Feature;
 
 import rx.Observable;
 import rx.Observer;
+import rx.functions.Action0;
 import rx.functions.Func0;
 
 /**
@@ -39,6 +40,7 @@ public interface HttpServer extends Closeable {
         public Executor requestExecutor();
         public Observer<HttpObject> responseObserver();
         public Object transport();
+        public void addOnTradeClosed(final Action0 onTradeClosed);
     }
     
     public class TransportException extends RuntimeException {

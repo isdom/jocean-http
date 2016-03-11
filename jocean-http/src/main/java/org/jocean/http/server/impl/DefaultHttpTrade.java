@@ -9,7 +9,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.server.HttpServer;
+import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.StatefulRef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,6 +80,23 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         return this._responseObserver;
     }
     
+    @Override
+    public void addOnTradeClosed(final Action0 onTradeClosed) {
+        this._onTradeClosedRef.submitWhenActive(new Action1<COWCompositeSupport<Action0>>() {
+            @Override
+            public void call(final COWCompositeSupport<Action0> actions) {
+                actions.addComponent(onTradeClosed);
+            }})
+        .submitWhenDestroyed(new Action0() {
+            @Override
+            public void call() {
+                onTradeClosed.call();
+            }})
+        .call();
+    }
+    
+    private final StatefulRef<COWCompositeSupport<Action0>> _onTradeClosedRef = 
+            new StatefulRef<>(new COWCompositeSupport<Action0>());
     private final Channel _channel;
     private final Action1<Boolean> _onTradeClosed;
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
@@ -206,11 +225,25 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
                     this._isRequestCompleted.get() 
                     && isResponseCompleted 
                     && this._isKeepAlive.get();
-            this._onTradeClosed.call(canReuseChannel);
+            try {
+                this._onTradeClosed.call(canReuseChannel);
+            } catch (Exception e) {
+                LOG.warn("exception when invoke _onTradeClosed, detail:{}", 
+                        ExceptionUtils.exception2detail(e));
+            }
             if (LOG.isDebugEnabled()) {
                 LOG.debug("invoke onTradeClosed on active trade[channel: {}] with canReuseChannel({})", 
                         this._channel, canReuseChannel);
             }
+            this._onTradeClosedRef.destroy(new Action1<COWCompositeSupport<Action0>>() {
+                @Override
+                public void call(final COWCompositeSupport<Action0> actions) {
+                    actions.foreachComponent(new Action1<Action0>() {
+                        @Override
+                        public void call(final Action0 onTradeClosed) {
+                            onTradeClosed.call();
+                        }});
+                }});
         } else {
             LOG.warn("invoke onTradeClosed on closed trade[channel: {}]", this._channel);
         }
