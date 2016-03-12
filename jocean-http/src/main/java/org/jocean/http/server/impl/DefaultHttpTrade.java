@@ -41,7 +41,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
                 .append(_requestSubscribers.size()).append(", isRequestCompleted=")
                 .append(_isRequestCompleted.get()).append(", isKeepAlive=")
                 .append(_isKeepAlive.get()).append(", isClosed=")
-                .append(_isClosed.get()).append(", channel=").append(_channel)
+                .append(_isActive.get()).append(", channel=").append(_channel)
                 .append("]");
         return builder.toString();
     }
@@ -60,6 +60,11 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         return this._requestObserver;
     }
     
+    @Override
+    public boolean isActive() {
+        return this._isActive.get();
+    }
+
     @Override
     public Object transport() {
         return this._channel;
@@ -101,7 +106,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     private final Action1<Boolean> _onTradeClosed;
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
-    private final AtomicBoolean _isClosed = new AtomicBoolean(false);
+    private final AtomicBoolean _isActive = new AtomicBoolean(true);
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
     
     private final Observer<HttpObject> _responseObserver = new Observer<HttpObject>() {
@@ -211,12 +216,8 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         }
     };
         
-    private boolean isActive() {
-        return !this._isClosed.get();
-    }
-
     private boolean checkActiveAndTryClose() {
-        return this._isClosed.compareAndSet(false, true);
+        return this._isActive.compareAndSet(true, false);
     }
     
     private synchronized void doCloseTrade(final boolean isResponseCompleted) {

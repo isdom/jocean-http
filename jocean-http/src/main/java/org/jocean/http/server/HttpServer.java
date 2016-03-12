@@ -36,6 +36,7 @@ public interface HttpServer extends Closeable {
             final Feature ... features);
     
     public interface HttpTrade {
+        public boolean isActive();
         public Observable<? extends HttpObject> request();
         public Executor requestExecutor();
         public Observer<HttpObject> responseObserver();
