@@ -51,15 +51,13 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     public DefaultHttpTrade(
             final Channel channel, 
-            final Action1<Boolean> onTradeClosed) {
+            final Observable<HttpObject> requestObservable, 
+            final Action1<Boolean> recycleChannelAction) {
         this._channel = channel;
-        this._onTradeClosed = onTradeClosed;
+        this._recycleChannelAction = recycleChannelAction;
+        requestObservable.subscribe(this._requestObserver);
     }
 
-    Observer<HttpObject> requestObserver() {
-        return this._requestObserver;
-    }
-    
     @Override
     public boolean isActive() {
         return this._isActive.get();
@@ -103,7 +101,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     private final StatefulRef<COWCompositeSupport<Action0>> _onTradeClosedRef = 
             new StatefulRef<>(new COWCompositeSupport<Action0>());
     private final Channel _channel;
-    private final Action1<Boolean> _onTradeClosed;
+    private final Action1<Boolean> _recycleChannelAction;
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
     private final AtomicBoolean _isActive = new AtomicBoolean(true);
@@ -226,9 +224,9 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
                     this._isRequestCompleted.get() 
                     && isResponseCompleted 
                     && this._isKeepAlive.get();
-            if (null!=this._onTradeClosed) {
+            if (null!=this._recycleChannelAction) {
                 try {
-                    this._onTradeClosed.call(canReuseChannel);
+                    this._recycleChannelAction.call(canReuseChannel);
                 } catch (Exception e) {
                     LOG.warn("exception when invoke _onTradeClosed, detail:{}", 
                             ExceptionUtils.exception2detail(e));

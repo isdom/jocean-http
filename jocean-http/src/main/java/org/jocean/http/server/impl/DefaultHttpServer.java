@@ -144,17 +144,13 @@ public class DefaultHttpServer implements HttpServer {
                 }});
     }
 
-    private DefaultHttpTrade httpTradeOf(
+    private HttpTrade httpTradeOf(
             final Channel channel, 
-            final Action1<Boolean> onTradeClosed) {
-        final DefaultHttpTrade trade = new DefaultHttpTrade(
+            final Action1<Boolean> recycleChannelAction) {
+        return new DefaultHttpTrade(
                 channel,
-                onTradeClosed);
-        
-        requestObservable(channel).subscribe(
-                trade.requestObserver());
-                
-        return trade;
+                requestObservable(channel),
+                recycleChannelAction);
     }
 
     private Action1<Boolean> recycleChannelAction(

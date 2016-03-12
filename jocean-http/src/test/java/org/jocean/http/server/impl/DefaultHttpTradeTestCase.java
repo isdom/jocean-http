@@ -16,7 +16,9 @@ public class DefaultHttpTradeTestCase {
 
     @Test
     public final void testOnTradeClosedCalledWhenClosed() {
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), null);
+        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+                Observable.<HttpObject>empty(),
+                null);
         
         final AtomicBoolean onClosed = new AtomicBoolean(false);
         trade.addOnTradeClosed(new Action0(){
@@ -27,18 +29,20 @@ public class DefaultHttpTradeTestCase {
             }});
         
         assertFalse(onClosed.get());
+        assertTrue(trade.isActive());
         
-        Observable.<HttpObject>error(new RuntimeException("RequestError"))
-            .subscribe(trade.requestObserver());
+        Observable.<HttpObject>error(new RuntimeException("ResponseError"))
+            .subscribe(trade.responseObserver());
         
         assertTrue(onClosed.get());
     }
 
     @Test
     public final void testInvokeAddOnTradeClosedCallAfterClosed() {
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), null);
-        Observable.<HttpObject>error(new RuntimeException("RequestError"))
-        .subscribe(trade.requestObserver());
+        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+                Observable.<HttpObject>error(new RuntimeException("RequestError")), null);
+        
+        assertFalse(trade.isActive());
         
         final AtomicBoolean onClosed = new AtomicBoolean(false);
         trade.addOnTradeClosed(new Action0(){
