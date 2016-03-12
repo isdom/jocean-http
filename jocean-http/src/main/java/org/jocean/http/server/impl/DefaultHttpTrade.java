@@ -175,8 +175,8 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         @Override
         public void onNext(final HttpObject httpObject) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("trade({}) requestObserver.onNext, httpobj:{}",
-                        this, httpObject);
+                LOG.debug("({}) requestObserver.onNext, httpobj:{}",
+                        DefaultHttpTrade.this, httpObject);
             }
             if (httpObject instanceof HttpRequest) {
                 _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpObject));
@@ -195,8 +195,8 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         
         @Override
         public void onError(final Throwable e) {
-            LOG.warn("trade({}) requestObserver.onError, detail:{}",
-                    this, ExceptionUtils.exception2detail(e));
+            LOG.warn("({}) requestObserver.onError, detail:{}",
+                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
                 try {
                     if (!subscriber.isUnsubscribed()) {
@@ -233,7 +233,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
                             ExceptionUtils.exception2detail(e));
                 }
             } else {
-                LOG.warn("trade{}'s _onTradeClosed is null", this);
+                LOG.warn("({})'s _onTradeClosed is null", this);
             }
             if (LOG.isDebugEnabled()) {
                 LOG.debug("invoke onTradeClosed on active trade[channel: {}] with canReuseChannel({})", 
