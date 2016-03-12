@@ -225,11 +225,15 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
                     this._isRequestCompleted.get() 
                     && isResponseCompleted 
                     && this._isKeepAlive.get();
-            try {
-                this._onTradeClosed.call(canReuseChannel);
-            } catch (Exception e) {
-                LOG.warn("exception when invoke _onTradeClosed, detail:{}", 
-                        ExceptionUtils.exception2detail(e));
+            if (null!=this._onTradeClosed) {
+                try {
+                    this._onTradeClosed.call(canReuseChannel);
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke _onTradeClosed, detail:{}", 
+                            ExceptionUtils.exception2detail(e));
+                }
+            } else {
+                LOG.warn("trade{}'s _onTradeClosed is null", this);
             }
             if (LOG.isDebugEnabled()) {
                 LOG.debug("invoke onTradeClosed on active trade[channel: {}] with canReuseChannel({})", 
