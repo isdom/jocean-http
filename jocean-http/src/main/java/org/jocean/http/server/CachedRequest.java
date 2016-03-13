@@ -147,7 +147,7 @@ public class CachedRequest {
     }
     
     public FullHttpRequest retainFullHttpRequest() {
-        return _retainFullHttpRequest.call();
+        return this._retainFullHttpRequest.call();
     }
     
     public Observable<HttpObject> request() {
@@ -201,9 +201,11 @@ public class CachedRequest {
             new Action1_N<List<HttpContent>>() {
         @Override
         public void call(final List<HttpContent> currentBlock, final Object...args) {
-            final HttpContent httpContent = (HttpContent)args[0];
-            currentBlock.add(httpContent);
-            _currentBlockSize += httpContent.content().readableBytes();
+            if (args.length >= 1) {
+                final HttpContent httpContent = (HttpContent)args[0];
+                currentBlock.add(httpContent);
+                _currentBlockSize += httpContent.content().readableBytes();
+            }
         }});
     
     private final FuncN<HttpContent> _buildCurrentBlockAndReset = 
@@ -243,14 +245,16 @@ public class CachedRequest {
             new Action1_N<List<HttpObject>>() {
         @Override
         public void call(final List<HttpObject> reqs,final Object...args) {
-            final HttpObject httpobj = (HttpObject)args[0];
-            reqs.add(httpobj);
-            for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
-                try {
-                    subscriber.onNext(httpobj);
-                } catch (Throwable e) {
-                    LOG.warn("exception when request's ({}).onNext, detail:{}",
-                        subscriber, ExceptionUtils.exception2detail(e));
+            if (args.length >= 1) {
+                final HttpObject httpobj = (HttpObject)args[0];
+                reqs.add(httpobj);
+                for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
+                    try {
+                        subscriber.onNext(httpobj);
+                    } catch (Throwable e) {
+                        LOG.warn("exception when request's ({}).onNext, detail:{}",
+                            subscriber, ExceptionUtils.exception2detail(e));
+                    }
                 }
             }
         }});
@@ -283,6 +287,6 @@ public class CachedRequest {
         }});
     
     private final List<Subscriber<? super HttpObject>> _subscribers = new CopyOnWriteArrayList<>();
-    private boolean _isCompleted = false;
+    private volatile boolean _isCompleted = false;
     private volatile Throwable _error = null;
 }

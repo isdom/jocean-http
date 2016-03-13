@@ -108,25 +108,31 @@ class DefaultHttpTrade implements HttpTrade {
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> actions, final Object...args) {
-                @SuppressWarnings("unchecked")
-                final Action1<HttpTrade> onTradeClosed = (Action1<HttpTrade>)args[0];
-                actions.addComponent(onTradeClosed);
+                if (args.length >= 1) {
+                    @SuppressWarnings("unchecked")
+                    final Action1<HttpTrade> onTradeClosed = (Action1<HttpTrade>)args[0];
+                    actions.addComponent(onTradeClosed);
+                }
             }})
         .submitWhenDestroyed(new ActionN() {
             @Override
             public void call(final Object...args) {
-                @SuppressWarnings("unchecked")
-                final Action1<HttpTrade> onTradeClosed = (Action1<HttpTrade>)args[0];
-                onTradeClosed.call(DefaultHttpTrade.this);
+                if (args.length >= 1) {
+                    @SuppressWarnings("unchecked")
+                    final Action1<HttpTrade> onTradeClosed = (Action1<HttpTrade>)args[0];
+                    onTradeClosed.call(DefaultHttpTrade.this);
+                }
             }});
     
     private final ActionN _removeOnTradeClosed = this._onTradeClosedActionsRef.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
         @Override
         public void call(final COWCompositeSupport<Action1<HttpTrade>> actions,final Object...args) {
-            @SuppressWarnings("unchecked")
-            final Action1<HttpTrade> onTradeClosed = (Action1<HttpTrade>)args[0];
-            actions.removeComponent(onTradeClosed);
+            if (args.length >= 1) {
+                @SuppressWarnings("unchecked")
+                final Action1<HttpTrade> onTradeClosed = (Action1<HttpTrade>)args[0];
+                actions.removeComponent(onTradeClosed);
+            }
         }});
     
     private final Channel _channel;
