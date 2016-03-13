@@ -3,17 +3,16 @@
  */
 package org.jocean.http.server;
 
-import io.netty.handler.codec.http.HttpObject;
-
 import java.io.Closeable;
 import java.net.SocketAddress;
 import java.util.concurrent.Executor;
 
 import org.jocean.http.Feature;
 
+import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 import rx.Observer;
-import rx.functions.Action0;
+import rx.functions.Action1;
 import rx.functions.Func0;
 
 /**
@@ -37,11 +36,13 @@ public interface HttpServer extends Closeable {
     
     public interface HttpTrade {
         public boolean isActive();
+        public boolean isEndedWithKeepAlive();
         public Observable<? extends HttpObject> request();
         public Executor requestExecutor();
         public Observer<HttpObject> responseObserver();
         public Object transport();
-        public void addOnTradeClosed(final Action0 onTradeClosed);
+        public HttpTrade addOnTradeClosed(final Action1<HttpTrade> onTradeClosed);
+        public void removeOnTradeClosed(final Action1<HttpTrade> onTradeClosed);
     }
     
     public class TransportException extends RuntimeException {

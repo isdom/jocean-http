@@ -8,7 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.jocean.http.server.HttpServer;
+import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.StatefulRef;
@@ -32,7 +32,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpTrade implements HttpServer.HttpTrade {
+class DefaultHttpTrade implements HttpTrade {
     
     @Override
     public String toString() {
@@ -49,18 +49,23 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
-    public DefaultHttpTrade(
+    DefaultHttpTrade(
             final Channel channel, 
-            final Observable<HttpObject> requestObservable, 
-            final Action1<Boolean> recycleChannelAction) {
+            final Observable<HttpObject> requestObservable) {
         this._channel = channel;
-        this._recycleChannelAction = recycleChannelAction;
         requestObservable.subscribe(this._requestObserver);
     }
 
     @Override
     public boolean isActive() {
         return this._isActive.get();
+    }
+
+    @Override
+    public boolean isEndedWithKeepAlive() {
+        return (this._isRequestCompleted.get() 
+            && this._isResponseCompleted.get()
+            && this._isKeepAlive.get());
     }
 
     @Override
@@ -84,25 +89,35 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     }
     
     @Override
-    public void addOnTradeClosed(final Action0 onTradeClosed) {
-        this._onTradeClosedRef.submitWhenActive(new Action1<COWCompositeSupport<Action0>>() {
+    public HttpTrade addOnTradeClosed(final Action1<HttpTrade> onTradeClosed) {
+        this._onTradeClosedActionsRef.submitWhenActive(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
-            public void call(final COWCompositeSupport<Action0> actions) {
+            public void call(final COWCompositeSupport<Action1<HttpTrade>> actions) {
                 actions.addComponent(onTradeClosed);
             }})
         .submitWhenDestroyed(new Action0() {
             @Override
             public void call() {
-                onTradeClosed.call();
+                onTradeClosed.call(DefaultHttpTrade.this);
             }})
         .call();
+        return this;
     }
     
-    private final StatefulRef<COWCompositeSupport<Action0>> _onTradeClosedRef = 
-            new StatefulRef<>(new COWCompositeSupport<Action0>());
+    @Override
+    public void removeOnTradeClosed(final Action1<HttpTrade> onTradeClosed) {
+        this._onTradeClosedActionsRef.submitWhenActive(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
+            @Override
+            public void call(final COWCompositeSupport<Action1<HttpTrade>> actions) {
+                actions.removeComponent(onTradeClosed);
+            }}).call();
+    }
+    
+    private final StatefulRef<COWCompositeSupport<Action1<HttpTrade>>> _onTradeClosedActionsRef = 
+            new StatefulRef<>(new COWCompositeSupport<Action1<HttpTrade>>());
     private final Channel _channel;
-    private final Action1<Boolean> _recycleChannelAction;
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
+    private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
     private final AtomicBoolean _isActive = new AtomicBoolean(true);
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
@@ -125,7 +140,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
             try {
                 doCloseTrade(false);
             } catch (Exception e1) {
-                LOG.warn("exception when ({}).onTradeClosed, detail:{}",
+                LOG.warn("exception when trade({}).onTradeClosed, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e1));
             }
         }
@@ -160,7 +175,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         @Override
         public void onCompleted() {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("trade({}) requestObserver.onCompleted", this);
+                LOG.debug("trade({}) requestObserver.onCompleted", DefaultHttpTrade.this);
             }
             _isRequestCompleted.set(true);
             for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
@@ -178,7 +193,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         @Override
         public void onNext(final HttpObject httpObject) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("({}) requestObserver.onNext, httpobj:{}",
+                LOG.debug("trade({}) requestObserver.onNext, httpobj:{}",
                         DefaultHttpTrade.this, httpObject);
             }
             if (httpObject instanceof HttpRequest) {
@@ -198,7 +213,7 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
         
         @Override
         public void onError(final Throwable e) {
-            LOG.warn("({}) requestObserver.onError, detail:{}",
+            LOG.warn("trade({}) requestObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
                 try {
@@ -220,31 +235,18 @@ class DefaultHttpTrade implements HttpServer.HttpTrade {
     
     private synchronized void doCloseTrade(final boolean isResponseCompleted) {
         if (checkActiveAndTryClose()) {
-            final boolean canReuseChannel = 
-                    this._isRequestCompleted.get() 
-                    && isResponseCompleted 
-                    && this._isKeepAlive.get();
-            if (null!=this._recycleChannelAction) {
-                try {
-                    this._recycleChannelAction.call(canReuseChannel);
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke _onTradeClosed, detail:{}", 
-                            ExceptionUtils.exception2detail(e));
-                }
-            } else {
-                LOG.warn("({})'s _onTradeClosed is null", this);
-            }
+            this._isResponseCompleted.set(isResponseCompleted);
             if (LOG.isDebugEnabled()) {
-                LOG.debug("invoke onTradeClosed on active trade[channel: {}] with canReuseChannel({})", 
-                        this._channel, canReuseChannel);
+                LOG.debug("invoke doCloseTrade on active trade[channel: {}] with isEndedWithKeepAlive({})", 
+                        this._channel, this.isEndedWithKeepAlive());
             }
-            this._onTradeClosedRef.destroy(new Action1<COWCompositeSupport<Action0>>() {
+            this._onTradeClosedActionsRef.destroy(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
                 @Override
-                public void call(final COWCompositeSupport<Action0> actions) {
-                    actions.foreachComponent(new Action1<Action0>() {
+                public void call(final COWCompositeSupport<Action1<HttpTrade>> actions) {
+                    actions.foreachComponent(new Action1<Action1<HttpTrade>>() {
                         @Override
-                        public void call(final Action0 onTradeClosed) {
-                            onTradeClosed.call();
+                        public void call(final Action1<HttpTrade> onTradeClosed) {
+                            onTradeClosed.call(DefaultHttpTrade.this);
                         }});
                 }});
         } else {

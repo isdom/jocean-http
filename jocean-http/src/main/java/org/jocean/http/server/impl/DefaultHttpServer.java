@@ -138,28 +138,27 @@ public class DefaultHttpServer implements HttpServer {
                 public void call() {
                     if (!tradeSubscriber.isUnsubscribed()) {
                         tradeSubscriber.onNext(
-                            httpTradeOf(channel, 
-                                recycleChannelAction(channel, tradeSubscriber)));
+                            httpTradeOf(channel)
+                            .addOnTradeClosed(recycleChannelAction(channel, tradeSubscriber)));
                     }
                 }});
     }
 
-    private HttpTrade httpTradeOf(
-            final Channel channel, 
-            final Action1<Boolean> recycleChannelAction) {
+    private HttpTrade httpTradeOf(final Channel channel) {
         return new DefaultHttpTrade(
                 channel,
-                requestObservable(channel),
-                recycleChannelAction);
+                requestObservable(channel));
     }
 
-    private Action1<Boolean> recycleChannelAction(
+    private Action1<HttpTrade> recycleChannelAction(
             final Channel channel,
             final Subscriber<? super HttpTrade> tradeSubscriber) {
-        return new Action1<Boolean>() {
+        return new Action1<HttpTrade>() {
             @Override
-            public void call(final Boolean canReuseChannel) {
-                if (canReuseChannel && channel.isActive() && !tradeSubscriber.isUnsubscribed()) {
+            public void call(final HttpTrade trade) {
+                if (channel.isActive()
+                    && trade.isEndedWithKeepAlive()
+                    && !tradeSubscriber.isUnsubscribed()) {
                     channel.flush();
                     awaitInboundRequest(channel, tradeSubscriber);
                 } else {
