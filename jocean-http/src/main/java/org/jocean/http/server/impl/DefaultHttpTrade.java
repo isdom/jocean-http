@@ -12,6 +12,7 @@ import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.StatefulRef;
+import org.jocean.idiom.rx.Action1_N;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,7 @@ import rx.Observer;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.functions.ActionN;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -90,31 +92,43 @@ class DefaultHttpTrade implements HttpTrade {
     
     @Override
     public HttpTrade addOnTradeClosed(final Action1<HttpTrade> onTradeClosed) {
-        this._onTradeClosedActionsRef.submitWhenActive(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
-            @Override
-            public void call(final COWCompositeSupport<Action1<HttpTrade>> actions) {
-                actions.addComponent(onTradeClosed);
-            }})
-        .submitWhenDestroyed(new Action0() {
-            @Override
-            public void call() {
-                onTradeClosed.call(DefaultHttpTrade.this);
-            }})
-        .call();
+        this._addOnTradeClosed.call(onTradeClosed);
         return this;
     }
     
     @Override
     public void removeOnTradeClosed(final Action1<HttpTrade> onTradeClosed) {
-        this._onTradeClosedActionsRef.submitWhenActive(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
-            @Override
-            public void call(final COWCompositeSupport<Action1<HttpTrade>> actions) {
-                actions.removeComponent(onTradeClosed);
-            }}).call();
+        this._removeOnTradeClosed.call();
     }
     
     private final StatefulRef<COWCompositeSupport<Action1<HttpTrade>>> _onTradeClosedActionsRef = 
             new StatefulRef<>(new COWCompositeSupport<Action1<HttpTrade>>());
+    
+    private final ActionN _addOnTradeClosed = this._onTradeClosedActionsRef.submitWhenActive(
+            new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
+            @Override
+            public void call(final COWCompositeSupport<Action1<HttpTrade>> actions, final Object...args) {
+                @SuppressWarnings("unchecked")
+                final Action1<HttpTrade> onTradeClosed = (Action1<HttpTrade>)args[0];
+                actions.addComponent(onTradeClosed);
+            }})
+        .submitWhenDestroyed(new ActionN() {
+            @Override
+            public void call(final Object...args) {
+                @SuppressWarnings("unchecked")
+                final Action1<HttpTrade> onTradeClosed = (Action1<HttpTrade>)args[0];
+                onTradeClosed.call(DefaultHttpTrade.this);
+            }});
+    
+    private final ActionN _removeOnTradeClosed = this._onTradeClosedActionsRef.submitWhenActive(
+            new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
+        @Override
+        public void call(final COWCompositeSupport<Action1<HttpTrade>> actions,final Object...args) {
+            @SuppressWarnings("unchecked")
+            final Action1<HttpTrade> onTradeClosed = (Action1<HttpTrade>)args[0];
+            actions.removeComponent(onTradeClosed);
+        }});
+    
     private final Channel _channel;
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);

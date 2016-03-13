@@ -7,6 +7,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.StatefulRef;
+import org.jocean.idiom.rx.Action1_N;
+import org.jocean.idiom.rx.Func1_N;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +28,8 @@ import rx.Observer;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Func1;
+import rx.functions.ActionN;
+import rx.functions.FuncN;
 import rx.subscriptions.Subscriptions;
 
 public class CachedRequest {
@@ -107,59 +110,15 @@ public class CachedRequest {
     }
     
     private HttpContent buildCurrentBlockAndReset() {
-        return this._currentBlockRef.callWhenActive(new Func1<List<HttpContent>,HttpContent>() {
-            @Override
-            public HttpContent call(final List<HttpContent> currentBlock) {
-                try {
-                    if (currentBlock.size()>1) {
-                        final ByteBuf[] bufs = new ByteBuf[currentBlock.size()];
-                        for (int idx = 0; idx<currentBlock.size(); idx++) {
-                            bufs[idx] = currentBlock.get(idx).content();
-                        }
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("build block: assemble {} HttpContent to composite content with size {} KB",
-                                    bufs.length, (float)_currentBlockSize / 1024f);
-                        }
-                        return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs.length, bufs));
-                    } else {
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("build block: only one HttpContent with {} KB to build block, so pass through",
-                                    (float)_currentBlockSize / 1024f);
-                        }
-                        return currentBlock.get(0);
-                    }
-                } finally {
-                    currentBlock.clear();
-                    _currentBlockSize = 0;
-                }
-            }}).call();
+        return this._buildCurrentBlockAndReset.call();
     }
 
     private void updateCurrentBlock(final HttpContent content) {
-        this._currentBlockRef.submitWhenActive(new Action1<List<HttpContent>>() {
-            @Override
-            public void call(final List<HttpContent> currentBlock) {
-                currentBlock.add(content);
-                _currentBlockSize += content.content().readableBytes();
-            }})
-        .call();
+        this._updateCurrentBlock.call(content);
     }
 
     private void addHttpObjectAndNotifySubscribers(final HttpObject httpobj) {
-        this._reqHttpObjectsRef.submitWhenActive(new Action1<List<HttpObject>>() {
-            @Override
-            public void call(final List<HttpObject> reqs) {
-                reqs.add(httpobj);
-                for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
-                    try {
-                        subscriber.onNext(httpobj);
-                    } catch (Throwable e) {
-                        LOG.warn("exception when request's ({}).onNext, detail:{}",
-                            subscriber, ExceptionUtils.exception2detail(e));
-                    }
-                }
-            }})
-        .call();;
+        this._addHttpObjectAndNotifySubscribers.call(httpobj);
     }
 
     public void destroy() {
@@ -188,30 +147,7 @@ public class CachedRequest {
     }
     
     public FullHttpRequest retainFullHttpRequest() {
-        return this._reqHttpObjectsRef.callWhenActive(new Func1<List<HttpObject>,FullHttpRequest>() {
-            @Override
-            public FullHttpRequest call(final List<HttpObject> reqs) {
-                if (_isCompleted && reqs.size()>0) {
-                    if (reqs.get(0) instanceof FullHttpRequest) {
-                        return ((FullHttpRequest)reqs.get(0)).retain();
-                    }
-                    
-                    final HttpRequest req = (HttpRequest)reqs.get(0);
-                    final ByteBuf[] bufs = new ByteBuf[reqs.size()-1];
-                    for (int idx = 1; idx<reqs.size(); idx++) {
-                        bufs[idx-1] = ((HttpContent)reqs.get(idx)).content().retain();
-                    }
-                    final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
-                            req.getProtocolVersion(), 
-                            req.getMethod(), 
-                            req.getUri(), 
-                            Unpooled.wrappedBuffer(bufs));
-                    fullreq.headers().add(req.headers());
-                    return fullreq;
-                } else {
-                    return null;
-                }
-            }}).call();
+        return _retainFullHttpRequest.call();
     }
     
     public Observable<HttpObject> request() {
@@ -231,9 +167,9 @@ public class CachedRequest {
                                 }
                                 return;
                             }
-                            _reqHttpObjectsRef.submitWhenActive(new Action1<List<HttpObject>>() {
+                            _reqHttpObjectsRef.submitWhenActive(new Action1_N<List<HttpObject>>() {
                                 @Override
-                                public void call(final List<HttpObject> reqs) {
+                                public void call(final List<HttpObject> reqs,final Object...args) {
                                     for (HttpObject httpObj : reqs ) {
                                         subscriber.onNext(httpObj);
                                     }
@@ -260,8 +196,91 @@ public class CachedRequest {
             new StatefulRef<>((List<HttpContent>)new ArrayList<HttpContent>());
     private int _currentBlockSize = 0;
     
+    private final ActionN _updateCurrentBlock = 
+            this._currentBlockRef.submitWhenActive(
+            new Action1_N<List<HttpContent>>() {
+        @Override
+        public void call(final List<HttpContent> currentBlock, final Object...args) {
+            final HttpContent httpContent = (HttpContent)args[0];
+            currentBlock.add(httpContent);
+            _currentBlockSize += httpContent.content().readableBytes();
+        }});
+    
+    private final FuncN<HttpContent> _buildCurrentBlockAndReset = 
+            this._currentBlockRef.callWhenActive(
+            new Func1_N<List<HttpContent>,HttpContent>() {
+        @Override
+        public HttpContent call(final List<HttpContent> currentBlock, final Object... args) {
+            try {
+                if (currentBlock.size()>1) {
+                    final ByteBuf[] bufs = new ByteBuf[currentBlock.size()];
+                    for (int idx = 0; idx<currentBlock.size(); idx++) {
+                        bufs[idx] = currentBlock.get(idx).content();
+                    }
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("build block: assemble {} HttpContent to composite content with size {} KB",
+                                bufs.length, (float)_currentBlockSize / 1024f);
+                    }
+                    return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs.length, bufs));
+                } else {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("build block: only one HttpContent with {} KB to build block, so pass through",
+                                (float)_currentBlockSize / 1024f);
+                    }
+                    return currentBlock.get(0);
+                }
+            } finally {
+                currentBlock.clear();
+                _currentBlockSize = 0;
+            }
+        }});
+    
     private final StatefulRef<List<HttpObject>> _reqHttpObjectsRef = 
             new StatefulRef<>((List<HttpObject>)new ArrayList<HttpObject>());
+    
+    private final ActionN _addHttpObjectAndNotifySubscribers = 
+            this._reqHttpObjectsRef.submitWhenActive(
+            new Action1_N<List<HttpObject>>() {
+        @Override
+        public void call(final List<HttpObject> reqs,final Object...args) {
+            final HttpObject httpobj = (HttpObject)args[0];
+            reqs.add(httpobj);
+            for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
+                try {
+                    subscriber.onNext(httpobj);
+                } catch (Throwable e) {
+                    LOG.warn("exception when request's ({}).onNext, detail:{}",
+                        subscriber, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }});
+    
+    private final FuncN<FullHttpRequest> _retainFullHttpRequest = 
+            this._reqHttpObjectsRef.callWhenActive(
+            new Func1_N<List<HttpObject>,FullHttpRequest>() {
+        @Override
+        public FullHttpRequest call(final List<HttpObject> reqs,final Object...args) {
+            if (_isCompleted && reqs.size()>0) {
+                if (reqs.get(0) instanceof FullHttpRequest) {
+                    return ((FullHttpRequest)reqs.get(0)).retain();
+                }
+                
+                final HttpRequest req = (HttpRequest)reqs.get(0);
+                final ByteBuf[] bufs = new ByteBuf[reqs.size()-1];
+                for (int idx = 1; idx<reqs.size(); idx++) {
+                    bufs[idx-1] = ((HttpContent)reqs.get(idx)).content().retain();
+                }
+                final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
+                        req.getProtocolVersion(), 
+                        req.getMethod(), 
+                        req.getUri(), 
+                        Unpooled.wrappedBuffer(bufs));
+                fullreq.headers().add(req.headers());
+                return fullreq;
+            } else {
+                return null;
+            }
+        }});
     
     private final List<Subscriber<? super HttpObject>> _subscribers = new CopyOnWriteArrayList<>();
     private boolean _isCompleted = false;
