@@ -201,11 +201,9 @@ public class CachedRequest {
             new Action1_N<List<HttpContent>>() {
         @Override
         public void call(final List<HttpContent> currentBlock, final Object...args) {
-            if (args.length >= 1) {
-                final HttpContent httpContent = (HttpContent)args[0];
-                currentBlock.add(httpContent);
-                _currentBlockSize += httpContent.content().readableBytes();
-            }
+            final HttpContent httpContent = StatefulRef.<HttpContent>getArgAs(0, args);
+            currentBlock.add(httpContent);
+            _currentBlockSize += httpContent.content().readableBytes();
         }});
     
     private final FuncN<HttpContent> _buildCurrentBlockAndReset = 
@@ -245,16 +243,14 @@ public class CachedRequest {
             new Action1_N<List<HttpObject>>() {
         @Override
         public void call(final List<HttpObject> reqs,final Object...args) {
-            if (args.length >= 1) {
-                final HttpObject httpobj = (HttpObject)args[0];
-                reqs.add(httpobj);
-                for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
-                    try {
-                        subscriber.onNext(httpobj);
-                    } catch (Throwable e) {
-                        LOG.warn("exception when request's ({}).onNext, detail:{}",
-                            subscriber, ExceptionUtils.exception2detail(e));
-                    }
+            final HttpObject httpobj = StatefulRef.<HttpObject>getArgAs(0, args);
+            reqs.add(httpobj);
+            for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
+                try {
+                    subscriber.onNext(httpobj);
+                } catch (Throwable e) {
+                    LOG.warn("exception when request's ({}).onNext, detail:{}",
+                        subscriber, ExceptionUtils.exception2detail(e));
                 }
             }
         }});
