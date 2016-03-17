@@ -59,66 +59,19 @@ public class CachedRequest {
     public CachedRequest(final HttpTrade trade, final int maxBlockSize) {
         this._maxBlockSize = maxBlockSize > 0 ? maxBlockSize : _MAX_BLOCK_SIZE;
         this._trade = trade;
-        trade.request().subscribe(new Observer<HttpObject>() {
-            @Override
-            public void onCompleted() {
-                _isCompleted = true;
-                for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
-                    try {
-                        subscriber.onCompleted();
-                    } catch (Throwable e) {
-                        LOG.warn("exception when request's ({}).onCompleted, detail:{}",
-                            subscriber, ExceptionUtils.exception2detail(e));
-                    }
-                }
-            }
-            
-            @Override
-            public void onError(final Throwable e) {
-                _error = e;
-                for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
-                    try {
-                        subscriber.onError(e);
-                    } catch (Throwable e1) {
-                        LOG.warn("exception when request's ({}).onError, detail:{}",
-                            subscriber, ExceptionUtils.exception2detail(e1));
-                    }
-                }
-            }
-
-            @Override
-            public void onNext(final HttpObject msg) {
-                if (msg instanceof HttpContent) {
-                    if (msg instanceof LastHttpContent) {
-                        if (_currentBlockSize > 0) {
-                            // build block left
-                            addHttpObjectAndNotifySubscribers(buildCurrentBlockAndReset());
-                        }
-                        // direct add last HttpContent
-                        addHttpObjectAndNotifySubscribers(ReferenceCountUtil.retain(msg));
-                    } else {
-                        updateCurrentBlock(ReferenceCountUtil.retain((HttpContent)msg));
-                        if (_currentBlockSize > _maxBlockSize) {
-                            // build block
-                            addHttpObjectAndNotifySubscribers(buildCurrentBlockAndReset());
-                        }
-                    }
-                } else {
-                    addHttpObjectAndNotifySubscribers(ReferenceCountUtil.retain(msg));
-                }
-            }});
+        trade.request().subscribe(this._requestObserver);
     }
     
     private HttpContent buildCurrentBlockAndReset() {
-        return this._buildCurrentBlockAndReset.call();
+        return this._buildCurrentBlockAndResetFunc.call();
     }
 
     private void updateCurrentBlock(final HttpContent content) {
-        this._updateCurrentBlock.call(content);
+        this._updateCurrentBlockAction.call(content);
     }
 
     private void addHttpObjectAndNotifySubscribers(final HttpObject httpobj) {
-        this._addHttpObjectAndNotifySubscribers.call(httpobj);
+        this._addHttpObjectAndNotifySubscribersAction.call(httpobj);
     }
 
     public void destroy() {
@@ -147,7 +100,7 @@ public class CachedRequest {
     }
     
     public FullHttpRequest retainFullHttpRequest() {
-        return this._retainFullHttpRequest.call();
+        return this._retainFullHttpRequestFunc.call();
     }
     
     public Observable<HttpObject> request() {
@@ -196,7 +149,7 @@ public class CachedRequest {
             new StatefulRef<>((List<HttpContent>)new ArrayList<HttpContent>());
     private int _currentBlockSize = 0;
     
-    private final ActionN _updateCurrentBlock = 
+    private final ActionN _updateCurrentBlockAction = 
             this._currentBlockRef.submitWhenActive(
             new Action1_N<List<HttpContent>>() {
         @Override
@@ -206,7 +159,7 @@ public class CachedRequest {
             _currentBlockSize += httpContent.content().readableBytes();
         }});
     
-    private final FuncN<HttpContent> _buildCurrentBlockAndReset = 
+    private final FuncN<HttpContent> _buildCurrentBlockAndResetFunc = 
             this._currentBlockRef.callWhenActive(
             new Func1_N<List<HttpContent>,HttpContent>() {
         @Override
@@ -238,7 +191,7 @@ public class CachedRequest {
     private final StatefulRef<List<HttpObject>> _reqHttpObjectsRef = 
             new StatefulRef<>((List<HttpObject>)new ArrayList<HttpObject>());
     
-    private final ActionN _addHttpObjectAndNotifySubscribers = 
+    private final ActionN _addHttpObjectAndNotifySubscribersAction = 
             this._reqHttpObjectsRef.submitWhenActive(
             new Action1_N<List<HttpObject>>() {
         @Override
@@ -255,7 +208,7 @@ public class CachedRequest {
             }
         }});
     
-    private final FuncN<FullHttpRequest> _retainFullHttpRequest = 
+    private final FuncN<FullHttpRequest> _retainFullHttpRequestFunc = 
             this._reqHttpObjectsRef.callWhenActive(
             new Func1_N<List<HttpObject>,FullHttpRequest>() {
         @Override
@@ -282,6 +235,55 @@ public class CachedRequest {
             }
         }});
     
+    final Observer<HttpObject> _requestObserver = new Observer<HttpObject>() {
+        @Override
+        public void onCompleted() {
+            _isCompleted = true;
+            for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
+                try {
+                    subscriber.onCompleted();
+                } catch (Throwable e) {
+                    LOG.warn("exception when request's ({}).onCompleted, detail:{}",
+                        subscriber, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }
+        
+        @Override
+        public void onError(final Throwable e) {
+            _error = e;
+            for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
+                try {
+                    subscriber.onError(e);
+                } catch (Throwable e1) {
+                    LOG.warn("exception when request's ({}).onError, detail:{}",
+                        subscriber, ExceptionUtils.exception2detail(e1));
+                }
+            }
+        }
+
+        @Override
+        public void onNext(final HttpObject msg) {
+            if (msg instanceof HttpContent) {
+                if (msg instanceof LastHttpContent) {
+                    if (_currentBlockSize > 0) {
+                        // build block left
+                        addHttpObjectAndNotifySubscribers(buildCurrentBlockAndReset());
+                    }
+                    // direct add last HttpContent
+                    addHttpObjectAndNotifySubscribers(ReferenceCountUtil.retain(msg));
+                } else {
+                    updateCurrentBlock(ReferenceCountUtil.retain((HttpContent)msg));
+                    if (_currentBlockSize > _maxBlockSize) {
+                        // build block
+                        addHttpObjectAndNotifySubscribers(buildCurrentBlockAndReset());
+                    }
+                }
+            } else {
+                addHttpObjectAndNotifySubscribers(ReferenceCountUtil.retain(msg));
+            }
+        }};
+        
     private final List<Subscriber<? super HttpObject>> _subscribers = new CopyOnWriteArrayList<>();
     private volatile boolean _isCompleted = false;
     private volatile Throwable _error = null;
