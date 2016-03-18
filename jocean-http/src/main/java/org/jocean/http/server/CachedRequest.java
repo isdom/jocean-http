@@ -62,6 +62,28 @@ public class CachedRequest {
         trade.request().subscribe(this._requestObserver);
     }
     
+    public void destroy() {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("destroy CachedRequest with {} HttpObject."
+                    //  TODO synchronized
+                    /*, this._reqHttpObjectsRef.get().size()*/ );
+        }
+        this._currentBlockRef.destroy(CachedRequest.<HttpContent>buildActionWhenDestroying());
+        // release all HttpObjects of request
+        this._reqHttpObjectsRef.destroy(CachedRequest.<HttpObject>buildActionWhenDestroying());
+    }
+
+    private static <T> Action1<List<T>> buildActionWhenDestroying() {
+        return new Action1<List<T>>() {
+            @Override
+            public void call(final List<T> objs) {
+                for (T obj : objs) {
+                    ReferenceCountUtil.release(obj);
+                }
+                objs.clear();
+            }};
+    }
+    
     private HttpContent buildCurrentBlockAndReset() {
         return this._buildCurrentBlockAndResetFunc.call();
     }
@@ -72,31 +94,6 @@ public class CachedRequest {
 
     private void addHttpObjectAndNotifySubscribers(final HttpObject httpobj) {
         this._addHttpObjectAndNotifySubscribersAction.call(httpobj);
-    }
-
-    public void destroy() {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("destroy CachedRequest with {} HttpObject."
-                    //  TODO synchronized
-                    /*, this._reqHttpObjectsRef.get().size()*/ );
-        }
-        this._currentBlockRef.destroy(new Action1<List<HttpContent>>() {
-            @Override
-            public void call(final List<HttpContent> httpobjs) {
-                for (HttpContent obj : httpobjs) {
-                    ReferenceCountUtil.release(obj);
-                }
-                httpobjs.clear();
-            }});
-        // release all HttpObjects of request
-        this._reqHttpObjectsRef.destroy(new Action1<List<HttpObject>>() {
-            @Override
-            public void call(final List<HttpObject> httpobjs) {
-                for (HttpObject obj : httpobjs) {
-                    ReferenceCountUtil.release(obj);
-                }
-                httpobjs.clear();
-            }});
     }
     
     public FullHttpRequest retainFullHttpRequest() {
