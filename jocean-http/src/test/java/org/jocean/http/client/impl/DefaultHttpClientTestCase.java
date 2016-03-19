@@ -15,7 +15,6 @@ import javax.net.ssl.SSLException;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
-import org.jocean.http.Feature.TrafficCounterFeature;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
 import org.jocean.http.util.HttpUtil;
