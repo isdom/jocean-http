@@ -1,5 +1,7 @@
 package org.jocean.http.util;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.SocketAddress;
 import java.util.Iterator;
 import java.util.Map.Entry;
@@ -11,15 +13,22 @@ import org.jocean.idiom.PairedVisitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufInputStream;
+import io.netty.buffer.CompositeByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
+import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.util.ReferenceCountUtil;
 import io.netty.util.ReferenceCounted;
 import rx.functions.Func1;
 import rx.functions.Func2;
@@ -162,4 +171,12 @@ public class Nettys {
               };
           }
     };
+    
+    public static byte[] dumpByteBufAsBytes(final ByteBuf bytebuf)
+        throws IOException {
+        final InputStream is = new ByteBufInputStream(bytebuf);
+        final byte[] bytes = new byte[is.available()];
+        is.read(bytes);
+        return bytes;
+    }
 }
