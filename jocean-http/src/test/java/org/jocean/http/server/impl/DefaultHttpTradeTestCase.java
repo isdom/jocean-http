@@ -7,7 +7,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -16,6 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jocean.http.server.CachedRequest;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.Nettys;
+import org.jocean.idiom.rx.RxActions;
 import org.junit.Test;
 
 import com.google.common.base.Charsets;
@@ -27,7 +27,6 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.DefaultHttpRequest;
-import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
@@ -171,7 +170,7 @@ public class DefaultHttpTradeTestCase {
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
         final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes("UTF-8"), 1);
         
-        applyHttpContentArrayBy(contents, new Action1<HttpContent>() {
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
                 assertEquals(1, c.refCnt());
@@ -196,7 +195,7 @@ public class DefaultHttpTradeTestCase {
         subscriberRef.get().onCompleted();
         
         assertTrue(trade.isActive());
-        applyHttpContentArrayBy(contents, new Action1<HttpContent>() {
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
                 assertEquals(2, c.refCnt());
@@ -214,7 +213,7 @@ public class DefaultHttpTradeTestCase {
         Observable.<HttpObject>just(response)
             .subscribe(trade.responseObserver());
         
-        applyHttpContentArrayBy(contents, new Action1<HttpContent>() {
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
                 assertEquals(2, c.refCnt());
@@ -223,18 +222,11 @@ public class DefaultHttpTradeTestCase {
         fullrequest.release();
         
         assertFalse(trade.isActive());
-        applyHttpContentArrayBy(contents, new Action1<HttpContent>() {
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
                 assertEquals(1, c.refCnt());
             }});
-    }
-
-    private static void applyHttpContentArrayBy(final HttpContent[] contents,
-            final Action1<HttpContent> actionToContent) {
-        for (HttpContent content : contents) {
-            actionToContent.call(content);
-        }
     }
 
     private static HttpContent[] buildContentArray(final byte[] srcBytes, final int bytesPerContent) {
