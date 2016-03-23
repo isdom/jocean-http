@@ -5,6 +5,7 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
@@ -381,6 +382,52 @@ public class DefaultHttpTradeTestCase {
         assertEquals(0, cached.currentBlockSize());
         assertEquals(0, cached.currentBlockCount());
         assertEquals(0, cached.requestHttpObjCount());
+    }
+    
+    @Test
+    public final void tesTradeForRequestPartError() throws Exception {
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes("UTF-8"), 1);
+        
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+        
+        final AtomicReference<Subscriber<? super HttpObject>> subscriberRef = new AtomicReference<>();
+        
+        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+                Observable.create(new OnSubscribe<HttpObject>() {
+                    @Override
+                    public void call(final Subscriber<? super HttpObject> t) {
+                        subscriberRef.set(t);
+                    }}));
+        
+        final CachedRequest cached = new CachedRequest(trade, 4);
+        
+        subscriberRef.get().onNext(request);
+        for (int idx = 0; idx < 5; idx++) {
+            subscriberRef.get().onNext(contents[idx]);
+        }
+        subscriberRef.get().onError(new RuntimeException("RequestPartError"));
+        
+        assertFalse(trade.isActive());
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+        
+        assertEquals(0, cached.currentBlockSize());
+        assertEquals(0, cached.currentBlockCount());
+        assertEquals(0, cached.requestHttpObjCount());
+        
+        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        assertNull(fullrequest);
     }
     
     private static HttpContent[] buildContentArray(final byte[] srcBytes, final int bytesPerContent) {

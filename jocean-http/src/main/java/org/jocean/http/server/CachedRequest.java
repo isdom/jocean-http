@@ -102,6 +102,7 @@ public class CachedRequest {
                     /*, this._reqHttpObjectsRef.get().size()*/ );
         }
         this._currentBlockRef.destroy(CachedRequest.<HttpContent>buildActionWhenDestroying());
+        this._currentBlockSize = 0;
         // release all HttpObjects of request
         this._reqHttpObjectsRef.destroy(CachedRequest.<HttpObject>buildActionWhenDestroying());
     }
