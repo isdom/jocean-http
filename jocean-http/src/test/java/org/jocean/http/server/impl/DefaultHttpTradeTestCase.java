@@ -17,6 +17,7 @@ import org.jocean.http.server.CachedRequest;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.rx.RxActions;
+import org.jocean.idiom.rx.SubscriberHolder;
 import org.junit.Test;
 
 import com.google.common.base.Charsets;
@@ -90,19 +91,17 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, request.refCnt());
         
-        final AtomicReference<Subscriber<? super HttpObject>> subscriberRef = new AtomicReference<>();
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
-                Observable.create(new OnSubscribe<HttpObject>() {
-                    @Override
-                    public void call(final Subscriber<? super HttpObject> t) {
-                        subscriberRef.set(t);
-                    }}));
+                Observable.create(holder));
+        
+        assertEquals(1, holder.getSubscriberCount());
         
         CachedRequest cached = new CachedRequest(trade);
         
-        subscriberRef.get().onNext(request);
-        subscriberRef.get().onCompleted();
+        holder.getAt(0).onNext(request);
+        holder.getAt(0).onCompleted();
         
         assertTrue(trade.isActive());
         assertEquals(2, request.refCnt());
