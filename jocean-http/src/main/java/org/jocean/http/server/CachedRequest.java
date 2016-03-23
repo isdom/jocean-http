@@ -67,6 +67,34 @@ public class CachedRequest {
             }});
     }
     
+    public int currentBlockSize() {
+        return this._currentBlockSize;
+    }
+    
+    public int currentBlockCount() {
+        return this._currentBlockRef.callWhenActive(new Func1_N<List<HttpContent>, Integer>() {
+            @Override
+            public Integer call(final List<HttpContent> contents, Object... args) {
+                return contents.size();
+            }}).callWhenDestroyed(new FuncN<Integer>() {
+            @Override
+            public Integer call(Object... args) {
+                return 0;
+            }}).call();
+    }
+    
+    public int requestHttpObjCount() {
+        return this._reqHttpObjectsRef.callWhenActive(new Func1_N<List<HttpObject>, Integer>() {
+            @Override
+            public Integer call(final List<HttpObject> objs, Object... args) {
+                return objs.size();
+            }}).callWhenDestroyed(new FuncN<Integer>() {
+            @Override
+            public Integer call(Object... args) {
+                return 0;
+            }}).call();
+    }
+    
     private void destroy() {
         if (LOG.isDebugEnabled()) {
             LOG.debug("destroy CachedRequest with {} HttpObject."

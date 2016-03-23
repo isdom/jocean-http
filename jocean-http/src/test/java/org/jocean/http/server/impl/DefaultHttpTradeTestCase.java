@@ -201,6 +201,10 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(2, c.refCnt());
             }});
         
+        assertEquals(0, cached.currentBlockSize());
+        assertEquals(0, cached.currentBlockCount());
+        assertEquals(3, cached.requestHttpObjCount());
+        
         final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
         assertNotNull(fullrequest);
         
@@ -229,6 +233,156 @@ public class DefaultHttpTradeTestCase {
             }});
     }
 
+    @Test
+    public final void tesTradeForCompleteRoundWithReassembRequestMoreThan2() throws Exception {
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes("UTF-8"), 1);
+        
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+        
+        final AtomicReference<Subscriber<? super HttpObject>> subscriberRef = new AtomicReference<>();
+        
+        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+                Observable.create(new OnSubscribe<HttpObject>() {
+                    @Override
+                    public void call(final Subscriber<? super HttpObject> t) {
+                        subscriberRef.set(t);
+                    }}));
+        
+        final CachedRequest cached = new CachedRequest(trade, 8);
+        
+        subscriberRef.get().onNext(request);
+        for (HttpContent content : contents) {
+            subscriberRef.get().onNext(content);
+        }
+        subscriberRef.get().onNext(LastHttpContent.EMPTY_LAST_CONTENT);
+        subscriberRef.get().onCompleted();
+        
+        assertTrue(trade.isActive());
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(2, c.refCnt());
+            }});
+        
+        assertEquals(0, cached.currentBlockSize());
+        assertEquals(0, cached.currentBlockCount());
+        assertEquals(4, cached.requestHttpObjCount());
+        
+        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        assertNotNull(fullrequest);
+        
+        final String reqcontent = 
+                new String(Nettys.dumpByteBufAsBytes(fullrequest.content()), Charsets.UTF_8);
+        assertEquals(REQ_CONTENT, reqcontent);
+        
+        final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
+        
+        Observable.<HttpObject>just(response)
+            .subscribe(trade.responseObserver());
+        
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(2, c.refCnt());
+            }});
+        
+        fullrequest.release();
+        
+        assertFalse(trade.isActive());
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+    }
+    
+    @Test
+    public final void tesTradeForCompleteRoundWithReassembRequestAndSendReqAgainAfterComplete() throws Exception {
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes("UTF-8"), 1);
+        
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+        
+        final AtomicReference<Subscriber<? super HttpObject>> subscriberRef = new AtomicReference<>();
+        
+        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+                Observable.create(new OnSubscribe<HttpObject>() {
+                    @Override
+                    public void call(final Subscriber<? super HttpObject> t) {
+                        subscriberRef.set(t);
+                    }}));
+        
+        final CachedRequest cached = new CachedRequest(trade, 8);
+        
+        subscriberRef.get().onNext(request);
+        for (HttpContent content : contents) {
+            subscriberRef.get().onNext(content);
+        }
+        subscriberRef.get().onNext(LastHttpContent.EMPTY_LAST_CONTENT);
+        subscriberRef.get().onCompleted();
+        
+        assertTrue(trade.isActive());
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(2, c.refCnt());
+            }});
+        
+        assertEquals(0, cached.currentBlockSize());
+        assertEquals(0, cached.currentBlockCount());
+        assertEquals(4, cached.requestHttpObjCount());
+        
+        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        assertNotNull(fullrequest);
+        
+        final String reqcontent = 
+                new String(Nettys.dumpByteBufAsBytes(fullrequest.content()), Charsets.UTF_8);
+        assertEquals(REQ_CONTENT, reqcontent);
+        
+        final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
+        
+        Observable.<HttpObject>just(response)
+            .subscribe(trade.responseObserver());
+        
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(2, c.refCnt());
+            }});
+        
+        fullrequest.release();
+        
+        assertFalse(trade.isActive());
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+        
+        for (HttpContent content : contents) {
+            subscriberRef.get().onNext(content);
+        }
+        
+        assertEquals(0, cached.currentBlockSize());
+        assertEquals(0, cached.currentBlockCount());
+        assertEquals(0, cached.requestHttpObjCount());
+    }
+    
     private static HttpContent[] buildContentArray(final byte[] srcBytes, final int bytesPerContent) {
         final List<HttpContent> contents = new ArrayList<>();
         
