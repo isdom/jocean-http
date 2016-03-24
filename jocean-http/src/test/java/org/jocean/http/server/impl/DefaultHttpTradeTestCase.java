@@ -11,7 +11,6 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.CachedRequest;
 import org.jocean.http.server.HttpServer.HttpTrade;
@@ -37,8 +36,6 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
-import rx.Observable.OnSubscribe;
-import rx.Subscriber;
 import rx.functions.Action1;
 
 public class DefaultHttpTradeTestCase {
@@ -96,9 +93,9 @@ public class DefaultHttpTradeTestCase {
         final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
                 Observable.create(holder));
         
-        assertEquals(1, holder.getSubscriberCount());
-        
         CachedRequest cached = new CachedRequest(trade);
+        
+        assertEquals(1, holder.getSubscriberCount());
         
         holder.getAt(0).onNext(request);
         holder.getAt(0).onCompleted();
@@ -129,19 +126,17 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, request.refCnt());
         
-        final AtomicReference<Subscriber<? super HttpObject>> subscriberRef = new AtomicReference<>();
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
-                Observable.create(new OnSubscribe<HttpObject>() {
-                    @Override
-                    public void call(final Subscriber<? super HttpObject> t) {
-                        subscriberRef.set(t);
-                    }}));
+                Observable.create(holder));
         
         CachedRequest cached = new CachedRequest(trade);
         
-        subscriberRef.get().onNext(request);
-        subscriberRef.get().onCompleted();
+        assertEquals(1, holder.getSubscriberCount());
+        
+        holder.getAt(0).onNext(request);
+        holder.getAt(0).onCompleted();
         
         assertTrue(trade.isActive());
         assertEquals(2, request.refCnt());
@@ -176,23 +171,21 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        final AtomicReference<Subscriber<? super HttpObject>> subscriberRef = new AtomicReference<>();
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
-                Observable.create(new OnSubscribe<HttpObject>() {
-                    @Override
-                    public void call(final Subscriber<? super HttpObject> t) {
-                        subscriberRef.set(t);
-                    }}));
+                Observable.create(holder));
         
         final CachedRequest cached = new CachedRequest(trade, 16);
         
-        subscriberRef.get().onNext(request);
+        assertEquals(1, holder.getSubscriberCount());
+        
+        holder.getAt(0).onNext(request);
         for (HttpContent content : contents) {
-            subscriberRef.get().onNext(content);
+            holder.getAt(0).onNext(content);
         }
-        subscriberRef.get().onNext(LastHttpContent.EMPTY_LAST_CONTENT);
-        subscriberRef.get().onCompleted();
+        holder.getAt(0).onNext(LastHttpContent.EMPTY_LAST_CONTENT);
+        holder.getAt(0).onCompleted();
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
@@ -247,23 +240,21 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        final AtomicReference<Subscriber<? super HttpObject>> subscriberRef = new AtomicReference<>();
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
-                Observable.create(new OnSubscribe<HttpObject>() {
-                    @Override
-                    public void call(final Subscriber<? super HttpObject> t) {
-                        subscriberRef.set(t);
-                    }}));
+                Observable.create(holder));
         
         final CachedRequest cached = new CachedRequest(trade, 8);
         
-        subscriberRef.get().onNext(request);
+        assertEquals(1, holder.getSubscriberCount());
+        
+        holder.getAt(0).onNext(request);
         for (HttpContent content : contents) {
-            subscriberRef.get().onNext(content);
+            holder.getAt(0).onNext(content);
         }
-        subscriberRef.get().onNext(LastHttpContent.EMPTY_LAST_CONTENT);
-        subscriberRef.get().onCompleted();
+        holder.getAt(0).onNext(LastHttpContent.EMPTY_LAST_CONTENT);
+        holder.getAt(0).onCompleted();
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
@@ -318,23 +309,21 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        final AtomicReference<Subscriber<? super HttpObject>> subscriberRef = new AtomicReference<>();
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
-                Observable.create(new OnSubscribe<HttpObject>() {
-                    @Override
-                    public void call(final Subscriber<? super HttpObject> t) {
-                        subscriberRef.set(t);
-                    }}));
+                Observable.create(holder));
         
         final CachedRequest cached = new CachedRequest(trade, 8);
         
-        subscriberRef.get().onNext(request);
+        assertEquals(1, holder.getSubscriberCount());
+        
+        holder.getAt(0).onNext(request);
         for (HttpContent content : contents) {
-            subscriberRef.get().onNext(content);
+            holder.getAt(0).onNext(content);
         }
-        subscriberRef.get().onNext(LastHttpContent.EMPTY_LAST_CONTENT);
-        subscriberRef.get().onCompleted();
+        holder.getAt(0).onNext(LastHttpContent.EMPTY_LAST_CONTENT);
+        holder.getAt(0).onCompleted();
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
@@ -375,7 +364,7 @@ public class DefaultHttpTradeTestCase {
             }});
         
         for (HttpContent content : contents) {
-            subscriberRef.get().onNext(content);
+            holder.getAt(0).onNext(content);
         }
         
         assertEquals(0, cached.currentBlockSize());
@@ -397,22 +386,20 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        final AtomicReference<Subscriber<? super HttpObject>> subscriberRef = new AtomicReference<>();
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
-                Observable.create(new OnSubscribe<HttpObject>() {
-                    @Override
-                    public void call(final Subscriber<? super HttpObject> t) {
-                        subscriberRef.set(t);
-                    }}));
+                Observable.create(holder));
         
         final CachedRequest cached = new CachedRequest(trade, 4);
         
-        subscriberRef.get().onNext(request);
+        assertEquals(1, holder.getSubscriberCount());
+        
+        holder.getAt(0).onNext(request);
         for (int idx = 0; idx < 5; idx++) {
-            subscriberRef.get().onNext(contents[idx]);
+            holder.getAt(0).onNext(contents[idx]);
         }
-        subscriberRef.get().onError(new RuntimeException("RequestPartError"));
+        holder.getAt(0).onError(new RuntimeException("RequestPartError"));
         
         assertFalse(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
