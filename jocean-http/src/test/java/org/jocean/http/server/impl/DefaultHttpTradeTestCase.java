@@ -424,4 +424,136 @@ public class DefaultHttpTradeTestCase {
         final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
         assertNull(fullrequest);
     }
+
+    @Test
+    public final void tesTradeForCompleteRoundWithReassembRequestTwiceAndContentedResponse() 
+            throws Exception {
+        //  TODO
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+        
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        
+        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+                Observable.create(holder));
+        
+        final CachedRequest cached = new CachedRequest(trade, 8);
+        
+        assertEquals(1, holder.getSubscriberCount());
+        
+        emitFullRequest(request, contents, holder.getAt(0));
+        
+        assertTrue(trade.isActive());
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(2, c.refCnt());
+            }});
+        
+        assertEquals(0, cached.currentBlockSize());
+        assertEquals(0, cached.currentBlockCount());
+        assertEquals(4, cached.requestHttpObjCount());
+        
+        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        assertNotNull(fullrequest);
+        
+        final String reqcontent = 
+                new String(Nettys.dumpByteBufAsBytes(fullrequest.content()), Charsets.UTF_8);
+        assertEquals(REQ_CONTENT, reqcontent);
+        
+        final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
+        
+        Observable.<HttpObject>just(response)
+            .subscribe(trade.responseObserver());
+        
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(2, c.refCnt());
+            }});
+        
+        fullrequest.release();
+        
+        assertFalse(trade.isActive());
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+    }
+
+    @Test
+    public final void tesTradeForErrorResponseWithReassembRequestTwiceAndContentedResponse() 
+            throws Exception {
+        //  TODO
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+        
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        
+        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+                Observable.create(holder));
+        
+        final CachedRequest cached = new CachedRequest(trade, 8);
+        
+        assertEquals(1, holder.getSubscriberCount());
+        
+        emitFullRequest(request, contents, holder.getAt(0));
+        
+        assertTrue(trade.isActive());
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(2, c.refCnt());
+            }});
+        
+        assertEquals(0, cached.currentBlockSize());
+        assertEquals(0, cached.currentBlockCount());
+        assertEquals(4, cached.requestHttpObjCount());
+        
+        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        assertNotNull(fullrequest);
+        
+        final String reqcontent = 
+                new String(Nettys.dumpByteBufAsBytes(fullrequest.content()), Charsets.UTF_8);
+        assertEquals(REQ_CONTENT, reqcontent);
+        
+        final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
+        
+        Observable.<HttpObject>just(response)
+            .subscribe(trade.responseObserver());
+        
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(2, c.refCnt());
+            }});
+        
+        fullrequest.release();
+        
+        assertFalse(trade.isActive());
+        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+    }
 }
