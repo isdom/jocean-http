@@ -36,10 +36,37 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
+import rx.Subscriber;
 import rx.functions.Action1;
 
 public class DefaultHttpTradeTestCase {
 
+    private static HttpContent[] buildContentArray(final byte[] srcBytes, final int bytesPerContent) {
+        final List<HttpContent> contents = new ArrayList<>();
+        
+        int startInBytes = 0;
+        while (startInBytes < srcBytes.length) {
+            final ByteBuf content = Unpooled.buffer(bytesPerContent);
+            final int len = Math.min(bytesPerContent, srcBytes.length-startInBytes);
+            
+            content.writeBytes(srcBytes, startInBytes, len);
+            startInBytes += len;
+            contents.add(new DefaultHttpContent(content));
+        }
+        return contents.toArray(new HttpContent[0]);
+    }
+
+    private static void emitFullRequest(final DefaultHttpRequest request,
+            final HttpContent[] contents,
+            final Subscriber<? super HttpObject> subscriber) {
+        subscriber.onNext(request);
+        for (HttpContent c : contents) {
+            subscriber.onNext(c);
+        }
+        subscriber.onNext(LastHttpContent.EMPTY_LAST_CONTENT);
+        subscriber.onCompleted();
+    }
+    
     @Test
     public final void testOnTradeClosedCalledWhenClosed() {
         final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
@@ -47,7 +74,6 @@ public class DefaultHttpTradeTestCase {
         
         final AtomicBoolean onClosed = new AtomicBoolean(false);
         trade.addOnTradeClosed(new Action1<HttpTrade>(){
-
             @Override
             public void call(final HttpTrade trade) {
                 onClosed.set(true);
@@ -82,7 +108,7 @@ public class DefaultHttpTradeTestCase {
     @Test
     public final void tesTradeForCompleteRequestAndErrorResponse() throws Exception {
         final ByteBuf content = Unpooled.buffer(0);
-        content.writeBytes("test content".getBytes("UTF-8"));
+        content.writeBytes("test content".getBytes(Charsets.UTF_8));
         final DefaultFullHttpRequest request = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
         
@@ -120,7 +146,7 @@ public class DefaultHttpTradeTestCase {
     @Test
     public final void tesTradeForCompleteRound() throws Exception {
         final ByteBuf content = Unpooled.buffer(0);
-        content.writeBytes("test content".getBytes("UTF-8"));
+        content.writeBytes("test content".getBytes(Charsets.UTF_8));
         final DefaultFullHttpRequest request = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
         
@@ -163,7 +189,7 @@ public class DefaultHttpTradeTestCase {
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes("UTF-8"), 1);
+        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
             @Override
@@ -180,12 +206,7 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        holder.getAt(0).onNext(request);
-        for (HttpContent content : contents) {
-            holder.getAt(0).onNext(content);
-        }
-        holder.getAt(0).onNext(LastHttpContent.EMPTY_LAST_CONTENT);
-        holder.getAt(0).onCompleted();
+        emitFullRequest(request, contents, holder.getAt(0));
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
@@ -227,12 +248,12 @@ public class DefaultHttpTradeTestCase {
     }
 
     @Test
-    public final void tesTradeForCompleteRoundWithReassembRequestMoreThan2() throws Exception {
+    public final void tesTradeForCompleteRoundWithReassembRequestTwice() throws Exception {
         final String REQ_CONTENT = "testcontent";
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes("UTF-8"), 1);
+        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
             @Override
@@ -249,12 +270,7 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        holder.getAt(0).onNext(request);
-        for (HttpContent content : contents) {
-            holder.getAt(0).onNext(content);
-        }
-        holder.getAt(0).onNext(LastHttpContent.EMPTY_LAST_CONTENT);
-        holder.getAt(0).onCompleted();
+        emitFullRequest(request, contents, holder.getAt(0));
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
@@ -296,12 +312,12 @@ public class DefaultHttpTradeTestCase {
     }
     
     @Test
-    public final void tesTradeForCompleteRoundWithReassembRequestAndSendReqAgainAfterComplete() throws Exception {
+    public final void tesTradeForCompleteRoundWithReassembRequestAndReSendRequestAfterComplete() throws Exception {
         final String REQ_CONTENT = "testcontent";
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes("UTF-8"), 1);
+        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
             @Override
@@ -318,12 +334,7 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        holder.getAt(0).onNext(request);
-        for (HttpContent content : contents) {
-            holder.getAt(0).onNext(content);
-        }
-        holder.getAt(0).onNext(LastHttpContent.EMPTY_LAST_CONTENT);
-        holder.getAt(0).onCompleted();
+        emitFullRequest(request, contents, holder.getAt(0));
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
@@ -363,9 +374,7 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        for (HttpContent content : contents) {
-            holder.getAt(0).onNext(content);
-        }
+        emitFullRequest(request, contents, holder.getAt(0));
         
         assertEquals(0, cached.currentBlockSize());
         assertEquals(0, cached.currentBlockCount());
@@ -378,7 +387,7 @@ public class DefaultHttpTradeTestCase {
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes("UTF-8"), 1);
+        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
             @Override
@@ -414,20 +423,5 @@ public class DefaultHttpTradeTestCase {
         
         final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
         assertNull(fullrequest);
-    }
-    
-    private static HttpContent[] buildContentArray(final byte[] srcBytes, final int bytesPerContent) {
-        final List<HttpContent> contents = new ArrayList<>();
-        
-        int startInBytes = 0;
-        while (startInBytes < srcBytes.length) {
-            final ByteBuf content = Unpooled.buffer(bytesPerContent);
-            final int len = Math.min(bytesPerContent, srcBytes.length-startInBytes);
-            
-            content.writeBytes(srcBytes, startInBytes, len);
-            startInBytes += len;
-            contents.add(new DefaultHttpContent(content));
-        }
-        return contents.toArray(new HttpContent[0]);
     }
 }
