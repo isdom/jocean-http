@@ -56,15 +56,15 @@ public class DefaultHttpTradeTestCase {
         return contents.toArray(new HttpContent[0]);
     }
 
-    private static void emitFullRequest(final DefaultHttpRequest request,
-            final HttpContent[] contents,
-            final Subscriber<? super HttpObject> subscriber) {
-        subscriber.onNext(request);
-        for (HttpContent c : contents) {
-            subscriber.onNext(c);
+    private static void emitHttpObjects(final Subscriber<? super HttpObject> subscriber,
+            final HttpObject... objs) {
+        for (HttpObject obj : objs) {
+            subscriber.onNext(obj);
+            if (obj instanceof LastHttpContent) {
+                subscriber.onCompleted();
+            }
         }
-        subscriber.onNext(LastHttpContent.EMPTY_LAST_CONTENT);
-        subscriber.onCompleted();
+//        subscriber.onNext(LastHttpContent.EMPTY_LAST_CONTENT);
     }
     
     @Test
@@ -206,7 +206,9 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        emitFullRequest(request, contents, holder.getAt(0));
+        emitHttpObjects(holder.getAt(0), request);
+        emitHttpObjects(holder.getAt(0), contents);
+        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
@@ -270,7 +272,9 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        emitFullRequest(request, contents, holder.getAt(0));
+        emitHttpObjects(holder.getAt(0), request);
+        emitHttpObjects(holder.getAt(0), contents);
+        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
@@ -334,7 +338,9 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        emitFullRequest(request, contents, holder.getAt(0));
+        emitHttpObjects(holder.getAt(0), request);
+        emitHttpObjects(holder.getAt(0), contents);
+        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
@@ -374,7 +380,9 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        emitFullRequest(request, contents, holder.getAt(0));
+        emitHttpObjects(holder.getAt(0), request);
+        emitHttpObjects(holder.getAt(0), contents);
+        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertEquals(0, cached.currentBlockSize());
         assertEquals(0, cached.currentBlockCount());
@@ -450,7 +458,9 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        emitFullRequest(request, contents, holder.getAt(0));
+        emitHttpObjects(holder.getAt(0), request);
+        emitHttpObjects(holder.getAt(0), contents);
+        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
@@ -516,7 +526,9 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        emitFullRequest(request, contents, holder.getAt(0));
+        emitHttpObjects(holder.getAt(0), request);
+        emitHttpObjects(holder.getAt(0), contents);
+        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
