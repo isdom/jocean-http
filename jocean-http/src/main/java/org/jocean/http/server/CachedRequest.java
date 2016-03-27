@@ -305,7 +305,7 @@ public class CachedRequest {
                     addHttpObjectAndNotifySubscribers(ReferenceCountUtil.retain(msg));
                 } else {
                     updateCurrentBlock(ReferenceCountUtil.retain((HttpContent)msg));
-                    if (_currentBlockSize > _maxBlockSize) {
+                    if (_currentBlockSize >= _maxBlockSize) {
                         // build block
                         addHttpObjectAndNotifySubscribers(buildCurrentBlockAndReset());
                     }
