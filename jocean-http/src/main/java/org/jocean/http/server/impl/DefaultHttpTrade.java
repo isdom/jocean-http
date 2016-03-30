@@ -156,7 +156,9 @@ class DefaultHttpTrade implements HttpTrade {
         @Override
         public void onNext(final HttpObject msg) {
             if (isActive()) {
-                _channel.write(ReferenceCountUtil.retain(msg));
+                //  TODO, each onNext fire a flush op.
+                //  TOBE fix only flush at last time when onCompleted.
+                _channel.writeAndFlush(ReferenceCountUtil.retain(msg));
             } else {
                 LOG.warn("sendback msg({}) on closed transport[channel: {}]",
                     msg, _channel);

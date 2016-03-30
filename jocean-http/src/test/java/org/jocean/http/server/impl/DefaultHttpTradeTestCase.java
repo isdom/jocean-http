@@ -10,7 +10,10 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.CachedRequest;
 import org.jocean.http.server.HttpServer.HttpTrade;
@@ -18,12 +21,24 @@ import org.jocean.http.util.Nettys;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.SubscriberHolder;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 
+import io.netty.bootstrap.Bootstrap;
+import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
+import io.netty.channel.local.LocalEventLoopGroup;
+import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpContent;
@@ -31,17 +46,25 @@ import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.handler.logging.LoggingHandler;
+import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observer;
 import rx.functions.Action1;
 
 public class DefaultHttpTradeTestCase {
+
+    private static final Logger LOG =
+            LoggerFactory.getLogger(DefaultHttpTradeTestCase.class);
 
     private static HttpContent[] buildContentArray(final byte[] srcBytes, final int bytesPerContent) {
         final List<HttpContent> contents = new ArrayList<>();
@@ -68,6 +91,49 @@ public class DefaultHttpTradeTestCase {
         }
     }
     
+    private static Channel buildLocalServer(final String addr, final Queue<Channel> consumer)
+            throws InterruptedException {
+        return new ServerBootstrap()
+            .group(new LocalEventLoopGroup(1), new LocalEventLoopGroup(1))
+            .channel(LocalServerChannel.class)
+            .childHandler(new ChannelInitializer<Channel>() {
+                @Override
+                protected void initChannel(final Channel ch) throws Exception {
+                    ch.pipeline().addLast(new LoggingHandler());
+                    ch.pipeline().addLast(new HttpServerCodec());
+//                    ch.pipeline().addLast(new SimpleChannelInboundHandler<HttpObject>() {
+//                        @Override
+//                        protected void channelRead0(ChannelHandlerContext ctx,
+//                                HttpObject msg) throws Exception {
+//                            LOG.debug("addr:{} - channelRead0: {}", addr, msg);
+//                        }});
+                    consumer.offer(ch);
+                }})
+            .localAddress(new LocalAddress(addr))
+            .bind()
+            .sync()
+            .channel();
+    }
+
+    private static Bootstrap buildLocalClient(final String addr) {
+        return new Bootstrap()
+            .group(new LocalEventLoopGroup(1))
+            .channel(LocalChannel.class)
+            .handler(new ChannelInitializer<Channel>() {
+                @Override
+                protected void initChannel(final Channel ch) throws Exception {
+                    ch.pipeline().addLast(new LoggingHandler());
+                    ch.pipeline().addLast(new HttpClientCodec());
+                  ch.pipeline().addLast(new SimpleChannelInboundHandler<HttpObject>() {
+                  @Override
+                  protected void channelRead0(ChannelHandlerContext ctx,
+                          HttpObject msg) throws Exception {
+                      LOG.debug("client:{} - channelRead0: {}", addr, msg);
+                  }});
+                }})
+            .remoteAddress(new LocalAddress(addr));
+    }
+
     @Test
     public final void testOnTradeClosedCalledWhenClosed() {
         final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
@@ -549,88 +615,122 @@ public class DefaultHttpTradeTestCase {
     @Test
     public final void tesTradeForCompleteRoundWithMultiContentRequestAndMultiContentResponse() 
             throws Exception {
-        final String REQ_CONTENT = "testcontent";
         
-        final DefaultHttpRequest request = 
-                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final SynchronousQueue<Channel> channelProvider = new SynchronousQueue<Channel>();
+        final Bootstrap clientbootstrap = buildLocalClient("test");
+        final Channel serverChannel = buildLocalServer("test", channelProvider);
         
-        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.refCnt());
-            }});
+        final ChannelFuture connectfuture = clientbootstrap.connect();
         
-        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
-        
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
-                Observable.create(holder));
-        
-        final CachedRequest cached = new CachedRequest(trade, 8);
-        
-        assertEquals(1, holder.getSubscriberCount());
-        
-        emitHttpObjects(holder.getAt(0), request);
-        emitHttpObjects(holder.getAt(0), req_contents);
-        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
-        
-        assertTrue(trade.isActive());
-        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(2, c.refCnt());
-            }});
-        
-        assertEquals(0, cached.currentBlockSize());
-        assertEquals(0, cached.currentBlockCount());
-        assertEquals(4, cached.requestHttpObjCount());
-        
-        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
-        assertNotNull(fullrequest);
-        
-        final String reqcontent = 
-                new String(Nettys.dumpByteBufAsBytes(fullrequest.content()), Charsets.UTF_8);
-        assertEquals(REQ_CONTENT, reqcontent);
-        
-        //  注意：因为 cached request 中 HttpContent 被重组为 2 个 CompositeByteBuf
-        //  所以 retainFullHttpRequest 只会增加 CompositeByteBuf 本身的引用计数，
-        //  而不会增加 CompositeByteBuf 中子元素 ByteBuf 的引用计数，因此 req_contents
-        //  中的 各子元素 ByteBuf 引用计数不变, 还是2
-        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(2, c.refCnt());
-            }});
-        
-        fullrequest.release();
-        
-        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(2, c.refCnt());
-            }});
-        
-        final String RESP_CONTENT = "respcontent";
-        final HttpResponse response = new DefaultHttpResponse(HTTP_1_1, OK);
-        final HttpContent[] resp_contents = buildContentArray(RESP_CONTENT.getBytes(Charsets.UTF_8), 1);
+        try {
+            final String REQ_CONTENT = "testcontent";
+            
+            final DefaultHttpRequest request = 
+                    new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+            final HttpContent[] req_contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+            request.headers().add(HttpHeaders.Names.CONTENT_LENGTH, req_contents.length);
+            
+            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.refCnt());
+                }});
+            
+            final Channel server = channelProvider.take();
+            final Channel client = connectfuture.sync().channel();
+            
+            final DefaultHttpTrade trade = new DefaultHttpTrade(server, 
+                    DefaultHttpServer.requestObservable(server));
+            
+            final CachedRequest cached = new CachedRequest(trade, 8);
+            
+            client.write(request);
+            for (HttpContent c : req_contents) {
+                client.write(ReferenceCountUtil.retain(c));
+            }
+            client.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
+            
+            Thread.sleep(1000);
+            
+//            emitHttpObjects(holder.getAt(0), request);
+//            emitHttpObjects(holder.getAt(0), req_contents);
+//            emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
+            
+            assertTrue(trade.isActive());
+//            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+//                @Override
+//                public void call(final HttpContent c) {
+//                    assertEquals(2, c.refCnt());
+//                }});
+            
+            assertEquals(0, cached.currentBlockSize());
+            assertEquals(0, cached.currentBlockCount());
+//            assertEquals(4, cached.requestHttpObjCount());
+            
+            final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+            assertNotNull(fullrequest);
+            
+            final String reqcontent = 
+                    new String(Nettys.dumpByteBufAsBytes(fullrequest.content()), Charsets.UTF_8);
+            assertEquals(REQ_CONTENT, reqcontent);
+            
+            //  注意：因为 cached request 中 HttpContent 被重组为 2 个 CompositeByteBuf
+            //  所以 retainFullHttpRequest 只会增加 CompositeByteBuf 本身的引用计数，
+            //  而不会增加 CompositeByteBuf 中子元素 ByteBuf 的引用计数，因此 req_contents
+            //  中的 各子元素 ByteBuf 引用计数不变, 还是2
+//            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+//                @Override
+//                public void call(final HttpContent c) {
+//                    assertEquals(2, c.refCnt());
+//                }});
+            
+            fullrequest.release();
+            
+            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(2, c.refCnt());
+                }});
+            
+            final String RESP_CONTENT = "respcontent";
+            final HttpResponse response = new DefaultHttpResponse(HTTP_1_1, OK);
+            final HttpContent[] resp_contents = buildContentArray(RESP_CONTENT.getBytes(Charsets.UTF_8), 1);
+            response.headers().add(HttpHeaders.Names.CONTENT_LENGTH, resp_contents.length);
 
-        emitHttpObjects(trade.responseObserver(), response);
-        emitHttpObjects(trade.responseObserver(), resp_contents);
-        emitHttpObjects(trade.responseObserver(), LastHttpContent.EMPTY_LAST_CONTENT);
-        
-        assertFalse(trade.isActive());
-        
-        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.refCnt());
-            }});
-        
-        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.refCnt());
-            }});
+            RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.refCnt());
+                }});
+            
+            emitHttpObjects(trade.responseObserver(), response);
+            emitHttpObjects(trade.responseObserver(), resp_contents);
+            emitHttpObjects(trade.responseObserver(), LastHttpContent.EMPTY_LAST_CONTENT);
+            
+            Thread.sleep( 1000 );
+            
+            RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.refCnt());
+                }});
+            
+            assertFalse(trade.isActive());
+            
+            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.refCnt());
+                }});
+            
+            RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.refCnt());
+                }});
+        } finally {
+            serverChannel.close().sync();
+        }
     }
 
     @Test

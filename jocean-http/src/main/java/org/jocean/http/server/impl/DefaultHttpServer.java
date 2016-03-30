@@ -175,7 +175,7 @@ public class DefaultHttpServer implements HttpServer {
             }};
     }
     
-    private Observable<HttpObject> requestObservable(final Channel channel) {
+    static Observable<HttpObject> requestObservable(final Channel channel) {
         return Observable.create(new OnSubscribe<HttpObject>() {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
