@@ -115,7 +115,7 @@ public class DefaultHttpServer implements HttpServer {
     private void awaitInboundRequest(
             final Channel channel,
             final Subscriber<? super HttpTrade> tradeSubscriber) {
-        APPLY.GUIDE.applyTo(channel.pipeline(), 
+        APPLY.ON_CHANNEL_READ.applyTo(channel.pipeline(), 
             new Action0() {
                 @Override
                 public void call() {

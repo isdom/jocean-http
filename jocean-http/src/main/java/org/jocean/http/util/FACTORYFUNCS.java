@@ -94,15 +94,15 @@ class FACTORYFUNCS {
           }
     };
     
-    static final Func1<Action0, ChannelHandler> HTTPSERVER_GUIDE_FUNC1 = 
+    static final Func1<Action0, ChannelHandler> ON_CHANNEL_READ_FUNC1 = 
             new Func1<Action0, ChannelHandler>() {
         @Override
-        public ChannelHandler call(final Action0 doWork) {
+        public ChannelHandler call(final Action0 onChannelRead) {
             return new ChannelInboundHandlerAdapter() {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx,
                         Throwable cause) throws Exception {
-                    LOG.warn("HTTPSERVER_GUIDE_FUNC1: exceptionCaught at channel({})/handler({}), detail:{}", 
+                    LOG.warn("ON_CHANNEL_READ_FUNC1: exceptionCaught at channel({})/handler({}), detail:{}", 
                             ctx.channel(), this,
                             ExceptionUtils.exception2detail(cause));
                     ctx.close();
@@ -112,7 +112,7 @@ class FACTORYFUNCS {
                 public void channelInactive(final ChannelHandlerContext ctx)
                         throws Exception {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("HTTPSERVER_GUIDE_FUNC1: channel({})/handler({}): channelInactive.", 
+                        LOG.debug("ON_CHANNEL_READ_FUNC1: channel({})/handler({}): channelInactive.", 
                                 ctx.channel(), ctx.name());
                     }
                     ctx.close();
@@ -121,11 +121,11 @@ class FACTORYFUNCS {
                 @Override
                 public void channelRead(ChannelHandlerContext ctx, final Object msg) throws Exception {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("HTTPSERVER_GUIDE_FUNC1: channel({})/handler({}): channelRead with msg({}).", 
+                        LOG.debug("ON_CHANNEL_READ_FUNC1: channel({})/handler({}): channelRead with msg({}).", 
                                 ctx.channel(), ctx.name(), msg);
                     }
                     try {
-                        doWork.call();
+                        onChannelRead.call();
                         ctx.fireChannelRead(msg);
                     } finally {
                         RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
@@ -135,7 +135,7 @@ class FACTORYFUNCS {
         }
     };
     
-    static final Func1<Observer<HttpObject>, ChannelHandler> HTTPSERVER_WORK_FUNC1 = 
+    static final Func1<Observer<HttpObject>, ChannelHandler> HTTPOBJ_OBSERVER_FUNC1 = 
             new Func1<Observer<HttpObject>, ChannelHandler>() {
         @Override
         public ChannelHandler call(final Observer<HttpObject> httpObjectObserver) {
