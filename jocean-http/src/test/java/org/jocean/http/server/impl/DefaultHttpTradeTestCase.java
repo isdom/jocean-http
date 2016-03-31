@@ -116,12 +116,6 @@ public class DefaultHttpTradeTestCase {
                 protected void initChannel(final Channel ch) throws Exception {
                     ch.pipeline().addLast(new LoggingHandler());
                     ch.pipeline().addLast(new HttpClientCodec());
-//                    ch.pipeline().addLast(new SimpleChannelInboundHandler<HttpObject>() {
-//                        @Override
-//                        protected void channelRead0(final ChannelHandlerContext ctx,
-//                            final HttpObject msg) throws Exception {
-//                            LOG.debug("client:{} - channelRead0: {}", addr, msg);
-//                    }});
                 }})
             .remoteAddress(new LocalAddress(addr));
     }
@@ -644,13 +638,9 @@ public class DefaultHttpTradeTestCase {
             }
             client.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
             
+            // http request has received by server's trade instance
+            // bcs of cached request's Observable completed
             cached.request().toBlocking().subscribe();
-            
-//            Thread.sleep(1000);
-            
-//            emitHttpObjects(holder.getAt(0), request);
-//            emitHttpObjects(holder.getAt(0), req_contents);
-//            emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
             
 //            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
 //                @Override
@@ -706,6 +696,7 @@ public class DefaultHttpTradeTestCase {
             emitHttpObjects(trade.responseObserver(), resp_contents);
             emitHttpObjects(trade.responseObserver(), LastHttpContent.EMPTY_LAST_CONTENT);
             
+            //  ensure trade's response has been received by client
             clientObservable.toBlocking().subscribe();
             
             RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
