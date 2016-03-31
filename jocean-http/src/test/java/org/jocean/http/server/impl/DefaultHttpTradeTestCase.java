@@ -11,9 +11,9 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.CachedRequest;
 import org.jocean.http.server.HttpServer.HttpTrade;
@@ -32,9 +32,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalEventLoopGroup;
@@ -101,12 +99,6 @@ public class DefaultHttpTradeTestCase {
                 protected void initChannel(final Channel ch) throws Exception {
                     ch.pipeline().addLast(new LoggingHandler());
                     ch.pipeline().addLast(new HttpServerCodec());
-//                    ch.pipeline().addLast(new SimpleChannelInboundHandler<HttpObject>() {
-//                        @Override
-//                        protected void channelRead0(ChannelHandlerContext ctx,
-//                                HttpObject msg) throws Exception {
-//                            LOG.debug("addr:{} - channelRead0: {}", addr, msg);
-//                        }});
                     consumer.offer(ch);
                 }})
             .localAddress(new LocalAddress(addr))
@@ -124,12 +116,12 @@ public class DefaultHttpTradeTestCase {
                 protected void initChannel(final Channel ch) throws Exception {
                     ch.pipeline().addLast(new LoggingHandler());
                     ch.pipeline().addLast(new HttpClientCodec());
-                  ch.pipeline().addLast(new SimpleChannelInboundHandler<HttpObject>() {
-                  @Override
-                  protected void channelRead0(ChannelHandlerContext ctx,
-                          HttpObject msg) throws Exception {
-                      LOG.debug("client:{} - channelRead0: {}", addr, msg);
-                  }});
+//                    ch.pipeline().addLast(new SimpleChannelInboundHandler<HttpObject>() {
+//                        @Override
+//                        protected void channelRead0(final ChannelHandlerContext ctx,
+//                            final HttpObject msg) throws Exception {
+//                            LOG.debug("client:{} - channelRead0: {}", addr, msg);
+//                    }});
                 }})
             .remoteAddress(new LocalAddress(addr));
     }
@@ -616,7 +608,7 @@ public class DefaultHttpTradeTestCase {
     public final void tesTradeForCompleteRoundWithMultiContentRequestAndMultiContentResponse() 
             throws Exception {
         
-        final SynchronousQueue<Channel> channelProvider = new SynchronousQueue<Channel>();
+        final BlockingQueue<Channel> channelProvider = new SynchronousQueue<Channel>();
         final Bootstrap clientbootstrap = buildLocalClient("test");
         final Channel serverChannel = buildLocalServer("test", channelProvider);
         
@@ -642,6 +634,8 @@ public class DefaultHttpTradeTestCase {
             final DefaultHttpTrade trade = new DefaultHttpTrade(server, 
                     DefaultHttpServer.requestObservable(server));
             
+            assertTrue(trade.isActive());
+            
             final CachedRequest cached = new CachedRequest(trade, 8);
             
             client.write(request);
@@ -650,13 +644,14 @@ public class DefaultHttpTradeTestCase {
             }
             client.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
             
-            Thread.sleep(1000);
+            cached.request().toBlocking().subscribe();
+            
+//            Thread.sleep(1000);
             
 //            emitHttpObjects(holder.getAt(0), request);
 //            emitHttpObjects(holder.getAt(0), req_contents);
 //            emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
             
-            assertTrue(trade.isActive());
 //            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
 //                @Override
 //                public void call(final HttpContent c) {
@@ -665,7 +660,6 @@ public class DefaultHttpTradeTestCase {
             
             assertEquals(0, cached.currentBlockSize());
             assertEquals(0, cached.currentBlockCount());
-//            assertEquals(4, cached.requestHttpObjCount());
             
             final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
             assertNotNull(fullrequest);
@@ -703,11 +697,16 @@ public class DefaultHttpTradeTestCase {
                     assertEquals(1, c.refCnt());
                 }});
             
+            final Observable<HttpObject> clientObservable = 
+                    DefaultHttpServer.requestObservable(client).cache();
+            
+            clientObservable.subscribe();
+            
             emitHttpObjects(trade.responseObserver(), response);
             emitHttpObjects(trade.responseObserver(), resp_contents);
             emitHttpObjects(trade.responseObserver(), LastHttpContent.EMPTY_LAST_CONTENT);
             
-            Thread.sleep( 1000 );
+            clientObservable.toBlocking().subscribe();
             
             RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
                 @Override
