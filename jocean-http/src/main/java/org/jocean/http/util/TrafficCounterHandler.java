@@ -1,4 +1,4 @@
-package org.jocean.http.client.impl;
+package org.jocean.http.util;
 
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -10,7 +10,7 @@ import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 
-final class TrafficCounterHandler extends ChannelDuplexHandler 
+final public class TrafficCounterHandler extends ChannelDuplexHandler 
     implements TrafficCounter {
 
     @Override

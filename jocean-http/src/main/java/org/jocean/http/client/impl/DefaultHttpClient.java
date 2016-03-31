@@ -12,9 +12,11 @@ import org.jocean.http.TrafficCounter;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound.ApplyToRequest;
+import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.http.util.TrafficCounterAware;
+import org.jocean.http.util.TrafficCounterHandler;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
@@ -162,7 +164,7 @@ public class DefaultHttpClient implements HttpClient {
     private TrafficCounter buildTrafficCounter(final Channel channel, 
             final Action1<Subscription> add4release) {
         final TrafficCounterHandler handler = 
-                (TrafficCounterHandler)HttpClientConstants.APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
+                (TrafficCounterHandler)APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
         
         add4release.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
         return handler;

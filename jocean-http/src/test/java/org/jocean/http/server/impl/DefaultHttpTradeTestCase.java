@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.server.CachedRequest;
 import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.SubscriberHolder;
@@ -626,7 +627,7 @@ public class DefaultHttpTradeTestCase {
             final Channel client = connectfuture.sync().channel();
             
             final DefaultHttpTrade trade = new DefaultHttpTrade(server, 
-                    DefaultHttpServer.requestObservable(server));
+                    APPLY.from(server));
             
             assertTrue(trade.isActive());
             
@@ -688,7 +689,7 @@ public class DefaultHttpTradeTestCase {
                 }});
             
             final Observable<HttpObject> clientObservable = 
-                    DefaultHttpServer.requestObservable(client).cache();
+                    APPLY.from(client).cache();
             
             clientObservable.subscribe();
             

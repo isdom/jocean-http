@@ -1,0 +1,202 @@
+package org.jocean.http.util;
+
+import org.jocean.http.server.HttpServer.TransportException;
+import org.jocean.idiom.ExceptionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.http.HttpClientCodec;
+import io.netty.handler.codec.http.HttpContentCompressor;
+import io.netty.handler.codec.http.HttpContentDecompressor;
+import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpServerCodec;
+import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.stream.ChunkedWriteHandler;
+import io.netty.handler.timeout.IdleStateEvent;
+import io.netty.handler.timeout.IdleStateHandler;
+import rx.Observer;
+import rx.functions.Action0;
+import rx.functions.Func1;
+import rx.functions.Func2;
+import rx.functions.FuncN;
+
+class FACTORYFUNCS {
+    private static final Logger LOG =
+            LoggerFactory.getLogger(FACTORYFUNCS.class);
+    
+    private FACTORYFUNCS() {
+        throw new IllegalStateException("No instances!");
+    }
+    
+    static final FuncN<ChannelHandler> TRAFFICCOUNTER_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new TrafficCounterHandler();
+        }};
+        
+    static final FuncN<ChannelHandler> HTTPCLIENT_CODEC_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new HttpClientCodec();
+        }};
+            
+    static final FuncN<ChannelHandler> CONTENT_DECOMPRESSOR_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new HttpContentDecompressor();
+        }};
+        
+    static final FuncN<ChannelHandler> CHUNKED_WRITER_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new ChunkedWriteHandler();
+        }};
+
+    static final FuncN<ChannelHandler> HTTPSERVER_CODEC_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new HttpServerCodec();
+        }};
+        
+    static final FuncN<ChannelHandler> CONTENT_COMPRESSOR_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new HttpContentCompressor();
+        }
+    };
+
+    static final Func2<Channel,SslContext,ChannelHandler> SSL_FUNC2 = 
+            new Func2<Channel,SslContext,ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Channel channel, final SslContext ctx) {
+            return ctx.newHandler(channel.alloc());
+        }};
+        
+    static final Func1<Integer,ChannelHandler> CLOSE_ON_IDLE_FUNC1 = 
+        new Func1<Integer,ChannelHandler>() {
+            @Override
+            public ChannelHandler call(final Integer allIdleTimeout) {
+              return new IdleStateHandler(0, 0, allIdleTimeout) {
+                  @Override
+                  protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
+                      if (LOG.isInfoEnabled()) {
+                          LOG.info("channelIdle:{} , close channel[{}]", evt.state().name(), ctx.channel());
+                      }
+                      ctx.channel().close();
+                  }
+              };
+          }
+    };
+    
+    static final Func1<Action0, ChannelHandler> HTTPSERVER_GUIDE_FUNC1 = 
+            new Func1<Action0, ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Action0 doWork) {
+            return new ChannelInboundHandlerAdapter() {
+                @Override
+                public void exceptionCaught(ChannelHandlerContext ctx,
+                        Throwable cause) throws Exception {
+                    LOG.warn("HTTPSERVER_GUIDE_FUNC1: exceptionCaught at channel({})/handler({}), detail:{}", 
+                            ctx.channel(), this,
+                            ExceptionUtils.exception2detail(cause));
+                    ctx.close();
+                }
+
+                @Override
+                public void channelInactive(final ChannelHandlerContext ctx)
+                        throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("HTTPSERVER_GUIDE_FUNC1: channel({})/handler({}): channelInactive.", 
+                                ctx.channel(), ctx.name());
+                    }
+                    ctx.close();
+                }
+
+                @Override
+                public void channelRead(ChannelHandlerContext ctx, final Object msg) throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("HTTPSERVER_GUIDE_FUNC1: channel({})/handler({}): channelRead with msg({}).", 
+                                ctx.channel(), ctx.name(), msg);
+                    }
+                    try {
+                        doWork.call();
+                        ctx.fireChannelRead(msg);
+                    } finally {
+                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
+                    }
+                }
+            };
+        }
+    };
+    
+    static final Func1<Observer<HttpObject>, ChannelHandler> HTTPSERVER_WORK_FUNC1 = 
+            new Func1<Observer<HttpObject>, ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Observer<HttpObject> httpObjectObserver) {
+            return new SimpleChannelInboundHandler<HttpObject>() {
+                @Override
+                public void exceptionCaught(ChannelHandlerContext ctx,
+                        Throwable cause) throws Exception {
+                    LOG.warn("exceptionCaught at channel({})/handler({}), detail:{}, and call onHttpObject({}).onError with TransportException.", 
+                            ctx.channel(), ctx.name(),
+                            ExceptionUtils.exception2detail(cause), 
+                            httpObjectObserver);
+                    httpObjectObserver.onError(new TransportException("exceptionCaught", cause));
+                    ctx.close();
+                }
+
+                // @Override
+                // public void channelReadComplete(ChannelHandlerContext ctx) {
+                // ctx.flush();
+                // }
+
+                @Override
+                public void channelInactive(final ChannelHandlerContext ctx)
+                        throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("channel({})/handler({}): channelInactive and call onHttpObject({}).onError with TransportException.", 
+                                ctx.channel(), ctx.name(), httpObjectObserver);
+                    }
+                    httpObjectObserver.onError(new TransportException("channelInactive"));
+                }
+
+                @Override
+                protected void channelRead0(final ChannelHandlerContext ctx,
+                        final HttpObject msg) throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("channel({})/handler({}): channelRead0 and call onHttpObject({}).onHttpObject with msg({}).", 
+                                ctx.channel(), ctx.name(), httpObjectObserver, msg);
+                    }
+                    try {
+                        httpObjectObserver.onNext(msg);
+                    } catch (Exception e) {
+                        LOG.warn("exception when invoke onNext for channel({})/msg ({}), detail: {}.", 
+                                ctx.channel(), msg, ExceptionUtils.exception2detail(e));
+                    }
+                    
+                    if (msg instanceof LastHttpContent) {
+                        //  remove handler itself
+                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
+                        try {
+                            httpObjectObserver.onCompleted();
+                        } catch (Exception e) {
+                            LOG.warn("exception when invoke onCompleted for channel({}), detail: {}.", 
+                                    ctx.channel(), ExceptionUtils.exception2detail(e));
+                        }
+                    }
+                }
+
+                // @Override
+                // public void channelActive(final ChannelHandlerContext ctx)
+                // throws Exception {
+                // }
+            };
+        }
+    };
+}

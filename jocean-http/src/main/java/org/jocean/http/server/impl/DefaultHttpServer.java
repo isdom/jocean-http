@@ -8,17 +8,14 @@ import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
 import org.jocean.http.server.HttpServer;
+import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Class2ApplyBuilder;
-import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ServerChannelAware;
-import org.jocean.http.util.Nettys.ToOrdinal;
-import org.jocean.http.util.PipelineApply;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
-import org.jocean.idiom.rx.RxFunctions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,33 +24,19 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
-import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.handler.codec.http.HttpContentCompressor;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpServerCodec;
-import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
-import rx.Observer;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
-import rx.functions.Func1;
-import rx.functions.FuncN;
-import rx.functions.Functions;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -147,7 +130,7 @@ public class DefaultHttpServer implements HttpServer {
     private HttpTrade httpTradeOf(final Channel channel) {
         return new DefaultHttpTrade(
                 channel,
-                requestObservable(channel));
+                APPLY.from(channel));
     }
 
     private Action1<HttpTrade> recycleChannelAction(
@@ -173,16 +156,6 @@ public class DefaultHttpServer implements HttpServer {
                         .addListener(ChannelFutureListener.CLOSE);
                 }
             }};
-    }
-    
-    static Observable<HttpObject> requestObservable(final Channel channel) {
-        return Observable.create(new OnSubscribe<HttpObject>() {
-            @Override
-            public void call(final Subscriber<? super HttpObject> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    APPLY.WORKER.applyTo(channel.pipeline(), subscriber);
-                }
-            }} );
     }
     
     public DefaultHttpServer() {
@@ -253,156 +226,6 @@ public class DefaultHttpServer implements HttpServer {
     
     private static final Class2ApplyBuilder _APPLY_BUILDER;
         
-    private static final FuncN<ChannelHandler> HTTPSERVER_CODEC_FUNCN = new FuncN<ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Object... args) {
-            return new HttpServerCodec();
-        }};
-        
-    private static final FuncN<ChannelHandler> CONTENT_COMPRESSOR_FUNCN = new FuncN<ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Object... args) {
-            return new HttpContentCompressor();
-        }
-    };
-
-    private static final Func1<Action0, ChannelHandler> HTTPSERVER_GUIDE_FUNC1 = 
-            new Func1<Action0, ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Action0 doWork) {
-            return new ChannelInboundHandlerAdapter() {
-                @Override
-                public void exceptionCaught(ChannelHandlerContext ctx,
-                        Throwable cause) throws Exception {
-                    LOG.warn("HTTPSERVER_GUIDE_FUNC1: exceptionCaught at channel({})/handler({}), detail:{}", 
-                            ctx.channel(), this,
-                            ExceptionUtils.exception2detail(cause));
-                    ctx.close();
-                }
-
-                @Override
-                public void channelInactive(final ChannelHandlerContext ctx)
-                        throws Exception {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("HTTPSERVER_GUIDE_FUNC1: channel({})/handler({}): channelInactive.", 
-                                ctx.channel(), ctx.name());
-                    }
-                    ctx.close();
-                }
-
-                @Override
-                public void channelRead(ChannelHandlerContext ctx, final Object msg) throws Exception {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("HTTPSERVER_GUIDE_FUNC1: channel({})/handler({}): channelRead with msg({}).", 
-                                ctx.channel(), ctx.name(), msg);
-                    }
-                    try {
-                        doWork.call();
-                        ctx.fireChannelRead(msg);
-                    } finally {
-                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
-                    }
-                }
-            };
-        }
-    };
-    
-    private static final Func1<Observer<HttpObject>, ChannelHandler> HTTPSERVER_WORK_FUNC1 = 
-            new Func1<Observer<HttpObject>, ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Observer<HttpObject> httpObjectObserver) {
-            return new SimpleChannelInboundHandler<HttpObject>() {
-                @Override
-                public void exceptionCaught(ChannelHandlerContext ctx,
-                        Throwable cause) throws Exception {
-                    LOG.warn("exceptionCaught at channel({})/handler({}), detail:{}, and call onHttpObject({}).onError with TransportException.", 
-                            ctx.channel(), ctx.name(),
-                            ExceptionUtils.exception2detail(cause), 
-                            httpObjectObserver);
-                    httpObjectObserver.onError(new TransportException("exceptionCaught", cause));
-                    ctx.close();
-                }
-
-                // @Override
-                // public void channelReadComplete(ChannelHandlerContext ctx) {
-                // ctx.flush();
-                // }
-
-                @Override
-                public void channelInactive(final ChannelHandlerContext ctx)
-                        throws Exception {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("channel({})/handler({}): channelInactive and call onHttpObject({}).onError with TransportException.", 
-                                ctx.channel(), ctx.name(), httpObjectObserver);
-                    }
-                    httpObjectObserver.onError(new TransportException("channelInactive"));
-                }
-
-                @Override
-                protected void channelRead0(final ChannelHandlerContext ctx,
-                        final HttpObject msg) throws Exception {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("channel({})/handler({}): channelRead0 and call onHttpObject({}).onHttpObject with msg({}).", 
-                                ctx.channel(), ctx.name(), httpObjectObserver, msg);
-                    }
-                    try {
-                        httpObjectObserver.onNext(msg);
-                    } catch (Exception e) {
-                        LOG.warn("exception when invoke onNext for channel({})/msg ({}), detail: {}.", 
-                                ctx.channel(), msg, ExceptionUtils.exception2detail(e));
-                    }
-                    
-                    if (msg instanceof LastHttpContent) {
-                        //  remove handler itself
-                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
-                        try {
-                            httpObjectObserver.onCompleted();
-                        } catch (Exception e) {
-                            LOG.warn("exception when invoke onCompleted for channel({}), detail: {}.", 
-                                    ctx.channel(), ExceptionUtils.exception2detail(e));
-                        }
-                    }
-                }
-
-                // @Override
-                // public void channelActive(final ChannelHandlerContext ctx)
-                // throws Exception {
-                // }
-            };
-        }
-    };
-    
-    private static enum APPLY implements PipelineApply {
-        LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
-        CLOSE_ON_IDLE(Functions.fromFunc(Nettys.CLOSE_ON_IDLE_FUNC1)),
-        SSL(Functions.fromFunc(Nettys.SSL_FUNC2)),
-        HTTPSERVER(HTTPSERVER_CODEC_FUNCN),
-        CONTENT_COMPRESSOR(CONTENT_COMPRESSOR_FUNCN),
-        GUIDE(Functions.fromFunc(HTTPSERVER_GUIDE_FUNC1)),
-        WORKER(Functions.fromFunc(HTTPSERVER_WORK_FUNC1)),
-        ;
-        
-        @Override
-        public ChannelHandler applyTo(final ChannelPipeline pipeline, final Object ... args) {
-            if (null==this._factory) {
-                throw new UnsupportedOperationException("ChannelHandler's factory is null");
-            }
-            return Nettys.insertHandler(
-                    pipeline,
-                this.name(), 
-                this._factory.call(args), 
-                TO_ORDINAL);
-        }
-    
-        public static final ToOrdinal TO_ORDINAL = Nettys.ordinal(APPLY.class);
-        
-        private APPLY(final FuncN<ChannelHandler> factory) {
-            this._factory = factory;
-        }
-    
-        private final FuncN<ChannelHandler> _factory;
-    }
-    
     static {
         _APPLY_BUILDER = new Class2ApplyBuilder();
         _APPLY_BUILDER.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
