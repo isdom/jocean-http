@@ -20,6 +20,7 @@ import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
@@ -156,9 +157,11 @@ class DefaultHttpTrade implements HttpTrade {
         @Override
         public void onNext(final HttpObject msg) {
             if (isActive()) {
-                //  TODO, each onNext fire a flush op.
-                //  TOBE fix only flush at last time when onCompleted.
-                _channel.writeAndFlush(ReferenceCountUtil.retain(msg));
+                if (msg instanceof LastHttpContent) {
+                    _channel.writeAndFlush(ReferenceCountUtil.retain(msg));
+                } else {
+                    _channel.write(ReferenceCountUtil.retain(msg));
+                }
             } else {
                 LOG.warn("sendback msg({}) on closed transport[channel: {}]",
                     msg, _channel);
