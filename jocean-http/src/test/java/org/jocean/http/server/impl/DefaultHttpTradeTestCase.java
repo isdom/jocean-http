@@ -607,9 +607,11 @@ public class DefaultHttpTradeTestCase {
         final Bootstrap clientbootstrap = buildLocalClient("test");
         final Channel serverChannel = buildLocalServer("test", channelProvider);
         
-        final ChannelFuture connectfuture = clientbootstrap.connect();
-        
         try {
+            final ChannelFuture connectfuture = clientbootstrap.connect();
+            final Channel server = channelProvider.take();
+            final Channel client = connectfuture.sync().channel();
+            
             final String REQ_CONTENT = "testcontent";
             
             final DefaultHttpRequest request = 
@@ -623,11 +625,8 @@ public class DefaultHttpTradeTestCase {
                     assertEquals(1, c.refCnt());
                 }});
             
-            final Channel server = channelProvider.take();
-            final Channel client = connectfuture.sync().channel();
-            
             final DefaultHttpTrade trade = new DefaultHttpTrade(server, 
-                    APPLY.from(server));
+                    APPLY.httpobjObservable(server));
             
             assertTrue(trade.isActive());
             
@@ -689,7 +688,7 @@ public class DefaultHttpTradeTestCase {
                 }});
             
             final Observable<HttpObject> clientObservable = 
-                    APPLY.from(client).cache();
+                    APPLY.httpobjObservable(client).cache();
             
             clientObservable.subscribe();
             

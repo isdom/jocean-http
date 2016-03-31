@@ -28,7 +28,7 @@ public enum APPLY implements PipelineApply {
     WORKER(Functions.fromFunc(FACTORYFUNCS.HTTPSERVER_WORK_FUNC1)),
     ;
     
-    public static Observable<HttpObject> from(final Channel channel) {
+    public static Observable<HttpObject> httpobjObservable(final Channel channel) {
         return Observable.create(new OnSubscribe<HttpObject>() {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
