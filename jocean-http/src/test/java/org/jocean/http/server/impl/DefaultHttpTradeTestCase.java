@@ -45,16 +45,13 @@ import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpResponse;
-import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observer;
@@ -98,8 +95,8 @@ public class DefaultHttpTradeTestCase {
             .childHandler(new ChannelInitializer<Channel>() {
                 @Override
                 protected void initChannel(final Channel ch) throws Exception {
-                    ch.pipeline().addLast(new LoggingHandler());
-                    ch.pipeline().addLast(new HttpServerCodec());
+                    APPLY.LOGGING.applyTo(ch.pipeline());
+                    APPLY.HTTPSERVER.applyTo(ch.pipeline());
                     consumer.offer(ch);
                 }})
             .localAddress(new LocalAddress(addr))
@@ -115,8 +112,8 @@ public class DefaultHttpTradeTestCase {
             .handler(new ChannelInitializer<Channel>() {
                 @Override
                 protected void initChannel(final Channel ch) throws Exception {
-                    ch.pipeline().addLast(new LoggingHandler());
-                    ch.pipeline().addLast(new HttpClientCodec());
+                    APPLY.LOGGING.applyTo(ch.pipeline());
+                    APPLY.HTTPCLIENT.applyTo(ch.pipeline());
                 }})
             .remoteAddress(new LocalAddress(addr));
     }

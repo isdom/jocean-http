@@ -311,7 +311,25 @@ public class DefaultHttpClient implements HttpClient {
                         @Override
                         public void call(final Subscriber<? super Channel> channelSubscriber) {
                             if (!channelSubscriber.isUnsubscribed()) {
-                                channel.pipeline().addLast(new SslHandshakeNotifier(channelSubscriber));
+                                APPLY.SSLNOTIFY.applyTo(channel.pipeline(), 
+                                    new Action1<Channel>() {
+                                        @Override
+                                        public void call(final Channel ch) {
+                                            ChannelPool.Util.setChannelReady(ch);
+                                            channelSubscriber.onNext(ch);
+                                            channelSubscriber.onCompleted();
+                                            if (LOG.isDebugEnabled()) {
+                                                LOG.debug("channel({}): userEventTriggered for ssl handshake success", ch);
+                                            }
+                                        }},
+                                    new Action1<Throwable>() {
+                                        @Override
+                                        public void call(final Throwable e) {
+                                            channelSubscriber.onError(e);
+                                            LOG.warn("channel({}): userEventTriggered for ssl handshake failure:{}",
+                                                    channel,
+                                                    ExceptionUtils.exception2detail(e));
+                                        }});
                             } else {
                                 LOG.warn("SslHandshakeNotifier: channelSubscriber {} has unsubscribe", channelSubscriber);
                             }

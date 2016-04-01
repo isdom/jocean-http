@@ -17,11 +17,13 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
 import rx.Observer;
 import rx.functions.Action0;
+import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.functions.Func2;
 import rx.functions.FuncN;
@@ -92,6 +94,40 @@ class FACTORYFUNCS {
                   }
               };
           }
+    };
+    
+    static final Func2<Action1<Channel>, Action1<Throwable>, ChannelHandler> SSLNOTIFY_FUNC2 = 
+            new Func2<Action1<Channel>, Action1<Throwable>, ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Action1<Channel> onSuccess,
+                final Action1<Throwable> onFailure) {
+            return new  ChannelInboundHandlerAdapter() {
+                @Override
+                public void userEventTriggered(final ChannelHandlerContext ctx,
+                        final Object evt) throws Exception {
+                    if (evt instanceof SslHandshakeCompletionEvent) {
+                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
+                        final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
+                        if (sslComplete.isSuccess()) {
+                            try {
+                                onSuccess.call(ctx.channel());
+                            } catch (Exception e) {
+                                LOG.warn("exception when invoke onSuccess, detail:{}",
+                                        ExceptionUtils.exception2detail(e));
+                            }
+                        } else {
+                            try {
+                                onFailure.call(sslComplete.cause());
+                            } catch (Exception e) {
+                                LOG.warn("exception when invoke onFailure, detail:{}",
+                                        ExceptionUtils.exception2detail(e));
+                            }
+                        }
+                    }
+                    ctx.fireUserEventTriggered(evt);
+                }
+            };
+        }
     };
     
     static final Func1<Action0, ChannelHandler> ON_CHANNEL_READ_FUNC1 = 
