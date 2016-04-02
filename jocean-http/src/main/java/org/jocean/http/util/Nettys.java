@@ -95,10 +95,14 @@ public class Nettys {
                 final int order = toOrdinal.call(entry.getKey(), entry.getValue())
                         - toInsertOrdinal;
                 if (order==0) {
-                    //  equals, handler already added, just ignore
-                    //  NOT added
-                    LOG.warn("channel({}): handler ({}) already added, ignore.", pipeline.channel(), name);
-                    return null;
+                    //  order equals, same ordered handler already added, 
+                    //  so replaced by new handler
+                    LOG.warn("channel({}): handler order ({}) exist, old handler {}/{} will be replace by new handler {}/{}.",
+                            pipeline.channel(), toInsertOrdinal, 
+                            entry.getKey(), entry.getValue(),
+                            name, handler);
+                    pipeline.replace(entry.getValue(), name, handler);
+                    return handler;
                 }
                 if (order < 0) {
                     // current handler's name less than name, continue comapre
