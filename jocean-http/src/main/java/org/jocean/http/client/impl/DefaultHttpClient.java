@@ -28,6 +28,7 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -94,7 +95,7 @@ public class DefaultHttpClient implements HttpClient {
                         _channelPool.retainChannel(remoteAddress, add4release)
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
-                            .doOnNext(attachSubscriberToChannel(responseSubscriber))
+                            .doOnNext(attachSubscriberToChannel(responseSubscriber, add4release))
                             .doOnNext(fillChannelAware(fullFeatures))
                             .doOnNext(hookTrafficCounter(fullFeatures, add4release))
                             .flatMap(doTransferRequest(request, fullFeatures))
@@ -212,30 +213,33 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     private Action1<? super Channel> attachSubscriberToChannel(
-            final Subscriber<? super HttpObject> responseSubscriber) {
+            final Subscriber<? super HttpObject> responseSubscriber, 
+            final Action1<Subscription> add4release) {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
-                APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), new Subscriber<HttpObject>(responseSubscriber) {
-                    @Override
-                    public void onCompleted() {
-                        final ChannelPool pool = ChannelPool.Util
-                                .getChannelPool(channel);
-                        if (null != pool) {
-                            pool.afterReceiveLastContent(channel);
+                final ChannelHandler handler = 
+                    APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), new Subscriber<HttpObject>(responseSubscriber) {
+                        @Override
+                        public void onCompleted() {
+                            final ChannelPool pool = ChannelPool.Util
+                                    .getChannelPool(channel);
+                            if (null != pool) {
+                                pool.afterReceiveLastContent(channel);
+                            }
+                            responseSubscriber.onCompleted();
                         }
-                        responseSubscriber.onCompleted();
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        responseSubscriber.onError(e);
-                    }
-
-                    @Override
-                    public void onNext(HttpObject t) {
-                        responseSubscriber.onNext(t);
-                    }});
+    
+                        @Override
+                        public void onError(Throwable e) {
+                            responseSubscriber.onError(e);
+                        }
+    
+                        @Override
+                        public void onNext(HttpObject t) {
+                            responseSubscriber.onNext(t);
+                        }});
+                add4release.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
             }};
     }
 
