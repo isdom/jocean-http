@@ -130,7 +130,7 @@ public class DefaultHttpServer implements HttpServer {
     private HttpTrade httpTradeOf(final Channel channel) {
         return new DefaultHttpTrade(
                 channel,
-                APPLY.httpobjObservable(channel));
+                RxNettys.httpobjObservable(channel));
     }
 
     private Action1<HttpTrade> recycleChannelAction(

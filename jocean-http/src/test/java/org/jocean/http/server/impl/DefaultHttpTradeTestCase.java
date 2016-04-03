@@ -19,6 +19,7 @@ import org.jocean.http.server.CachedRequest;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.SubscriberHolder;
 import org.junit.Test;
@@ -623,7 +624,7 @@ public class DefaultHttpTradeTestCase {
                 }});
             
             final DefaultHttpTrade trade = new DefaultHttpTrade(server, 
-                    APPLY.httpobjObservable(server));
+                    RxNettys.httpobjObservable(server));
             
             assertTrue(trade.isActive());
             
@@ -685,7 +686,7 @@ public class DefaultHttpTradeTestCase {
                 }});
             
             final Observable<HttpObject> clientObservable = 
-                    APPLY.httpobjObservable(client).cache();
+                    RxNettys.httpobjObservable(client).cache();
             
             clientObservable.subscribe();
             

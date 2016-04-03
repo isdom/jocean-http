@@ -3,14 +3,9 @@ package org.jocean.http.util;
 import org.jocean.http.util.Nettys.ToOrdinal;
 import org.jocean.idiom.rx.RxFunctions;
 
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
-import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.logging.LoggingHandler;
-import rx.Observable;
-import rx.Subscriber;
-import rx.Observable.OnSubscribe;
 import rx.functions.FuncN;
 import rx.functions.Functions;
 
@@ -28,16 +23,6 @@ public enum APPLY implements PipelineApply {
     ON_CHANNEL_READ(Functions.fromFunc(FACTORYFUNCS.ON_CHANNEL_READ_FUNC1)),
     HTTPOBJ_SUBSCRIBER(Functions.fromFunc(FACTORYFUNCS.HTTPOBJ_SUBSCRIBER_FUNC1)),
     ;
-    
-    public static Observable<HttpObject> httpobjObservable(final Channel channel) {
-        return Observable.create(new OnSubscribe<HttpObject>() {
-            @Override
-            public void call(final Subscriber<? super HttpObject> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber);
-                }
-            }} );
-    }
     
     public static final ToOrdinal TO_ORDINAL = Nettys.ordinal(APPLY.class);
     
