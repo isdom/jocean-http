@@ -216,7 +216,7 @@ public class DefaultHttpClient implements HttpClient {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
-                APPLY.HTTPOBJ_OBSERVER.applyTo(channel.pipeline(), new Subscriber<HttpObject>(responseSubscriber) {
+                APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), new Subscriber<HttpObject>(responseSubscriber) {
                     @Override
                     public void onCompleted() {
                         final ChannelPool pool = ChannelPool.Util

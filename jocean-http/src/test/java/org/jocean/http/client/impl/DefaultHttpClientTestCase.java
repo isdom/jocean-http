@@ -921,14 +921,14 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed(1);
         } finally {
+            client.close();
+            server.stop();
+            
             testSubscriber.assertNoErrors();
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             //  channel connected, so message has been send
             nextSensor.assertCalled();
-            
-            client.close();
-            server.stop();
         }
     }
 

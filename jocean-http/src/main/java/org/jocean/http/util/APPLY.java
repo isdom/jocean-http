@@ -26,7 +26,7 @@ public enum APPLY implements PipelineApply {
     CONTENT_COMPRESSOR(FACTORYFUNCS.CONTENT_COMPRESSOR_FUNCN),
     CHUNKED_WRITER(FACTORYFUNCS.CHUNKED_WRITER_FUNCN),
     ON_CHANNEL_READ(Functions.fromFunc(FACTORYFUNCS.ON_CHANNEL_READ_FUNC1)),
-    HTTPOBJ_OBSERVER(Functions.fromFunc(FACTORYFUNCS.HTTPOBJ_OBSERVER_FUNC1)),
+    HTTPOBJ_SUBSCRIBER(Functions.fromFunc(FACTORYFUNCS.HTTPOBJ_SUBSCRIBER_FUNC1)),
     ;
     
     public static Observable<HttpObject> httpobjObservable(final Channel channel) {
@@ -34,7 +34,7 @@ public enum APPLY implements PipelineApply {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
-                    APPLY.HTTPOBJ_OBSERVER.applyTo(channel.pipeline(), subscriber);
+                    APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber);
                 }
             }} );
     }
