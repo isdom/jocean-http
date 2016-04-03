@@ -9,7 +9,7 @@ import io.netty.handler.logging.LoggingHandler;
 import rx.functions.FuncN;
 import rx.functions.Functions;
 
-public enum APPLY implements PipelineApply {
+public enum APPLY {
     LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
     TRAFFICCOUNTER(FACTORYFUNCS.TRAFFICCOUNTER_FUNCN),
     CLOSE_ON_IDLE(Functions.fromFunc(FACTORYFUNCS.CLOSE_ON_IDLE_FUNC1)),
@@ -26,7 +26,6 @@ public enum APPLY implements PipelineApply {
     
     public static final ToOrdinal TO_ORDINAL = Nettys.ordinal(APPLY.class);
     
-    @Override
     public ChannelHandler applyTo(final ChannelPipeline pipeline, final Object ... args) {
         if (null==this._factory) {
             throw new UnsupportedOperationException("ChannelHandler's factory is null");
