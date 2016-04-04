@@ -20,6 +20,7 @@ import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.Pair;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.SubscriberHolder;
 import org.junit.Test;
@@ -117,6 +118,22 @@ public class DefaultHttpTradeTestCase {
                     APPLY.HTTPCLIENT.applyTo(ch.pipeline());
                 }})
             .remoteAddress(new LocalAddress(addr));
+    }
+    
+    private static Pair<Channel,Channel> connectClientToServer(final String addr) throws Exception {
+        final BlockingQueue<Channel> channelProvider = new SynchronousQueue<Channel>();
+        final Bootstrap clientbootstrap = buildLocalClient(addr);
+        final Channel acceptorChannel = buildLocalServer(addr, channelProvider);
+        
+        try {
+            final ChannelFuture connectfuture = clientbootstrap.connect();
+            final Channel server = channelProvider.take();
+            final Channel client = connectfuture.sync().channel();
+            
+            return Pair.of(client, server);
+        } finally {
+            acceptorChannel.close().sync();
+        }
     }
 
     @Test
@@ -601,124 +618,117 @@ public class DefaultHttpTradeTestCase {
     public final void tesTradeForCompleteRoundWithMultiContentRequestAndMultiContentResponse() 
             throws Exception {
         
-        final BlockingQueue<Channel> channelProvider = new SynchronousQueue<Channel>();
-        final Bootstrap clientbootstrap = buildLocalClient("test");
-        final Channel serverChannel = buildLocalServer("test", channelProvider);
+        final Pair<Channel,Channel> pairChannel = connectClientToServer("test");
         
-        try {
-            final ChannelFuture connectfuture = clientbootstrap.connect();
-            final Channel server = channelProvider.take();
-            final Channel client = connectfuture.sync().channel();
-            
-            final String REQ_CONTENT = "testcontent";
-            
-            final DefaultHttpRequest request = 
-                    new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-            final HttpContent[] req_contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
-            request.headers().add(HttpHeaders.Names.CONTENT_LENGTH, req_contents.length);
-            
-            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-                @Override
-                public void call(final HttpContent c) {
-                    assertEquals(1, c.refCnt());
-                }});
-            
-            final DefaultHttpTrade trade = new DefaultHttpTrade(server, 
-                    RxNettys.httpobjObservable(server));
-            
-            assertTrue(trade.isActive());
-            
-            final CachedRequest cached = new CachedRequest(trade, 8);
-            
-            client.write(request);
-            for (HttpContent c : req_contents) {
-                client.write(ReferenceCountUtil.retain(c));
-            }
-            client.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
-            
-            // http request has received by server's trade instance
-            // bcs of cached request's Observable completed
-            cached.request().toBlocking().subscribe();
-            
-//            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-//                @Override
-//                public void call(final HttpContent c) {
-//                    assertEquals(2, c.refCnt());
-//                }});
-            
-            assertEquals(0, cached.currentBlockSize());
-            assertEquals(0, cached.currentBlockCount());
-            
-            final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
-            assertNotNull(fullrequest);
-            
-            final String reqcontent = 
-                    new String(Nettys.dumpByteBufAsBytes(fullrequest.content()), Charsets.UTF_8);
-            assertEquals(REQ_CONTENT, reqcontent);
-            
-            //  注意：因为 cached request 中 HttpContent 被重组为 2 个 CompositeByteBuf
-            //  所以 retainFullHttpRequest 只会增加 CompositeByteBuf 本身的引用计数，
-            //  而不会增加 CompositeByteBuf 中子元素 ByteBuf 的引用计数，因此 req_contents
-            //  中的 各子元素 ByteBuf 引用计数不变, 还是2
-//            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-//                @Override
-//                public void call(final HttpContent c) {
-//                    assertEquals(2, c.refCnt());
-//                }});
-            
-            fullrequest.release();
-            
-            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-                @Override
-                public void call(final HttpContent c) {
-                    assertEquals(2, c.refCnt());
-                }});
-            
-            final String RESP_CONTENT = "respcontent";
-            final HttpResponse response = new DefaultHttpResponse(HTTP_1_1, OK);
-            final HttpContent[] resp_contents = buildContentArray(RESP_CONTENT.getBytes(Charsets.UTF_8), 1);
-            response.headers().add(HttpHeaders.Names.CONTENT_LENGTH, resp_contents.length);
-
-            RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
-                @Override
-                public void call(final HttpContent c) {
-                    assertEquals(1, c.refCnt());
-                }});
-            
-            final Observable<HttpObject> clientObservable = 
-                    RxNettys.httpobjObservable(client).cache();
-            
-            clientObservable.subscribe();
-            
-            emitHttpObjects(trade.responseObserver(), response);
-            emitHttpObjects(trade.responseObserver(), resp_contents);
-            emitHttpObjects(trade.responseObserver(), LastHttpContent.EMPTY_LAST_CONTENT);
-            
-            //  ensure trade's response has been received by client
-            clientObservable.toBlocking().subscribe();
-            
-            RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
-                @Override
-                public void call(final HttpContent c) {
-                    assertEquals(1, c.refCnt());
-                }});
-            
-            assertFalse(trade.isActive());
-            
-            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-                @Override
-                public void call(final HttpContent c) {
-                    assertEquals(1, c.refCnt());
-                }});
-            
-            RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
-                @Override
-                public void call(final HttpContent c) {
-                    assertEquals(1, c.refCnt());
-                }});
-        } finally {
-            serverChannel.close().sync();
+        final Channel client = pairChannel.first;
+        final Channel server = pairChannel.second;
+        
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] req_contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        request.headers().add(HttpHeaders.Names.CONTENT_LENGTH, req_contents.length);
+        
+        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+        
+        final DefaultHttpTrade trade = new DefaultHttpTrade(server, 
+                RxNettys.httpobjObservable(server));
+        
+        assertTrue(trade.isActive());
+        
+        final CachedRequest cached = new CachedRequest(trade, 8);
+        
+        client.write(request);
+        for (HttpContent c : req_contents) {
+            client.write(ReferenceCountUtil.retain(c));
         }
+        client.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
+        
+        // http request has received by server's trade instance
+        // bcs of cached request's Observable completed
+        cached.request().toBlocking().subscribe();
+        
+//            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+//                @Override
+//                public void call(final HttpContent c) {
+//                    assertEquals(2, c.refCnt());
+//                }});
+        
+        assertEquals(0, cached.currentBlockSize());
+        assertEquals(0, cached.currentBlockCount());
+        
+        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        assertNotNull(fullrequest);
+        
+        final String reqcontent = 
+                new String(Nettys.dumpByteBufAsBytes(fullrequest.content()), Charsets.UTF_8);
+        assertEquals(REQ_CONTENT, reqcontent);
+        
+        //  注意：因为 cached request 中 HttpContent 被重组为 2 个 CompositeByteBuf
+        //  所以 retainFullHttpRequest 只会增加 CompositeByteBuf 本身的引用计数，
+        //  而不会增加 CompositeByteBuf 中子元素 ByteBuf 的引用计数，因此 req_contents
+        //  中的 各子元素 ByteBuf 引用计数不变, 还是2
+//            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+//                @Override
+//                public void call(final HttpContent c) {
+//                    assertEquals(2, c.refCnt());
+//                }});
+        
+        fullrequest.release();
+        
+        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(2, c.refCnt());
+            }});
+        
+        final String RESP_CONTENT = "respcontent";
+        final HttpResponse response = new DefaultHttpResponse(HTTP_1_1, OK);
+        final HttpContent[] resp_contents = buildContentArray(RESP_CONTENT.getBytes(Charsets.UTF_8), 1);
+        response.headers().add(HttpHeaders.Names.CONTENT_LENGTH, resp_contents.length);
+
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+        
+        final Observable<HttpObject> clientObservable = 
+                RxNettys.httpobjObservable(client).cache();
+        
+        clientObservable.subscribe();
+        
+        emitHttpObjects(trade.responseObserver(), response);
+        emitHttpObjects(trade.responseObserver(), resp_contents);
+        emitHttpObjects(trade.responseObserver(), LastHttpContent.EMPTY_LAST_CONTENT);
+        
+        //  ensure trade's response has been received by client
+        clientObservable.toBlocking().subscribe();
+        
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+        
+        assertFalse(trade.isActive());
+        
+        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
+        
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.refCnt());
+            }});
     }
 
     @Test
