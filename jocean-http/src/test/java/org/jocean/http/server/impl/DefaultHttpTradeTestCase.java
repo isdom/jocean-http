@@ -10,7 +10,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -89,41 +88,33 @@ public class DefaultHttpTradeTestCase {
         }
     }
     
-    private static Channel buildLocalServer(final String addr, final Queue<Channel> consumer)
-            throws InterruptedException {
-        return new ServerBootstrap()
-            .group(new LocalEventLoopGroup(1), new LocalEventLoopGroup(1))
-            .channel(LocalServerChannel.class)
-            .childHandler(new ChannelInitializer<Channel>() {
-                @Override
-                protected void initChannel(final Channel ch) throws Exception {
-                    APPLY.LOGGING.applyTo(ch.pipeline());
-                    APPLY.HTTPSERVER.applyTo(ch.pipeline());
-                    consumer.offer(ch);
-                }})
-            .localAddress(new LocalAddress(addr))
-            .bind()
-            .sync()
-            .channel();
-    }
-
-    private static Bootstrap buildLocalClient(final String addr) {
-        return new Bootstrap()
-            .group(new LocalEventLoopGroup(1))
-            .channel(LocalChannel.class)
-            .handler(new ChannelInitializer<Channel>() {
-                @Override
-                protected void initChannel(final Channel ch) throws Exception {
-                    APPLY.LOGGING.applyTo(ch.pipeline());
-                    APPLY.HTTPCLIENT.applyTo(ch.pipeline());
-                }})
-            .remoteAddress(new LocalAddress(addr));
-    }
-    
-    private static Pair<Channel,Channel> connectClientToServer(final String addr) throws Exception {
+    private static Pair<Channel,Channel> createConnection(final String addr) throws Exception {
         final BlockingQueue<Channel> channelProvider = new SynchronousQueue<Channel>();
-        final Bootstrap clientbootstrap = buildLocalClient(addr);
-        final Channel acceptorChannel = buildLocalServer(addr, channelProvider);
+        final Bootstrap clientbootstrap = new Bootstrap()
+                .group(new LocalEventLoopGroup(1))
+                .channel(LocalChannel.class)
+                .handler(new ChannelInitializer<Channel>() {
+                    @Override
+                    protected void initChannel(final Channel ch) throws Exception {
+                        APPLY.LOGGING.applyTo(ch.pipeline());
+                        APPLY.HTTPCLIENT.applyTo(ch.pipeline());
+                    }})
+                .remoteAddress(new LocalAddress(addr));
+
+        final Channel acceptorChannel = new ServerBootstrap()
+                .group(new LocalEventLoopGroup(1), new LocalEventLoopGroup(1))
+                .channel(LocalServerChannel.class)
+                .childHandler(new ChannelInitializer<Channel>() {
+                    @Override
+                    protected void initChannel(final Channel ch) throws Exception {
+                        APPLY.LOGGING.applyTo(ch.pipeline());
+                        APPLY.HTTPSERVER.applyTo(ch.pipeline());
+                        channelProvider.offer(ch);
+                    }})
+                .localAddress(new LocalAddress(addr))
+                .bind()
+                .sync()
+                .channel();
         
         try {
             final ChannelFuture connectfuture = clientbootstrap.connect();
@@ -618,7 +609,7 @@ public class DefaultHttpTradeTestCase {
     public final void tesTradeForCompleteRoundWithMultiContentRequestAndMultiContentResponse() 
             throws Exception {
         
-        final Pair<Channel,Channel> pairChannel = connectClientToServer("test");
+        final Pair<Channel,Channel> pairChannel = createConnection("test");
         
         final Channel client = pairChannel.first;
         final Channel server = pairChannel.second;
