@@ -10,10 +10,12 @@ import org.jocean.http.client.impl.AbstractChannelPool;
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.idiom.Ordered;
 import org.jocean.idiom.PairedVisitor;
+import org.jocean.idiom.UnsafeOp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
@@ -153,5 +155,16 @@ public class Nettys {
         final byte[] bytes = new byte[is.available()];
         is.read(bytes);
         return bytes;
+    }
+
+    public static String dumpByteBufHolder(final ByteBufHolder holder) {
+        final ByteBuf content = holder.content();
+        final ByteBuf unwrap = null != content.unwrap() ? content.unwrap() : content;
+        
+        final StringBuilder sb = new StringBuilder();
+        sb.append(unwrap.toString());
+        sb.append('@');
+        sb.append(UnsafeOp.toAddress(unwrap));
+        return sb.toString();
     }
 }

@@ -5,14 +5,17 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.StatefulRef;
+import org.jocean.idiom.UnsafeOp;
 import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpContent;
@@ -295,6 +298,12 @@ public class CachedRequest {
 
         @Override
         public void onNext(final HttpObject msg) {
+            if (LOG.isDebugEnabled()) {
+                if (msg instanceof ByteBufHolder) {
+                    LOG.debug("cachedRequest: receive ByteBufHolder's content: {}", 
+                            Nettys.dumpByteBufHolder((ByteBufHolder)msg));
+                }
+            }
             if (msg instanceof HttpContent) {
                 if (msg instanceof LastHttpContent) {
                     if (_currentBlockSize > 0) {

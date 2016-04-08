@@ -20,6 +20,7 @@ import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.Pair;
+import org.jocean.idiom.UnsafeOp;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.SubscriberHolder;
 import org.junit.Test;
@@ -31,6 +32,7 @@ import com.google.common.base.Charsets;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -73,6 +75,13 @@ public class DefaultHttpTradeTestCase {
             
             content.writeBytes(srcBytes, startInBytes, len);
             startInBytes += len;
+            
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("build content: {}@{}",
+                        content,
+                        UnsafeOp.toAddress(content));
+            }
+            
             contents.add(new DefaultHttpContent(content));
         }
         return contents.toArray(new HttpContent[0]);
@@ -632,6 +641,7 @@ public class DefaultHttpTradeTestCase {
         
         assertTrue(trade.isActive());
         
+        //  注: 因为是 LocalChannel, CachedRequest 中会持有 client 发出的 ByteBuf 实例
         final CachedRequest cached = new CachedRequest(trade, 8);
         
         client.write(request);
@@ -644,12 +654,6 @@ public class DefaultHttpTradeTestCase {
         // bcs of cached request's Observable completed
         cached.request().toBlocking().subscribe();
         
-//            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-//                @Override
-//                public void call(final HttpContent c) {
-//                    assertEquals(2, c.refCnt());
-//                }});
-        
         assertEquals(0, cached.currentBlockSize());
         assertEquals(0, cached.currentBlockCount());
         
@@ -660,23 +664,7 @@ public class DefaultHttpTradeTestCase {
                 new String(Nettys.dumpByteBufAsBytes(fullrequest.content()), Charsets.UTF_8);
         assertEquals(REQ_CONTENT, reqcontent);
         
-        //  注意：因为 cached request 中 HttpContent 被重组为 2 个 CompositeByteBuf
-        //  所以 retainFullHttpRequest 只会增加 CompositeByteBuf 本身的引用计数，
-        //  而不会增加 CompositeByteBuf 中子元素 ByteBuf 的引用计数，因此 req_contents
-        //  中的 各子元素 ByteBuf 引用计数不变, 还是2
-//            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-//                @Override
-//                public void call(final HttpContent c) {
-//                    assertEquals(2, c.refCnt());
-//                }});
-        
         fullrequest.release();
-        
-        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(2, c.refCnt());
-            }});
         
         final String RESP_CONTENT = "respcontent";
         final HttpResponse response = new DefaultHttpResponse(HTTP_1_1, OK);
@@ -698,18 +686,19 @@ public class DefaultHttpTradeTestCase {
         emitHttpObjects(trade.responseObserver(), resp_contents);
         emitHttpObjects(trade.responseObserver(), LastHttpContent.EMPTY_LAST_CONTENT);
         
-        //  ensure trade's response has been received by client
-        clientObservable.toBlocking().subscribe();
+        assertFalse(trade.isActive());
         
-        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+        //  Trade 结束，因从 CachedRequest 被销毁。因此 不再持有 req_contents 实例
+        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
                 assertEquals(1, c.refCnt());
             }});
         
-        assertFalse(trade.isActive());
+        //  ensure trade's response has been received by client
+        clientObservable.toBlocking().subscribe();
         
-        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
                 assertEquals(1, c.refCnt());
