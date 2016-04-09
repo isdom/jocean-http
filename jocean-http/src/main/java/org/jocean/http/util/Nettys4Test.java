@@ -13,6 +13,9 @@ import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
+import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.LastHttpContent;
+import rx.Observer;
 
 public class Nettys4Test {
     private static final LocalEventLoopGroup EVENTLOOP4CLIENT = new LocalEventLoopGroup(1);
@@ -63,4 +66,13 @@ public class Nettys4Test {
         }
     }
 
+    public static void emitHttpObjects(final Observer<? super HttpObject> observer,
+            final HttpObject... objs) {
+        for (HttpObject obj : objs) {
+            observer.onNext(obj);
+            if (obj instanceof LastHttpContent) {
+                observer.onCompleted();
+            }
+        }
+    }
 }

@@ -10,14 +10,10 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.server.CachedRequest;
 import org.jocean.http.server.HttpServer.HttpTrade;
-import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys4Test;
 import org.jocean.http.util.RxNettys;
@@ -31,18 +27,10 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 
-import io.netty.bootstrap.Bootstrap;
-import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
-import io.netty.channel.local.LocalEventLoopGroup;
-import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpContent;
@@ -59,7 +47,6 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
-import rx.Observer;
 import rx.functions.Action1;
 
 public class DefaultHttpTradeTestCase {
@@ -87,16 +74,6 @@ public class DefaultHttpTradeTestCase {
             contents.add(new DefaultHttpContent(content));
         }
         return contents.toArray(new HttpContent[0]);
-    }
-
-    private static void emitHttpObjects(final Observer<? super HttpObject> subscriber,
-            final HttpObject... objs) {
-        for (HttpObject obj : objs) {
-            subscriber.onNext(obj);
-            if (obj instanceof LastHttpContent) {
-                subscriber.onCompleted();
-            }
-        }
     }
     
     @Test
@@ -244,9 +221,9 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        emitHttpObjects(holder.getAt(0), request);
-        emitHttpObjects(holder.getAt(0), req_contents);
-        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -320,9 +297,9 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        emitHttpObjects(holder.getAt(0), request);
-        emitHttpObjects(holder.getAt(0), req_contents);
-        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -397,9 +374,9 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        emitHttpObjects(holder.getAt(0), request);
-        emitHttpObjects(holder.getAt(0), req_contents);
-        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -472,9 +449,9 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, holder.getSubscriberCount());
         
-        emitHttpObjects(holder.getAt(0), request);
-        emitHttpObjects(holder.getAt(0), req_contents);
-        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -524,9 +501,9 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        emitHttpObjects(holder.getAt(0), request);
-        emitHttpObjects(holder.getAt(0), req_contents);
-        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertEquals(0, cached.currentBlockSize());
         assertEquals(0, cached.currentBlockCount());
@@ -645,9 +622,9 @@ public class DefaultHttpTradeTestCase {
         
         clientObservable.subscribe();
         
-        emitHttpObjects(trade.responseObserver(), response);
-        emitHttpObjects(trade.responseObserver(), resp_contents);
-        emitHttpObjects(trade.responseObserver(), LastHttpContent.EMPTY_LAST_CONTENT);
+        Nettys4Test.emitHttpObjects(trade.responseObserver(), response);
+        Nettys4Test.emitHttpObjects(trade.responseObserver(), resp_contents);
+        Nettys4Test.emitHttpObjects(trade.responseObserver(), LastHttpContent.EMPTY_LAST_CONTENT);
         
         assertFalse(trade.isActive());
         
