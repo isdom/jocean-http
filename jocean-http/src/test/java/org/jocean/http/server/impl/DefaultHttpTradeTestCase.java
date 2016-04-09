@@ -8,8 +8,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.server.CachedRequest;
@@ -18,7 +16,6 @@ import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys4Test;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.Pair;
-import org.jocean.idiom.UnsafeOp;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.SubscriberHolder;
 import org.junit.Test;
@@ -33,7 +30,6 @@ import io.netty.channel.Channel;
 import io.netty.channel.local.LocalChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
-import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -53,28 +49,6 @@ public class DefaultHttpTradeTestCase {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTradeTestCase.class);
-
-    private static HttpContent[] buildContentArray(final byte[] srcBytes, final int bytesPerContent) {
-        final List<HttpContent> contents = new ArrayList<>();
-        
-        int startInBytes = 0;
-        while (startInBytes < srcBytes.length) {
-            final ByteBuf content = Unpooled.buffer(bytesPerContent);
-            final int len = Math.min(bytesPerContent, srcBytes.length-startInBytes);
-            
-            content.writeBytes(srcBytes, startInBytes, len);
-            startInBytes += len;
-            
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("build content: {}@{}",
-                        content,
-                        UnsafeOp.toAddress(content));
-            }
-            
-            contents.add(new DefaultHttpContent(content));
-        }
-        return contents.toArray(new HttpContent[0]);
-    }
     
     @Test
     public final void testOnTradeClosedCalledWhenClosed() {
@@ -204,7 +178,7 @@ public class DefaultHttpTradeTestCase {
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
             @Override
@@ -280,7 +254,7 @@ public class DefaultHttpTradeTestCase {
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
             @Override
@@ -357,7 +331,7 @@ public class DefaultHttpTradeTestCase {
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
             @Override
@@ -432,7 +406,7 @@ public class DefaultHttpTradeTestCase {
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
             @Override
@@ -516,7 +490,7 @@ public class DefaultHttpTradeTestCase {
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
             @Override
@@ -567,7 +541,7 @@ public class DefaultHttpTradeTestCase {
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         request.headers().add(HttpHeaders.Names.CONTENT_LENGTH, req_contents.length);
         
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -608,7 +582,7 @@ public class DefaultHttpTradeTestCase {
         
         final String RESP_CONTENT = "respcontent";
         final HttpResponse response = new DefaultHttpResponse(HTTP_1_1, OK);
-        final HttpContent[] resp_contents = buildContentArray(RESP_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] resp_contents = Nettys4Test.buildContentArray(RESP_CONTENT.getBytes(Charsets.UTF_8), 1);
         response.headers().add(HttpHeaders.Names.CONTENT_LENGTH, resp_contents.length);
 
         RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
