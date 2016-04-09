@@ -10,6 +10,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,6 +19,7 @@ import org.jocean.http.server.CachedRequest;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
+import org.jocean.http.util.Nettys4Test;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.UnsafeOp;
@@ -97,45 +99,6 @@ public class DefaultHttpTradeTestCase {
         }
     }
     
-    private static Pair<Channel,Channel> createConnection(final String addr) throws Exception {
-        final BlockingQueue<Channel> channelProvider = new SynchronousQueue<Channel>();
-        final Bootstrap clientbootstrap = new Bootstrap()
-                .group(new LocalEventLoopGroup(1))
-                .channel(LocalChannel.class)
-                .handler(new ChannelInitializer<Channel>() {
-                    @Override
-                    protected void initChannel(final Channel ch) throws Exception {
-                        APPLY.LOGGING.applyTo(ch.pipeline());
-                        APPLY.HTTPCLIENT.applyTo(ch.pipeline());
-                    }})
-                .remoteAddress(new LocalAddress(addr));
-
-        final Channel acceptorChannel = new ServerBootstrap()
-                .group(new LocalEventLoopGroup(1), new LocalEventLoopGroup(1))
-                .channel(LocalServerChannel.class)
-                .childHandler(new ChannelInitializer<Channel>() {
-                    @Override
-                    protected void initChannel(final Channel ch) throws Exception {
-                        APPLY.LOGGING.applyTo(ch.pipeline());
-                        APPLY.HTTPSERVER.applyTo(ch.pipeline());
-                        channelProvider.offer(ch);
-                    }})
-                .localAddress(new LocalAddress(addr))
-                .bind()
-                .sync()
-                .channel();
-        
-        try {
-            final ChannelFuture connectfuture = clientbootstrap.connect();
-            final Channel server = channelProvider.take();
-            final Channel client = connectfuture.sync().channel();
-            
-            return Pair.of(client, server);
-        } finally {
-            acceptorChannel.close().sync();
-        }
-    }
-
     @Test
     public final void testOnTradeClosedCalledWhenClosed() {
         final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
@@ -618,7 +581,7 @@ public class DefaultHttpTradeTestCase {
     public final void tesTradeForCompleteRoundWithMultiContentRequestAndMultiContentResponse() 
             throws Exception {
         
-        final Pair<Channel,Channel> pairChannel = createConnection("test");
+        final Pair<Channel,Channel> pairChannel = Nettys4Test.createLocalConnection4Http("test");
         
         final Channel client = pairChannel.first;
         final Channel server = pairChannel.second;
@@ -705,74 +668,6 @@ public class DefaultHttpTradeTestCase {
             }});
         
         RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.refCnt());
-            }});
-    }
-
-    @Test
-    public final void tesTradeForErrorResponseWithReassembRequestTwiceAndContentedResponse() 
-            throws Exception {
-        //  TODO
-        final String REQ_CONTENT = "testcontent";
-        
-        final DefaultHttpRequest request = 
-                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] contents = buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
-        
-        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.refCnt());
-            }});
-        
-        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
-        
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
-                Observable.create(holder));
-        
-        final CachedRequest cached = new CachedRequest(trade, 8);
-        
-        assertEquals(1, holder.getSubscriberCount());
-        
-        emitHttpObjects(holder.getAt(0), request);
-        emitHttpObjects(holder.getAt(0), contents);
-        emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
-        
-        assertTrue(trade.isActive());
-        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(2, c.refCnt());
-            }});
-        
-        assertEquals(0, cached.currentBlockSize());
-        assertEquals(0, cached.currentBlockCount());
-        assertEquals(4, cached.requestHttpObjCount());
-        
-        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
-        assertNotNull(fullrequest);
-        
-        final String reqcontent = 
-                new String(Nettys.dumpByteBufAsBytes(fullrequest.content()), Charsets.UTF_8);
-        assertEquals(REQ_CONTENT, reqcontent);
-        
-        final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
-        
-        Observable.<HttpObject>just(response)
-            .subscribe(trade.responseObserver());
-        
-        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(2, c.refCnt());
-            }});
-        
-        fullrequest.release();
-        
-        assertFalse(trade.isActive());
-        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
                 assertEquals(1, c.refCnt());
