@@ -204,150 +204,126 @@ public class Nettys4Test {
 
             @Override
             public ByteBufAllocator alloc() {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelPromise newPromise() {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelProgressivePromise newProgressivePromise() {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture newSucceededFuture() {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture newFailedFuture(Throwable cause) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelPromise voidPromise() {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture bind(SocketAddress localAddress) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture connect(SocketAddress remoteAddress) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture connect(SocketAddress remoteAddress,
                     SocketAddress localAddress) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture disconnect() {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture close() {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture deregister() {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture bind(SocketAddress localAddress,
                     ChannelPromise promise) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture connect(SocketAddress remoteAddress,
                     ChannelPromise promise) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture connect(SocketAddress remoteAddress,
                     SocketAddress localAddress, ChannelPromise promise) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture disconnect(ChannelPromise promise) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture close(ChannelPromise promise) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture deregister(ChannelPromise promise) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public Channel read() {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture write(Object msg) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture write(Object msg, ChannelPromise promise) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public Channel flush() {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture writeAndFlush(Object msg,
                     ChannelPromise promise) {
-                // TODO Auto-generated method stub
                 return null;
             }
 
             @Override
             public ChannelFuture writeAndFlush(Object msg) {
-                // TODO Auto-generated method stub
                 return null;
             }};
     }
