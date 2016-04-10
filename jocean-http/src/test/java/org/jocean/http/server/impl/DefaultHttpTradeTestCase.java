@@ -27,7 +27,6 @@ import com.google.common.base.Charsets;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
-import io.netty.channel.local.LocalChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -52,7 +51,7 @@ public class DefaultHttpTradeTestCase {
     
     @Test
     public final void testOnTradeClosedCalledWhenClosed() {
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 Observable.<HttpObject>empty());
         
         final AtomicBoolean onClosed = new AtomicBoolean(false);
@@ -69,11 +68,12 @@ public class DefaultHttpTradeTestCase {
             .subscribe(trade.responseObserver());
         
         assertTrue(onClosed.get());
+        assertFalse(trade.isActive());
     }
 
     @Test
     public final void testInvokeAddOnTradeClosedCallAfterClosed() {
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 Observable.<HttpObject>error(new RuntimeException("RequestError")));
         
         assertFalse(trade.isActive());
@@ -99,15 +99,14 @@ public class DefaultHttpTradeTestCase {
         
         final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 Observable.create(holder));
         
         CachedRequest cached = new CachedRequest(trade);
         
         assertEquals(1, holder.getSubscriberCount());
         
-        holder.getAt(0).onNext(request);
-        holder.getAt(0).onCompleted();
+        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
         
         assertTrue(trade.isActive());
         assertEquals(2, request.refCnt());
@@ -125,8 +124,8 @@ public class DefaultHttpTradeTestCase {
         
         fullrequest.release();
         
-        assertFalse(trade.isActive());
         assertEquals(1, request.refCnt());
+        assertFalse(trade.isActive());
     }
 
     @Test
@@ -140,15 +139,14 @@ public class DefaultHttpTradeTestCase {
         
         final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 Observable.create(holder));
         
         CachedRequest cached = new CachedRequest(trade);
         
         assertEquals(1, holder.getSubscriberCount());
         
-        holder.getAt(0).onNext(request);
-        holder.getAt(0).onCompleted();
+        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
         
         assertTrue(trade.isActive());
         assertEquals(2, request.refCnt());
@@ -188,7 +186,7 @@ public class DefaultHttpTradeTestCase {
         
         final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 Observable.create(holder));
         
         final CachedRequest cached = new CachedRequest(trade, 16);
@@ -264,7 +262,7 @@ public class DefaultHttpTradeTestCase {
         
         final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 Observable.create(holder));
         
         final CachedRequest cached = new CachedRequest(trade, 8);
@@ -341,7 +339,7 @@ public class DefaultHttpTradeTestCase {
         
         final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 Observable.create(holder));
         
         final CachedRequest cached = new CachedRequest(trade, 1);
@@ -416,7 +414,7 @@ public class DefaultHttpTradeTestCase {
         
         final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 Observable.create(holder));
         
         final CachedRequest cached = new CachedRequest(trade, 8);
@@ -500,7 +498,7 @@ public class DefaultHttpTradeTestCase {
         
         final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(new LocalChannel(), 
+        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 Observable.create(holder));
         
         final CachedRequest cached = new CachedRequest(trade, 4);
