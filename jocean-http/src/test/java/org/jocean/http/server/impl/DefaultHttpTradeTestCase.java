@@ -8,6 +8,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.server.CachedRequest;
@@ -43,6 +45,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.functions.Action1;
+import rx.observables.ConnectableObservable;
 
 public class DefaultHttpTradeTestCase {
 
@@ -97,16 +100,15 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, request.refCnt());
         
-        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        final ConnectableObservable<HttpObject> requestObservable = 
+                Observable.<HttpObject>just(request).publish();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.create(holder));
+                requestObservable);
         
         CachedRequest cached = new CachedRequest(trade);
         
-        assertEquals(1, holder.getSubscriberCount());
-        
-        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        requestObservable.connect();
         
         assertTrue(trade.isActive());
         assertEquals(2, request.refCnt());
@@ -137,16 +139,15 @@ public class DefaultHttpTradeTestCase {
         
         assertEquals(1, request.refCnt());
         
-        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        final ConnectableObservable<HttpObject> requestObservable = 
+                Observable.<HttpObject>just(request).publish();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.create(holder));
+                requestObservable);
         
         CachedRequest cached = new CachedRequest(trade);
         
-        assertEquals(1, holder.getSubscriberCount());
-        
-        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        requestObservable.connect();
         
         assertTrue(trade.isActive());
         assertEquals(2, request.refCnt());
@@ -184,18 +185,20 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        final ConnectableObservable<HttpObject> requestObservable = 
+                Observable.<HttpObject>from(new ArrayList<HttpObject>() {
+                    private static final long serialVersionUID = 1L;
+                {
+                    this.add(request);
+                    this.addAll(Arrays.asList(req_contents));
+                    this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+                }}).publish();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.create(holder));
+                requestObservable);
         
         final CachedRequest cached = new CachedRequest(trade, 16);
-        
-        assertEquals(1, holder.getSubscriberCount());
-        
-        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
-        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents);
-        Nettys4Test.emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
+        requestObservable.connect();
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -260,18 +263,21 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        final ConnectableObservable<HttpObject> requestObservable = 
+                Observable.<HttpObject>from(new ArrayList<HttpObject>() {
+                    private static final long serialVersionUID = 1L;
+                {
+                    this.add(request);
+                    this.addAll(Arrays.asList(req_contents));
+                    this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+                }}).publish();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.create(holder));
+                requestObservable);
         
         final CachedRequest cached = new CachedRequest(trade, 8);
         
-        assertEquals(1, holder.getSubscriberCount());
-        
-        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
-        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents);
-        Nettys4Test.emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
+        requestObservable.connect();
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -337,18 +343,21 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        final ConnectableObservable<HttpObject> requestObservable = 
+                Observable.<HttpObject>from(new ArrayList<HttpObject>() {
+                    private static final long serialVersionUID = 1L;
+                {
+                    this.add(request);
+                    this.addAll(Arrays.asList(req_contents));
+                    this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+                }}).publish();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.create(holder));
+                requestObservable);
         
         final CachedRequest cached = new CachedRequest(trade, 1);
         
-        assertEquals(1, holder.getSubscriberCount());
-        
-        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
-        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents);
-        Nettys4Test.emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
+        requestObservable.connect();
         
         assertTrue(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -594,9 +603,13 @@ public class DefaultHttpTradeTestCase {
         
         clientObservable.subscribe();
         
-        Nettys4Test.emitHttpObjects(trade.responseObserver(), response);
-        Nettys4Test.emitHttpObjects(trade.responseObserver(), resp_contents);
-        Nettys4Test.emitHttpObjects(trade.responseObserver(), LastHttpContent.EMPTY_LAST_CONTENT);
+        Observable.<HttpObject>from(new ArrayList<HttpObject>() {
+            private static final long serialVersionUID = 1L;
+        {
+            this.add(response);
+            this.addAll(Arrays.asList(resp_contents));
+            this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+        }}).subscribe(trade.responseObserver());
         
         assertFalse(trade.isActive());
         
