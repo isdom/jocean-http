@@ -497,31 +497,35 @@ public class DefaultHttpTradeTestCase {
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
-        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
                 assertEquals(1, c.refCnt());
             }});
         
-        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        final ConnectableObservable<HttpObject> requestObservable = 
+                Observable.concat(
+                    Observable.<HttpObject>from(new ArrayList<HttpObject>() {
+                        private static final long serialVersionUID = 1L;
+                    {
+                        this.add(request);
+                        for (int idx = 0; idx < 5; idx++) {
+                            this.add(req_contents[idx]);
+                        }
+                    }}),
+                    Observable.<HttpObject>error(new RuntimeException("RequestPartError"))
+                ).publish();
         
         final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.create(holder));
+                requestObservable);
         
         final CachedRequest cached = new CachedRequest(trade, 4);
-        
-        assertEquals(1, holder.getSubscriberCount());
-        
-        holder.getAt(0).onNext(request);
-        for (int idx = 0; idx < 5; idx++) {
-            holder.getAt(0).onNext(contents[idx]);
-        }
-        holder.getAt(0).onError(new RuntimeException("RequestPartError"));
+        requestObservable.connect();
         
         assertFalse(trade.isActive());
-        RxActions.applyArrayBy(contents, new Action1<HttpContent>() {
+        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
                 assertEquals(1, c.refCnt());
