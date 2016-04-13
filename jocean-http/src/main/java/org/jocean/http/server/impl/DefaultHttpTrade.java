@@ -8,6 +8,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.jocean.http.server.CachedRequest;
+import org.jocean.http.server.HttpServer.CachedHttpTrade;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
@@ -17,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
@@ -100,6 +103,63 @@ class DefaultHttpTrade implements HttpTrade {
     @Override
     public void removeOnTradeClosed(final Action1<HttpTrade> onTradeClosed) {
         this._removeOnTradeClosed.call();
+    }
+    
+    @Override
+    public CachedHttpTrade cached(final int maxBlockSize) {
+        final CachedRequest cached = new CachedRequest(this, maxBlockSize);
+        return new CachedHttpTrade() {
+
+            @Override
+            public boolean isActive() {
+                return DefaultHttpTrade.this.isActive();
+            }
+
+            @Override
+            public boolean isEndedWithKeepAlive() {
+                return DefaultHttpTrade.this.isEndedWithKeepAlive();
+            }
+
+            @Override
+            public Observable<? extends HttpObject> request() {
+                return cached.request();
+            }
+
+            @Override
+            public Executor requestExecutor() {
+                return DefaultHttpTrade.this.requestExecutor();
+            }
+
+            @Override
+            public Observer<HttpObject> responseObserver() {
+                return DefaultHttpTrade.this.responseObserver();
+            }
+
+            @Override
+            public Object transport() {
+                return DefaultHttpTrade.this.transport();
+            }
+
+            @Override
+            public HttpTrade addOnTradeClosed(
+                    final Action1<HttpTrade> onTradeClosed) {
+                return DefaultHttpTrade.this.addOnTradeClosed(onTradeClosed);
+            }
+
+            @Override
+            public void removeOnTradeClosed(Action1<HttpTrade> onTradeClosed) {
+                DefaultHttpTrade.this.removeOnTradeClosed(onTradeClosed);
+            }
+
+            @Override
+            public CachedHttpTrade cached(int maxBlockSize) {
+                return DefaultHttpTrade.this.cached(maxBlockSize);
+            }
+
+            @Override
+            public FullHttpRequest retainFullHttpRequest() {
+                return cached.retainFullHttpRequest();
+            }};
     }
     
     private final StatefulRef<COWCompositeSupport<Action1<HttpTrade>>> _onTradeClosedActionsRef = 

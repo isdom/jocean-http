@@ -9,6 +9,7 @@ import java.util.concurrent.Executor;
 
 import org.jocean.http.Feature;
 
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 import rx.Observer;
@@ -43,6 +44,11 @@ public interface HttpServer extends Closeable {
         public Object transport();
         public HttpTrade addOnTradeClosed(final Action1<HttpTrade> onTradeClosed);
         public void removeOnTradeClosed(final Action1<HttpTrade> onTradeClosed);
+        public CachedHttpTrade cached(final int maxBlockSize);
+    }
+    
+    public interface CachedHttpTrade extends HttpTrade {
+        public FullHttpRequest retainFullHttpRequest();
     }
     
     public class TransportException extends RuntimeException {
