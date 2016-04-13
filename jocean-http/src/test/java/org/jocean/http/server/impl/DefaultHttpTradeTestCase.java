@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.server.CachedRequest;
+import org.jocean.http.server.HttpServer.CachedHttpTrade;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys4Test;
@@ -103,17 +104,17 @@ public class DefaultHttpTradeTestCase {
         final ConnectableObservable<HttpObject> requestObservable = 
                 Observable.<HttpObject>just(request).publish();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
+        final CachedHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                requestObservable).cached(-1);
         
-        CachedRequest cached = new CachedRequest(trade);
+//        CachedRequest cached = new CachedRequest(trade);
         
         requestObservable.connect();
         
         assertTrue(trade.isActive());
         assertEquals(2, request.refCnt());
         
-        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        final FullHttpRequest fullrequest = trade.retainFullHttpRequest();
         assertNotNull(fullrequest);
         
         //  retainFullHttpRequest 导致引用计数 +1
