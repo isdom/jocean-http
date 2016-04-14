@@ -107,8 +107,6 @@ public class DefaultHttpTradeTestCase {
         final CachedHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 requestObservable).cached(-1);
         
-//        CachedRequest cached = new CachedRequest(trade);
-        
         requestObservable.connect();
         
         assertTrue(trade.isActive());
@@ -143,17 +141,15 @@ public class DefaultHttpTradeTestCase {
         final ConnectableObservable<HttpObject> requestObservable = 
                 Observable.<HttpObject>just(request).publish();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
-        
-        CachedRequest cached = new CachedRequest(trade);
+        final CachedHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                requestObservable).cached(-1);
         
         requestObservable.connect();
         
         assertTrue(trade.isActive());
         assertEquals(2, request.refCnt());
         
-        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        final FullHttpRequest fullrequest = trade.retainFullHttpRequest();
         assertNotNull(fullrequest);
         
         //  retainFullHttpRequest 导致引用计数 +1
