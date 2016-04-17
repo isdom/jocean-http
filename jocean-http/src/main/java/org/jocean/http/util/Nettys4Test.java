@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-import org.jocean.http.server.impl.DefaultHttpTradeTestCase;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.UnsafeOp;
 import org.slf4j.Logger;
@@ -26,7 +25,6 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelProgressivePromise;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoop;
-import io.netty.channel.Channel.Unsafe;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalEventLoopGroup;
