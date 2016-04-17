@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.jocean.http.server.CachedRequest;
 import org.jocean.http.server.HttpServer.CachedHttpTrade;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.Nettys;
@@ -191,10 +190,9 @@ public class DefaultHttpTradeTestCase {
                     this.add(LastHttpContent.EMPTY_LAST_CONTENT);
                 }}).publish();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
+        final CachedHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                requestObservable).cached(16);
         
-        final CachedRequest cached = new CachedRequest(trade, 16);
         requestObservable.connect();
         
         assertTrue(trade.isActive());
@@ -204,11 +202,11 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(2, c.refCnt());
             }});
         
-        assertEquals(0, cached.currentBlockSize());
-        assertEquals(0, cached.currentBlockCount());
-        assertEquals(3, cached.requestHttpObjCount());
+        assertEquals(0, trade.currentBlockSize());
+        assertEquals(0, trade.currentBlockCount());
+        assertEquals(3, trade.requestHttpObjCount());
         
-        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        final FullHttpRequest fullrequest = trade.retainFullHttpRequest();
         assertNotNull(fullrequest);
         
         //  注意：因为 cached request 中 HttpContent 被重组为 2 个 CompositeByteBuf
@@ -269,10 +267,8 @@ public class DefaultHttpTradeTestCase {
                     this.add(LastHttpContent.EMPTY_LAST_CONTENT);
                 }}).publish();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
-        
-        final CachedRequest cached = new CachedRequest(trade, 8);
+        final CachedHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                requestObservable).cached(8);
         
         requestObservable.connect();
         
@@ -283,11 +279,11 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(2, c.refCnt());
             }});
         
-        assertEquals(0, cached.currentBlockSize());
-        assertEquals(0, cached.currentBlockCount());
-        assertEquals(4, cached.requestHttpObjCount());
+        assertEquals(0, trade.currentBlockSize());
+        assertEquals(0, trade.currentBlockCount());
+        assertEquals(4, trade.requestHttpObjCount());
         
-        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        final FullHttpRequest fullrequest = trade.retainFullHttpRequest();
         assertNotNull(fullrequest);
         
         //  注意：因为 cached request 中 HttpContent 被重组为 2 个 CompositeByteBuf
@@ -349,10 +345,8 @@ public class DefaultHttpTradeTestCase {
                     this.add(LastHttpContent.EMPTY_LAST_CONTENT);
                 }}).publish();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
-        
-        final CachedRequest cached = new CachedRequest(trade, 1);
+        final CachedHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                requestObservable).cached(1);
         
         requestObservable.connect();
         
@@ -363,11 +357,11 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(2, c.refCnt());
             }});
         
-        assertEquals(0, cached.currentBlockSize());
-        assertEquals(0, cached.currentBlockCount());
-        assertEquals(13, cached.requestHttpObjCount());
+        assertEquals(0, trade.currentBlockSize());
+        assertEquals(0, trade.currentBlockCount());
+        assertEquals(13, trade.requestHttpObjCount());
         
-        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        final FullHttpRequest fullrequest = trade.retainFullHttpRequest();
         assertNotNull(fullrequest);
         
         //  注意：因为 cached request 的maxBlockSize = 1, 因此 HttpContent 均原样加入 reqHttpObjects 中
@@ -420,10 +414,8 @@ public class DefaultHttpTradeTestCase {
         
         final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.create(holder));
-        
-        final CachedRequest cached = new CachedRequest(trade, 8);
+        final CachedHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.create(holder)).cached(8);
         
         assertEquals(1, holder.getSubscriberCount());
         
@@ -438,11 +430,11 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(2, c.refCnt());
             }});
         
-        assertEquals(0, cached.currentBlockSize());
-        assertEquals(0, cached.currentBlockCount());
-        assertEquals(4, cached.requestHttpObjCount());
+        assertEquals(0, trade.currentBlockSize());
+        assertEquals(0, trade.currentBlockCount());
+        assertEquals(4, trade.requestHttpObjCount());
         
-        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        final FullHttpRequest fullrequest = trade.retainFullHttpRequest();
         assertNotNull(fullrequest);
         
         //  注意：因为 cached request 中 HttpContent 被重组为 2 个 CompositeByteBuf
@@ -483,9 +475,9 @@ public class DefaultHttpTradeTestCase {
         Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents);
         Nettys4Test.emitHttpObjects(holder.getAt(0), LastHttpContent.EMPTY_LAST_CONTENT);
         
-        assertEquals(0, cached.currentBlockSize());
-        assertEquals(0, cached.currentBlockCount());
-        assertEquals(0, cached.requestHttpObjCount());
+        assertEquals(0, trade.currentBlockSize());
+        assertEquals(0, trade.currentBlockCount());
+        assertEquals(0, trade.requestHttpObjCount());
     }
     
     @Test
@@ -515,10 +507,9 @@ public class DefaultHttpTradeTestCase {
                     Observable.<HttpObject>error(new RuntimeException("RequestPartError"))
                 ).publish();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
+        final CachedHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                requestObservable).cached(4);
         
-        final CachedRequest cached = new CachedRequest(trade, 4);
         requestObservable.connect();
         
         assertFalse(trade.isActive());
@@ -528,11 +519,11 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        assertEquals(0, cached.currentBlockSize());
-        assertEquals(0, cached.currentBlockCount());
-        assertEquals(0, cached.requestHttpObjCount());
+        assertEquals(0, trade.currentBlockSize());
+        assertEquals(0, trade.currentBlockCount());
+        assertEquals(0, trade.requestHttpObjCount());
         
-        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        final FullHttpRequest fullrequest = trade.retainFullHttpRequest();
         assertNull(fullrequest);
     }
 
@@ -558,13 +549,11 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(server, 
-                RxNettys.httpobjObservable(server));
+        //  注: 因为是 LocalChannel, CachedRequest 中会持有 client 发出的 ByteBuf 实例
+        final CachedHttpTrade trade = new DefaultHttpTrade(server, 
+                RxNettys.httpobjObservable(server)).cached(8);
         
         assertTrue(trade.isActive());
-        
-        //  注: 因为是 LocalChannel, CachedRequest 中会持有 client 发出的 ByteBuf 实例
-        final CachedRequest cached = new CachedRequest(trade, 8);
         
         client.write(request);
         for (HttpContent c : req_contents) {
@@ -574,12 +563,12 @@ public class DefaultHttpTradeTestCase {
         
         // http request has received by server's trade instance
         // bcs of cached request's Observable completed
-        cached.request().toBlocking().subscribe();
+        trade.request().toBlocking().subscribe();
         
-        assertEquals(0, cached.currentBlockSize());
-        assertEquals(0, cached.currentBlockCount());
+        assertEquals(0, trade.currentBlockSize());
+        assertEquals(0, trade.currentBlockCount());
         
-        final FullHttpRequest fullrequest = cached.retainFullHttpRequest();
+        final FullHttpRequest fullrequest = trade.retainFullHttpRequest();
         assertNotNull(fullrequest);
         
         final String reqcontent = 

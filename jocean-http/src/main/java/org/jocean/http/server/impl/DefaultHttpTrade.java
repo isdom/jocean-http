@@ -8,7 +8,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.jocean.http.server.CachedRequest;
 import org.jocean.http.server.HttpServer.CachedHttpTrade;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.idiom.COWCompositeSupport;
@@ -159,6 +158,21 @@ class DefaultHttpTrade implements HttpTrade {
             @Override
             public FullHttpRequest retainFullHttpRequest() {
                 return cached.retainFullHttpRequest();
+            }
+
+            @Override
+            public int currentBlockSize() {
+                return cached.currentBlockSize();
+            }
+
+            @Override
+            public int currentBlockCount() {
+                return cached.currentBlockCount();
+            }
+
+            @Override
+            public int requestHttpObjCount() {
+                return cached.requestHttpObjCount();
             }};
     }
     

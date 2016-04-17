@@ -1,4 +1,4 @@
-package org.jocean.http.server;
+package org.jocean.http.server.impl;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,7 +34,7 @@ import rx.functions.ActionN;
 import rx.functions.FuncN;
 import rx.subscriptions.Subscriptions;
 
-public class CachedRequest {
+class CachedRequest {
     
     private static int _block_size = 128 * 1024; // 128KB
     static {

@@ -5,16 +5,20 @@ package org.jocean.http.server;
 
 import java.io.Closeable;
 import java.net.SocketAddress;
+import java.util.List;
 import java.util.concurrent.Executor;
 
 import org.jocean.http.Feature;
+import org.jocean.idiom.rx.Func1_N;
 
 import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 import rx.Observer;
 import rx.functions.Action1;
 import rx.functions.Func0;
+import rx.functions.FuncN;
 
 /**
  * @author isdom
@@ -49,6 +53,9 @@ public interface HttpServer extends Closeable {
     
     public interface CachedHttpTrade extends HttpTrade {
         public FullHttpRequest retainFullHttpRequest();
+        public int currentBlockSize();
+        public int currentBlockCount();
+        public int requestHttpObjCount();
     }
     
     public class TransportException extends RuntimeException {
