@@ -91,6 +91,17 @@ public class DefaultHttpTradeTestCase {
         assertTrue(onClosed.get());
     }
 
+    @Test(expected = RuntimeException.class)
+    public final void tesTradeForCachedFailed() throws Exception {
+        final ByteBuf content = Unpooled.buffer(0);
+        content.writeBytes("test content".getBytes(Charsets.UTF_8));
+        final DefaultFullHttpRequest request = 
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
+        
+        new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.<HttpObject>just(request)).cached(-1);
+    }
+    
     @Test
     public final void tesTradeForCompleteRequestAndErrorResponse() throws Exception {
         final ByteBuf content = Unpooled.buffer(0);

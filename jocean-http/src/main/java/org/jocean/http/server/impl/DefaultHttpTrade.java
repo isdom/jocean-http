@@ -106,74 +106,78 @@ class DefaultHttpTrade implements HttpTrade {
     
     @Override
     public CachedHttpTrade cached(final int maxBlockSize) {
-        final CachedRequest cached = new CachedRequest(this, maxBlockSize);
-        return new CachedHttpTrade() {
-
-            @Override
-            public boolean isActive() {
-                return DefaultHttpTrade.this.isActive();
-            }
-
-            @Override
-            public boolean isEndedWithKeepAlive() {
-                return DefaultHttpTrade.this.isEndedWithKeepAlive();
-            }
-
-            @Override
-            public Observable<? extends HttpObject> request() {
-                return cached.request();
-            }
-
-            @Override
-            public Executor requestExecutor() {
-                return DefaultHttpTrade.this.requestExecutor();
-            }
-
-            @Override
-            public Observer<HttpObject> responseObserver() {
-                return DefaultHttpTrade.this.responseObserver();
-            }
-
-            @Override
-            public Object transport() {
-                return DefaultHttpTrade.this.transport();
-            }
-
-            @Override
-            public HttpTrade addOnTradeClosed(
-                    final Action1<HttpTrade> onTradeClosed) {
-                return DefaultHttpTrade.this.addOnTradeClosed(onTradeClosed);
-            }
-
-            @Override
-            public void removeOnTradeClosed(Action1<HttpTrade> onTradeClosed) {
-                DefaultHttpTrade.this.removeOnTradeClosed(onTradeClosed);
-            }
-
-            @Override
-            public CachedHttpTrade cached(int maxBlockSize) {
-                return DefaultHttpTrade.this.cached(maxBlockSize);
-            }
-
-            @Override
-            public FullHttpRequest retainFullHttpRequest() {
-                return cached.retainFullHttpRequest();
-            }
-
-            @Override
-            public int currentBlockSize() {
-                return cached.currentBlockSize();
-            }
-
-            @Override
-            public int currentBlockCount() {
-                return cached.currentBlockCount();
-            }
-
-            @Override
-            public int requestHttpObjCount() {
-                return cached.requestHttpObjCount();
-            }};
+        if (!_isRequestStart.get()) {
+            final CachedRequest cached = new CachedRequest(this, maxBlockSize);
+            return new CachedHttpTrade() {
+    
+                @Override
+                public boolean isActive() {
+                    return DefaultHttpTrade.this.isActive();
+                }
+    
+                @Override
+                public boolean isEndedWithKeepAlive() {
+                    return DefaultHttpTrade.this.isEndedWithKeepAlive();
+                }
+    
+                @Override
+                public Observable<? extends HttpObject> request() {
+                    return cached.request();
+                }
+    
+                @Override
+                public Executor requestExecutor() {
+                    return DefaultHttpTrade.this.requestExecutor();
+                }
+    
+                @Override
+                public Observer<HttpObject> responseObserver() {
+                    return DefaultHttpTrade.this.responseObserver();
+                }
+    
+                @Override
+                public Object transport() {
+                    return DefaultHttpTrade.this.transport();
+                }
+    
+                @Override
+                public HttpTrade addOnTradeClosed(
+                        final Action1<HttpTrade> onTradeClosed) {
+                    return DefaultHttpTrade.this.addOnTradeClosed(onTradeClosed);
+                }
+    
+                @Override
+                public void removeOnTradeClosed(Action1<HttpTrade> onTradeClosed) {
+                    DefaultHttpTrade.this.removeOnTradeClosed(onTradeClosed);
+                }
+    
+                @Override
+                public CachedHttpTrade cached(int maxBlockSize) {
+                    return DefaultHttpTrade.this.cached(maxBlockSize);
+                }
+    
+                @Override
+                public FullHttpRequest retainFullHttpRequest() {
+                    return cached.retainFullHttpRequest();
+                }
+    
+                @Override
+                public int currentBlockSize() {
+                    return cached.currentBlockSize();
+                }
+    
+                @Override
+                public int currentBlockCount() {
+                    return cached.currentBlockCount();
+                }
+    
+                @Override
+                public int requestHttpObjCount() {
+                    return cached.requestHttpObjCount();
+                }};
+        } else {
+            throw new RuntimeException("request has already started!");
+        }
     }
     
     private final StatefulRef<COWCompositeSupport<Action1<HttpTrade>>> _onTradeClosedActionsRef = 
@@ -199,6 +203,7 @@ class DefaultHttpTrade implements HttpTrade {
         }});
     
     private final Channel _channel;
+    private final AtomicBoolean _isRequestStart = new AtomicBoolean(false);
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
@@ -283,6 +288,7 @@ class DefaultHttpTrade implements HttpTrade {
                 LOG.debug("trade({}) requestObserver.onNext, httpobj:{}",
                         DefaultHttpTrade.this, httpObject);
             }
+            _isRequestStart.compareAndSet(false, true);
             if (httpObject instanceof HttpRequest) {
                 _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpObject));
             }
