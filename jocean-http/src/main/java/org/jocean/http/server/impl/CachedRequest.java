@@ -3,6 +3,8 @@ package org.jocean.http.server.impl;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.Nettys;
@@ -144,9 +146,9 @@ class CachedRequest {
                     @Override
                     public void run() {
                         if (!subscriber.isUnsubscribed()) {
-                            if (null != _error) {
+                            if (null != _error.get()) {
                                 try {
-                                    subscriber.onError(_error);
+                                    subscriber.onError(_error.get());
                                 } catch (Throwable e1) {
                                     LOG.warn("exception when request's ({}).onError, detail:{}",
                                         subscriber, ExceptionUtils.exception2detail(e1));
@@ -160,7 +162,7 @@ class CachedRequest {
                                         subscriber.onNext(httpObj);
                                     }
                                 }}).call();
-                            if (_isCompleted) {
+                            if (_isCompleted.get()) {
                                 subscriber.onCompleted();
                             }
                             _subscribers.add(subscriber);
@@ -246,7 +248,7 @@ class CachedRequest {
             new Func1_N<List<HttpObject>,FullHttpRequest>() {
         @Override
         public FullHttpRequest call(final List<HttpObject> reqs,final Object...args) {
-            if (_isCompleted && reqs.size()>0) {
+            if (_isCompleted.get() && reqs.size()>0) {
                 if (reqs.get(0) instanceof FullHttpRequest) {
                     return ((FullHttpRequest)reqs.get(0)).retain();
                 }
@@ -271,26 +273,28 @@ class CachedRequest {
     final Observer<HttpObject> _requestObserver = new Observer<HttpObject>() {
         @Override
         public void onCompleted() {
-            _isCompleted = true;
-            for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
-                try {
-                    subscriber.onCompleted();
-                } catch (Throwable e) {
-                    LOG.warn("exception when request's ({}).onCompleted, detail:{}",
-                        subscriber, ExceptionUtils.exception2detail(e));
+            if ( _isCompleted.compareAndSet(false, true) ) {
+                for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
+                    try {
+                        subscriber.onCompleted();
+                    } catch (Throwable e) {
+                        LOG.warn("exception when request's ({}).onCompleted, detail:{}",
+                            subscriber, ExceptionUtils.exception2detail(e));
+                    }
                 }
             }
         }
         
         @Override
         public void onError(final Throwable e) {
-            _error = e;
-            for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
-                try {
-                    subscriber.onError(e);
-                } catch (Throwable e1) {
-                    LOG.warn("exception when request's ({}).onError, detail:{}",
-                        subscriber, ExceptionUtils.exception2detail(e1));
+            if (_error.compareAndSet(null, e)) {
+                for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
+                    try {
+                        subscriber.onError(e);
+                    } catch (Throwable e1) {
+                        LOG.warn("exception when request's ({}).onError, detail:{}",
+                            subscriber, ExceptionUtils.exception2detail(e1));
+                    }
                 }
             }
         }
@@ -324,6 +328,6 @@ class CachedRequest {
         }};
         
     private final List<Subscriber<? super HttpObject>> _subscribers = new CopyOnWriteArrayList<>();
-    private volatile boolean _isCompleted = false;
-    private volatile Throwable _error = null;
+    private final AtomicBoolean _isCompleted = new AtomicBoolean(false);
+    private final AtomicReference<Throwable> _error = new AtomicReference<Throwable>(null);
 }
