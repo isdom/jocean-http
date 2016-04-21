@@ -6,12 +6,10 @@ import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
 import rx.Observable;
-import rx.Subscription;
-import rx.functions.Action1;
 
 public interface ChannelPool {
     
-    public Observable<Channel> retainChannel(final SocketAddress address, final Action1<Subscription> add4release);
+    public Observable<Channel> retainChannel(final SocketAddress address);
     
     public boolean recycleChannel(final Channel channel);
     

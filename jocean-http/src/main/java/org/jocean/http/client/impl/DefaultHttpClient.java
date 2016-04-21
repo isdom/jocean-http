@@ -92,7 +92,7 @@ public class DefaultHttpClient implements HttpClient {
                                 JOArrays.addFirst(Feature[].class, 
                                         cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
                                         HttpClientConstants.APPLY_HTTPCLIENT);
-                        _channelPool.retainChannel(remoteAddress, add4release)
+                        _channelPool.retainChannel(remoteAddress)
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
                             .doOnNext(attachSubscriberToChannel(responseSubscriber, add4release))
