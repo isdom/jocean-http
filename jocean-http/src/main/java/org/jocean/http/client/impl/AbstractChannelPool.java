@@ -42,7 +42,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                         }
                     }
                 } while (null!=channel);
-                //  no more channel to be reused
+                //  no more channel can be reused
                 subscriber.onError(new RuntimeException("Nonreused Channel"));
             } catch (Throwable e) {
                 subscriber.onError(e);

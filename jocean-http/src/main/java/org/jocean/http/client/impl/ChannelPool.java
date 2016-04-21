@@ -13,9 +13,9 @@ public interface ChannelPool {
     
     public boolean recycleChannel(final Channel channel);
     
-    public void beforeSendRequest(final Channel channel, final HttpRequest request);
+    public void preSendRequest(final Channel channel, final HttpRequest request);
     
-    public void afterReceiveLastContent(final Channel channel);
+    public void postReceiveLastContent(final Channel channel);
     
     public static class Util {
         private static final AttributeKey<ChannelPool> POOL_ATTR = AttributeKey.valueOf("__POOL");

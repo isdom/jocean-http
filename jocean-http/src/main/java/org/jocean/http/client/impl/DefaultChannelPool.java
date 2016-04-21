@@ -22,7 +22,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
     private static final AttributeKey<Boolean> KEEPALIVE = AttributeKey.valueOf("__KEEPALIVE");
     
     @Override
-    public void beforeSendRequest(final Channel channel, final HttpRequest request) {
+    public void preSendRequest(final Channel channel, final HttpRequest request) {
         //  当Channel被重用，但由于source cancel等情况，没有发送过request
         //  则此时仍然可以被再次回收
         transactionBegin(channel);
@@ -30,7 +30,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
     }
 
     @Override
-    public void afterReceiveLastContent(final Channel channel) {
+    public void postReceiveLastContent(final Channel channel) {
         if (channel.attr(KEEPALIVE).get()) {
             transactionEnd(channel);
         }

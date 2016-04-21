@@ -225,7 +225,7 @@ public class DefaultHttpClient implements HttpClient {
                             final ChannelPool pool = ChannelPool.Util
                                     .getChannelPool(channel);
                             if (null != pool) {
-                                pool.afterReceiveLastContent(channel);
+                                pool.postReceiveLastContent(channel);
                             }
                             responseSubscriber.onCompleted();
                         }
@@ -279,7 +279,7 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public void call(final Object msg) {
                 if (msg instanceof HttpRequest) {
-                    _channelPool.beforeSendRequest(channel, (HttpRequest)msg);
+                    _channelPool.preSendRequest(channel, (HttpRequest)msg);
                 }
             }
         };

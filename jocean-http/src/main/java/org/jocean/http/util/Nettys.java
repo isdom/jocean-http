@@ -55,11 +55,11 @@ public class Nettys {
             }
     
             @Override
-            public void beforeSendRequest(Channel channel, HttpRequest request) {
+            public void preSendRequest(Channel channel, HttpRequest request) {
             }
     
             @Override
-            public void afterReceiveLastContent(Channel channel) {
+            public void postReceiveLastContent(Channel channel) {
             }
         };
     }
