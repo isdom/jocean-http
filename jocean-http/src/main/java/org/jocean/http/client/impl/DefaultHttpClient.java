@@ -379,15 +379,7 @@ public class DefaultHttpClient implements HttpClient {
         return Subscriptions.create(new Action0() {
             @Override
             public void call() {
-                if (channel.eventLoop().inEventLoop()) {
-                    ChannelPool.Util.getChannelPool(channel).recycleChannel(channel);
-                } else {
-                    channel.eventLoop().submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            ChannelPool.Util.getChannelPool(channel).recycleChannel(channel);
-                        }});
-                }
+                ChannelPool.Util.getChannelPool(channel).recycleChannel(channel);
             }
         });
     }
