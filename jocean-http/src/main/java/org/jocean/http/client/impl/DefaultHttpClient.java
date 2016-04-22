@@ -193,10 +193,13 @@ public class DefaultHttpClient implements HttpClient {
             final Feature[] features,
             final Action1<Subscription> add4release) {
         for (Feature feature : features) {
-            add4release.call(
-                Subscriptions.create(
-                    RxNettys.actionToRemoveHandler(channel, 
-                    feature.call(HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline()))));
+            final ChannelHandler handler = feature.call(
+                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline());
+            if (null != handler) {
+                add4release.call(
+                    Subscriptions.create(
+                        RxNettys.actionToRemoveHandler(channel, handler)));
+            }
         }
     }
     
