@@ -184,8 +184,9 @@ public class DefaultHttpClient implements HttpClient {
     private static void applyChannelFeatures(
             final Channel channel,
             final Feature[] features) {
-        InterfaceUtils.combineImpls(Feature.class, features)
-            .call(HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, channel.pipeline());
+        for (Feature feature : features) {
+            feature.call(HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, channel.pipeline());
+        }
     }
 
     private static void applyInteractionFeatures(
