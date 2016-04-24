@@ -95,9 +95,7 @@ public class DefaultHttpClient implements HttpClient {
                         _channelPool.retainChannel(remoteAddress)
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
-                            .doOnNext(attachSubscriberToChannel(responseSubscriber, add4release))
-                            .doOnNext(fillChannelAware(fullFeatures))
-                            .doOnNext(hookTrafficCounter(fullFeatures, add4release))
+                            .doOnNext(processChannel(responseSubscriber, fullFeatures, add4release))
                             .flatMap(doTransferRequest(request, fullFeatures))
                             .flatMap(RxNettys.<ChannelFuture, HttpObject>emitErrorOnFailure())
 //                            .doOnNext(new Action1<ChannelFuture>() {
@@ -119,49 +117,84 @@ public class DefaultHttpClient implements HttpClient {
                         responseSubscriber.onError(e);
                     }
                 } else {
-                    LOG.warn("defineInteraction: responseSubscriber {} has unsubscribe", responseSubscriber);
+                    LOG.warn("defineInteraction: responseSubscriber {} has unsubscribed", responseSubscriber);
                 }
             }});
     }
 
-    private Action1<Channel> fillChannelAware(final Feature[] features) {
+    protected Action1<? super Channel> processChannel(
+            final Subscriber<? super HttpObject> responseSubscriber,
+            final Feature[] fullFeatures, 
+            final Action1<Subscription> add4release) {
         final ChannelAware channelAware = 
-            InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
+                InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])fullFeatures);
+        final TrafficCounterAware trafficCounterAware = 
+                InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])fullFeatures);
         
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
-                if (null!=channelAware) {
-                    try {
-                        channelAware.setChannel(channel);
-                    } catch (Exception e) {
-                        LOG.warn("exception when invoke setChannel for channel ({}), detail: {}",
-                                channel, ExceptionUtils.exception2detail(e));
-                    }
-                }
+                attachSubscriberToChannel(channel, responseSubscriber, add4release);
+                fillChannelAware(channel, channelAware);
+                hookTrafficCounter(channel, trafficCounterAware, add4release);
             }};
     }
 
-    private Action1<? super Channel> hookTrafficCounter(
-            final Feature[] features, final Action1<Subscription> add4release) {
-        final TrafficCounterAware trafficCounterAware = 
-                InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])features);
-            
-        return new Action1<Channel>() {
-            @Override
-            public void call(final Channel channel) {
-                if (null!=trafficCounterAware) {
-                    try {
-                        trafficCounterAware.setTrafficCounter(buildTrafficCounter(channel, add4release));
-                    } catch (Exception e) {
-                        LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
-                                channel, ExceptionUtils.exception2detail(e));
+    private void attachSubscriberToChannel(
+            final Channel channel,
+            final Subscriber<? super HttpObject> responseSubscriber, 
+            final Action1<Subscription> add4release) {
+        final ChannelHandler handler = 
+            APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), new Subscriber<HttpObject>(responseSubscriber) {
+                @Override
+                public void onCompleted() {
+                    final ChannelPool pool = ChannelPool.Util
+                            .getChannelPool(channel);
+                    if (null != pool) {
+                        pool.postReceiveLastContent(channel);
                     }
+                    responseSubscriber.onCompleted();
                 }
-            }};
+
+                @Override
+                public void onError(Throwable e) {
+                    responseSubscriber.onError(e);
+                }
+
+                @Override
+                public void onNext(HttpObject t) {
+                    responseSubscriber.onNext(t);
+                }});
+        add4release.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
     }
 
-    private TrafficCounter buildTrafficCounter(final Channel channel, 
+    private void fillChannelAware(final Channel channel, ChannelAware channelAware) {
+        if (null!=channelAware) {
+            try {
+                channelAware.setChannel(channel);
+            } catch (Exception e) {
+                LOG.warn("exception when invoke setChannel for channel ({}), detail: {}",
+                        channel, ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+
+    private void hookTrafficCounter(
+            final Channel channel,
+            final TrafficCounterAware trafficCounterAware, 
+            final Action1<Subscription> add4release) {
+        if (null!=trafficCounterAware) {
+            try {
+                trafficCounterAware.setTrafficCounter(buildTrafficCounter(channel, add4release));
+            } catch (Exception e) {
+                LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
+                        channel, ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+
+    private TrafficCounter buildTrafficCounter(
+            final Channel channel, 
             final Action1<Subscription> add4release) {
         final TrafficCounterHandler handler = 
                 (TrafficCounterHandler)APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
@@ -214,37 +247,6 @@ public class DefaultHttpClient implements HttpClient {
             }
         }
         return false;
-    }
-
-    private Action1<? super Channel> attachSubscriberToChannel(
-            final Subscriber<? super HttpObject> responseSubscriber, 
-            final Action1<Subscription> add4release) {
-        return new Action1<Channel>() {
-            @Override
-            public void call(final Channel channel) {
-                final ChannelHandler handler = 
-                    APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), new Subscriber<HttpObject>(responseSubscriber) {
-                        @Override
-                        public void onCompleted() {
-                            final ChannelPool pool = ChannelPool.Util
-                                    .getChannelPool(channel);
-                            if (null != pool) {
-                                pool.postReceiveLastContent(channel);
-                            }
-                            responseSubscriber.onCompleted();
-                        }
-    
-                        @Override
-                        public void onError(Throwable e) {
-                            responseSubscriber.onError(e);
-                        }
-    
-                        @Override
-                        public void onNext(HttpObject t) {
-                            responseSubscriber.onNext(t);
-                        }});
-                add4release.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
-            }};
     }
 
     private Func1<Channel, Observable<ChannelFuture>> doTransferRequest(
