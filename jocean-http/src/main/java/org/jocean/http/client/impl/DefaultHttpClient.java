@@ -96,7 +96,7 @@ public class DefaultHttpClient implements HttpClient {
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
                             .doOnNext(processChannel(responseSubscriber, fullFeatures, add4release))
-                            .flatMap(doTransferRequest(request, fullFeatures))
+                            .flatMap(doSendRequest(request, fullFeatures))
                             .flatMap(RxNettys.<ChannelFuture, HttpObject>emitErrorOnFailure())
 //                            .doOnNext(new Action1<ChannelFuture>() {
 //                                @Override
@@ -249,7 +249,7 @@ public class DefaultHttpClient implements HttpClient {
         return false;
     }
 
-    private Func1<Channel, Observable<ChannelFuture>> doTransferRequest(
+    private Func1<Channel, Observable<ChannelFuture>> doSendRequest(
             final Observable<? extends Object> request,
             final Feature[] features) {
         final ApplyToRequest applyToRequest = 
@@ -262,35 +262,26 @@ public class DefaultHttpClient implements HttpClient {
         return new Func1<Channel, Observable<ChannelFuture>> () {
             @Override
             public Observable<ChannelFuture> call(final Channel channel) {
-                return request.doOnNext(doApplyToRequest(applyToRequest))
-                        .doOnNext(doForChannelPool(channel))
+                return request.doOnNext(doOnRequest(applyToRequest, channel))
                         .map(RxNettys.<Object>sendMessage(channel));
             }
         };
     }
 
-    private Action1<Object> doApplyToRequest(final ApplyToRequest applyToRequest) {
-        return new Action1<Object> () {
-            @Override
-            public void call(final Object msg) {
-                if (msg instanceof HttpRequest && null!=applyToRequest) {
-                    applyToRequest.call((HttpRequest) msg);
-                }
-            }
-        };
-    }
-    
-    private final Action1<Object> doForChannelPool(final Channel channel) {
+    private Action1<Object> doOnRequest(final ApplyToRequest applyToRequest, final Channel channel) {
         return new Action1<Object> () {
             @Override
             public void call(final Object msg) {
                 if (msg instanceof HttpRequest) {
+                    if (null!=applyToRequest) {
+                        applyToRequest.call((HttpRequest)msg);
+                    }
                     _channelPool.preSendRequest(channel, (HttpRequest)msg);
                 }
             }
         };
     }
-
+    
     private Observable<? extends Channel> createChannel(
             final SocketAddress remoteAddress, 
             final Feature[] features, 
