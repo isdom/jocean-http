@@ -106,7 +106,6 @@ public class DefaultHttpClient implements HttpClient {
                                     future.addListener(RxNettys.makeFailure2ErrorListener(responseSubscriber));
                                 }})
                             .flatMap(new Func1<ChannelFuture, Observable<HttpObject>>() {
-
                                 @Override
                                 public Observable<HttpObject> call(
                                         final ChannelFuture channelFuture) {
