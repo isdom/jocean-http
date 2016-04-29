@@ -98,13 +98,20 @@ public class DefaultHttpClient implements HttpClient {
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
                             .doOnNext(processChannel(responseSubscriber, fullFeatures, add4release))
                             .flatMap(doSendRequest(request, fullFeatures))
-                            .flatMap(RxNettys.<ChannelFuture, HttpObject>emitErrorOnFailure())
-//                            .doOnNext(new Action1<ChannelFuture>() {
-//                                @Override
-//                                public void call(final ChannelFuture future) {
-//                                    responseSubscriber.add(Subscriptions.from(future));
-//                                    future.addListener(RxNettys.makeFailure2ErrorListener(responseSubscriber));
-//                                }})
+//                            .flatMap(RxNettys.<ChannelFuture, HttpObject>emitErrorOnFailure())
+                            .doOnNext(new Action1<ChannelFuture>() {
+                                @Override
+                                public void call(final ChannelFuture future) {
+                                    responseSubscriber.add(Subscriptions.from(future));
+                                    future.addListener(RxNettys.makeFailure2ErrorListener(responseSubscriber));
+                                }})
+                            .flatMap(new Func1<ChannelFuture, Observable<HttpObject>>() {
+
+                                @Override
+                                public Observable<HttpObject> call(
+                                        final ChannelFuture channelFuture) {
+                                    return Observable.never();
+                                }})
                             .doOnUnsubscribe(new Action0() {
                                 @Override
                                 public void call() {
@@ -158,13 +165,13 @@ public class DefaultHttpClient implements HttpClient {
                 }
 
                 @Override
-                public void onError(Throwable e) {
+                public void onError(final Throwable e) {
                     responseSubscriber.onError(e);
                 }
 
                 @Override
-                public void onNext(HttpObject t) {
-                    responseSubscriber.onNext(t);
+                public void onNext(final HttpObject httpObj) {
+                    responseSubscriber.onNext(httpObj);
                 }});
         add4release.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
     }
