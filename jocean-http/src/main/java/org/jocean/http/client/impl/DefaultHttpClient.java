@@ -264,17 +264,21 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public Observable<ChannelFuture> call(final Channel channel) {
                 return request.doOnNext(doOnRequest(applyToRequest, channel))
+                        .doOnCompleted(new Action0() {
+                            @Override
+                            public void call() {
+                                channel.flush();
+                            }})
                         .map(DefaultHttpClient.<Object>sendMessage(channel));
             }
         };
     }
 
-    private static <M> Func1<M, ChannelFuture> sendMessage(
-            final Channel channel) {
+    private static <M> Func1<M, ChannelFuture> sendMessage(final Channel channel) {
         return new Func1<M, ChannelFuture>() {
             @Override
             public ChannelFuture call(final M msg) {
-                return channel.writeAndFlush(ReferenceCountUtil.retain(msg));
+                return channel.write(ReferenceCountUtil.retain(msg));
             }
         };
     }
