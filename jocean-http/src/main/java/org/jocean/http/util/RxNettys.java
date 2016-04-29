@@ -85,15 +85,6 @@ public class RxNettys {
         return (Func1)RETAIN_OBJ;
     }
         
-    public static <M> Func1<M, ChannelFuture> sendMessage(
-            final Channel channel) {
-        return new Func1<M,ChannelFuture>() {
-            @Override
-            public ChannelFuture call(final M msg) {
-                return channel.writeAndFlush(ReferenceCountUtil.retain(msg));
-            }};
-    }
-    
     public static <V> GenericFutureListener<Future<V>> makeFailure2ErrorListener(final Subscriber<?> subscriber) {
         return new GenericFutureListener<Future<V>>() {
             @Override

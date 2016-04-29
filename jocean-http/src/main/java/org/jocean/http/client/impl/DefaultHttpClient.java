@@ -34,6 +34,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
@@ -263,11 +264,21 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public Observable<ChannelFuture> call(final Channel channel) {
                 return request.doOnNext(doOnRequest(applyToRequest, channel))
-                        .map(RxNettys.<Object>sendMessage(channel));
+                        .map(DefaultHttpClient.<Object>sendMessage(channel));
             }
         };
     }
 
+    private static <M> Func1<M, ChannelFuture> sendMessage(
+            final Channel channel) {
+        return new Func1<M, ChannelFuture>() {
+            @Override
+            public ChannelFuture call(final M msg) {
+                return channel.writeAndFlush(ReferenceCountUtil.retain(msg));
+            }
+        };
+    }
+    
     private Action1<Object> doOnRequest(final ApplyToRequest applyToRequest, final Channel channel) {
         return new Action1<Object> () {
             @Override
