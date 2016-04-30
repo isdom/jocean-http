@@ -161,6 +161,14 @@ public class RxNettys {
             }
         };
     }
+    
+    public static Observable<? extends Channel> fromChannelFuture(final ChannelFuture future) {
+        return Observable.create(new OnSubscribe<Channel>() {
+            @Override
+            public void call(final Subscriber<? super Channel> subscriber) {
+                future.addListener(futureSuccess2NextCompletedListener(subscriber));
+            }}).cache();
+    }
         
     public static Func1<ChannelFuture, Observable<? extends Channel>> 
         emitNextAndCompletedOnSuccess() {
