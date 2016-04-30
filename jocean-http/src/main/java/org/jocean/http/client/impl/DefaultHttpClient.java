@@ -98,12 +98,10 @@ public class DefaultHttpClient implements HttpClient {
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
                             .doOnNext(processChannel(responseSubscriber, fullFeatures, add4release))
                             .flatMap(doSendRequest(request, fullFeatures))
-//                            .flatMap(RxNettys.<ChannelFuture, HttpObject>emitErrorOnFailure())
                             .doOnNext(new Action1<ChannelFuture>() {
                                 @Override
                                 public void call(final ChannelFuture future) {
-                                    responseSubscriber.add(Subscriptions.from(future));
-                                    future.addListener(RxNettys.makeFailure2ErrorListener(responseSubscriber));
+                                    RxNettys.attachFutureToSubscriber(future, responseSubscriber);
                                 }})
                             .flatMap(RxNettys.<ChannelFuture,HttpObject>flatMapByNever())
                             .doOnUnsubscribe(new Action0() {
@@ -310,8 +308,8 @@ public class DefaultHttpClient implements HttpClient {
                     ChannelPool.Util.attachChannelPool(future.channel(), _channelPool);
                     add4release.call(recycleChannelSubscription(future.channel()));
                     add4release.call(Subscriptions.from(future));
-                    future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
-                    future.addListener(RxNettys.makeSuccess2NextCompletedListener(channelSubscriber));
+                    future.addListener(RxNettys.futureFailure2ErrorListener(channelSubscriber));
+                    future.addListener(RxNettys.futureSuccess2NextCompletedListener(channelSubscriber));
                 } else {
                     LOG.warn("newChannel: channelSubscriber {} has unsubscribe", channelSubscriber);
                 }
@@ -327,8 +325,8 @@ public class DefaultHttpClient implements HttpClient {
                                 applyInteractionFeatures(channel, features, add4release);
                                 final ChannelFuture future = channel.connect(remoteAddress);
                                 add4release.call(Subscriptions.from(future));
-                                future.addListener(RxNettys.makeFailure2ErrorListener(channelSubscriber));
-                                future.addListener(RxNettys.makeSuccess2NextCompletedListener(channelSubscriber));
+                                future.addListener(RxNettys.futureFailure2ErrorListener(channelSubscriber));
+                                future.addListener(RxNettys.futureSuccess2NextCompletedListener(channelSubscriber));
                             } else {
                                 LOG.warn("applyFeatures: channelSubscriber {} has unsubscribe", channelSubscriber);
                             }

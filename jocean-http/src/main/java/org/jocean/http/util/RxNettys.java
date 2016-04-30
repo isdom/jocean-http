@@ -85,7 +85,7 @@ public class RxNettys {
         return (Func1)RETAIN_OBJ;
     }
         
-    public static <V> GenericFutureListener<Future<V>> makeFailure2ErrorListener(final Subscriber<?> subscriber) {
+    public static <V> GenericFutureListener<Future<V>> futureFailure2ErrorListener(final Subscriber<?> subscriber) {
         return new GenericFutureListener<Future<V>>() {
             @Override
             public void operationComplete(final Future<V> f)
@@ -95,6 +95,11 @@ public class RxNettys {
                 }
             }
         };
+    }
+    
+    public static <V> void attachFutureToSubscriber(final Future<V> future, final Subscriber<?> subscriber) {
+        subscriber.add(Subscriptions.from(future));
+        future.addListener(RxNettys.futureFailure2ErrorListener(subscriber));
     }
     
 //    private final static Func1<Future<Object>, Observable<Object>> EMITERROR_ONFAILURE = 
@@ -144,7 +149,7 @@ public class RxNettys {
                 }});
         }};
         
-    public static ChannelFutureListener makeSuccess2NextCompletedListener(final Subscriber<? super Channel> subscriber) {
+    public static ChannelFutureListener futureSuccess2NextCompletedListener(final Subscriber<? super Channel> subscriber) {
         return new ChannelFutureListener() {
             @Override
             public void operationComplete(final ChannelFuture f)

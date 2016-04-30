@@ -37,7 +37,6 @@ import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
-import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -104,9 +103,8 @@ public class DefaultHttpServer implements HttpServer {
                             awaitInboundRequest(channel, subscriber);
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
+                    RxNettys.attachFutureToSubscriber(future, subscriber);
                     subscriber.add(RxNettys.subscriptionFrom(future.channel()));
-                    subscriber.add(Subscriptions.from(future));
-                    future.addListener(RxNettys.makeFailure2ErrorListener(subscriber));
                     future.addListener(channelFutureListenerOf(features));
                 }
             }});
