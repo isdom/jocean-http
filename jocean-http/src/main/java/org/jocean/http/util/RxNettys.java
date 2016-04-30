@@ -128,26 +128,31 @@ public class RxNettys {
 //        return (Func1)EMITERROR_ONFAILURE;
 //    }
     
-    private final static Func1<ChannelFuture, Observable<? extends Channel>> EMITNEXTANDCOMPLETED_ONSUCCESS = 
-    new Func1<ChannelFuture, Observable<? extends Channel>>() {
-        @Override
-        public Observable<? extends Channel> call(final ChannelFuture future) {
-            return Observable.create(new OnSubscribe<Channel>() {
-                @Override
-                public void call(final Subscriber<? super Channel> subscriber) {
-                    subscriber.add(Subscriptions.from(
-                        future.addListener(new ChannelFutureListener() {
-                            @Override
-                            public void operationComplete(final ChannelFuture f)
-                                    throws Exception {
-                                if (f.isSuccess()) {
-                                    subscriber.onNext(f.channel());
-                                    subscriber.onCompleted();
-                                }
-                            }
-                        })));
-                }});
-        }};
+//    private final static Func1<ChannelFuture, Observable<? extends Channel>> EMITNEXTANDCOMPLETED_ONSUCCESS = 
+//    new Func1<ChannelFuture, Observable<? extends Channel>>() {
+//        @Override
+//        public Observable<? extends Channel> call(final ChannelFuture future) {
+//            return Observable.create(new OnSubscribe<Channel>() {
+//                @Override
+//                public void call(final Subscriber<? super Channel> subscriber) {
+//                    subscriber.add(Subscriptions.from(
+//                        future.addListener(new ChannelFutureListener() {
+//                            @Override
+//                            public void operationComplete(final ChannelFuture f)
+//                                    throws Exception {
+//                                if (f.isSuccess()) {
+//                                    subscriber.onNext(f.channel());
+//                                    subscriber.onCompleted();
+//                                }
+//                            }
+//                        })));
+//                }});
+//        }};
+//        
+//    public static Func1<ChannelFuture, Observable<? extends Channel>> 
+//        emitNextAndCompletedOnSuccess() {
+//        return  EMITNEXTANDCOMPLETED_ONSUCCESS;
+//    }
         
     public static ChannelFutureListener futureSuccess2NextCompletedListener(final Subscriber<? super Channel> subscriber) {
         return new ChannelFutureListener() {
@@ -166,15 +171,11 @@ public class RxNettys {
         return Observable.create(new OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> subscriber) {
+                future.addListener(futureFailure2ErrorListener(subscriber));
                 future.addListener(futureSuccess2NextCompletedListener(subscriber));
             }}).cache();
     }
         
-    public static Func1<ChannelFuture, Observable<? extends Channel>> 
-        emitNextAndCompletedOnSuccess() {
-        return  EMITNEXTANDCOMPLETED_ONSUCCESS;
-    }
-    
     private final static Func1<Object, Observable<Object>> TONEVER_FLATMAP = 
         new Func1<Object, Observable<Object>>() {
             @Override
