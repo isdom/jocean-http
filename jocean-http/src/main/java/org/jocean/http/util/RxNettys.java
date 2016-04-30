@@ -101,58 +101,6 @@ public class RxNettys {
         subscriber.add(Subscriptions.from(future));
         future.addListener(RxNettys.futureFailure2ErrorListener(subscriber));
     }
-    
-//    private final static Func1<Future<Object>, Observable<Object>> EMITERROR_ONFAILURE = 
-//    new Func1<Future<Object>, Observable<Object>>() {
-//        @Override
-//        public Observable<Object> call(final Future<Object> future) {
-//            return Observable.create(new OnSubscribe<Object> () {
-//                @Override
-//                public void call(final Subscriber<Object> subscriber) {
-//                    subscriber.add(Subscriptions.from(
-//                        future.addListener(new GenericFutureListener<Future<Object>>() {
-//                            @Override
-//                            public void operationComplete(final Future<Object> f)
-//                                    throws Exception {
-//                                if (!f.isSuccess()) {
-//                                    subscriber.onError(f.cause());
-//                                }
-//                            }
-//                        })));
-//                }});
-//        }};
-        
-//    @SuppressWarnings({ "unchecked", "rawtypes" })
-//    public static <F extends Future<?>,R> Func1<F, Observable<? extends R>> 
-//        emitErrorOnFailure() {
-//        return (Func1)EMITERROR_ONFAILURE;
-//    }
-    
-//    private final static Func1<ChannelFuture, Observable<? extends Channel>> EMITNEXTANDCOMPLETED_ONSUCCESS = 
-//    new Func1<ChannelFuture, Observable<? extends Channel>>() {
-//        @Override
-//        public Observable<? extends Channel> call(final ChannelFuture future) {
-//            return Observable.create(new OnSubscribe<Channel>() {
-//                @Override
-//                public void call(final Subscriber<? super Channel> subscriber) {
-//                    subscriber.add(Subscriptions.from(
-//                        future.addListener(new ChannelFutureListener() {
-//                            @Override
-//                            public void operationComplete(final ChannelFuture f)
-//                                    throws Exception {
-//                                if (f.isSuccess()) {
-//                                    subscriber.onNext(f.channel());
-//                                    subscriber.onCompleted();
-//                                }
-//                            }
-//                        })));
-//                }});
-//        }};
-//        
-//    public static Func1<ChannelFuture, Observable<? extends Channel>> 
-//        emitNextAndCompletedOnSuccess() {
-//        return  EMITNEXTANDCOMPLETED_ONSUCCESS;
-//    }
         
     public static ChannelFutureListener futureSuccess2NextCompletedListener(final Subscriber<? super Channel> subscriber) {
         return new ChannelFutureListener() {
