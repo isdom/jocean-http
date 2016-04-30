@@ -97,52 +97,31 @@ public class RxNettys {
         };
     }
     
-    private final static Func1<Future<Object>, Observable<Object>> EMITERROR_ONFAILURE = 
-    new Func1<Future<Object>, Observable<Object>>() {
-        @Override
-        public Observable<Object> call(final Future<Object> future) {
-            return Observable.create(new OnSubscribe<Object> () {
-                @Override
-                public void call(final Subscriber<Object> subscriber) {
-                    subscriber.add(Subscriptions.from(
-                        future.addListener(new GenericFutureListener<Future<Object>>() {
-                            @Override
-                            public void operationComplete(final Future<Object> f)
-                                    throws Exception {
-                                if (!f.isSuccess()) {
-                                    subscriber.onError(f.cause());
-                                }
-                            }
-                        })));
-                }});
-        }};
+//    private final static Func1<Future<Object>, Observable<Object>> EMITERROR_ONFAILURE = 
+//    new Func1<Future<Object>, Observable<Object>>() {
+//        @Override
+//        public Observable<Object> call(final Future<Object> future) {
+//            return Observable.create(new OnSubscribe<Object> () {
+//                @Override
+//                public void call(final Subscriber<Object> subscriber) {
+//                    subscriber.add(Subscriptions.from(
+//                        future.addListener(new GenericFutureListener<Future<Object>>() {
+//                            @Override
+//                            public void operationComplete(final Future<Object> f)
+//                                    throws Exception {
+//                                if (!f.isSuccess()) {
+//                                    subscriber.onError(f.cause());
+//                                }
+//                            }
+//                        })));
+//                }});
+//        }};
         
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    public static <F extends Future<?>,R> Func1<F, Observable<? extends R>> 
-        emitErrorOnFailure() {
-        return (Func1)EMITERROR_ONFAILURE;
-        /* replace by global one instance
-        return new Func1<F, Observable<? extends R>>() {
-            @Override
-            public Observable<? extends R> call(final F future) {
-                return Observable.create(new OnSubscribe<R> () {
-                    @SuppressWarnings("unchecked")
-                    @Override
-                    public void call(final Subscriber<? super R> subscriber) {
-                        subscriber.add(Subscriptions.from(
-                            future.addListener(new GenericFutureListener<F>() {
-                                @Override
-                                public void operationComplete(final F future)
-                                        throws Exception {
-                                    if (!future.isSuccess()) {
-                                        subscriber.onError(future.cause());
-                                    }
-                                }
-                            })));
-                    }});
-            }};
-            */
-    }
+//    @SuppressWarnings({ "unchecked", "rawtypes" })
+//    public static <F extends Future<?>,R> Func1<F, Observable<? extends R>> 
+//        emitErrorOnFailure() {
+//        return (Func1)EMITERROR_ONFAILURE;
+//    }
     
     private final static Func1<ChannelFuture, Observable<? extends Channel>> EMITNEXTANDCOMPLETED_ONSUCCESS = 
     new Func1<ChannelFuture, Observable<? extends Channel>>() {
@@ -183,6 +162,18 @@ public class RxNettys {
         return  EMITNEXTANDCOMPLETED_ONSUCCESS;
     }
     
+    private final static Func1<Object, Observable<Object>> TONEVER_FLATMAP = 
+        new Func1<Object, Observable<Object>>() {
+            @Override
+            public Observable<Object> call(final Object source) {
+                return Observable.never();
+            }};
+    
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public static <SRC, DST> Func1<SRC, Observable<? extends DST>>  flatMapByNever() {
+        return (Func1)TONEVER_FLATMAP;
+    }
+    
     public static Subscription subscriptionFrom(final Channel channel) {
         return Subscriptions.create(new Action0() {
             @Override
@@ -190,36 +181,6 @@ public class RxNettys {
                 channel.close();
             }});
     }
-
-    //  TO BE removed
-    /*
-    public static Subscription removeHandlersSubscription(final Channel channel, final String[] names) {
-        return Subscriptions.create(new Action0() {
-            @Override
-            public void call() {
-                if (channel.eventLoop().inEventLoop()) {
-                    doRemove();
-                } else {
-                    channel.eventLoop().submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            doRemove();
-                        }});
-                }
-            }
-            private void doRemove() {
-                final ChannelPipeline pipeline = channel.pipeline();
-                for (String name : names) {
-                    if (pipeline.context(name) != null) {
-                        final ChannelHandler handler = pipeline.remove(name);
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("channel({}): remove oneoff Handler({}/{}) success.", channel, name, handler);
-                        }
-                    }
-                }
-            }});
-    }
-    */
     
     public static byte[] httpObjectsAsBytes(final Iterator<HttpObject> itr)
             throws IOException {

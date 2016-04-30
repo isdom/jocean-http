@@ -105,12 +105,7 @@ public class DefaultHttpClient implements HttpClient {
                                     responseSubscriber.add(Subscriptions.from(future));
                                     future.addListener(RxNettys.makeFailure2ErrorListener(responseSubscriber));
                                 }})
-                            .flatMap(new Func1<ChannelFuture, Observable<HttpObject>>() {
-                                @Override
-                                public Observable<HttpObject> call(
-                                        final ChannelFuture channelFuture) {
-                                    return Observable.never();
-                                }})
+                            .flatMap(RxNettys.<ChannelFuture,HttpObject>flatMapByNever())
                             .doOnUnsubscribe(new Action0() {
                                 @Override
                                 public void call() {
