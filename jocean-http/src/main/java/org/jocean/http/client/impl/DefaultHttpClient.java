@@ -300,40 +300,50 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress, 
             final Feature[] features, 
             final Action1<Subscription> add4release) {
-        Observable<? extends Channel> channelObservable = Observable.create(new OnSubscribe<Channel>() {
+        final Observable<? extends Channel> channelObservable = Observable.create(new OnSubscribe<ChannelFuture>() {
             @Override
-            public void call(final Subscriber<? super Channel> channelSubscriber) {
-                if (!channelSubscriber.isUnsubscribed()) {
+            public void call(final Subscriber<? super ChannelFuture> futureSubscriber) {
+                if (!futureSubscriber.isUnsubscribed()) {
                     final ChannelFuture future = _channelCreator.newChannel();
                     ChannelPool.Util.attachChannelPool(future.channel(), _channelPool);
                     add4release.call(recycleChannelSubscription(future.channel()));
                     add4release.call(Subscriptions.from(future));
-                    future.addListener(RxNettys.futureFailure2ErrorListener(channelSubscriber));
-                    future.addListener(RxNettys.futureSuccess2NextCompletedListener(channelSubscriber));
-                } else {
-                    LOG.warn("newChannel: channelSubscriber {} has unsubscribe", channelSubscriber);
+                    futureSubscriber.onNext(future);  
+                    futureSubscriber.onCompleted();
                 }
             }})
-            .flatMap(new Func1<Channel, Observable<? extends Channel>> () {
+            .flatMap(new Func1<ChannelFuture, Observable<? extends Channel>>() {
                 @Override
-                public Observable<? extends Channel> call(final Channel channel) {
-                    return Observable.create(new OnSubscribe<Channel>() {
+                public Observable<? extends Channel> call(final ChannelFuture future) {
+                    return RxNettys.fromChannelFuture(future);
+                }})
+            .doOnNext(new Action1<Channel>() {
+                @Override
+                public void call(final Channel channel) {
+                    applyChannelFeatures(channel, features);
+                    applyInteractionFeatures(channel, features, add4release);
+                }})
+            .flatMap(new Func1<Channel, Observable<? extends ChannelFuture>>() {
+                @Override
+                public Observable<? extends ChannelFuture> call(final Channel channel) {
+                    return Observable.create(new OnSubscribe<ChannelFuture>() {
                         @Override
-                        public void call(final Subscriber<? super Channel> channelSubscriber) {
-                            if (!channelSubscriber.isUnsubscribed()) {
-                                applyChannelFeatures(channel, features);
-                                applyInteractionFeatures(channel, features, add4release);
+                        public void call(final Subscriber<? super ChannelFuture> futureSubscriber) {
+                            if (!futureSubscriber.isUnsubscribed()) {
                                 final ChannelFuture future = channel.connect(remoteAddress);
                                 add4release.call(Subscriptions.from(future));
-                                future.addListener(RxNettys.futureFailure2ErrorListener(channelSubscriber));
-                                future.addListener(RxNettys.futureSuccess2NextCompletedListener(channelSubscriber));
-                            } else {
-                                LOG.warn("applyFeatures: channelSubscriber {} has unsubscribe", channelSubscriber);
+                                futureSubscriber.onNext(future);
+                                futureSubscriber.onCompleted();
                             }
                         }});
+                }})
+            .flatMap(new Func1<ChannelFuture, Observable<? extends Channel>> () {
+                @Override
+                public Observable<? extends Channel> call(final ChannelFuture future) {
+                    return RxNettys.fromChannelFuture(future);
                 }});
         if (isSSLEnabled(features)) {
-            channelObservable = channelObservable.flatMap(new Func1<Channel, Observable<? extends Channel>> () {
+            return channelObservable.flatMap(new Func1<Channel, Observable<? extends Channel>> () {
                 @Override
                 public Observable<? extends Channel> call(final Channel channel) {
                     return Observable.create(new OnSubscribe<Channel>() {
@@ -365,13 +375,12 @@ public class DefaultHttpClient implements HttpClient {
                         }});
                 }});
         } else {
-            channelObservable = channelObservable.doOnNext(new Action1<Channel>() {
+            return channelObservable.doOnNext(new Action1<Channel>() {
                 @Override
                 public void call(final Channel channel) {
                     ChannelPool.Util.setChannelReady(channel);
                 }});
         }
-        return channelObservable;
     }
 
     private Feature[] cloneFeatures(final Feature[] features) {
