@@ -312,11 +312,7 @@ public class DefaultHttpClient implements HttpClient {
                     futureSubscriber.onCompleted();
                 }
             }})
-            .flatMap(new Func1<ChannelFuture, Observable<? extends Channel>>() {
-                @Override
-                public Observable<? extends Channel> call(final ChannelFuture future) {
-                    return RxNettys.fromChannelFuture(future);
-                }})
+            .flatMap(RxNettys.funcFutureToChannel())
             .doOnNext(new Action1<Channel>() {
                 @Override
                 public void call(final Channel channel) {
@@ -337,11 +333,7 @@ public class DefaultHttpClient implements HttpClient {
                             }
                         }});
                 }})
-            .flatMap(new Func1<ChannelFuture, Observable<? extends Channel>> () {
-                @Override
-                public Observable<? extends Channel> call(final ChannelFuture future) {
-                    return RxNettys.fromChannelFuture(future);
-                }});
+            .flatMap(RxNettys.funcFutureToChannel());
         if (isSSLEnabled(features)) {
             return channelObservable.flatMap(new Func1<Channel, Observable<? extends Channel>> () {
                 @Override

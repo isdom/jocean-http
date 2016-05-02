@@ -90,7 +90,7 @@ public class RxNettys {
             @Override
             public void operationComplete(final Future<V> f)
                     throws Exception {
-                if (!f.isSuccess()) {
+                if (!f.isSuccess() && !subscriber.isUnsubscribed()) {
                     subscriber.onError(f.cause());
                 }
             }
@@ -107,7 +107,7 @@ public class RxNettys {
             @Override
             public void operationComplete(final ChannelFuture f)
                     throws Exception {
-                if (f.isSuccess()) {
+                if (f.isSuccess() && !subscriber.isUnsubscribed()) {
                     subscriber.onNext(f.channel());
                     subscriber.onCompleted();
                 }
@@ -115,15 +115,21 @@ public class RxNettys {
         };
     }
     
-    public static Observable<? extends Channel> fromChannelFuture(final ChannelFuture future) {
-        return Observable.create(new OnSubscribe<Channel>() {
+    public static Func1<ChannelFuture, Observable<? extends Channel>> funcFutureToChannel() {
+        return new Func1<ChannelFuture, Observable<? extends Channel>>() {
             @Override
-            public void call(final Subscriber<? super Channel> subscriber) {
-                future.addListener(futureFailure2ErrorListener(subscriber));
-                future.addListener(futureSuccess2NextCompletedListener(subscriber));
-            }}).cache();
+            public Observable<? extends Channel> call(final ChannelFuture future) {
+                return Observable.create(new OnSubscribe<Channel>() {
+                    @Override
+                    public void call(final Subscriber<? super Channel> subscriber) {
+                        if (!subscriber.isUnsubscribed()) {
+                            future.addListener(futureFailure2ErrorListener(subscriber));
+                            future.addListener(futureSuccess2NextCompletedListener(subscriber));
+                        }
+                    }});
+            }};
     }
-        
+    
     private final static Func1<Object, Observable<Object>> TONEVER_FLATMAP = 
         new Func1<Object, Observable<Object>>() {
             @Override
