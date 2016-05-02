@@ -306,8 +306,8 @@ public class DefaultHttpClient implements HttpClient {
                 if (!futureSubscriber.isUnsubscribed()) {
                     final ChannelFuture future = _channelCreator.newChannel();
                     ChannelPool.Util.attachChannelPool(future.channel(), _channelPool);
-                    add4release.call(recycleChannelSubscription(future.channel()));
-                    add4release.call(Subscriptions.from(future));
+                    futureSubscriber.add(recycleChannelSubscription(future.channel()));
+                    futureSubscriber.add(Subscriptions.from(future));
                     futureSubscriber.onNext(future);  
                     futureSubscriber.onCompleted();
                 }
