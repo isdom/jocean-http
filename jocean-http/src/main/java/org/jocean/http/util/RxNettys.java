@@ -2,6 +2,7 @@ package org.jocean.http.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.SocketAddress;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -125,6 +126,24 @@ public class RxNettys {
                         if (!subscriber.isUnsubscribed()) {
                             future.addListener(futureFailure2ErrorListener(subscriber));
                             future.addListener(futureSuccess2NextCompletedListener(subscriber));
+                        }
+                    }});
+            }};
+    }
+    
+    public static Func1<Channel, Observable<? extends ChannelFuture>> funcAsyncConnectTo(
+            final SocketAddress remoteAddress) {
+        return new Func1<Channel, Observable<? extends ChannelFuture>>() {
+            @Override
+            public Observable<? extends ChannelFuture> call(final Channel channel) {
+                return Observable.create(new OnSubscribe<ChannelFuture>() {
+                    @Override
+                    public void call(final Subscriber<? super ChannelFuture> subscriber) {
+                        if (!subscriber.isUnsubscribed()) {
+                            final ChannelFuture future = channel.connect(remoteAddress);
+                            subscriber.add(Subscriptions.from(future));
+                            subscriber.onNext(future);
+                            subscriber.onCompleted();
                         }
                     }});
             }};

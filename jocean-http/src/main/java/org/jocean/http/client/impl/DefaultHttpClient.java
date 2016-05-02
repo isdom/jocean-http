@@ -319,20 +319,7 @@ public class DefaultHttpClient implements HttpClient {
                     applyChannelFeatures(channel, features);
                     applyInteractionFeatures(channel, features, add4release);
                 }})
-            .flatMap(new Func1<Channel, Observable<? extends ChannelFuture>>() {
-                @Override
-                public Observable<? extends ChannelFuture> call(final Channel channel) {
-                    return Observable.create(new OnSubscribe<ChannelFuture>() {
-                        @Override
-                        public void call(final Subscriber<? super ChannelFuture> futureSubscriber) {
-                            if (!futureSubscriber.isUnsubscribed()) {
-                                final ChannelFuture future = channel.connect(remoteAddress);
-                                add4release.call(Subscriptions.from(future));
-                                futureSubscriber.onNext(future);
-                                futureSubscriber.onCompleted();
-                            }
-                        }});
-                }})
+            .flatMap(RxNettys.funcAsyncConnectTo(remoteAddress))
             .flatMap(RxNettys.funcFutureToChannel());
         if (isSSLEnabled(features)) {
             return channelObservable.flatMap(new Func1<Channel, Observable<? extends Channel>> () {
