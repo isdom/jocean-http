@@ -214,6 +214,9 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
 
+    //  TODO, when provide Subscriber, then execute as applyInteractionFeatures
+    //  otherwise execute as applyChannelFeatures
+    //  SO, extract these funcs to RxNettys
     private static void applyChannelFeatures(
             final Channel channel,
             final Feature[] features) {
@@ -231,6 +234,21 @@ public class DefaultHttpClient implements HttpClient {
                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline());
             if (null != handler) {
                 add4release.call(
+                    Subscriptions.create(
+                        RxNettys.actionToRemoveHandler(channel, handler)));
+            }
+        }
+    }
+    
+    private static void applyInteractionFeatures(
+            final Channel channel,
+            final Feature[] features,
+            final Subscriber<?> subscriber) {
+        for (Feature feature : features) {
+            final ChannelHandler handler = feature.call(
+                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline());
+            if (null != handler && null!=subscriber) {
+                subscriber.add(
                     Subscriptions.create(
                         RxNettys.actionToRemoveHandler(channel, handler)));
             }
@@ -313,11 +331,19 @@ public class DefaultHttpClient implements HttpClient {
                 }
             }})
             .flatMap(RxNettys.funcFutureToChannel())
-            .doOnNext(new Action1<Channel>() {
+            .flatMap(new Func1<Channel, Observable<? extends Channel>>() {
                 @Override
-                public void call(final Channel channel) {
-                    applyChannelFeatures(channel, features);
-                    applyInteractionFeatures(channel, features, add4release);
+                public Observable<? extends Channel> call(final Channel channel) {
+                    return Observable.create(new OnSubscribe<Channel>() {
+                        @Override
+                        public void call(final Subscriber<? super Channel> subscriber) {
+                            if (!subscriber.isUnsubscribed()) {
+                                applyChannelFeatures(channel, features);
+                                applyInteractionFeatures(channel, features, subscriber);
+                                subscriber.onNext(channel);
+                                subscriber.onCompleted();
+                            }
+                        }});
                 }})
             .flatMap(RxNettys.funcAsyncConnectTo(remoteAddress))
             .flatMap(RxNettys.funcFutureToChannel());
