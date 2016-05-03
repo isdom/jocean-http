@@ -186,34 +186,10 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public void call(final Channel channel) {
                 subscriber.add(recycleChannelSubscription(channel));
-                applyInteractionFeatures(channel, features, subscriber);
+                RxNettys.applyFeaturesToChannel(channel,
+                        HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, 
+                        features, subscriber);
             }};
-    }
-
-    //  TODO, when provide Subscriber, then execute as applyInteractionFeatures
-    //  otherwise execute as applyChannelFeatures
-    //  SO, extract these funcs to RxNettys
-    private static void applyChannelFeatures(
-            final Channel channel,
-            final Feature[] features) {
-        for (Feature feature : features) {
-            feature.call(HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, channel.pipeline());
-        }
-    }
-    
-    private static void applyInteractionFeatures(
-            final Channel channel,
-            final Feature[] features,
-            final Subscriber<?> subscriber) {
-        for (Feature feature : features) {
-            final ChannelHandler handler = feature.call(
-                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline());
-            if (null != handler && null!=subscriber) {
-                subscriber.add(
-                    Subscriptions.create(
-                        RxNettys.actionToRemoveHandler(channel, handler)));
-            }
-        }
     }
     
     private static boolean isSSLEnabled(final Feature[] features) {
@@ -298,8 +274,11 @@ public class DefaultHttpClient implements HttpClient {
                         @Override
                         public void call(final Subscriber<? super Channel> subscriber) {
                             if (!subscriber.isUnsubscribed()) {
-                                applyChannelFeatures(channel, features);
-                                applyInteractionFeatures(channel, features, subscriber);
+                                RxNettys.applyFeaturesToChannel(channel, 
+                                        HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features, null);
+                                RxNettys.applyFeaturesToChannel(
+                                        channel, 
+                                        HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features, subscriber);
                                 subscriber.onNext(channel);
                                 subscriber.onCompleted();
                             }

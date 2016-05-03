@@ -7,6 +7,8 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
+import org.jocean.http.Feature;
+import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
@@ -53,6 +55,21 @@ public class RxNettys {
         throw new IllegalStateException("No instances!");
     }
 
+    public static void applyFeaturesToChannel(
+            final Channel channel,
+            final HandlerBuilder builder,
+            final Feature[] features,
+            final Subscriber<?> subscriber) {
+        for (Feature feature : features) {
+            final ChannelHandler handler = feature.call(builder, channel.pipeline());
+            if (null != handler && null!=subscriber) {
+                subscriber.add(
+                    Subscriptions.create(
+                        RxNettys.actionToRemoveHandler(channel, handler)));
+            }
+        }
+    }
+    
     public static Action0 actionToRemoveHandler(
         final Channel channel,
         final ChannelHandler handler) {
