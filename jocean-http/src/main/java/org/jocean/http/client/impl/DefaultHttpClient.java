@@ -80,7 +80,9 @@ public class DefaultHttpClient implements HttpClient {
                                         cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
                                         HttpClientConstants.APPLY_HTTPCLIENT);
                         _channelPool.retainChannel(remoteAddress)
-                            .doOnNext(prepareReuseChannel(fullFeatures, responseSubscriber))
+                            .doOnNext(prepareReuseChannel(responseSubscriber))
+                            .flatMap(RxNettys.funcUndoableApplyFeatures(
+                                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures))
                             .doOnNext(processChannel(fullFeatures, responseSubscriber))
                             .flatMap(doSendRequest(request, fullFeatures))
@@ -180,15 +182,11 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     private Action1<Channel> prepareReuseChannel(
-            final Feature[] features,
             final Subscriber<?> subscriber) {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
                 subscriber.add(recycleChannelSubscription(channel));
-                RxNettys.applyFeaturesToChannel(channel,
-                        HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, 
-                        features, subscriber);
             }};
     }
     
@@ -267,23 +265,10 @@ public class DefaultHttpClient implements HttpClient {
                 }
             }})
             .flatMap(RxNettys.funcFutureToChannel())
-            .flatMap(new Func1<Channel, Observable<? extends Channel>>() {
-                @Override
-                public Observable<? extends Channel> call(final Channel channel) {
-                    return Observable.create(new OnSubscribe<Channel>() {
-                        @Override
-                        public void call(final Subscriber<? super Channel> subscriber) {
-                            if (!subscriber.isUnsubscribed()) {
-                                RxNettys.applyFeaturesToChannel(channel, 
-                                        HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features, null);
-                                RxNettys.applyFeaturesToChannel(
-                                        channel, 
-                                        HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features, subscriber);
-                                subscriber.onNext(channel);
-                                subscriber.onCompleted();
-                            }
-                        }});
-                }})
+            .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
+                    HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
+            .flatMap(RxNettys.funcUndoableApplyFeatures(
+                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features))
             .flatMap(RxNettys.funcAsyncConnectTo(remoteAddress))
             .flatMap(RxNettys.funcFutureToChannel());
         if (isSSLEnabled(features)) {

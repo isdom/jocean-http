@@ -166,6 +166,42 @@ public class RxNettys {
             }};
     }
     
+    public static Action1<Channel> actionPermanentlyApplyFeatures(
+            final HandlerBuilder builder,
+            final Feature[] features) {
+        return new Action1<Channel>() {
+            @Override
+            public void call(final Channel channel) {
+                applyFeaturesToChannel(
+                        channel, 
+                        builder, 
+                        features, 
+                        null);
+            }};
+    }
+    
+    public static Func1<Channel, Observable<? extends Channel>> funcUndoableApplyFeatures(
+            final HandlerBuilder builder,
+            final Feature[] features) {
+        return new Func1<Channel, Observable<? extends Channel>>() {
+            @Override
+            public Observable<? extends Channel> call(final Channel channel) {
+                return Observable.create(new OnSubscribe<Channel>() {
+                    @Override
+                    public void call(final Subscriber<? super Channel> subscriber) {
+                        if (!subscriber.isUnsubscribed()) {
+                            applyFeaturesToChannel(
+                                    channel, 
+                                    builder, 
+                                    features, 
+                                    subscriber);
+                            subscriber.onNext(channel);
+                            subscriber.onCompleted();
+                        }
+                    }});
+            }};
+    }
+    
     private final static Func1<Object, Observable<Object>> TONEVER_FLATMAP = 
         new Func1<Object, Observable<Object>>() {
             @Override
