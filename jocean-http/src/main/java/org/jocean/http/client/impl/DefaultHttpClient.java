@@ -94,7 +94,7 @@ public class DefaultHttpClient implements HttpClient {
                                         cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
                                         HttpClientConstants.APPLY_HTTPCLIENT);
                         _channelPool.retainChannel(remoteAddress)
-                            .doOnNext(prepareReuseChannel(fullFeatures, add4release))
+                            .doOnNext(prepareReuseChannel(fullFeatures, responseSubscriber))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures))
                             .doOnNext(processChannel(responseSubscriber, fullFeatures, add4release))
                             .flatMap(doSendRequest(request, fullFeatures))
@@ -205,12 +205,12 @@ public class DefaultHttpClient implements HttpClient {
 
     private Action1<Channel> prepareReuseChannel(
             final Feature[] features,
-            final Action1<Subscription> add4release) {
+            final Subscriber<?> subscriber) {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
-                add4release.call(recycleChannelSubscription(channel));
-                applyInteractionFeatures(channel, features, add4release);
+                subscriber.add(recycleChannelSubscription(channel));
+                applyInteractionFeatures(channel, features, subscriber);
             }};
     }
 
@@ -222,21 +222,6 @@ public class DefaultHttpClient implements HttpClient {
             final Feature[] features) {
         for (Feature feature : features) {
             feature.call(HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, channel.pipeline());
-        }
-    }
-
-    private static void applyInteractionFeatures(
-            final Channel channel,
-            final Feature[] features,
-            final Action1<Subscription> add4release) {
-        for (Feature feature : features) {
-            final ChannelHandler handler = feature.call(
-                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, channel.pipeline());
-            if (null != handler) {
-                add4release.call(
-                    Subscriptions.create(
-                        RxNettys.actionToRemoveHandler(channel, handler)));
-            }
         }
     }
     
