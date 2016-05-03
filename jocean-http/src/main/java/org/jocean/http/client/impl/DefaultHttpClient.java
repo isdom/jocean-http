@@ -5,7 +5,6 @@ package org.jocean.http.client.impl;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
@@ -76,19 +75,6 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Subscriber<? super HttpObject> responseSubscriber) {
                 if (!responseSubscriber.isUnsubscribed()) {
                     try {
-                        final AtomicReference<Subscription> subscriptionRef = new AtomicReference<Subscription>();
-                        final Action1<Subscription> add4release = new Action1<Subscription>() {
-                            @Override
-                            public void call(final Subscription subscription) {
-                                if (null != subscription) {
-                                    if ( null == subscriptionRef.get()) {
-                                        subscriptionRef.set(subscription);
-                                    } else {
-                                        subscriptionRef.set(Subscriptions.from(subscriptionRef.get(), subscription));
-                                    }
-                                }
-                            }};
-                        
                         final Feature[] fullFeatures = 
                                 JOArrays.addFirst(Feature[].class, 
                                         cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
@@ -96,7 +82,7 @@ public class DefaultHttpClient implements HttpClient {
                         _channelPool.retainChannel(remoteAddress)
                             .doOnNext(prepareReuseChannel(fullFeatures, responseSubscriber))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures))
-                            .doOnNext(processChannel(responseSubscriber, fullFeatures, add4release))
+                            .doOnNext(processChannel(fullFeatures, responseSubscriber))
                             .flatMap(doSendRequest(request, fullFeatures))
                             .doOnNext(new Action1<ChannelFuture>() {
                                 @Override
@@ -104,14 +90,6 @@ public class DefaultHttpClient implements HttpClient {
                                     RxNettys.attachFutureToSubscriber(future, responseSubscriber);
                                 }})
                             .flatMap(RxNettys.<ChannelFuture,HttpObject>flatMapByNever())
-                            .doOnUnsubscribe(new Action0() {
-                                @Override
-                                public void call() {
-                                    final Subscription subscription = subscriptionRef.getAndSet(null);
-                                    if (null!=subscription) {
-                                        subscription.unsubscribe();
-                                    }
-                                }})
                             .subscribe(responseSubscriber);
                     } catch (final Throwable e) {
                         responseSubscriber.onError(e);
@@ -123,27 +101,25 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     protected Action1<? super Channel> processChannel(
-            final Subscriber<? super HttpObject> responseSubscriber,
-            final Feature[] fullFeatures, 
-            final Action1<Subscription> add4release) {
+            final Feature[] features,
+            final Subscriber<? super HttpObject> responseSubscriber) {
         final ChannelAware channelAware = 
-                InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])fullFeatures);
+                InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
         final TrafficCounterAware trafficCounterAware = 
-                InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])fullFeatures);
+                InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])features);
         
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
-                attachSubscriberToChannel(channel, responseSubscriber, add4release);
+                attachSubscriberToChannel(channel, responseSubscriber);
                 fillChannelAware(channel, channelAware);
-                hookTrafficCounter(channel, trafficCounterAware, add4release);
+                hookTrafficCounter(channel, trafficCounterAware, responseSubscriber);
             }};
     }
 
     private void attachSubscriberToChannel(
             final Channel channel,
-            final Subscriber<? super HttpObject> responseSubscriber, 
-            final Action1<Subscription> add4release) {
+            final Subscriber<? super HttpObject> responseSubscriber) {
         final ChannelHandler handler = 
             APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), new Subscriber<HttpObject>(responseSubscriber) {
                 @Override
@@ -165,7 +141,7 @@ public class DefaultHttpClient implements HttpClient {
                 public void onNext(final HttpObject httpObj) {
                     responseSubscriber.onNext(httpObj);
                 }});
-        add4release.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
+        responseSubscriber.add(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
     }
 
     private void fillChannelAware(final Channel channel, ChannelAware channelAware) {
@@ -182,10 +158,10 @@ public class DefaultHttpClient implements HttpClient {
     private void hookTrafficCounter(
             final Channel channel,
             final TrafficCounterAware trafficCounterAware, 
-            final Action1<Subscription> add4release) {
+            final Subscriber<?> subscriber) {
         if (null!=trafficCounterAware) {
             try {
-                trafficCounterAware.setTrafficCounter(buildTrafficCounter(channel, add4release));
+                trafficCounterAware.setTrafficCounter(buildTrafficCounter(channel, subscriber));
             } catch (Exception e) {
                 LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
                         channel, ExceptionUtils.exception2detail(e));
@@ -195,11 +171,11 @@ public class DefaultHttpClient implements HttpClient {
 
     private TrafficCounter buildTrafficCounter(
             final Channel channel, 
-            final Action1<Subscription> add4release) {
+            final Subscriber<?> subscriber) {
         final TrafficCounterHandler handler = 
                 (TrafficCounterHandler)APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
         
-        add4release.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
+        subscriber.add(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
         return handler;
     }
 
