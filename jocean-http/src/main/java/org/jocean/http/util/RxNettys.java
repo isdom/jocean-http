@@ -65,8 +65,8 @@ public class RxNettys {
                         if (ctx != null) {
                             pipeline.remove(handler);
                             if (LOG.isDebugEnabled()) {
-                                LOG.debug("actionToRemoveHandler: channel ({}) remove handler({}) success.", 
-                                        channel, ctx.name());
+                                LOG.debug("actionToRemoveHandler: channel ({}) remove handler({}/{}) success.", 
+                                        channel, ctx.name(), handler);
                             }
                         }
                     }}
