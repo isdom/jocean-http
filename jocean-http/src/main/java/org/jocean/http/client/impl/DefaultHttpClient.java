@@ -95,7 +95,7 @@ public class DefaultHttpClient implements HttpClient {
                                         HttpClientConstants.APPLY_HTTPCLIENT);
                         _channelPool.retainChannel(remoteAddress)
                             .doOnNext(prepareReuseChannel(fullFeatures, add4release))
-                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, add4release))
+                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures))
                             .doOnNext(processChannel(responseSubscriber, fullFeatures, add4release))
                             .flatMap(doSendRequest(request, fullFeatures))
                             .doOnNext(new Action1<ChannelFuture>() {
@@ -316,8 +316,7 @@ public class DefaultHttpClient implements HttpClient {
     
     private Observable<? extends Channel> createChannel(
             final SocketAddress remoteAddress, 
-            final Feature[] features, 
-            final Action1<Subscription> add4release) {
+            final Feature[] features) {
         final Observable<? extends Channel> channelObservable = Observable.create(new OnSubscribe<ChannelFuture>() {
             @Override
             public void call(final Subscriber<? super ChannelFuture> futureSubscriber) {
