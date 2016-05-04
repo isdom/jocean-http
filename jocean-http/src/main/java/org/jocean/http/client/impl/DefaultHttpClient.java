@@ -252,7 +252,7 @@ public class DefaultHttpClient implements HttpClient {
     private Observable<? extends Channel> createChannel(
             final SocketAddress remoteAddress, 
             final Feature[] features) {
-        final Observable<? extends Channel> channelObservable = Observable.create(new OnSubscribe<ChannelFuture>() {
+        return Observable.create(new OnSubscribe<ChannelFuture>() {
             @Override
             public void call(final Subscriber<? super ChannelFuture> futureSubscriber) {
                 if (!futureSubscriber.isUnsubscribed()) {
@@ -270,46 +270,9 @@ public class DefaultHttpClient implements HttpClient {
             .flatMap(RxNettys.funcUndoableApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features))
             .flatMap(RxNettys.funcAsyncConnectTo(remoteAddress))
-            .flatMap(RxNettys.funcFutureToChannel());
-        if (isSSLEnabled(features)) {
-            return channelObservable.flatMap(new Func1<Channel, Observable<? extends Channel>> () {
-                @Override
-                public Observable<? extends Channel> call(final Channel channel) {
-                    return Observable.create(new OnSubscribe<Channel>() {
-                        @Override
-                        public void call(final Subscriber<? super Channel> channelSubscriber) {
-                            if (!channelSubscriber.isUnsubscribed()) {
-                                APPLY.SSLNOTIFY.applyTo(channel.pipeline(), 
-                                    new Action1<Channel>() {
-                                        @Override
-                                        public void call(final Channel ch) {
-                                            ChannelPool.Util.setChannelReady(ch);
-                                            channelSubscriber.onNext(ch);
-                                            channelSubscriber.onCompleted();
-                                            if (LOG.isDebugEnabled()) {
-                                                LOG.debug("channel({}): userEventTriggered for ssl handshake success", ch);
-                                            }
-                                        }},
-                                    new Action1<Throwable>() {
-                                        @Override
-                                        public void call(final Throwable e) {
-                                            channelSubscriber.onError(e);
-                                            LOG.warn("channel({}): userEventTriggered for ssl handshake failure:{}",
-                                                    channel,
-                                                    ExceptionUtils.exception2detail(e));
-                                        }});
-                            } else {
-                                LOG.warn("SslHandshakeNotifier: channelSubscriber {} has unsubscribe", channelSubscriber);
-                            }
-                        }});
-                }});
-        } else {
-            return channelObservable.doOnNext(new Action1<Channel>() {
-                @Override
-                public void call(final Channel channel) {
-                    ChannelPool.Util.setChannelReady(channel);
-                }});
-        }
+            .flatMap(RxNettys.funcFutureToChannel())
+            .compose(RxNettys.markChannelWhenReady(isSSLEnabled(features)))
+            ;
     }
 
     private Feature[] cloneFeatures(final Feature[] features) {
