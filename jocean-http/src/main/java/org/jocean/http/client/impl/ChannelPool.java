@@ -3,9 +3,11 @@ package org.jocean.http.client.impl;
 import java.net.SocketAddress;
 
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
 import rx.Observable;
+import rx.functions.Action1;
 
 public interface ChannelPool {
     
@@ -26,6 +28,14 @@ public interface ChannelPool {
         
         public static ChannelPool getChannelPool(final Channel channel) {
             return  channel.attr(POOL_ATTR).get();
+        }
+        
+        public static Action1<ChannelFuture> actionAttachChannelPool(final ChannelPool pool) {
+            return new Action1<ChannelFuture>() {
+                @Override
+                public void call(final ChannelFuture channelFuture) {
+                    attachChannelPool(channelFuture.channel(), pool);
+                }};
         }
     }
 }

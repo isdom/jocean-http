@@ -257,13 +257,13 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Subscriber<? super ChannelFuture> futureSubscriber) {
                 if (!futureSubscriber.isUnsubscribed()) {
                     final ChannelFuture future = _channelCreator.newChannel();
-                    ChannelPool.Util.attachChannelPool(future.channel(), _channelPool);
                     futureSubscriber.add(recycleChannelSubscription(future.channel()));
                     futureSubscriber.add(Subscriptions.from(future));
                     futureSubscriber.onNext(future);  
                     futureSubscriber.onCompleted();
                 }
             }})
+            .doOnNext(ChannelPool.Util.actionAttachChannelPool(_channelPool))
             .flatMap(RxNettys.funcFutureToChannel())
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
