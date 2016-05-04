@@ -22,6 +22,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCounted;
 import rx.functions.Func2;
 
@@ -145,6 +146,16 @@ public class Nettys {
                     return Enum.valueOf(cls, name).ordinal();
                 }
             }};
+    }
+    
+    private static final AttributeKey<Object> READY_ATTR = AttributeKey.valueOf("__READY");
+    
+    public static void setChannelReady(final Channel channel) {
+        channel.attr(READY_ATTR).set(new Object());
+    }
+    
+    public static boolean isChannelReady(final Channel channel) {
+        return null != channel.attr(READY_ATTR).get();
     }
     
     public static byte[] dumpByteBufAsBytes(final ByteBuf bytebuf)

@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 
+import org.jocean.http.util.Nettys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +69,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
     @Override
     public boolean recycleChannel(final Channel channel) {
         if (channel.isActive() 
-            && ChannelPool.Util.isChannelReady(channel)
+            && Nettys.isChannelReady(channel)
             && !isTransactioning(channel)) {
             final SocketAddress address = channel.remoteAddress();
             if (null!=address) {
