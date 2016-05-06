@@ -196,7 +196,7 @@ public class RxNettys {
                                     features, 
                                     subscriber);
                             subscriber.onNext(channel);
-                            subscriber.onCompleted();
+//                            subscriber.onCompleted();
                         }
                     }});
             }};

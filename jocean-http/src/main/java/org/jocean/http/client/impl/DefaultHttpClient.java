@@ -79,11 +79,12 @@ public class DefaultHttpClient implements HttpClient {
                                 JOArrays.addFirst(Feature[].class, 
                                         cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
                                         HttpClientConstants.APPLY_HTTPCLIENT);
+                        //  TODO
                         _channelPool.retainChannel(remoteAddress)
                             .doOnNext(prepareReuseChannel(responseSubscriber))
                             .flatMap(RxNettys.funcUndoableApplyFeatures(
                                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
-                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures))
+                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, responseSubscriber))
                             .doOnNext(processChannel(fullFeatures, responseSubscriber))
                             .flatMap(doSendRequest(request, fullFeatures))
                             .doOnNext(new Action1<ChannelFuture>() {
@@ -251,19 +252,19 @@ public class DefaultHttpClient implements HttpClient {
     
     private Observable<? extends Channel> createChannel(
             final SocketAddress remoteAddress, 
-            final Feature[] features) {
+            final Feature[] features,
+            final Subscriber<?> subscriber) {
         return Observable.create(new OnSubscribe<ChannelFuture>() {
             @Override
             public void call(final Subscriber<? super ChannelFuture> futureSubscriber) {
                 if (!futureSubscriber.isUnsubscribed()) {
                     final ChannelFuture future = _channelCreator.newChannel();
-                    futureSubscriber.add(recycleChannelSubscription(future.channel()));
-                    futureSubscriber.add(Subscriptions.from(future));
+                    subscriber.add(Subscriptions.from(future));
                     futureSubscriber.onNext(future);  
                     futureSubscriber.onCompleted();
                 }
             }})
-            .doOnNext(ChannelPool.Util.actionAttachChannelPool(_channelPool))
+            .doOnNext(ChannelPool.Util.actionEnableRecyclingForChannelFuture(_channelPool, subscriber))
             .flatMap(RxNettys.funcFutureToChannel())
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
