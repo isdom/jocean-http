@@ -87,14 +87,9 @@ public class DefaultHttpClient implements HttpClient {
                             .doOnNext(RxNettys.actionUndoableApplyFeatures(
                                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures, doOnUnsubscribe))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, doOnUnsubscribe))
-                            .doOnNext(processChannel(fullFeatures, responseSubscriber))
+                            .doOnNext(implFeatures(fullFeatures, doOnUnsubscribe))
                             .flatMap(doSendRequest(request, fullFeatures))
-                            .doOnNext(new Action1<ChannelFuture>() {
-                                @Override
-                                public void call(final ChannelFuture future) {
-                                    RxNettys.attachFutureToSubscriber(future, responseSubscriber);
-                                }})
-                            .flatMap(RxNettys.<ChannelFuture,HttpObject>flatMapByNever())
+                            .flatMap(waitforResponse(doOnUnsubscribe))
                             .doOnUnsubscribe(new Action0() {
                                 @Override
                                 public void call() {
@@ -110,9 +105,9 @@ public class DefaultHttpClient implements HttpClient {
             }});
     }
 
-    protected Action1<? super Channel> processChannel(
+    protected Action1<? super Channel> implFeatures(
             final Feature[] features,
-            final Subscriber<? super HttpObject> responseSubscriber) {
+            final DoOnUnsubscribe doOnUnsubscribe) {
         final ChannelAware channelAware = 
                 InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
         final TrafficCounterAware trafficCounterAware = 
@@ -121,37 +116,42 @@ public class DefaultHttpClient implements HttpClient {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
-                attachSubscriberToChannel(channel, responseSubscriber);
                 fillChannelAware(channel, channelAware);
-                hookTrafficCounter(channel, trafficCounterAware, responseSubscriber);
+                hookTrafficCounter(channel, trafficCounterAware, doOnUnsubscribe);
             }};
     }
 
-    private void attachSubscriberToChannel(
-            final Channel channel,
-            final Subscriber<? super HttpObject> responseSubscriber) {
-        final ChannelHandler handler = 
-            APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), new Subscriber<HttpObject>(responseSubscriber) {
-                @Override
-                public void onCompleted() {
-                    final ChannelPool pool = ChannelPool.Util
-                            .getChannelPool(channel);
-                    if (null != pool) {
-                        pool.postReceiveLastContent(channel);
-                    }
-                    responseSubscriber.onCompleted();
-                }
+    private Func1<Channel, Observable<HttpObject>> waitforResponse(final DoOnUnsubscribe doOnUnsubscribe) {
+        return new Func1<Channel, Observable<HttpObject>>() {
+            @Override
+            public Observable<HttpObject> call(final Channel channel) {
+                return Observable.create(new OnSubscribe<HttpObject>() {
+                    @Override
+                    public void call(final Subscriber<? super HttpObject> subscriber) {
+                        final ChannelHandler handler = 
+                                APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), new Subscriber<HttpObject>(subscriber) {
+                                    @Override
+                                    public void onCompleted() {
+                                        final ChannelPool pool = ChannelPool.Util
+                                                .getChannelPool(channel);
+                                        if (null != pool) {
+                                            pool.postReceiveLastContent(channel);
+                                        }
+                                        subscriber.onCompleted();
+                                    }
 
-                @Override
-                public void onError(final Throwable e) {
-                    responseSubscriber.onError(e);
-                }
+                                    @Override
+                                    public void onError(final Throwable e) {
+                                        subscriber.onError(e);
+                                    }
 
-                @Override
-                public void onNext(final HttpObject httpObj) {
-                    responseSubscriber.onNext(httpObj);
-                }});
-        responseSubscriber.add(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
+                                    @Override
+                                    public void onNext(final HttpObject httpObj) {
+                                        subscriber.onNext(httpObj);
+                                    }});
+                        doOnUnsubscribe.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
+                    }});
+            }};
     }
 
     private void fillChannelAware(final Channel channel, ChannelAware channelAware) {
@@ -168,10 +168,10 @@ public class DefaultHttpClient implements HttpClient {
     private void hookTrafficCounter(
             final Channel channel,
             final TrafficCounterAware trafficCounterAware, 
-            final Subscriber<?> subscriber) {
+            final DoOnUnsubscribe doOnUnsubscribe) {
         if (null!=trafficCounterAware) {
             try {
-                trafficCounterAware.setTrafficCounter(buildTrafficCounter(channel, subscriber));
+                trafficCounterAware.setTrafficCounter(buildTrafficCounter(channel, doOnUnsubscribe));
             } catch (Exception e) {
                 LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
                         channel, ExceptionUtils.exception2detail(e));
@@ -181,11 +181,11 @@ public class DefaultHttpClient implements HttpClient {
 
     private TrafficCounter buildTrafficCounter(
             final Channel channel, 
-            final Subscriber<?> subscriber) {
+            final DoOnUnsubscribe doOnUnsubscribe) {
         final TrafficCounterHandler handler = 
                 (TrafficCounterHandler)APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
         
-        subscriber.add(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
+        doOnUnsubscribe.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
         return handler;
     }
 
@@ -201,7 +201,7 @@ public class DefaultHttpClient implements HttpClient {
         return false;
     }
 
-    private Func1<Channel, Observable<ChannelFuture>> doSendRequest(
+    private Func1<Channel, Observable<Channel>> doSendRequest(
             final Observable<? extends Object> request,
             final Feature[] features) {
         final ApplyToRequest applyToRequest = 
@@ -211,16 +211,29 @@ public class DefaultHttpClient implements HttpClient {
                         ApplyToRequest.class, HttpClientConstants._CLS_TO_APPLY2REQ, features),
                     InterfaceUtils.compositeIncludeType(
                         ApplyToRequest.class, (Object[])features));
-        return new Func1<Channel, Observable<ChannelFuture>> () {
+        return new Func1<Channel, Observable<Channel>> () {
             @Override
-            public Observable<ChannelFuture> call(final Channel channel) {
-                return request.doOnNext(doOnRequest(applyToRequest, channel))
-                        .doOnCompleted(new Action0() {
-                            @Override
-                            public void call() {
-                                channel.flush();
-                            }})
-                        .map(DefaultHttpClient.<Object>sendMessage(channel));
+            public Observable<Channel> call(final Channel channel) {
+                return Observable.create(new OnSubscribe<Channel>() {
+                    @Override
+                    public void call(final Subscriber<? super Channel> subscriber) {
+                        request.doOnNext(doOnRequest(applyToRequest, channel))
+                            .doOnCompleted(new Action0() {
+                                @Override
+                                public void call() {
+                                    channel.flush();
+                                    subscriber.onNext(channel);
+                                    subscriber.onCompleted();
+                                }})
+                            .map(DefaultHttpClient.<Object>sendMessage(channel))
+                            .doOnNext(new Action1<ChannelFuture>() {
+                                @Override
+                                public void call(final ChannelFuture future) {
+                                    RxNettys.attachFutureToSubscriber(future, subscriber);
+                                }})
+                            .flatMap(RxNettys.<ChannelFuture,Channel>flatMapByNever())
+                            .subscribe(subscriber);
+                    }});
             }
         };
     }
