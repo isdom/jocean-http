@@ -7,11 +7,9 @@ import io.netty.channel.ChannelFuture;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
 import rx.Observable;
-import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
 public interface ChannelPool {
@@ -35,7 +33,7 @@ public interface ChannelPool {
             return  channel.attr(POOL_ATTR).get();
         }
         
-        public static Action1<ChannelFuture> actionEnableRecyclingForChannelFuture(
+        public static Action1<ChannelFuture> actionEnableRecyclingForNewChannel(
                 final ChannelPool pool,
                 final Subscriber<?> subscriber) {
             return new Action1<ChannelFuture>() {
@@ -52,26 +50,18 @@ public interface ChannelPool {
                 }};
         }
         
-        public static Func1<Channel, Observable<? extends Channel>> funcEnableRecycling() {
-            return new Func1<Channel, Observable<? extends Channel>>() {
+        public static Action1<Channel> actionEnableRecyclingReuseChannel(final Subscriber<?> subscriber) {
+            return new Action1<Channel>() {
                 @Override
-                public Observable<? extends Channel> call(final Channel channel) {
-                    return Observable.create(new OnSubscribe<Channel>() {
+                public void call(final Channel channel) {
+                    subscriber.add(Subscriptions.create(new Action0() {
                         @Override
-                        public void call(final Subscriber<? super Channel> subscriber) {
-                            if (!subscriber.isUnsubscribed()) {
-                                subscriber.add(Subscriptions.create(new Action0() {
-                                        @Override
-                                        public void call() {
-                                            getChannelPool(channel).recycleChannel(channel);
-                                        }
-                                    }));
-                                subscriber.onNext(channel);
-//                                subscriber.onCompleted();
-                            }
+                        public void call() {
+                            getChannelPool(channel).recycleChannel(channel);
                         }
-                    });
-                }};
+                    }));
+                }
+            };
         }
     }
 }

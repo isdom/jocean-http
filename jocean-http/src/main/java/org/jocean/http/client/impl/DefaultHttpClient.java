@@ -39,7 +39,6 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
-import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func1;
@@ -81,7 +80,7 @@ public class DefaultHttpClient implements HttpClient {
                                         HttpClientConstants.APPLY_HTTPCLIENT);
                         //  TODO
                         _channelPool.retainChannel(remoteAddress)
-                            .doOnNext(prepareReuseChannel(responseSubscriber))
+                            .doOnNext(ChannelPool.Util.actionEnableRecyclingReuseChannel(responseSubscriber))
                             .flatMap(RxNettys.funcUndoableApplyFeatures(
                                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, responseSubscriber))
@@ -182,15 +181,6 @@ public class DefaultHttpClient implements HttpClient {
         return handler;
     }
 
-    private Action1<Channel> prepareReuseChannel(
-            final Subscriber<?> subscriber) {
-        return new Action1<Channel>() {
-            @Override
-            public void call(final Channel channel) {
-                subscriber.add(recycleChannelSubscription(channel));
-            }};
-    }
-    
     private static boolean isSSLEnabled(final Feature[] features) {
         if (null == features) {
             return false;
@@ -264,7 +254,7 @@ public class DefaultHttpClient implements HttpClient {
                     futureSubscriber.onCompleted();
                 }
             }})
-            .doOnNext(ChannelPool.Util.actionEnableRecyclingForChannelFuture(_channelPool, subscriber))
+            .doOnNext(ChannelPool.Util.actionEnableRecyclingForNewChannel(_channelPool, subscriber))
             .flatMap(RxNettys.funcFutureToChannel())
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
@@ -288,15 +278,6 @@ public class DefaultHttpClient implements HttpClient {
         return cloned;
     }
 
-    private Subscription recycleChannelSubscription(final Channel channel) {
-        return Subscriptions.create(new Action0() {
-            @Override
-            public void call() {
-                ChannelPool.Util.getChannelPool(channel).recycleChannel(channel);
-            }
-        });
-    }
-    
     public DefaultHttpClient(final int processThreadNumber) {
         this(processThreadNumber, Feature.EMPTY_FEATURES);
     }
