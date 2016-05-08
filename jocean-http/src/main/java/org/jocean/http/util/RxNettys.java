@@ -9,6 +9,7 @@ import java.util.List;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
+import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
@@ -121,7 +122,7 @@ public class RxNettys {
         return (Func1)RETAIN_OBJ;
     }
         
-    public static <V> GenericFutureListener<Future<V>> futureFailure2ErrorListener(final Subscriber<?> subscriber) {
+    public static <V> GenericFutureListener<Future<V>> listenerOfOnError(final Subscriber<?> subscriber) {
         return new GenericFutureListener<Future<V>>() {
             @Override
             public void operationComplete(final Future<V> f)
@@ -135,10 +136,10 @@ public class RxNettys {
     
     public static <V> void attachFutureToSubscriber(final Future<V> future, final Subscriber<?> subscriber) {
         subscriber.add(Subscriptions.from(future));
-        future.addListener(RxNettys.futureFailure2ErrorListener(subscriber));
+        future.addListener(RxNettys.listenerOfOnError(subscriber));
     }
         
-    public static ChannelFutureListener futureSuccess2NextCompletedListener(final Subscriber<? super Channel> subscriber) {
+    public static ChannelFutureListener listenerOfOnNextAndCompleted(final Subscriber<? super Channel> subscriber) {
         return new ChannelFutureListener() {
             @Override
             public void operationComplete(final ChannelFuture f)
@@ -159,26 +160,27 @@ public class RxNettys {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
-                            future.addListener(futureFailure2ErrorListener(subscriber));
-                            future.addListener(futureSuccess2NextCompletedListener(subscriber));
+                            future.addListener(listenerOfOnError(subscriber));
+                            future.addListener(listenerOfOnNextAndCompleted(subscriber));
                         }
                     }});
             }};
     }
     
-    public static Func1<Channel, Observable<? extends ChannelFuture>> funcAsyncConnectTo(
-            final SocketAddress remoteAddress) {
-        return new Func1<Channel, Observable<? extends ChannelFuture>>() {
+    public static Func1<Channel, Observable<? extends Channel>> funcAsyncConnectTo(
+            final SocketAddress remoteAddress,
+            final DoOnUnsubscribe doOnUnsubscribe) {
+        return new Func1<Channel, Observable<? extends Channel>>() {
             @Override
-            public Observable<? extends ChannelFuture> call(final Channel channel) {
-                return Observable.create(new OnSubscribe<ChannelFuture>() {
+            public Observable<? extends Channel> call(final Channel channel) {
+                return Observable.create(new OnSubscribe<Channel>() {
                     @Override
-                    public void call(final Subscriber<? super ChannelFuture> subscriber) {
+                    public void call(final Subscriber<? super Channel> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
                             final ChannelFuture future = channel.connect(remoteAddress);
-                            subscriber.add(Subscriptions.from(future));
-                            subscriber.onNext(future);
-                            subscriber.onCompleted();
+                            doOnUnsubscribe.call(Subscriptions.from(future));
+                            future.addListener(listenerOfOnError(subscriber))
+                                .addListener(listenerOfOnNextAndCompleted(subscriber));
                         }
                     }});
             }};

@@ -268,8 +268,7 @@ public class DefaultHttpClient implements HttpClient {
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
             .doOnNext(RxNettys.actionUndoableApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features, doOnUnsubscribe))
-            .flatMap(RxNettys.funcAsyncConnectTo(remoteAddress))
-            .flatMap(RxNettys.funcFutureToChannel())
+            .flatMap(RxNettys.funcAsyncConnectTo(remoteAddress, doOnUnsubscribe))
             .compose(RxNettys.markChannelWhenReady(isSSLEnabled(features)))
             ;
     }
