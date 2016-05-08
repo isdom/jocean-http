@@ -9,7 +9,6 @@ import io.netty.channel.ChannelFuture;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
 import rx.Observable;
-import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.subscriptions.Subscriptions;
@@ -52,11 +51,11 @@ public interface ChannelPool {
                 }};
         }
         
-        public static Action1<Channel> actionEnableRecyclingReuseChannel(final Subscriber<?> subscriber) {
+        public static Action1<Channel> actionEnableRecyclingReuseChannel(final DoOnUnsubscribe doOnUnsubscribe) {
             return new Action1<Channel>() {
                 @Override
                 public void call(final Channel channel) {
-                    subscriber.add(Subscriptions.create(new Action0() {
+                    doOnUnsubscribe.call(Subscriptions.create(new Action0() {
                         @Override
                         public void call() {
                             getChannelPool(channel).recycleChannel(channel);

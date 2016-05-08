@@ -9,7 +9,6 @@ import java.util.List;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
-import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;

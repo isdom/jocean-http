@@ -83,7 +83,7 @@ public class DefaultHttpClient implements HttpClient {
                         final DefaultDoOnUnsubscribe doOnUnsubscribe = new DefaultDoOnUnsubscribe();
                         
                         _channelPool.retainChannel(remoteAddress)
-                            .doOnNext(ChannelPool.Util.actionEnableRecyclingReuseChannel(responseSubscriber))
+                            .doOnNext(ChannelPool.Util.actionEnableRecyclingReuseChannel(doOnUnsubscribe))
                             .doOnNext(RxNettys.actionUndoableApplyFeatures(
                                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures, doOnUnsubscribe))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, doOnUnsubscribe))
