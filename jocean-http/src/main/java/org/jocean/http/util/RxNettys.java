@@ -180,25 +180,18 @@ public class RxNettys {
             }};
     }
     
-    public static Func1<Channel, Observable<? extends Channel>> funcUndoableApplyFeatures(
+    public static Action1<Channel> actionUndoableApplyFeatures(
             final HandlerBuilder builder,
-            final Feature[] features) {
-        return new Func1<Channel, Observable<? extends Channel>>() {
+            final Feature[] features,
+            final Subscriber<?> subscriber) {
+        return new Action1<Channel>() {
             @Override
-            public Observable<? extends Channel> call(final Channel channel) {
-                return Observable.create(new OnSubscribe<Channel>() {
-                    @Override
-                    public void call(final Subscriber<? super Channel> subscriber) {
-                        if (!subscriber.isUnsubscribed()) {
-                            applyFeaturesToChannel(
-                                    channel, 
-                                    builder, 
-                                    features, 
-                                    subscriber);
-                            subscriber.onNext(channel);
-//                            subscriber.onCompleted();
-                        }
-                    }});
+            public void call(final Channel channel) {
+                applyFeaturesToChannel(
+                        channel, 
+                        builder, 
+                        features, 
+                        subscriber);
             }};
     }
     

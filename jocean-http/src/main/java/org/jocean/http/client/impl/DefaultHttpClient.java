@@ -81,8 +81,8 @@ public class DefaultHttpClient implements HttpClient {
                         //  TODO
                         _channelPool.retainChannel(remoteAddress)
                             .doOnNext(ChannelPool.Util.actionEnableRecyclingReuseChannel(responseSubscriber))
-                            .flatMap(RxNettys.funcUndoableApplyFeatures(
-                                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
+                            .doOnNext(RxNettys.actionUndoableApplyFeatures(
+                                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures, responseSubscriber))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, responseSubscriber))
                             .doOnNext(processChannel(fullFeatures, responseSubscriber))
                             .flatMap(doSendRequest(request, fullFeatures))
@@ -258,8 +258,8 @@ public class DefaultHttpClient implements HttpClient {
             .flatMap(RxNettys.funcFutureToChannel())
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
-            .flatMap(RxNettys.funcUndoableApplyFeatures(
-                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features))
+            .doOnNext(RxNettys.actionUndoableApplyFeatures(
+                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features, subscriber))
             .flatMap(RxNettys.funcAsyncConnectTo(remoteAddress))
             .flatMap(RxNettys.funcFutureToChannel())
             .compose(RxNettys.markChannelWhenReady(isSSLEnabled(features)))
