@@ -1,5 +1,16 @@
 package org.jocean.http;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.util.Iterator;
+
+import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.impl.DefaultHttpClient;
+import org.jocean.http.util.RxNettys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
@@ -12,19 +23,6 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.ReferenceCountUtil;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.InetSocketAddress;
-import java.util.Iterator;
-
-import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.Outbound;
-import org.jocean.http.client.impl.DefaultHttpClient;
-import org.jocean.http.util.RxNettys;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import rx.Observable;
 
 public class SslDemo {
@@ -79,7 +77,6 @@ public class SslDemo {
                         Feature.ENABLE_LOGGING,
                         new Feature.ENABLE_SSL(sslCtx)
                         )
-                    .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
@@ -94,7 +91,6 @@ public class SslDemo {
                         Feature.ENABLE_LOGGING,
                         new Feature.ENABLE_SSL(sslCtx)
                         )
-                    .compose(RxNettys.objects2httpobjs())
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 

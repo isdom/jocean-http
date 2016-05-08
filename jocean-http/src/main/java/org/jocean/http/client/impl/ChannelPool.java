@@ -2,6 +2,8 @@ package org.jocean.http.client.impl;
 
 import java.net.SocketAddress;
 
+import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
+
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.handler.codec.http.HttpRequest;
@@ -35,13 +37,13 @@ public interface ChannelPool {
         
         public static Action1<ChannelFuture> actionEnableRecyclingForNewChannel(
                 final ChannelPool pool,
-                final Subscriber<?> subscriber) {
+                final DoOnUnsubscribe doOnUnsubscribe) {
             return new Action1<ChannelFuture>() {
                 @Override
                 public void call(final ChannelFuture channelFuture) {
                     final Channel channel = channelFuture.channel();
                     attachChannelPool(channel, pool);
-                    subscriber.add(Subscriptions.create(new Action0() {
+                    doOnUnsubscribe.call(Subscriptions.create(new Action0() {
                             @Override
                             public void call() {
                                 getChannelPool(channel).recycleChannel(channel);

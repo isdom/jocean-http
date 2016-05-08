@@ -14,6 +14,8 @@ import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
+import org.jocean.http.util.RxNettys.DefaultDoOnUnsubscribe;
+import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 import org.jocean.http.util.TrafficCounterAware;
 import org.jocean.http.util.TrafficCounterHandler;
 import org.jocean.idiom.ExceptionUtils;
@@ -78,12 +80,13 @@ public class DefaultHttpClient implements HttpClient {
                                 JOArrays.addFirst(Feature[].class, 
                                         cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
                                         HttpClientConstants.APPLY_HTTPCLIENT);
-                        //  TODO
+                        final DefaultDoOnUnsubscribe doOnUnsubscribe = new DefaultDoOnUnsubscribe();
+                        
                         _channelPool.retainChannel(remoteAddress)
                             .doOnNext(ChannelPool.Util.actionEnableRecyclingReuseChannel(responseSubscriber))
                             .doOnNext(RxNettys.actionUndoableApplyFeatures(
-                                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures, responseSubscriber))
-                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, responseSubscriber))
+                                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures, doOnUnsubscribe))
+                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, doOnUnsubscribe))
                             .doOnNext(processChannel(fullFeatures, responseSubscriber))
                             .flatMap(doSendRequest(request, fullFeatures))
                             .doOnNext(new Action1<ChannelFuture>() {
@@ -92,6 +95,11 @@ public class DefaultHttpClient implements HttpClient {
                                     RxNettys.attachFutureToSubscriber(future, responseSubscriber);
                                 }})
                             .flatMap(RxNettys.<ChannelFuture,HttpObject>flatMapByNever())
+                            .doOnUnsubscribe(new Action0() {
+                                @Override
+                                public void call() {
+                                    doOnUnsubscribe.unsubscribe();
+                                }})
                             .subscribe(responseSubscriber);
                     } catch (final Throwable e) {
                         responseSubscriber.onError(e);
@@ -243,23 +251,23 @@ public class DefaultHttpClient implements HttpClient {
     private Observable<? extends Channel> createChannel(
             final SocketAddress remoteAddress, 
             final Feature[] features,
-            final Subscriber<?> subscriber) {
+            final DoOnUnsubscribe doOnUnsubscribe) {
         return Observable.create(new OnSubscribe<ChannelFuture>() {
             @Override
             public void call(final Subscriber<? super ChannelFuture> futureSubscriber) {
                 if (!futureSubscriber.isUnsubscribed()) {
                     final ChannelFuture future = _channelCreator.newChannel();
-                    subscriber.add(Subscriptions.from(future));
-                    futureSubscriber.onNext(future);  
+                    doOnUnsubscribe.call(Subscriptions.from(future));
+                    futureSubscriber.onNext(future);
                     futureSubscriber.onCompleted();
                 }
             }})
-            .doOnNext(ChannelPool.Util.actionEnableRecyclingForNewChannel(_channelPool, subscriber))
+            .doOnNext(ChannelPool.Util.actionEnableRecyclingForNewChannel(_channelPool, doOnUnsubscribe))
             .flatMap(RxNettys.funcFutureToChannel())
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
             .doOnNext(RxNettys.actionUndoableApplyFeatures(
-                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features, subscriber))
+                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features, doOnUnsubscribe))
             .flatMap(RxNettys.funcAsyncConnectTo(remoteAddress))
             .flatMap(RxNettys.funcFutureToChannel())
             .compose(RxNettys.markChannelWhenReady(isSSLEnabled(features)))

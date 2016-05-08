@@ -46,6 +46,7 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Actions;
 import rx.functions.Func1;
+import rx.internal.util.SubscriptionList;
 import rx.subscriptions.Subscriptions;
 
 public class RxNettys {
@@ -55,15 +56,32 @@ public class RxNettys {
         throw new IllegalStateException("No instances!");
     }
 
+    public interface DoOnUnsubscribe extends Action1<Subscription> {
+    }
+    
+    static public class DefaultDoOnUnsubscribe implements DoOnUnsubscribe {
+
+        @Override
+        public void call(Subscription s) {
+            this._subscriptionList.add(s);
+        }
+        
+        public void unsubscribe() {
+            this._subscriptionList.unsubscribe();
+        }
+        
+        final private SubscriptionList _subscriptionList = new SubscriptionList();
+    }
+    
     public static void applyFeaturesToChannel(
             final Channel channel,
             final HandlerBuilder builder,
             final Feature[] features,
-            final Subscriber<?> subscriber) {
+            final DoOnUnsubscribe doOnUnsubscribe) {
         for (Feature feature : features) {
             final ChannelHandler handler = feature.call(builder, channel.pipeline());
-            if (null != handler && null!=subscriber) {
-                subscriber.add(
+            if (null != handler && null!=doOnUnsubscribe) {
+                doOnUnsubscribe.call(
                     Subscriptions.create(
                         RxNettys.actionToRemoveHandler(channel, handler)));
             }
@@ -183,7 +201,7 @@ public class RxNettys {
     public static Action1<Channel> actionUndoableApplyFeatures(
             final HandlerBuilder builder,
             final Feature[] features,
-            final Subscriber<?> subscriber) {
+            final DoOnUnsubscribe doOnUnsubscribe) {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
@@ -191,7 +209,7 @@ public class RxNettys {
                         channel, 
                         builder, 
                         features, 
-                        subscriber);
+                        doOnUnsubscribe);
             }};
     }
     
@@ -289,28 +307,6 @@ public class RxNettys {
             return !(obj instanceof HttpObject);
         }};
         
-    private static final Func1<Object,Boolean> _ISHTTPOBJ = new Func1<Object, Boolean>() {
-        @Override
-        public Boolean call(final Object obj) {
-            return obj instanceof HttpObject;
-        }};
-    private static final Func1<Object,HttpObject> _OBJ2HTTPOBJ = new Func1<Object, HttpObject> (){
-        @Override
-        public HttpObject call(final Object obj) {
-            return (HttpObject)obj;
-        }};
-        
-    private static final Transformer<Object, HttpObject> _OBJS2HTTPOBJS = 
-        new Transformer<Object, HttpObject>() {
-        @Override
-        public Observable<HttpObject> call(final Observable<Object> objs) {
-            return objs.filter(_ISHTTPOBJ).map(_OBJ2HTTPOBJ);
-        }};
-        
-    public static Transformer<Object, HttpObject> objects2httpobjs() {
-        return _OBJS2HTTPOBJS;
-    }
-    
     public static <T> void releaseObjects(final Collection<T> objs) {
         synchronized (objs) {
             try {

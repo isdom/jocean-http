@@ -152,7 +152,6 @@ public class HttpServerDemo {
                 client.defineInteraction(
                 new LocalAddress("test"), 
                 Observable.just(request))
-                .compose(RxNettys.objects2httpobjs())
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
             
