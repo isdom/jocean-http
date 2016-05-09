@@ -175,26 +175,15 @@ public class DefaultHttpClient implements HttpClient {
         return new Func1<Channel, Observable<? extends Channel>> () {
             @Override
             public Observable<? extends Channel> call(final Channel channel) {
-                return Observable.create(new OnSubscribe<Channel>() {
-                    @Override
-                    public void call(final Subscriber<? super Channel> subscriber) {
-                        request.doOnNext(doOnRequest(features, channel))
-                            .doOnCompleted(new Action0() {
-                                @Override
-                                public void call() {
-                                    channel.flush();
-                                    subscriber.onNext(channel);
-                                    subscriber.onCompleted();
-                                }})
-                            .map(DefaultHttpClient.<Object>sendMessage(channel, doOnUnsubscribe))
-                            .doOnNext(new Action1<ChannelFuture>() {
-                                @Override
-                                public void call(final ChannelFuture future) {
-                                    RxNettys.attachFutureToSubscriber(future, subscriber);
-                                }})
-                            .flatMap(RxNettys.<ChannelFuture,Channel>flatMapByNever())
-                            .subscribe(subscriber);
-                    }});
+                return request.doOnNext(doOnRequest(features, channel))
+                    .doOnCompleted(new Action0() {
+                        @Override
+                        public void call() {
+                            channel.flush();
+                        }})
+                    .map(DefaultHttpClient.<Object>sendMessage(channel, doOnUnsubscribe))
+                    .flatMap(RxNettys.funcFutureToChannel())
+                    .last();
             }
         };
     }

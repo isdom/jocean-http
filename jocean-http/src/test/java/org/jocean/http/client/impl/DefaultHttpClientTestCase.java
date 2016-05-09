@@ -405,7 +405,7 @@ public class DefaultHttpClientTestCase {
         }
     }
 
-    @Test(timeout=2000)
+    @Test(timeout=10000)
     public void testHttpSendingError1stAnd2ndHappyPathNotReuseConnection() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
@@ -1139,7 +1139,7 @@ public class DefaultHttpClientTestCase {
         }
     }
     
-    @Test(timeout=2000)
+    @Test(timeout=10000)
     public void testHttpClientWriteAndFlushExceptionAfterConnected() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
@@ -1219,7 +1219,7 @@ public class DefaultHttpClientTestCase {
         }
     }
     
-    @Test(timeout=2000)
+    @Test(timeout=10000)
     public void testHttpClientWriteAndFlushExceptionAfterConnectedAndNewConnection2nd() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
