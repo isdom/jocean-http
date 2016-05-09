@@ -88,7 +88,7 @@ public class DefaultHttpClient implements HttpClient {
                                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures, doOnUnsubscribe))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, doOnUnsubscribe))
                             .doOnNext(implFeatures(fullFeatures, doOnUnsubscribe))
-                            .flatMap(sendRequest(request, fullFeatures))
+                            .flatMap(sendRequest(request, fullFeatures, doOnUnsubscribe))
                             .flatMap(waitforResponse(doOnUnsubscribe))
                             .doOnUnsubscribe(new Action0() {
                                 @Override
@@ -168,9 +168,10 @@ public class DefaultHttpClient implements HttpClient {
         return false;
     }
 
-    private Func1<Channel, Observable<Channel>> sendRequest(
+    private Func1<Channel, Observable<? extends Channel>> sendRequest(
             final Observable<? extends Object> request,
-            final Feature[] features) {
+            final Feature[] features, 
+            final DoOnUnsubscribe doOnUnsubscribe) {
         final ApplyToRequest applyToRequest = 
                 InterfaceUtils.compositeIncludeType(
                     ApplyToRequest.class,
@@ -178,9 +179,9 @@ public class DefaultHttpClient implements HttpClient {
                         ApplyToRequest.class, HttpClientConstants._CLS_TO_APPLY2REQ, features),
                     InterfaceUtils.compositeIncludeType(
                         ApplyToRequest.class, (Object[])features));
-        return new Func1<Channel, Observable<Channel>> () {
+        return new Func1<Channel, Observable<? extends Channel>> () {
             @Override
-            public Observable<Channel> call(final Channel channel) {
+            public Observable<? extends Channel> call(final Channel channel) {
                 return Observable.create(new OnSubscribe<Channel>() {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {
@@ -192,7 +193,7 @@ public class DefaultHttpClient implements HttpClient {
                                     subscriber.onNext(channel);
                                     subscriber.onCompleted();
                                 }})
-                            .map(DefaultHttpClient.<Object>sendMessage(channel))
+                            .map(DefaultHttpClient.<Object>sendMessage(channel, doOnUnsubscribe))
                             .doOnNext(new Action1<ChannelFuture>() {
                                 @Override
                                 public void call(final ChannelFuture future) {
@@ -205,11 +206,34 @@ public class DefaultHttpClient implements HttpClient {
         };
     }
 
-    private static <M> Func1<M, ChannelFuture> sendMessage(final Channel channel) {
+    private Action1<Object> doOnRequest(final ApplyToRequest applyToRequest, final Channel channel) {
+        return new Action1<Object> () {
+            @Override
+            public void call(final Object msg) {
+                if (msg instanceof HttpRequest) {
+                    if (null!=applyToRequest) {
+                        try {
+                            applyToRequest.call((HttpRequest)msg);
+                        } catch (Exception e) {
+                            LOG.warn("exception when invoke applyToRequest.call, detail: {}",
+                                    ExceptionUtils.exception2detail(e));
+                        }
+                    }
+                    _channelPool.preSendRequest(channel, (HttpRequest)msg);
+                }
+            }
+        };
+    }
+    
+    private static <M> Func1<M, ChannelFuture> sendMessage(
+            final Channel channel, 
+            final DoOnUnsubscribe doOnUnsubscribe) {
         return new Func1<M, ChannelFuture>() {
             @Override
             public ChannelFuture call(final M msg) {
-                return channel.write(ReferenceCountUtil.retain(msg));
+                final ChannelFuture future = channel.write(ReferenceCountUtil.retain(msg));
+                doOnUnsubscribe.call(Subscriptions.from(future));
+                return future;
             }
         };
     }
@@ -247,20 +271,6 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
 
-    private Action1<Object> doOnRequest(final ApplyToRequest applyToRequest, final Channel channel) {
-        return new Action1<Object> () {
-            @Override
-            public void call(final Object msg) {
-                if (msg instanceof HttpRequest) {
-                    if (null!=applyToRequest) {
-                        applyToRequest.call((HttpRequest)msg);
-                    }
-                    _channelPool.preSendRequest(channel, (HttpRequest)msg);
-                }
-            }
-        };
-    }
-    
     private Observable<? extends Channel> createChannel(
             final SocketAddress remoteAddress, 
             final Feature[] features,
