@@ -172,20 +172,13 @@ public class DefaultHttpClient implements HttpClient {
             final Observable<? extends Object> request,
             final Feature[] features, 
             final DoOnUnsubscribe doOnUnsubscribe) {
-        final ApplyToRequest applyToRequest = 
-                InterfaceUtils.compositeIncludeType(
-                    ApplyToRequest.class,
-                    InterfaceUtils.compositeBySource(
-                        ApplyToRequest.class, HttpClientConstants._CLS_TO_APPLY2REQ, features),
-                    InterfaceUtils.compositeIncludeType(
-                        ApplyToRequest.class, (Object[])features));
         return new Func1<Channel, Observable<? extends Channel>> () {
             @Override
             public Observable<? extends Channel> call(final Channel channel) {
                 return Observable.create(new OnSubscribe<Channel>() {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {
-                        request.doOnNext(doOnRequest(applyToRequest, channel))
+                        request.doOnNext(doOnRequest(features, channel))
                             .doOnCompleted(new Action0() {
                                 @Override
                                 public void call() {
@@ -206,7 +199,14 @@ public class DefaultHttpClient implements HttpClient {
         };
     }
 
-    private Action1<Object> doOnRequest(final ApplyToRequest applyToRequest, final Channel channel) {
+    private Action1<Object> doOnRequest(final Feature[] features, final Channel channel) {
+        final ApplyToRequest applyToRequest = 
+                InterfaceUtils.compositeIncludeType(
+                    ApplyToRequest.class,
+                    InterfaceUtils.compositeBySource(
+                        ApplyToRequest.class, HttpClientConstants._CLS_TO_APPLY2REQ, features),
+                    InterfaceUtils.compositeIncludeType(
+                        ApplyToRequest.class, (Object[])features));
         return new Action1<Object> () {
             @Override
             public void call(final Object msg) {
