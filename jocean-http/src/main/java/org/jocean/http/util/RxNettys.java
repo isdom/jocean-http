@@ -185,6 +185,31 @@ public class RxNettys {
             }};
     }
     
+    public static <M> Transformer<M, Channel> sendRequestAndReturnChannel(
+            final Channel channel, 
+            final DoOnUnsubscribe doOnUnsubscribe) {
+        return new Transformer<M, Channel>() {
+            @Override
+            public Observable<Channel> call(final Observable<M> request) {
+                return request.doOnCompleted(new Action0() {
+                          @Override
+                          public void call() {
+                              channel.flush();
+                          }})
+                      .map(new Func1<M, ChannelFuture>() {
+                          @Override
+                          public ChannelFuture call(final M msg) {
+                              final ChannelFuture future = channel.write(ReferenceCountUtil.retain(msg));
+                              doOnUnsubscribe.call(Subscriptions.from(future));
+                              return future;
+                          }
+                      })
+                      .flatMap(funcFutureToChannel())
+                      .last();
+            };
+        };
+    }
+    
     public static Action1<Channel> actionPermanentlyApplyFeatures(
             final HandlerBuilder builder,
             final Feature[] features) {

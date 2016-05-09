@@ -35,7 +35,6 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
@@ -62,10 +61,6 @@ public class DefaultHttpClient implements HttpClient {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
     
-    /* (non-Javadoc)
-     * @see org.jocean.http.client.HttpClient#sendRequest(java.net.URI, rx.Observable)
-     * eg: new SocketAddress(this._uri.getHost(), this._uri.getPort()))
-     */
     @Override
     public Observable<? extends HttpObject> defineInteraction(
             final SocketAddress remoteAddress,
@@ -176,14 +171,7 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public Observable<? extends Channel> call(final Channel channel) {
                 return request.doOnNext(doOnRequest(features, channel))
-                    .doOnCompleted(new Action0() {
-                        @Override
-                        public void call() {
-                            channel.flush();
-                        }})
-                    .map(DefaultHttpClient.<Object>sendMessage(channel, doOnUnsubscribe))
-                    .flatMap(RxNettys.funcFutureToChannel())
-                    .last();
+                    .compose(RxNettys.<Object>sendRequestAndReturnChannel(channel, doOnUnsubscribe));
             }
         };
     }
@@ -210,19 +198,6 @@ public class DefaultHttpClient implements HttpClient {
                     }
                     _channelPool.preSendRequest(channel, (HttpRequest)msg);
                 }
-            }
-        };
-    }
-    
-    private static <M> Func1<M, ChannelFuture> sendMessage(
-            final Channel channel, 
-            final DoOnUnsubscribe doOnUnsubscribe) {
-        return new Func1<M, ChannelFuture>() {
-            @Override
-            public ChannelFuture call(final M msg) {
-                final ChannelFuture future = channel.write(ReferenceCountUtil.retain(msg));
-                doOnUnsubscribe.call(Subscriptions.from(future));
-                return future;
             }
         };
     }
