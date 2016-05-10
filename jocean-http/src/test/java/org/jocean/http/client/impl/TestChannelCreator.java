@@ -9,6 +9,10 @@ import io.netty.channel.ChannelOutboundBuffer;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalEventLoopGroup;
+import rx.Observable;
+import rx.Subscriber;
+import rx.Observable.OnSubscribe;
+import rx.subscriptions.Subscriptions;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -18,6 +22,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -93,13 +98,21 @@ public class TestChannelCreator implements ChannelCreator {
     }
 
     @Override
-    public ChannelFuture newChannel() {
-        final ChannelFuture future = this._bootstrap.register();
-        if ( LOG.isDebugEnabled() ) {
-            LOG.debug("create new test channel: {}", future.channel());
-        }
-        _channels.add((TestChannel)future.channel());
-        return future;
+    public Observable<? extends ChannelFuture> newChannel(final DoOnUnsubscribe doOnUnsubscribe) {
+        return Observable.create(new OnSubscribe<ChannelFuture>() {
+            @Override
+            public void call(final Subscriber<? super ChannelFuture> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    final ChannelFuture future = _bootstrap.register();
+                    if ( LOG.isDebugEnabled() ) {
+                        LOG.debug("create new test channel: {}", future.channel());
+                    }
+                    _channels.add((TestChannel)future.channel());
+                    doOnUnsubscribe.call(Subscriptions.from(future));
+                    subscriber.onNext(future);
+                    subscriber.onCompleted();
+                }
+            }});
     }
     
     public List<TestChannel> getChannels() {

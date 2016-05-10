@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -215,16 +214,7 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress, 
             final Feature[] features,
             final DoOnUnsubscribe doOnUnsubscribe) {
-        return Observable.create(new OnSubscribe<ChannelFuture>() {
-            @Override
-            public void call(final Subscriber<? super ChannelFuture> futureSubscriber) {
-                if (!futureSubscriber.isUnsubscribed()) {
-                    final ChannelFuture future = _channelCreator.newChannel();
-                    doOnUnsubscribe.call(Subscriptions.from(future));
-                    futureSubscriber.onNext(future);
-                    futureSubscriber.onCompleted();
-                }
-            }})
+        return this._channelCreator.newChannel(doOnUnsubscribe)
             .doOnNext(ChannelPool.Util.actionEnableRecyclingForNewChannel(_channelPool, doOnUnsubscribe))
             .flatMap(RxNettys.funcFutureToChannel())
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
@@ -232,8 +222,7 @@ public class DefaultHttpClient implements HttpClient {
             .doOnNext(RxNettys.actionUndoableApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features, doOnUnsubscribe))
             .flatMap(RxNettys.funcAsyncConnectTo(remoteAddress, doOnUnsubscribe))
-            .compose(RxNettys.markChannelWhenReady(isSSLEnabled(features)))
-            ;
+            .compose(RxNettys.markChannelWhenReady(isSSLEnabled(features)));
     }
 
     private Feature[] cloneFeatures(final Feature[] features) {

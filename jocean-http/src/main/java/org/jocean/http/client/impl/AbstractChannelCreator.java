@@ -7,11 +7,16 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
+import rx.Observable;
+import rx.Subscriber;
+import rx.Observable.OnSubscribe;
+import rx.subscriptions.Subscriptions;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 import org.jocean.idiom.Ordered;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,16 +75,21 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
             .syncUninterruptibly();
     }
 
-    /* (non-Javadoc)
-     * @see org.jocean.http.client.impl.ChannelCreator#newChannel()
-     */
     @Override
-    public ChannelFuture newChannel() {
-        final ChannelFuture future = this._bootstrap.register();
-        if ( LOG.isDebugEnabled() ) {
-            LOG.debug("create new channel: {}", future.channel());
-        }
-        return future;
+    public Observable<? extends ChannelFuture> newChannel(final DoOnUnsubscribe doOnUnsubscribe) {
+        return Observable.create(new OnSubscribe<ChannelFuture>() {
+            @Override
+            public void call(final Subscriber<? super ChannelFuture> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    final ChannelFuture future = _bootstrap.register();
+                    if ( LOG.isDebugEnabled() ) {
+                        LOG.debug("create new channel: {}", future.channel());
+                    }
+                    doOnUnsubscribe.call(Subscriptions.from(future));
+                    subscriber.onNext(future);
+                    subscriber.onCompleted();
+                }
+            }});
     }
     
     public int getActiveChannelCount() {
