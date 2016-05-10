@@ -34,7 +34,7 @@ public interface ChannelPool {
             return  channel.attr(POOL_ATTR).get();
         }
         
-        public static Action1<ChannelFuture> actionEnableRecyclingForNewChannel(
+        public static Action1<ChannelFuture> enableRecycleForNewChannel(
                 final ChannelPool pool,
                 final DoOnUnsubscribe doOnUnsubscribe) {
             return new Action1<ChannelFuture>() {
@@ -51,7 +51,8 @@ public interface ChannelPool {
                 }};
         }
         
-        public static Action1<Channel> actionEnableRecyclingReuseChannel(final DoOnUnsubscribe doOnUnsubscribe) {
+        public static Action1<Channel> enableRecycleForReuseChannel(
+                final DoOnUnsubscribe doOnUnsubscribe) {
             return new Action1<Channel>() {
                 @Override
                 public void call(final Channel channel) {
