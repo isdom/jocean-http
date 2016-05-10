@@ -39,7 +39,6 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
-import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
@@ -80,7 +79,7 @@ public class DefaultHttpClient implements HttpClient {
                             .doOnNext(ChannelPool.Util.enableRecycleForReuseChannel(doOnUnsubscribe))
                             .doOnNext(RxNettys.actionUndoableApplyFeatures(
                                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures, doOnUnsubscribe))
-                            .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, doOnUnsubscribe))
+                            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures, doOnUnsubscribe))
                             .doOnNext(implFeatures(fullFeatures, doOnUnsubscribe))
                             .flatMap(sendRequestThenPushChannel(request, fullFeatures, doOnUnsubscribe))
                             .flatMap(waitforResponse(doOnUnsubscribe))
@@ -166,6 +165,7 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public Observable<? extends Channel> call(final Channel channel) {
                 return request.doOnNext(doOnRequest(features, channel))
+                    .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
                     .compose(RxNettys.<Object>sendRequestThenPushChannel(channel, doOnUnsubscribe));
             }
         };
@@ -191,7 +191,6 @@ public class DefaultHttpClient implements HttpClient {
                                     ExceptionUtils.exception2detail(e));
                         }
                     }
-                    _channelPool.preSendRequest(channel, (HttpRequest)msg);
                 }
             }
         };
@@ -202,15 +201,11 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public Observable<? extends HttpObject> call(final Channel channel) {
                 return RxNettys.waitforHttpResponse(doOnUnsubscribe).call(channel)
-                    .doOnCompleted(new Action0() {
-                        @Override
-                        public void call() {
-                            _channelPool.postReceiveLastContent(channel);
-                        }});
+                    .compose(ChannelPool.Util.hookPostReceiveLastContent(channel));
             }};
     }
 
-    private Observable<? extends Channel> createChannel(
+    private Observable<? extends Channel> createChannelAndConnectTo(
             final SocketAddress remoteAddress, 
             final Feature[] features,
             final DoOnUnsubscribe doOnUnsubscribe) {
@@ -222,7 +217,7 @@ public class DefaultHttpClient implements HttpClient {
             .doOnNext(RxNettys.actionUndoableApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features, doOnUnsubscribe))
             .flatMap(RxNettys.funcAsyncConnectTo(remoteAddress, doOnUnsubscribe))
-            .compose(RxNettys.markChannelWhenReady(isSSLEnabled(features)));
+            .compose(RxNettys.markAndPushChannelWhenReady(isSSLEnabled(features)));
     }
 
     private Feature[] cloneFeatures(final Feature[] features) {

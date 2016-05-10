@@ -249,7 +249,7 @@ public class RxNettys {
             }};
     }
     
-    public static Transformer<? super Channel, ? extends Channel> markChannelWhenReady(final boolean isSSLEnabled) {
+    public static Transformer<? super Channel, ? extends Channel> markAndPushChannelWhenReady(final boolean isSSLEnabled) {
         return new Transformer<Channel, Channel>() {
             @Override
             public Observable<Channel> call(final Observable<Channel> source) {
