@@ -185,7 +185,7 @@ public class RxNettys {
             }};
     }
     
-    public static <M> Transformer<M, Channel> sendRequestAndReturnChannel(
+    public static <M> Transformer<M, Channel> sendRequestThenPushChannel(
             final Channel channel, 
             final DoOnUnsubscribe doOnUnsubscribe) {
         return new Transformer<M, Channel>() {
@@ -285,16 +285,19 @@ public class RxNettys {
             }};
     }
     
-    private final static Func1<Object, Observable<Object>> TONEVER_FLATMAP = 
-        new Func1<Object, Observable<Object>>() {
+    public static Func1<Channel, Observable<? extends HttpObject>> waitforHttpResponse(final DoOnUnsubscribe doOnUnsubscribe) {
+        return new Func1<Channel, Observable<? extends HttpObject>>() {
             @Override
-            public Observable<Object> call(final Object source) {
-                return Observable.never();
-            }};
-    
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    public static <SRC, DST> Func1<SRC, Observable<? extends DST>>  flatMapByNever() {
-        return (Func1)TONEVER_FLATMAP;
+            public Observable<? extends HttpObject> call(final Channel channel) {
+                return Observable.create(new OnSubscribe<HttpObject>() {
+                    @Override
+                    public void call(final Subscriber<? super HttpObject> subscriber) {
+                        doOnUnsubscribe.call(
+                            Subscriptions.create(RxNettys.actionToRemoveHandler(channel, 
+                                APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
+                    }});
+            };
+        };
     }
     
     public static Subscription subscriptionFrom(final Channel channel) {

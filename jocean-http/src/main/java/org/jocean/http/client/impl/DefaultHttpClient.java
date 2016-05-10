@@ -29,7 +29,6 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -83,7 +82,7 @@ public class DefaultHttpClient implements HttpClient {
                                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures, doOnUnsubscribe))
                             .onErrorResumeNext(createChannel(remoteAddress, fullFeatures, doOnUnsubscribe))
                             .doOnNext(implFeatures(fullFeatures, doOnUnsubscribe))
-                            .flatMap(sendRequest(request, fullFeatures, doOnUnsubscribe))
+                            .flatMap(sendRequestThenPushChannel(request, fullFeatures, doOnUnsubscribe))
                             .flatMap(waitforResponse(doOnUnsubscribe))
                             .doOnUnsubscribe(new Action0() {
                                 @Override
@@ -163,7 +162,7 @@ public class DefaultHttpClient implements HttpClient {
         return false;
     }
 
-    private Func1<Channel, Observable<? extends Channel>> sendRequest(
+    private Func1<Channel, Observable<? extends Channel>> sendRequestThenPushChannel(
             final Observable<? extends Object> request,
             final Feature[] features, 
             final DoOnUnsubscribe doOnUnsubscribe) {
@@ -171,7 +170,7 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public Observable<? extends Channel> call(final Channel channel) {
                 return request.doOnNext(doOnRequest(features, channel))
-                    .compose(RxNettys.<Object>sendRequestAndReturnChannel(channel, doOnUnsubscribe));
+                    .compose(RxNettys.<Object>sendRequestThenPushChannel(channel, doOnUnsubscribe));
             }
         };
     }
@@ -206,32 +205,12 @@ public class DefaultHttpClient implements HttpClient {
         return new Func1<Channel, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final Channel channel) {
-                return Observable.create(new OnSubscribe<HttpObject>() {
-                    @Override
-                    public void call(final Subscriber<? super HttpObject> subscriber) {
-                        final ChannelHandler handler = 
-                                APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), new Subscriber<HttpObject>(subscriber) {
-                                    @Override
-                                    public void onCompleted() {
-                                        final ChannelPool pool = ChannelPool.Util
-                                                .getChannelPool(channel);
-                                        if (null != pool) {
-                                            pool.postReceiveLastContent(channel);
-                                        }
-                                        subscriber.onCompleted();
-                                    }
-
-                                    @Override
-                                    public void onError(final Throwable e) {
-                                        subscriber.onError(e);
-                                    }
-
-                                    @Override
-                                    public void onNext(final HttpObject httpObj) {
-                                        subscriber.onNext(httpObj);
-                                    }});
-                        doOnUnsubscribe.call(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
-                    }});
+                return RxNettys.waitforHttpResponse(doOnUnsubscribe).call(channel)
+                    .doOnCompleted(new Action0() {
+                        @Override
+                        public void call() {
+                            _channelPool.postReceiveLastContent(channel);
+                        }});
             }};
     }
 
