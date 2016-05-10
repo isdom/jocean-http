@@ -22,6 +22,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.ReflectUtils;
+import org.jocean.idiom.rx.RxActions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,7 +75,7 @@ public class DefaultHttpClient implements HttpClient {
                                 JOArrays.addFirst(Feature[].class, 
                                         cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
                                         HttpClientConstants.APPLY_HTTPCLIENT);
-                        final DefaultDoOnUnsubscribe doOnUnsubscribe = new DefaultDoOnUnsubscribe();
+                        final DefaultDoOnUnsubscribe doOnUnsubscribe = RxNettys.createDoOnUnsubscribe();
                         
                         _channelPool.retainChannel(remoteAddress)
                             .doOnNext(ChannelPool.Util.actionEnableRecyclingReuseChannel(doOnUnsubscribe))
@@ -84,11 +85,7 @@ public class DefaultHttpClient implements HttpClient {
                             .doOnNext(implFeatures(fullFeatures, doOnUnsubscribe))
                             .flatMap(sendRequestThenPushChannel(request, fullFeatures, doOnUnsubscribe))
                             .flatMap(waitforResponse(doOnUnsubscribe))
-                            .doOnUnsubscribe(new Action0() {
-                                @Override
-                                public void call() {
-                                    doOnUnsubscribe.unsubscribe();
-                                }})
+                            .doOnUnsubscribe(RxActions.subscription2Action0(doOnUnsubscribe))
                             .subscribe(subscriber);
                     } catch (final Throwable e) {
                         subscriber.onError(e);

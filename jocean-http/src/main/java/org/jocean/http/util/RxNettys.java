@@ -59,18 +59,28 @@ public class RxNettys {
     public interface DoOnUnsubscribe extends Action1<Subscription> {
     }
     
-    static public class DefaultDoOnUnsubscribe implements DoOnUnsubscribe {
+    public static class DefaultDoOnUnsubscribe implements DoOnUnsubscribe, Subscription {
 
         @Override
         public void call(Subscription s) {
             this._subscriptionList.add(s);
         }
         
+        @Override
         public void unsubscribe() {
             this._subscriptionList.unsubscribe();
         }
         
+        @Override
+        public boolean isUnsubscribed() {
+            return this._subscriptionList.isUnsubscribed();
+        }
+        
         final private SubscriptionList _subscriptionList = new SubscriptionList();
+    }
+    
+    public static DefaultDoOnUnsubscribe createDoOnUnsubscribe() {
+        return new DefaultDoOnUnsubscribe();
     }
     
     public static void applyFeaturesToChannel(
