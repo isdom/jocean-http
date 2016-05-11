@@ -42,7 +42,6 @@ import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
@@ -107,16 +106,15 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     
                     hookPayloadCounter(uploadTotal, features);
                     
-                    final Observable<? extends HttpObject>  response = _httpClient.defineInteraction(
+                    _httpClient.defineInteraction(
                             remoteAddress, 
                             Observable.from(httpRequest),
                             JOArrays.addFirst(Feature[].class, 
                                 safeGetRequestFeatures(request), 
-                                features));
-                    
-                    response.compose(new ToSignalResponse<RESP>(safeGetResponseClass(request)))
-                        .compose(RxNettys.<Object,RESP>releaseAtLast(httpRequest))
-                        .subscribe(subscriber);
+                                features))
+                    .compose(new ToSignalResponse<RESP>(safeGetResponseClass(request)))
+                    .compose(RxNettys.<Object,RESP>releaseAtLast(httpRequest))
+                    .subscribe(subscriber);
                 }
             }
         });

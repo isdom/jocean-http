@@ -4,9 +4,9 @@ import java.io.Closeable;
 
 import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 
-import io.netty.channel.ChannelFuture;
+import io.netty.channel.Channel;
 import rx.Single;
 
 public interface ChannelCreator extends Closeable {
-    public Single<? extends ChannelFuture> newChannel(final DoOnUnsubscribe doOnUnsubscribe);
+    public Single<? extends Channel> newChannel(final DoOnUnsubscribe doOnUnsubscribe);
 }

@@ -2,10 +2,9 @@ package org.jocean.http.client.impl;
 
 import java.net.SocketAddress;
 
-import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
+import org.jocean.http.util.Nettys;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
@@ -14,7 +13,6 @@ import rx.Observable.Transformer;
 import rx.Single;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.subscriptions.Subscriptions;
 
 public interface ChannelPool {
     
@@ -27,6 +25,12 @@ public interface ChannelPool {
     public void postReceiveLastContent(final Channel channel);
     
     public static class Util {
+        private static final Action1<Channel> RECYCLE_TO_POOL = new Action1<Channel>() {
+            @Override
+            public void call(final Channel channel) {
+                getChannelPool(channel).recycleChannel(channel);
+            }
+        };
         private static final AttributeKey<ChannelPool> POOL_ATTR = AttributeKey.valueOf("__POOL");
         
         public static void attachChannelPool(final Channel channel, final ChannelPool pool) {
@@ -70,36 +74,14 @@ public interface ChannelPool {
                 }};
         }
         
-        public static Action1<ChannelFuture> enableRecycleForNewChannel(
-                final ChannelPool pool,
-                final DoOnUnsubscribe doOnUnsubscribe) {
-            return new Action1<ChannelFuture>() {
-                @Override
-                public void call(final ChannelFuture channelFuture) {
-                    final Channel channel = channelFuture.channel();
-                    attachChannelPool(channel, pool);
-                    doOnUnsubscribe.call(Subscriptions.create(new Action0() {
-                            @Override
-                            public void call() {
-                                getChannelPool(channel).recycleChannel(channel);
-                            }
-                        }));
-                }};
-        }
-        
-        public static Action1<Channel> enableRecycleForReuseChannel(
-                final DoOnUnsubscribe doOnUnsubscribe) {
+        public static Action1<Channel> attachToChannelPoolAndEnableRecycle(
+                final ChannelPool pool) {
             return new Action1<Channel>() {
                 @Override
                 public void call(final Channel channel) {
-                    doOnUnsubscribe.call(Subscriptions.create(new Action0() {
-                        @Override
-                        public void call() {
-                            getChannelPool(channel).recycleChannel(channel);
-                        }
-                    }));
-                }
-            };
+                    attachChannelPool(channel, pool);
+                    Nettys.setReleaseAction(channel, RECYCLE_TO_POOL);
+                }};
         }
     }
 }

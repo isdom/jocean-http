@@ -350,6 +350,27 @@ public class RxNettys {
             }};
     }
     
+    public static <T> Action1<T> enableReleaseChannelWhenUnsubscribe(final DoOnUnsubscribe doOnUnsubscribe) {
+        return new Action1<T>() {
+            @Override
+            public void call(final T channelOrFuture) {
+                Channel ch = null;
+                if (channelOrFuture instanceof Channel) {
+                    ch = (Channel)channelOrFuture;
+                } else if (channelOrFuture instanceof ChannelFuture) {
+                    ch = ((ChannelFuture)channelOrFuture).channel();
+                }
+                if (null!=ch) {
+                    final Channel channel = ch;
+                    doOnUnsubscribe.call(Subscriptions.create(new Action0() {
+                        @Override
+                        public void call() {
+                            Nettys.releaseChannel(channel);
+                        }}));
+                }
+            }};
+    }
+    
     public static Subscription subscriptionFrom(final Channel channel) {
         return Subscriptions.create(new Action0() {
             @Override

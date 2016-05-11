@@ -17,7 +17,6 @@ import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
-import org.jocean.http.util.RxNettys;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +44,7 @@ public class DefaultSignalClientTestCase {
 
     private static final String TEST_ADDR = "test";
 
+    @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClientTestCase.class);
 

@@ -8,6 +8,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.jocean.http.util.RxNettys;
 import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,7 +98,7 @@ public class TestChannelCreator implements ChannelCreator {
     }
 
     @Override
-    public Single<? extends ChannelFuture> newChannel(final DoOnUnsubscribe doOnUnsubscribe) {
+    public Single<? extends Channel> newChannel(final DoOnUnsubscribe doOnUnsubscribe) {
         return Single.create(new Single.OnSubscribe<ChannelFuture>() {
             @Override
             public void call(final SingleSubscriber<? super ChannelFuture> subscriber) {
@@ -110,7 +111,9 @@ public class TestChannelCreator implements ChannelCreator {
                     doOnUnsubscribe.call(Subscriptions.from(future));
                     subscriber.onSuccess(future);
                 }
-            }});
+            }})
+            .doOnSuccess(RxNettys.<ChannelFuture>enableReleaseChannelWhenUnsubscribe(doOnUnsubscribe))
+            .flatMap(RxNettys.singleFutureToChannel());
     }
     
     public List<TestChannel> getChannels() {

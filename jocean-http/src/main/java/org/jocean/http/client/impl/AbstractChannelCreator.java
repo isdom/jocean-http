@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.jocean.http.util.RxNettys;
 import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 import org.jocean.idiom.Ordered;
 import org.slf4j.Logger;
@@ -75,7 +76,7 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
     }
 
     @Override
-    public Single<? extends ChannelFuture> newChannel(final DoOnUnsubscribe doOnUnsubscribe) {
+    public Single<? extends Channel> newChannel(final DoOnUnsubscribe doOnUnsubscribe) {
         return Single.create(new Single.OnSubscribe<ChannelFuture>() {
             @Override
             public void call(final SingleSubscriber<? super ChannelFuture> subscriber) {
@@ -87,7 +88,9 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
                     doOnUnsubscribe.call(Subscriptions.from(future));
                     subscriber.onSuccess(future);
                 }
-            }});
+            }})
+            .doOnSuccess(RxNettys.<ChannelFuture>enableReleaseChannelWhenUnsubscribe(doOnUnsubscribe))
+            .flatMap(RxNettys.singleFutureToChannel());
     }
     
     public int getActiveChannelCount() {
