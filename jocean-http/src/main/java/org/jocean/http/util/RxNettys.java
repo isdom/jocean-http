@@ -40,6 +40,8 @@ import io.netty.util.concurrent.GenericFutureListener;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
+import rx.Single;
+import rx.SingleSubscriber;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -169,27 +171,27 @@ public class RxNettys {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
-                            future.addListener(listenerOfOnError(subscriber));
-                            future.addListener(listenerOfOnNextAndCompleted(subscriber));
+                            future.addListener(listenerOfOnError(subscriber))
+                                .addListener(listenerOfOnNextAndCompleted(subscriber));
                         }
                     }});
             }};
     }
     
-    public static Func1<Channel, Observable<? extends Channel>> funcAsyncConnectTo(
+    public static Func1<Channel, Single<? extends Channel>> funcAsyncConnectTo(
             final SocketAddress remoteAddress,
             final DoOnUnsubscribe doOnUnsubscribe) {
-        return new Func1<Channel, Observable<? extends Channel>>() {
+        return new Func1<Channel, Single<? extends Channel>>() {
             @Override
-            public Observable<? extends Channel> call(final Channel channel) {
-                return Observable.create(new OnSubscribe<Channel>() {
+            public Single<? extends Channel> call(final Channel channel) {
+                return Single.create(new Single.OnSubscribe<Channel>() {
                     @Override
-                    public void call(final Subscriber<? super Channel> subscriber) {
+                    public void call(final SingleSubscriber<? super Channel> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
                             final ChannelFuture future = channel.connect(remoteAddress);
                             doOnUnsubscribe.call(Subscriptions.from(future));
                             future.addListener(listenerOfOnError(subscriber))
-                                .addListener(listenerOfOnNextAndCompleted(subscriber));
+                                .addListener(listenerOfOnSuccess(subscriber));
                         }
                     }});
             }};
@@ -249,25 +251,24 @@ public class RxNettys {
             }};
     }
     
-    public static Transformer<? super Channel, ? extends Channel> markAndPushChannelWhenReady(final boolean isSSLEnabled) {
-        return new Transformer<Channel, Channel>() {
+    public static Single.Transformer<? super Channel, ? extends Channel> markAndPushChannelWhenReady(final boolean isSSLEnabled) {
+        return new Single.Transformer<Channel, Channel>() {
             @Override
-            public Observable<Channel> call(final Observable<Channel> source) {
+            public Single<Channel> call(final Single<Channel> source) {
                 if (isSSLEnabled) {
-                    return source.flatMap(new Func1<Channel, Observable<? extends Channel>> () {
+                    return source.flatMap(new Func1<Channel, Single<? extends Channel>> () {
                         @Override
-                        public Observable<? extends Channel> call(final Channel channel) {
-                            return Observable.create(new OnSubscribe<Channel>() {
+                        public Single<? extends Channel> call(final Channel channel) {
+                            return Single.create(new Single.OnSubscribe<Channel>() {
                                 @Override
-                                public void call(final Subscriber<? super Channel> subscriber) {
+                                public void call(final SingleSubscriber<? super Channel> subscriber) {
                                     if (!subscriber.isUnsubscribed()) {
                                         APPLY.SSLNOTIFY.applyTo(channel.pipeline(), 
                                             new Action1<Channel>() {
                                                 @Override
                                                 public void call(final Channel ch) {
                                                     Nettys.setChannelReady(ch);
-                                                    subscriber.onNext(ch);
-                                                    subscriber.onCompleted();
+                                                    subscriber.onSuccess(ch);
                                                     if (LOG.isDebugEnabled()) {
                                                         LOG.debug("channel({}): userEventTriggered for ssl handshake success", ch);
                                                     }
@@ -286,7 +287,7 @@ public class RxNettys {
                                 }});
                         }});
                 } else {
-                    return source.doOnNext(new Action1<Channel>() {
+                    return source.doOnSuccess(new Action1<Channel>() {
                         @Override
                         public void call(final Channel channel) {
                             Nettys.setChannelReady(channel);
@@ -308,6 +309,45 @@ public class RxNettys {
                     }});
             };
         };
+    }
+    
+    public static <V> GenericFutureListener<Future<V>> listenerOfOnError(final SingleSubscriber<?> subscriber) {
+        return new GenericFutureListener<Future<V>>() {
+            @Override
+            public void operationComplete(final Future<V> f)
+                    throws Exception {
+                if (!f.isSuccess() && !subscriber.isUnsubscribed()) {
+                    subscriber.onError(f.cause());
+                }
+            }
+        };
+    }
+    
+    public static ChannelFutureListener listenerOfOnSuccess(final SingleSubscriber<? super Channel> subscriber) {
+        return new ChannelFutureListener() {
+            @Override
+            public void operationComplete(final ChannelFuture f)
+                    throws Exception {
+                if (f.isSuccess() && !subscriber.isUnsubscribed()) {
+                    subscriber.onSuccess(f.channel());
+                }
+            }
+        };
+    }
+    
+    public static Func1<ChannelFuture, Single<? extends Channel>> singleFutureToChannel() {
+        return new Func1<ChannelFuture, Single<? extends Channel>>() {
+            @Override
+            public Single<? extends Channel> call(final ChannelFuture future) {
+                return Single.create(new Single.OnSubscribe<Channel>() {
+                    @Override
+                    public void call(final SingleSubscriber<? super Channel> subscriber) {
+                        if (!subscriber.isUnsubscribed()) {
+                            future.addListener(listenerOfOnError(subscriber));
+                            future.addListener(listenerOfOnSuccess(subscriber));
+                        }
+                    }});
+            }};
     }
     
     public static Subscription subscriptionFrom(final Channel channel) {

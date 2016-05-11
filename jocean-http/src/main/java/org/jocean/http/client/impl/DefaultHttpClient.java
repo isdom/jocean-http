@@ -38,6 +38,7 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
+import rx.Single;
 import rx.Subscriber;
 import rx.functions.Action1;
 import rx.functions.Func1;
@@ -76,13 +77,13 @@ public class DefaultHttpClient implements HttpClient {
                         final DefaultDoOnUnsubscribe doOnUnsubscribe = RxNettys.createDoOnUnsubscribe();
                         
                         _channelPool.retainChannel(remoteAddress)
-                            .doOnNext(ChannelPool.Util.enableRecycleForReuseChannel(doOnUnsubscribe))
-                            .doOnNext(RxNettys.actionUndoableApplyFeatures(
+                            .doOnSuccess(ChannelPool.Util.enableRecycleForReuseChannel(doOnUnsubscribe))
+                            .doOnSuccess(RxNettys.actionUndoableApplyFeatures(
                                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures, doOnUnsubscribe))
                             .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures, doOnUnsubscribe))
-                            .doOnNext(implFeatures(fullFeatures, doOnUnsubscribe))
+                            .doOnSuccess(implFeatures(fullFeatures, doOnUnsubscribe))
                             .flatMap(sendRequestThenPushChannel(request, fullFeatures, doOnUnsubscribe))
-                            .flatMap(waitforResponse(doOnUnsubscribe))
+                            .flatMapObservable(waitforResponse(doOnUnsubscribe))
                             .doOnUnsubscribe(RxActions.subscription2Action0(doOnUnsubscribe))
                             .subscribe(subscriber);
                     } catch (final Throwable e) {
@@ -157,16 +158,17 @@ public class DefaultHttpClient implements HttpClient {
         return false;
     }
 
-    private Func1<Channel, Observable<? extends Channel>> sendRequestThenPushChannel(
+    private Func1<Channel, Single<? extends Channel>> sendRequestThenPushChannel(
             final Observable<? extends Object> request,
             final Feature[] features, 
             final DoOnUnsubscribe doOnUnsubscribe) {
-        return new Func1<Channel, Observable<? extends Channel>> () {
+        return new Func1<Channel, Single<? extends Channel>> () {
             @Override
-            public Observable<? extends Channel> call(final Channel channel) {
+            public Single<? extends Channel> call(final Channel channel) {
                 return request.doOnNext(doOnRequest(features, channel))
                     .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
-                    .compose(RxNettys.<Object>sendRequestThenPushChannel(channel, doOnUnsubscribe));
+                    .compose(RxNettys.<Object>sendRequestThenPushChannel(channel, doOnUnsubscribe))
+                    .toSingle();
             }
         };
     }
@@ -205,16 +207,16 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
 
-    private Observable<? extends Channel> createChannelAndConnectTo(
+    private Single<? extends Channel> createChannelAndConnectTo(
             final SocketAddress remoteAddress, 
             final Feature[] features,
             final DoOnUnsubscribe doOnUnsubscribe) {
         return this._channelCreator.newChannel(doOnUnsubscribe)
-            .doOnNext(ChannelPool.Util.enableRecycleForNewChannel(_channelPool, doOnUnsubscribe))
-            .flatMap(RxNettys.funcFutureToChannel())
-            .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
+            .doOnSuccess(ChannelPool.Util.enableRecycleForNewChannel(_channelPool, doOnUnsubscribe))
+            .flatMap(RxNettys.singleFutureToChannel())
+            .doOnSuccess(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
-            .doOnNext(RxNettys.actionUndoableApplyFeatures(
+            .doOnSuccess(RxNettys.actionUndoableApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features, doOnUnsubscribe))
             .flatMap(RxNettys.funcAsyncConnectTo(remoteAddress, doOnUnsubscribe))
             .compose(RxNettys.markAndPushChannelWhenReady(isSSLEnabled(features)));

@@ -11,13 +11,14 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
 import rx.Observable;
 import rx.Observable.Transformer;
+import rx.Single;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.subscriptions.Subscriptions;
 
 public interface ChannelPool {
     
-    public Observable<Channel> retainChannel(final SocketAddress address);
+    public Single<Channel> retainChannel(final SocketAddress address);
     
     public boolean recycleChannel(final Channel channel);
     
