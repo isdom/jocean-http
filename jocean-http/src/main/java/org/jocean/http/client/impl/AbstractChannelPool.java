@@ -65,6 +65,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                                         public void call(Subscription s) {
                                             subscriber.add(s);
                                         }});
+                                    subscriber.add(RxNettys.subscriptionForReleaseChannel(channel));
                                     subscriber.onNext(channel);
                                     subscriber.onCompleted();
                                     return;

@@ -75,7 +75,6 @@ public class DefaultHttpClient implements HttpClient {
 //                            .flatMap(sendRequestThenPushChannelAsSingle(request, fullFeatures, doOnUnsubscribe))
 //                            .flatMapObservable(waitforResponse(doOnUnsubscribe))
             return _channelPool.retainChannel(remoteAddress)
-                .doOnNext(RxNettys.<Channel>enableReleaseChannelWhenUnsubscribe())
                 .doOnNext(RxNettys.actionUndoableApplyFeatures(
                         HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
                 .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
