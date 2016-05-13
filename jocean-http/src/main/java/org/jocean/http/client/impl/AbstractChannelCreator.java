@@ -3,7 +3,6 @@
  */
 package org.jocean.http.client.impl;
 
-import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -32,37 +31,43 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
     private static final Logger LOG =
             LoggerFactory.getLogger(AbstractChannelCreator.class);
 
-    protected AbstractChannelCreator() {
-        class Initializer extends ChannelInitializer<Channel> implements Ordered {
-            @Override
-            public int ordinal() {
-                return -1000;
-            }
-            @Override
-            protected void initChannel(Channel ch) throws Exception {
-                /*
-                channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
-                    @Override
-                    public void channelActive(ChannelHandlerContext ctx) throws Exception {
-                        _activeChannelCount.incrementAndGet();
-                        ctx.fireChannelActive();
-                    }
-
-                    @Override
-                    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-                        _activeChannelCount.decrementAndGet();
-                        ctx.fireChannelInactive();
-                    }
-                }); */
-            }
-            @Override
-            public String toString() {
-                return "[AbstractChannelCreator' ChannelInitializer]";
-            }
+    private static class Initializer extends ChannelInitializer<Channel> implements Ordered {
+        @Override
+        public int ordinal() {
+            return -1000;
         }
+        @Override
+        protected void initChannel(Channel ch) throws Exception {
+            /*
+            channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                    _activeChannelCount.incrementAndGet();
+                    ctx.fireChannelActive();
+                }
+
+                @Override
+                public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+                    _activeChannelCount.decrementAndGet();
+                    ctx.fireChannelInactive();
+                }
+            }); */
+        }
+        @Override
+        public String toString() {
+            return "[AbstractChannelCreator' ChannelInitializer]";
+        }
+    }
+    
+    public void reset() {
+        close();
         this._bootstrap = new Bootstrap()
-            .handler(new Initializer());
-        initializeBootstrap(this._bootstrap);
+                .handler(new Initializer());
+            initializeBootstrap(this._bootstrap);
+    }
+    
+    protected AbstractChannelCreator() {
+        reset();
     }
     
     protected abstract void initializeBootstrap(final Bootstrap bootstrap);
@@ -71,11 +76,14 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
      * @see java.io.Closeable#close()
      */
     @Override
-    public void close() throws IOException {
-        // Shut down executor threads to exit.
-        this._bootstrap.group()
-            .shutdownGracefully(100, 1000, TimeUnit.MILLISECONDS)
-            .syncUninterruptibly();
+    public void close() {
+        if (null!=this._bootstrap) {
+            // Shut down executor threads to exit.
+            this._bootstrap.group()
+                .shutdownGracefully(100, 1000, TimeUnit.MILLISECONDS)
+                .syncUninterruptibly();
+            this._bootstrap = null;
+        }
     }
 
     @Override
@@ -109,7 +117,7 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
                     subscriber.add(Subscriptions.from(future));
                     RxNettys.installDoOnUnsubscribe(future.channel(), new DoOnUnsubscribe() {
                         @Override
-                        public void call(Subscription s) {
+                        public void call(final Subscription s) {
                             subscriber.add(s);
                         }});
                     subscriber.onNext(future);
@@ -124,7 +132,7 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
         return this._activeChannelCount.get();
     }
 
-    private final Bootstrap _bootstrap;
+    private Bootstrap _bootstrap = null;
     
     private final AtomicInteger _activeChannelCount = new AtomicInteger(0);
 }

@@ -1,6 +1,5 @@
 package org.jocean.http.client.impl;
 
-import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,8 +7,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.jocean.http.util.RxNettys;
-import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,16 +19,8 @@ import io.netty.channel.ChannelOutboundBuffer;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalEventLoopGroup;
-import rx.Observable;
-import rx.Single;
-import rx.SingleSubscriber;
-import rx.Subscriber;
-import rx.Subscription;
-import rx.functions.Action0;
-import rx.functions.Action1;
-import rx.subscriptions.Subscriptions;
 
-public class TestChannelCreator implements ChannelCreator {
+public class TestChannelCreator extends AbstractChannelCreator {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(TestChannelCreator.class);
@@ -97,55 +86,6 @@ public class TestChannelCreator implements ChannelCreator {
         private final AtomicBoolean _isClosed = new AtomicBoolean(false);
     }
     
-    @Override
-    public void close() throws IOException {
-        // ignore
-    }
-
-    @Override
-    public Single<Channel> newChannelAsSingle(final DoOnUnsubscribe doOnUnsubscribe) {
-        return Single.create(new Single.OnSubscribe<ChannelFuture>() {
-            @Override
-            public void call(final SingleSubscriber<? super ChannelFuture> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    final ChannelFuture future = _bootstrap.register();
-                    if ( LOG.isDebugEnabled() ) {
-                        LOG.debug("create new test channel: {}", future.channel());
-                    }
-                    _channels.add((TestChannel)future.channel());
-                    doOnUnsubscribe.call(Subscriptions.from(future));
-                    subscriber.onSuccess(future);
-                }
-            }})
-            .doOnSuccess(RxNettys.<ChannelFuture>enableReleaseChannelWhenUnsubscribe())
-            .flatMap(RxNettys.singleFutureToChannel());
-    }
-    
-    @Override
-    public Observable<? extends Channel> newChannel() {
-        return Observable.create(new Observable.OnSubscribe<ChannelFuture>() {
-            @Override
-            public void call(final Subscriber<? super ChannelFuture> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    final ChannelFuture future = _bootstrap.register();
-                    if ( LOG.isDebugEnabled() ) {
-                        LOG.debug("create new test channel: {}", future.channel());
-                    }
-                    _channels.add((TestChannel)future.channel());
-                    subscriber.add(Subscriptions.from(future));
-                    RxNettys.installDoOnUnsubscribe(future.channel(), new DoOnUnsubscribe() {
-                        @Override
-                        public void call(Subscription s) {
-                            subscriber.add(s);
-                        }});
-                    subscriber.onNext(future);
-                    subscriber.onCompleted();
-                }
-            }})
-            .doOnNext(RxNettys.<ChannelFuture>enableReleaseChannelWhenUnsubscribe())
-            .flatMap(RxNettys.funcFutureToChannel());
-    }
-    
     public List<TestChannel> getChannels() {
         return this._channels;
     }
@@ -160,9 +100,9 @@ public class TestChannelCreator implements ChannelCreator {
         return this;
     }
     
-    public void reset() {
-        this._bootstrap = new Bootstrap()
-            .group(new LocalEventLoopGroup(1))
+    @Override
+    protected void initializeBootstrap(final Bootstrap bootstrap) {
+        bootstrap.group(new LocalEventLoopGroup(1))
             .channelFactory(new ChannelFactory<TestChannel>() {
                         @Override
                         public TestChannel newChannel() {
@@ -172,17 +112,12 @@ public class TestChannelCreator implements ChannelCreator {
                 @Override
                 protected void initChannel(final Channel channel) throws Exception {
                     LOG.info("processing initChannel for {}", channel);
+                    _channels.add((TestChannel)channel);
                 }});
-    }
-    
-    public TestChannelCreator() {
-        reset();
     }
     
     private Exception _writeException = null;
     private Exception _connectException = null;
-    
-    private Bootstrap _bootstrap;
     
     private final List<TestChannel> _channels = new ArrayList<>();
 }
