@@ -33,13 +33,12 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.ReferenceCounted;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import rx.Observable;
-import rx.Observable.OnSubscribe;
-import rx.Observable.Transformer;
 import rx.Single;
 import rx.SingleSubscriber;
 import rx.Subscriber;
@@ -167,7 +166,7 @@ public class RxNettys {
         return new Func1<ChannelFuture, Observable<? extends Channel>>() {
             @Override
             public Observable<? extends Channel> call(final ChannelFuture future) {
-                return Observable.create(new OnSubscribe<Channel>() {
+                return Observable.create(new Observable.OnSubscribe<Channel>() {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
@@ -178,7 +177,7 @@ public class RxNettys {
             }};
     }
     
-    public static Func1<Channel, Single<? extends Channel>> funcAsyncConnectTo(
+    public static Func1<Channel, Single<? extends Channel>> asyncConnectToAsSingle(
             final SocketAddress remoteAddress,
             final DoOnUnsubscribe doOnUnsubscribe) {
         return new Func1<Channel, Single<? extends Channel>>() {
@@ -197,10 +196,26 @@ public class RxNettys {
             }};
     }
     
-    public static <M> Transformer<M, Channel> sendRequestThenPushChannel(
-            final Channel channel, 
-            final DoOnUnsubscribe doOnUnsubscribe) {
-        return new Transformer<M, Channel>() {
+    public static Func1<Channel, Observable<? extends Channel>> asyncConnectTo(
+            final SocketAddress remoteAddress) {
+        return new Func1<Channel, Observable<? extends Channel>>() {
+            @Override
+            public Observable<? extends Channel> call(final Channel channel) {
+                return Observable.create(new Observable.OnSubscribe<Channel>() {
+                    @Override
+                    public void call(final Subscriber<? super Channel> subscriber) {
+                        if (!subscriber.isUnsubscribed()) {
+                            final ChannelFuture future = channel.connect(remoteAddress);
+                            RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
+                            future.addListener(listenerOfOnError(subscriber))
+                                .addListener(listenerOfOnNextAndCompleted(subscriber));
+                        }
+                    }});
+            }};
+    }
+    
+    public static <M> Observable.Transformer<M, Channel> sendRequestThenPushChannel(final Channel channel) {
+        return new Observable.Transformer<M, Channel>() {
             @Override
             public Observable<Channel> call(final Observable<M> request) {
                 return request.doOnCompleted(new Action0() {
@@ -212,7 +227,7 @@ public class RxNettys {
                           @Override
                           public ChannelFuture call(final M msg) {
                               final ChannelFuture future = channel.write(ReferenceCountUtil.retain(msg));
-                              doOnUnsubscribe.call(Subscriptions.from(future));
+                              RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
                               return future;
                           }
                       })
@@ -238,8 +253,7 @@ public class RxNettys {
     
     public static Action1<Channel> actionUndoableApplyFeatures(
             final HandlerBuilder builder,
-            final Feature[] features,
-            final DoOnUnsubscribe doOnUnsubscribe) {
+            final Feature[] features) {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
@@ -247,11 +261,11 @@ public class RxNettys {
                         channel, 
                         builder, 
                         features, 
-                        doOnUnsubscribe);
+                        queryDoOnUnsubscribe(channel));
             }};
     }
     
-    public static Single.Transformer<? super Channel, ? extends Channel> markAndPushChannelWhenReady(final boolean isSSLEnabled) {
+    public static Single.Transformer<? super Channel, ? extends Channel> markAndPushChannelWhenReadyAsSingle(final boolean isSSLEnabled) {
         return new Single.Transformer<Channel, Channel>() {
             @Override
             public Single<Channel> call(final Single<Channel> source) {
@@ -296,14 +310,60 @@ public class RxNettys {
             }};
     }
     
-    public static Func1<Channel, Observable<? extends HttpObject>> waitforHttpResponse(final DoOnUnsubscribe doOnUnsubscribe) {
+    public static Observable.Transformer<? super Channel, ? extends Channel> markAndPushChannelWhenReady(final boolean isSSLEnabled) {
+        return new Observable.Transformer<Channel, Channel>() {
+            @Override
+            public Observable<Channel> call(final Observable<Channel> source) {
+                if (isSSLEnabled) {
+                    return source.flatMap(new Func1<Channel, Observable<? extends Channel>> () {
+                        @Override
+                        public Observable<? extends Channel> call(final Channel channel) {
+                            return Observable.create(new Observable.OnSubscribe<Channel>() {
+                                @Override
+                                public void call(final Subscriber<? super Channel> subscriber) {
+                                    if (!subscriber.isUnsubscribed()) {
+                                        APPLY.SSLNOTIFY.applyTo(channel.pipeline(), 
+                                            new Action1<Channel>() {
+                                                @Override
+                                                public void call(final Channel ch) {
+                                                    Nettys.setChannelReady(ch);
+                                                    subscriber.onNext(ch);
+                                                    subscriber.onCompleted();
+                                                    if (LOG.isDebugEnabled()) {
+                                                        LOG.debug("channel({}): userEventTriggered for ssl handshake success", ch);
+                                                    }
+                                                }},
+                                            new Action1<Throwable>() {
+                                                @Override
+                                                public void call(final Throwable e) {
+                                                    subscriber.onError(e);
+                                                    LOG.warn("channel({}): userEventTriggered for ssl handshake failure:{}",
+                                                            channel,
+                                                            ExceptionUtils.exception2detail(e));
+                                                }});
+                                    } else {
+                                        LOG.warn("SslHandshakeNotifier: channelSubscriber {} has unsubscribe", subscriber);
+                                    }
+                                }});
+                        }});
+                } else {
+                    return source.doOnNext(new Action1<Channel>() {
+                        @Override
+                        public void call(final Channel channel) {
+                            Nettys.setChannelReady(channel);
+                        }});
+                }
+            }};
+    }
+    
+    public static Func1<Channel, Observable<? extends HttpObject>> waitforHttpResponse() {
         return new Func1<Channel, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final Channel channel) {
-                return Observable.create(new OnSubscribe<HttpObject>() {
+                return Observable.create(new Observable.OnSubscribe<HttpObject>() {
                     @Override
                     public void call(final Subscriber<? super HttpObject> subscriber) {
-                        doOnUnsubscribe.call(
+                        RxNettys.doOnUnsubscribe(channel, 
                             Subscriptions.create(RxNettys.actionToRemoveHandler(channel, 
                                 APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
                     }});
@@ -350,7 +410,7 @@ public class RxNettys {
             }};
     }
     
-    public static <T> Action1<T> enableReleaseChannelWhenUnsubscribe(final DoOnUnsubscribe doOnUnsubscribe) {
+    public static <T> Action1<T> enableReleaseChannelWhenUnsubscribe() {
         return new Action1<T>() {
             @Override
             public void call(final T channelOrFuture) {
@@ -362,13 +422,36 @@ public class RxNettys {
                 }
                 if (null!=ch) {
                     final Channel channel = ch;
-                    doOnUnsubscribe.call(Subscriptions.create(new Action0() {
-                        @Override
-                        public void call() {
-                            Nettys.releaseChannel(channel);
-                        }}));
+                    RxNettys.doOnUnsubscribe(ch, 
+                        Subscriptions.create(new Action0() {
+                            @Override
+                            public void call() {
+                                Nettys.releaseChannel(channel);
+                            }}));
                 }
             }};
+    }
+    
+    private static final AttributeKey<DoOnUnsubscribe> DO_ON_UNSUBSCRIBE = AttributeKey.valueOf("__DO_ON_UNSUBSCRIBE");
+    
+    public static void installDoOnUnsubscribe(final Channel channel, final DoOnUnsubscribe doOnUnsubscribe) {
+        channel.attr(DO_ON_UNSUBSCRIBE).set(doOnUnsubscribe);
+    }
+    
+    public static DoOnUnsubscribe queryDoOnUnsubscribe(final Channel channel) {
+        return channel.attr(DO_ON_UNSUBSCRIBE).get();
+    }
+    
+    public static void doOnUnsubscribe(final Channel channel, final Subscription subscription) {
+        final DoOnUnsubscribe doOnUnsubscribe = channel.attr(DO_ON_UNSUBSCRIBE).get();
+        if (null!=doOnUnsubscribe) {
+            try {
+                doOnUnsubscribe.call(subscription);
+            } catch (Exception e) {
+                LOG.warn("exception when invoke doOnUnsubscribe {} for channel {}, detail: {}",
+                        doOnUnsubscribe, channel, ExceptionUtils.exception2detail(e));
+            }
+        }
     }
     
     public static Subscription subscriptionFrom(final Channel channel) {
@@ -440,10 +523,10 @@ public class RxNettys {
         }
     }
     
-    public static <T, E extends T> Transformer<? super T, ? extends T> retainAtFirst(
+    public static <T, E extends T> Observable.Transformer<? super T, ? extends T> retainAtFirst(
             final Collection<E> objs, 
             final Class<E> elementCls) {
-        return new Transformer<T, T>() {
+        return new Observable.Transformer<T, T>() {
             @Override
             public Observable<T> call(final Observable<T> source) {
                 return source.doOnNext(new Action1<T>() {
@@ -462,8 +545,8 @@ public class RxNettys {
             }};
     }
     
-    public static <E, T> Transformer<? super T, ? extends T> releaseAtLast(final Collection<E> objs) {
-        return new Transformer<T, T>() {
+    public static <E, T> Observable.Transformer<? super T, ? extends T> releaseAtLast(final Collection<E> objs) {
+        return new Observable.Transformer<T, T>() {
             @Override
             public Observable<T> call(final Observable<T> source) {
                 return source.doAfterTerminate(new Action0() {
@@ -523,7 +606,7 @@ public class RxNettys {
     }
     
     public static Observable<HttpObject> httpobjObservable(final Channel channel) {
-        return Observable.create(new OnSubscribe<HttpObject>() {
+        return Observable.create(new Observable.OnSubscribe<HttpObject>() {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
                 if (!subscriber.isUnsubscribed()) {

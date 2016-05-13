@@ -22,8 +22,13 @@ import io.netty.channel.ChannelOutboundBuffer;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalEventLoopGroup;
+import rx.Observable;
 import rx.Single;
 import rx.SingleSubscriber;
+import rx.Subscriber;
+import rx.Subscription;
+import rx.functions.Action0;
+import rx.functions.Action1;
 import rx.subscriptions.Subscriptions;
 
 public class TestChannelCreator implements ChannelCreator {
@@ -98,7 +103,7 @@ public class TestChannelCreator implements ChannelCreator {
     }
 
     @Override
-    public Single<? extends Channel> newChannel(final DoOnUnsubscribe doOnUnsubscribe) {
+    public Single<Channel> newChannelAsSingle(final DoOnUnsubscribe doOnUnsubscribe) {
         return Single.create(new Single.OnSubscribe<ChannelFuture>() {
             @Override
             public void call(final SingleSubscriber<? super ChannelFuture> subscriber) {
@@ -112,8 +117,33 @@ public class TestChannelCreator implements ChannelCreator {
                     subscriber.onSuccess(future);
                 }
             }})
-            .doOnSuccess(RxNettys.<ChannelFuture>enableReleaseChannelWhenUnsubscribe(doOnUnsubscribe))
+            .doOnSuccess(RxNettys.<ChannelFuture>enableReleaseChannelWhenUnsubscribe())
             .flatMap(RxNettys.singleFutureToChannel());
+    }
+    
+    @Override
+    public Observable<? extends Channel> newChannel() {
+        return Observable.create(new Observable.OnSubscribe<ChannelFuture>() {
+            @Override
+            public void call(final Subscriber<? super ChannelFuture> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    final ChannelFuture future = _bootstrap.register();
+                    if ( LOG.isDebugEnabled() ) {
+                        LOG.debug("create new test channel: {}", future.channel());
+                    }
+                    _channels.add((TestChannel)future.channel());
+                    subscriber.add(Subscriptions.from(future));
+                    RxNettys.installDoOnUnsubscribe(future.channel(), new DoOnUnsubscribe() {
+                        @Override
+                        public void call(Subscription s) {
+                            subscriber.add(s);
+                        }});
+                    subscriber.onNext(future);
+                    subscriber.onCompleted();
+                }
+            }})
+            .doOnNext(RxNettys.<ChannelFuture>enableReleaseChannelWhenUnsubscribe())
+            .flatMap(RxNettys.funcFutureToChannel());
     }
     
     public List<TestChannel> getChannels() {

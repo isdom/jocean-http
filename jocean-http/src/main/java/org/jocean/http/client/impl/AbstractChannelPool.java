@@ -2,12 +2,17 @@ package org.jocean.http.client.impl;
 
 import java.net.SocketAddress;
 
+import org.jocean.http.util.RxNettys;
+import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
+import rx.Observable;
 import rx.Single;
 import rx.SingleSubscriber;
+import rx.Subscriber;
+import rx.Subscription;
 
 public abstract class AbstractChannelPool implements ChannelPool {
     
@@ -16,7 +21,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
             LoggerFactory.getLogger(AbstractChannelPool.class);
 
     @Override
-    public Single<Channel> retainChannel(final SocketAddress address) {
+    public Single<Channel> retainChannelAsSingle(final SocketAddress address) {
         return Single.create(new Single.OnSubscribe<Channel>() {
             @Override
             public void call(final SingleSubscriber<? super Channel> subscriber) {
@@ -28,6 +33,40 @@ public abstract class AbstractChannelPool implements ChannelPool {
                             if (null != channel) {
                                 if (channel.isActive()) {
                                     subscriber.onSuccess(channel);
+                                    return;
+                                } else {
+                                    channel.close();
+                                }
+                            }
+                        } while (null!=channel);
+                        //  no more channel can be reused
+                        subscriber.onError(new RuntimeException("Nonreused Channel"));
+                    } catch (Throwable e) {
+                        subscriber.onError(e);
+                    }
+                }
+            }});
+    }
+    
+    @Override
+    public Observable<Channel> retainChannel(final SocketAddress address) {
+        return Observable.create(new Observable.OnSubscribe<Channel>() {
+            @Override
+            public void call(final Subscriber<? super Channel> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    try {
+                        Channel channel;
+                        do {
+                            channel = reuseChannel(address);
+                            if (null != channel) {
+                                if (channel.isActive()) {
+                                    RxNettys.installDoOnUnsubscribe(channel, new DoOnUnsubscribe() {
+                                        @Override
+                                        public void call(Subscription s) {
+                                            subscriber.add(s);
+                                        }});
+                                    subscriber.onNext(channel);
+                                    subscriber.onCompleted();
                                     return;
                                 } else {
                                     channel.close();

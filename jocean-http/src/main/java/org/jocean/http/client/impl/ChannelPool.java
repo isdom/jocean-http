@@ -16,7 +16,8 @@ import rx.functions.Action1;
 
 public interface ChannelPool {
     
-    public Single<Channel> retainChannel(final SocketAddress address);
+    public Single<Channel> retainChannelAsSingle(final SocketAddress address);
+    public Observable<Channel> retainChannel(final SocketAddress address);
     
     public boolean recycleChannel(final Channel channel);
     
