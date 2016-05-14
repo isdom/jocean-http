@@ -49,6 +49,7 @@ import rx.observables.ConnectableObservable;
 
 public class DefaultHttpTradeTestCase {
 
+    @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTradeTestCase.class);
     
@@ -599,7 +600,7 @@ public class DefaultHttpTradeTestCase {
                 assertEquals(1, c.refCnt());
             }});
         
-        final Observable<HttpObject> clientObservable = 
+        final Observable<? extends HttpObject> clientObservable = 
                 RxNettys.httpobjObservable(client).cache();
         
         clientObservable.subscribe();
