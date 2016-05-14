@@ -608,7 +608,7 @@ public class RxNettys {
         }
     }
     
-    public static Observable<HttpObject> httpobjObservable(final Channel channel) {
+    public static Observable<? extends HttpObject> httpobjObservable(final Channel channel) {
         return Observable.create(new Observable.OnSubscribe<HttpObject>() {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {

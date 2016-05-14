@@ -136,8 +136,8 @@ class FACTORYFUNCS {
         public ChannelHandler call(final Action0 onChannelRead) {
             return new ChannelInboundHandlerAdapter() {
                 @Override
-                public void exceptionCaught(ChannelHandlerContext ctx,
-                        Throwable cause) throws Exception {
+                public void exceptionCaught(final ChannelHandlerContext ctx,
+                        final Throwable cause) throws Exception {
                     LOG.warn("ON_CHANNEL_READ_FUNC1: exceptionCaught at channel({})/handler({}), detail:{}", 
                             ctx.channel(), this,
                             ExceptionUtils.exception2detail(cause));
@@ -155,7 +155,7 @@ class FACTORYFUNCS {
                 }
 
                 @Override
-                public void channelRead(ChannelHandlerContext ctx, final Object msg) throws Exception {
+                public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("ON_CHANNEL_READ_FUNC1: channel({})/handler({}): channelRead with msg({}).", 
                                 ctx.channel(), ctx.name(), msg);

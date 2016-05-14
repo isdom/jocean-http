@@ -56,7 +56,7 @@ class DefaultHttpTrade implements HttpTrade {
     
     DefaultHttpTrade(
             final Channel channel, 
-            final Observable<HttpObject> requestObservable) {
+            final Observable<? extends HttpObject> requestObservable) {
         this._channel = channel;
         requestObservable.subscribe(this._requestObserver);
     }
@@ -94,14 +94,14 @@ class DefaultHttpTrade implements HttpTrade {
     }
     
     @Override
-    public HttpTrade addOnTradeClosed(final Action1<HttpTrade> onTradeClosed) {
-        this._addOnTradeClosed.call(onTradeClosed);
+    public HttpTrade addOnTradeClosed(final Action1<HttpTrade> onClosed) {
+        this._addOnClosed.call(onClosed);
         return this;
     }
     
     @Override
-    public void removeOnTradeClosed(final Action1<HttpTrade> onTradeClosed) {
-        this._removeOnTradeClosed.call();
+    public void removeOnTradeClosed(final Action1<HttpTrade> onClosed) {
+        this._removeOnClosed.call(onClosed);
     }
     
     @Override
@@ -180,14 +180,14 @@ class DefaultHttpTrade implements HttpTrade {
         }
     }
     
-    private final StatefulRef<COWCompositeSupport<Action1<HttpTrade>>> _onTradeClosedActionsRef = 
+    private final StatefulRef<COWCompositeSupport<Action1<HttpTrade>>> _onClosedsRef = 
             new StatefulRef<>(new COWCompositeSupport<Action1<HttpTrade>>());
     
-    private final ActionN _addOnTradeClosed = this._onTradeClosedActionsRef.submitWhenActive(
+    private final ActionN _addOnClosed = this._onClosedsRef.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
-            public void call(final COWCompositeSupport<Action1<HttpTrade>> actions, final Object...args) {
-                actions.addComponent(StatefulRef.<Action1<HttpTrade>>getArgAs(0, args));
+            public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
+                oncloseds.addComponent(StatefulRef.<Action1<HttpTrade>>getArgAs(0, args));
             }})
         .submitWhenDestroyed(new ActionN() {
             @Override
@@ -195,11 +195,11 @@ class DefaultHttpTrade implements HttpTrade {
                 StatefulRef.<Action1<HttpTrade>>getArgAs(0, args).call(DefaultHttpTrade.this);
             }});
     
-    private final ActionN _removeOnTradeClosed = this._onTradeClosedActionsRef.submitWhenActive(
+    private final ActionN _removeOnClosed = this._onClosedsRef.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
         @Override
-        public void call(final COWCompositeSupport<Action1<HttpTrade>> actions,final Object...args) {
-            actions.removeComponent(StatefulRef.<Action1<HttpTrade>>getArgAs(0, args));
+        public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds,final Object...args) {
+            oncloseds.removeComponent(StatefulRef.<Action1<HttpTrade>>getArgAs(0, args));
         }});
     
     private final Channel _channel;
@@ -322,28 +322,33 @@ class DefaultHttpTrade implements HttpTrade {
         }
     };
         
-    private boolean checkActiveAndTryClose() {
+    private boolean trySetClosedFlag() {
         return this._isActive.compareAndSet(true, false);
     }
     
-    private synchronized void doCloseTrade(final boolean isResponseCompleted) {
-        if (checkActiveAndTryClose()) {
+    private void doCloseTrade(final boolean isResponseCompleted) {
+        if (trySetClosedFlag()) {
             this._isResponseCompleted.set(isResponseCompleted);
             if (LOG.isDebugEnabled()) {
-                LOG.debug("invoke doCloseTrade on active trade[channel: {}] with isEndedWithKeepAlive({})", 
-                        this._channel, this.isEndedWithKeepAlive());
+                LOG.debug("invoke doCloseTrade on active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
+                        this._channel, isResponseCompleted, this.isEndedWithKeepAlive());
             }
-            this._onTradeClosedActionsRef.destroy(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
+            this._onClosedsRef.destroy(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
                 @Override
-                public void call(final COWCompositeSupport<Action1<HttpTrade>> actions) {
-                    actions.foreachComponent(new Action1<Action1<HttpTrade>>() {
+                public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds) {
+                    oncloseds.foreachComponent(new Action1<Action1<HttpTrade>>() {
                         @Override
-                        public void call(final Action1<HttpTrade> onTradeClosed) {
-                            onTradeClosed.call(DefaultHttpTrade.this);
+                        public void call(final Action1<HttpTrade> onClosed) {
+                            try {
+                                onClosed.call(DefaultHttpTrade.this);
+                            } catch (Exception e) {
+                                LOG.warn("exception when trade({}) invoke onClosed({}), detail: {}",
+                                        DefaultHttpTrade.this, onClosed, ExceptionUtils.exception2detail(e));
+                            }
                         }});
                 }});
         } else {
-            LOG.warn("invoke onTradeClosed on closed trade[channel: {}]", this._channel);
+            LOG.warn("invoke doCloseTrade on closed trade[channel: {}]", this._channel);
         }
     }
 }

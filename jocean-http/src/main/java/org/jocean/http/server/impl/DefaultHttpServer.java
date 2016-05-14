@@ -105,22 +105,25 @@ public class DefaultHttpServer implements HttpServer {
                     final ChannelFuture future = bootstrap.bind(localAddress);
                     RxNettys.attachFutureToSubscriber(future, subscriber);
                     subscriber.add(RxNettys.subscriptionFrom(future.channel()));
-                    future.addListener(channelFutureListenerOf(features));
+                    final ServerChannelAware serverChannelAware = serverChannelAwareOf(features);
+                    if (null!=serverChannelAware) {
+                        future.addListener(listenerOfSetServerChannel(serverChannelAware));
+                    }
                 }
             }});
     }
 
     private void awaitInboundRequest(
             final Channel channel,
-            final Subscriber<? super HttpTrade> tradeSubscriber) {
+            final Subscriber<? super HttpTrade> subscriber) {
         APPLY.ON_CHANNEL_READ.applyTo(channel.pipeline(), 
             new Action0() {
                 @Override
                 public void call() {
-                    if (!tradeSubscriber.isUnsubscribed()) {
-                        tradeSubscriber.onNext(
+                    if (!subscriber.isUnsubscribed()) {
+                        subscriber.onNext(
                             httpTradeOf(channel)
-                            .addOnTradeClosed(recycleChannelAction(channel, tradeSubscriber)));
+                            .addOnTradeClosed(actionRecycleChannel(channel, subscriber)));
                     }
                 }});
     }
@@ -131,17 +134,17 @@ public class DefaultHttpServer implements HttpServer {
                 RxNettys.httpobjObservable(channel));
     }
 
-    private Action1<HttpTrade> recycleChannelAction(
+    private Action1<HttpTrade> actionRecycleChannel(
             final Channel channel,
-            final Subscriber<? super HttpTrade> tradeSubscriber) {
+            final Subscriber<? super HttpTrade> subscriber) {
         return new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade trade) {
                 if (channel.isActive()
                     && trade.isEndedWithKeepAlive()
-                    && !tradeSubscriber.isUnsubscribed()) {
+                    && !subscriber.isUnsubscribed()) {
                     channel.flush();
-                    awaitInboundRequest(channel, tradeSubscriber);
+                    awaitInboundRequest(channel, subscriber);
                 } else {
                     //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
                     //  Detail:
@@ -197,26 +200,29 @@ public class DefaultHttpServer implements HttpServer {
         return null != featuresBuilder ? featuresBuilder.call() : null;
     }
     
-    private static ChannelFutureListener channelFutureListenerOf(
-            final Feature[] applyFeatures) {
+    private static ChannelFutureListener listenerOfSetServerChannel(
+            final ServerChannelAware serverChannelAware) {
         return new ChannelFutureListener() {
             @Override
             public void operationComplete(final ChannelFuture future)
                     throws Exception {
                 if (future.isSuccess()) {
-                    final ServerChannelAware serverChannelAware = 
-                            InterfaceUtils.compositeIncludeType(ServerChannelAware.class, 
-                                (Object[])applyFeatures);
-                    if (null!=serverChannelAware) {
-                        try {
-                            serverChannelAware.setServerChannel((ServerChannel)future.channel());
-                        } catch (Exception e) {
-                            LOG.warn("exception when invoke setServerChannel for channel ({}), detail: {}",
-                                    future.channel(), ExceptionUtils.exception2detail(e));
-                        }
+                    try {
+                        serverChannelAware.setServerChannel((ServerChannel)future.channel());
+                    } catch (Exception e) {
+                        LOG.warn("exception when invoke setServerChannel for channel ({}), detail: {}",
+                                future.channel(), ExceptionUtils.exception2detail(e));
                     }
                 }
             }};
+    }
+
+    private static ServerChannelAware serverChannelAwareOf(
+            final Feature[] applyFeatures) {
+        final ServerChannelAware serverChannelAware = 
+                InterfaceUtils.compositeIncludeType(ServerChannelAware.class, 
+                    (Object[])applyFeatures);
+        return serverChannelAware;
     }
 
     private final BootstrapCreator _creator;
