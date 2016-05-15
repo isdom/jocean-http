@@ -40,9 +40,9 @@ public interface HttpServer extends Closeable {
         public boolean isEndedWithKeepAlive();
         //  try to close trade explicit
         public void close();
-        public Observable<? extends HttpObject> request();
+        public Observable<? extends HttpObject> inboundRequest();
+        public void outboundResponse(final Observable<? extends HttpObject> response);
         public Executor requestExecutor();
-        public Observer<HttpObject> responseObserver();
         public Object transport();
         public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed);
         public void undoOnClosed(final Action1<HttpTrade> onClosed);

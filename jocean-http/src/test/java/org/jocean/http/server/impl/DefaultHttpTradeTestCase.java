@@ -68,8 +68,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(onClosed.get());
         assertTrue(trade.isActive());
         
-        Observable.<HttpObject>error(new RuntimeException("ResponseError"))
-            .subscribe(trade.responseObserver());
+        trade.outboundResponse(Observable.<HttpObject>error(new RuntimeException("ResponseError")));
         
         assertTrue(onClosed.get());
         assertFalse(trade.isActive());
@@ -129,8 +128,7 @@ public class DefaultHttpTradeTestCase {
         //  retainFullHttpRequest 导致引用计数 +1
         assertEquals(3, request.refCnt());
         
-        Observable.<HttpObject>error(new RuntimeException("ResponseError"))
-            .subscribe(trade.responseObserver());
+        trade.outboundResponse(Observable.<HttpObject>error(new RuntimeException("ResponseError")));
         
         assertEquals(2, request.refCnt());
         
@@ -168,8 +166,7 @@ public class DefaultHttpTradeTestCase {
         
         final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
         
-        Observable.<HttpObject>just(response)
-            .subscribe(trade.responseObserver());
+        trade.outboundResponse(Observable.<HttpObject>just(response));
         
         assertEquals(2, request.refCnt());
         
@@ -245,8 +242,7 @@ public class DefaultHttpTradeTestCase {
         
         final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
         
-        Observable.<HttpObject>just(response)
-            .subscribe(trade.responseObserver());
+        trade.outboundResponse(Observable.<HttpObject>just(response));
         
         assertFalse(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -322,8 +318,7 @@ public class DefaultHttpTradeTestCase {
         
         final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
         
-        Observable.<HttpObject>just(response)
-            .subscribe(trade.responseObserver());
+        trade.outboundResponse(Observable.<HttpObject>just(response));
         
         assertFalse(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -399,8 +394,7 @@ public class DefaultHttpTradeTestCase {
         
         final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
         
-        Observable.<HttpObject>just(response)
-            .subscribe(trade.responseObserver());
+        trade.outboundResponse(Observable.<HttpObject>just(response));
         
         assertFalse(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -473,8 +467,7 @@ public class DefaultHttpTradeTestCase {
         
         final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
         
-        Observable.<HttpObject>just(response)
-            .subscribe(trade.responseObserver());
+        trade.outboundResponse(Observable.<HttpObject>just(response));
         
         assertFalse(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -575,7 +568,7 @@ public class DefaultHttpTradeTestCase {
         
         // http request has received by server's trade instance
         // bcs of cached request's Observable completed
-        trade.request().toBlocking().subscribe();
+        trade.inboundRequest().toBlocking().subscribe();
         
         assertEquals(0, trade.currentBlockSize());
         assertEquals(0, trade.currentBlockCount());
@@ -605,13 +598,15 @@ public class DefaultHttpTradeTestCase {
         
         clientObservable.subscribe();
         
-        Observable.<HttpObject>from(new ArrayList<HttpObject>() {
-            private static final long serialVersionUID = 1L;
-        {
-            this.add(response);
-            this.addAll(Arrays.asList(resp_contents));
-            this.add(LastHttpContent.EMPTY_LAST_CONTENT);
-        }}).subscribe(trade.responseObserver());
+        trade.outboundResponse(
+            Observable.<HttpObject>from(new ArrayList<HttpObject>() {
+                private static final long serialVersionUID = 1L;
+            {
+                this.add(response);
+                this.addAll(Arrays.asList(resp_contents));
+                this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+            }}));
+        
         
         assertFalse(trade.isActive());
         

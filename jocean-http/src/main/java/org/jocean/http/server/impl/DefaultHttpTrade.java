@@ -77,7 +77,7 @@ class DefaultHttpTrade implements HttpTrade {
     @Override
     public void close() {
         // TODO Auto-generated method stub
-        throw new RuntimeException();
+        throw new UnsupportedOperationException();
     }
     
     @Override
@@ -86,18 +86,18 @@ class DefaultHttpTrade implements HttpTrade {
     }
     
     @Override
-    public Observable<? extends HttpObject> request() {
+    public Observable<? extends HttpObject> inboundRequest() {
         return this._requestObservable;
     }
 
     @Override
-    public Executor requestExecutor() {
-        return this._channel.eventLoop();
+    public void outboundResponse(final Observable<? extends HttpObject> response) {
+        response.subscribe(this._responseObserver);
     }
     
     @Override
-    public Observer<HttpObject> responseObserver() {
-        return this._responseObserver;
+    public Executor requestExecutor() {
+        return this._channel.eventLoop();
     }
     
     @Override
@@ -142,7 +142,7 @@ class DefaultHttpTrade implements HttpTrade {
                 }
                 
                 @Override
-                public Observable<? extends HttpObject> request() {
+                public Observable<? extends HttpObject> inboundRequest() {
                     return cached.request();
                 }
     
@@ -152,8 +152,8 @@ class DefaultHttpTrade implements HttpTrade {
                 }
     
                 @Override
-                public Observer<HttpObject> responseObserver() {
-                    return DefaultHttpTrade.this.responseObserver();
+                public void outboundResponse(final Observable<? extends HttpObject> response) {
+                    DefaultHttpTrade.this.outboundResponse(response);
                 }
     
                 @Override

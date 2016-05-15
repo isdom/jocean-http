@@ -63,7 +63,7 @@ class CachedRequest {
     public CachedRequest(final HttpTrade trade, final int maxBlockSize) {
         this._maxBlockSize = maxBlockSize > 0 ? maxBlockSize : _MAX_BLOCK_SIZE;
         this._trade = trade;
-        trade.request().subscribe(this._requestObserver);
+        trade.inboundRequest().subscribe(this._requestObserver);
         this._trade.doOnClosed(new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade trade) {

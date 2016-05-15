@@ -58,7 +58,7 @@ public class DefaultHttpServerTestCase {
                 if (null!=transportRef) {
                     transportRef.set(trade.transport());
                 }
-                trade.request().subscribe(new Subscriber<HttpObject>() {
+                trade.inboundRequest().subscribe(new Subscriber<HttpObject>() {
                     private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
                     @Override
                     public void onCompleted() {
@@ -72,7 +72,7 @@ public class DefaultHttpServerTestCase {
                                         Unpooled.wrappedBuffer(bytes));
                                 response.headers().set(CONTENT_TYPE, "text/plain");
                                 response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                                Observable.<HttpObject>just(response).subscribe(trade.responseObserver());
+                                trade.outboundResponse(Observable.<HttpObject>just(response));
                             } catch (IOException e) {
                                 e.printStackTrace();
                             } finally {

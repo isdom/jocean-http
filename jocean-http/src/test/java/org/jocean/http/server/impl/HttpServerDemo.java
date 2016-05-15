@@ -78,7 +78,7 @@ public class HttpServerDemo {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    trade.request().subscribe(new Subscriber<HttpObject>() {
+                    trade.inboundRequest().subscribe(new Subscriber<HttpObject>() {
                         private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
                         
                         @Override
@@ -93,7 +93,7 @@ public class HttpServerDemo {
                                             Unpooled.wrappedBuffer(bytes));
                                     response.headers().set(CONTENT_TYPE, "text/plain");
                                     response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                                    Observable.<HttpObject>just(response).subscribe(trade.responseObserver());
+                                    trade.outboundResponse(Observable.<HttpObject>just(response));
                                 } catch (IOException e) {
                                     e.printStackTrace();
                                 } finally {
