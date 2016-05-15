@@ -22,7 +22,6 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
@@ -81,7 +80,7 @@ class DefaultHttpTrade implements HttpTrade {
     
     @Override
     public Observable<? extends HttpObject> request() {
-        return Observable.create(this._onSubscribeRequest);
+        return this._requestObservable;
     }
 
     @Override
@@ -107,7 +106,7 @@ class DefaultHttpTrade implements HttpTrade {
     
     @Override
     public CachedHttpTrade cached(final int maxBlockSize) {
-        if (!_isRequestStart.get()) {
+        if (!this._isRequestStart.get()) {
             final CachedRequest cached = new CachedRequest(this, maxBlockSize);
             return new CachedHttpTrade() {
     
@@ -142,14 +141,13 @@ class DefaultHttpTrade implements HttpTrade {
                 }
     
                 @Override
-                public HttpTrade doOnClosed(
-                        final Action1<HttpTrade> onTradeClosed) {
-                    return DefaultHttpTrade.this.doOnClosed(onTradeClosed);
+                public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed) {
+                    return DefaultHttpTrade.this.doOnClosed(onClosed);
                 }
     
                 @Override
-                public void undoOnClosed(Action1<HttpTrade> onTradeClosed) {
-                    DefaultHttpTrade.this.undoOnClosed(onTradeClosed);
+                public void undoOnClosed(Action1<HttpTrade> onClosed) {
+                    DefaultHttpTrade.this.undoOnClosed(onClosed);
                 }
     
                 @Override
@@ -214,11 +212,17 @@ class DefaultHttpTrade implements HttpTrade {
     private final Observer<HttpObject> _responseObserver = new Observer<HttpObject>() {
         @Override
         public void onCompleted() {
-            try {
-                doCloseTrade(true);
-            } catch (Exception e) {
-                LOG.warn("exception when ({}).onTradeClosed, detail:{}",
-                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
+            if (isActive()) {
+                _channel.flush();
+                try {
+                    doCloseTrade(true);
+                } catch (Exception e) {
+                    LOG.warn("exception when ({}).doCloseTrade, detail:{}",
+                        DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
+                }
+            } else {
+                LOG.warn("onCompleted on closed transport[channel: {}]",
+                        _channel);
             }
         }
 
@@ -229,7 +233,7 @@ class DefaultHttpTrade implements HttpTrade {
             try {
                 doCloseTrade(false);
             } catch (Exception e1) {
-                LOG.warn("exception when trade({}).onTradeClosed, detail:{}",
+                LOG.warn("exception when trade({}).doCloseTrade, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e1));
             }
         }
@@ -237,11 +241,7 @@ class DefaultHttpTrade implements HttpTrade {
         @Override
         public void onNext(final HttpObject msg) {
             if (isActive()) {
-                if (msg instanceof LastHttpContent) {
-                    _channel.writeAndFlush(ReferenceCountUtil.retain(msg));
-                } else {
-                    _channel.write(ReferenceCountUtil.retain(msg));
-                }
+                _channel.write(ReferenceCountUtil.retain(msg));
             } else {
                 LOG.warn("sendback msg({}) on closed transport[channel: {}]",
                     msg, _channel);
@@ -249,7 +249,8 @@ class DefaultHttpTrade implements HttpTrade {
         }
     };
     
-    private final OnSubscribe<HttpObject> _onSubscribeRequest = new OnSubscribe<HttpObject>() {
+    private final Observable<? extends HttpObject> _requestObservable = 
+            Observable.create(new OnSubscribe<HttpObject>() {
         @Override
         public void call(final Subscriber<? super HttpObject> subscriber) {
             if (!subscriber.isUnsubscribed()) {
@@ -261,7 +262,7 @@ class DefaultHttpTrade implements HttpTrade {
                     }}));
             }
         }
-    };
+    });
     
     private final Observer<HttpObject> _requestObserver = new Observer<HttpObject>() {
 
