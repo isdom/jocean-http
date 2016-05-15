@@ -43,10 +43,11 @@ class DefaultHttpTrade implements HttpTrade {
     public String toString() {
         StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpTrade [request's subscribers.size=")
-                .append(_requestSubscribers.size()).append(", isRequestCompleted=")
-                .append(_isRequestCompleted.get()).append(", isKeepAlive=")
-                .append(_isKeepAlive.get()).append(", isClosed=")
-                .append(_isActive.get()).append(", channel=").append(_channel)
+                .append(_requestSubscribers.size())
+                .append(", isRequestCompleted=").append(_isRequestCompleted.get())
+                .append(", isKeepAlive=").append(_isKeepAlive.get())
+                .append(", isActive=").append(_isActive.get())
+                .append(", channel=").append(_channel)
                 .append("]");
         return builder.toString();
     }
