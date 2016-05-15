@@ -12,7 +12,6 @@ import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys.ServerChannelAware;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
@@ -26,7 +25,6 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
-import io.netty.channel.ServerChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.internal.logging.InternalLoggerFactory;
@@ -37,6 +35,7 @@ import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
+import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -67,6 +66,17 @@ public class DefaultHttpServer implements HttpServer {
         return defineServer(localAddress, null, features);
     }
     
+    private static abstract class Initializer extends ChannelInitializer<Channel> implements Ordered {
+        @Override
+        public String toString() {
+            return "[DefaultHttpServer' ChannelInitializer]";
+        }
+        @Override
+        public int ordinal() {
+            return -1000;
+        }
+    }
+    
     public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress, 
             final Func0<Feature[]> featuresBuilder,
@@ -76,16 +86,6 @@ public class DefaultHttpServer implements HttpServer {
             public void call(final Subscriber<? super HttpTrade> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final ServerBootstrap bootstrap = _creator.newBootstrap();
-                    abstract class Initializer extends ChannelInitializer<Channel> implements Ordered {
-                        @Override
-                        public String toString() {
-                            return "[DefaultHttpServer' ChannelInitializer]";
-                        }
-                        @Override
-                        public int ordinal() {
-                            return -1000;
-                        }
-                    }
                     bootstrap.childHandler(new Initializer() {
                         @Override
                         protected void initChannel(final Channel channel) throws Exception {
@@ -103,12 +103,10 @@ public class DefaultHttpServer implements HttpServer {
                             awaitInboundRequest(channel, subscriber);
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
-                    RxNettys.attachFutureToSubscriber(future, subscriber);
-                    subscriber.add(RxNettys.subscriptionFrom(future.channel()));
-                    final ServerChannelAware serverChannelAware = serverChannelAwareOf(features);
-                    if (null!=serverChannelAware) {
-                        future.addListener(listenerOfSetServerChannel(serverChannelAware));
-                    }
+                    subscriber.add(Subscriptions.from(future));
+                    subscriber.add(RxNettys.subscriptionForCloseChannel(future.channel()));
+                    future.addListener(RxNettys.listenerOfOnError(subscriber))
+                        .addListener(RxNettys.listenerOfSetServerChannel(serverChannelAwareOf(features)));
                 }
             }});
     }
@@ -116,16 +114,18 @@ public class DefaultHttpServer implements HttpServer {
     private void awaitInboundRequest(
             final Channel channel,
             final Subscriber<? super HttpTrade> subscriber) {
-        APPLY.ON_CHANNEL_READ.applyTo(channel.pipeline(), 
-            new Action0() {
-                @Override
-                public void call() {
-                    if (!subscriber.isUnsubscribed()) {
-                        subscriber.onNext(
-                            httpTradeOf(channel)
-                            .doOnClosed(actionRecycleChannel(channel, subscriber)));
-                    }
-                }});
+//        subscriber.add(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, 
+            APPLY.ON_CHANNEL_READ.applyTo(channel.pipeline(), 
+                new Action0() {
+                    @Override
+                    public void call() {
+                        if (!subscriber.isUnsubscribed()) {
+                            subscriber.onNext(
+                                httpTradeOf(channel)
+                                .doOnClosed(actionRecycleChannel(channel, subscriber)));
+                        }
+                    }});
+//            )));
     }
 
     private HttpTrade httpTradeOf(final Channel channel) {
@@ -200,23 +200,6 @@ public class DefaultHttpServer implements HttpServer {
         return null != featuresBuilder ? featuresBuilder.call() : null;
     }
     
-    private static ChannelFutureListener listenerOfSetServerChannel(
-            final ServerChannelAware serverChannelAware) {
-        return new ChannelFutureListener() {
-            @Override
-            public void operationComplete(final ChannelFuture future)
-                    throws Exception {
-                if (future.isSuccess()) {
-                    try {
-                        serverChannelAware.setServerChannel((ServerChannel)future.channel());
-                    } catch (Exception e) {
-                        LOG.warn("exception when invoke setServerChannel for channel ({}), detail: {}",
-                                future.channel(), ExceptionUtils.exception2detail(e));
-                    }
-                }
-            }};
-    }
-
     private static ServerChannelAware serverChannelAwareOf(
             final Feature[] applyFeatures) {
         final ServerChannelAware serverChannelAware = 
