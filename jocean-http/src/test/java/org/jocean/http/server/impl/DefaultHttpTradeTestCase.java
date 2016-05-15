@@ -59,7 +59,7 @@ public class DefaultHttpTradeTestCase {
                 Observable.<HttpObject>empty());
         
         final AtomicBoolean onClosed = new AtomicBoolean(false);
-        trade.addOnTradeClosed(new Action1<HttpTrade>(){
+        trade.doOnClosed(new Action1<HttpTrade>(){
             @Override
             public void call(final HttpTrade trade) {
                 onClosed.set(true);
@@ -83,7 +83,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
         
         final AtomicBoolean onClosed = new AtomicBoolean(false);
-        trade.addOnTradeClosed(new Action1<HttpTrade>(){
+        trade.doOnClosed(new Action1<HttpTrade>(){
             @Override
             public void call(final HttpTrade trade) {
                 onClosed.set(true);

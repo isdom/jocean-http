@@ -94,13 +94,13 @@ class DefaultHttpTrade implements HttpTrade {
     }
     
     @Override
-    public HttpTrade addOnTradeClosed(final Action1<HttpTrade> onClosed) {
+    public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed) {
         this._addOnClosed.call(onClosed);
         return this;
     }
     
     @Override
-    public void removeOnTradeClosed(final Action1<HttpTrade> onClosed) {
+    public void undoOnClosed(final Action1<HttpTrade> onClosed) {
         this._removeOnClosed.call(onClosed);
     }
     
@@ -141,14 +141,14 @@ class DefaultHttpTrade implements HttpTrade {
                 }
     
                 @Override
-                public HttpTrade addOnTradeClosed(
+                public HttpTrade doOnClosed(
                         final Action1<HttpTrade> onTradeClosed) {
-                    return DefaultHttpTrade.this.addOnTradeClosed(onTradeClosed);
+                    return DefaultHttpTrade.this.doOnClosed(onTradeClosed);
                 }
     
                 @Override
-                public void removeOnTradeClosed(Action1<HttpTrade> onTradeClosed) {
-                    DefaultHttpTrade.this.removeOnTradeClosed(onTradeClosed);
+                public void undoOnClosed(Action1<HttpTrade> onTradeClosed) {
+                    DefaultHttpTrade.this.undoOnClosed(onTradeClosed);
                 }
     
                 @Override

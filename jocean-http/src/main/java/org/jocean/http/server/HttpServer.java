@@ -42,8 +42,8 @@ public interface HttpServer extends Closeable {
         public Executor requestExecutor();
         public Observer<HttpObject> responseObserver();
         public Object transport();
-        public HttpTrade addOnTradeClosed(final Action1<HttpTrade> onTradeClosed);
-        public void removeOnTradeClosed(final Action1<HttpTrade> onTradeClosed);
+        public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed);
+        public void undoOnClosed(final Action1<HttpTrade> onClosed);
         public CachedHttpTrade cached(final int maxBlockSize);
     }
     

@@ -123,7 +123,7 @@ public class DefaultHttpServer implements HttpServer {
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onNext(
                             httpTradeOf(channel)
-                            .addOnTradeClosed(actionRecycleChannel(channel, subscriber)));
+                            .doOnClosed(actionRecycleChannel(channel, subscriber)));
                     }
                 }});
     }

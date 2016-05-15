@@ -613,7 +613,9 @@ public class RxNettys {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
-                    APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber);
+                    subscriber.add(Subscriptions.create(
+                        RxNettys.actionToRemoveHandler(channel, 
+                            APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
                 }
             }} );
     }
