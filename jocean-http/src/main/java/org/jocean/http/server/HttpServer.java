@@ -38,6 +38,8 @@ public interface HttpServer extends Closeable {
     public interface HttpTrade {
         public boolean isActive();
         public boolean isEndedWithKeepAlive();
+        //  try to close trade explicit
+        public void close();
         public Observable<? extends HttpObject> request();
         public Executor requestExecutor();
         public Observer<HttpObject> responseObserver();

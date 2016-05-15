@@ -5,6 +5,8 @@ package org.jocean.http.server.impl;
 
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.jocean.http.Feature;
 import org.jocean.http.server.HttpServer;
@@ -86,6 +88,7 @@ public class DefaultHttpServer implements HttpServer {
             public void call(final Subscriber<? super HttpTrade> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final ServerBootstrap bootstrap = _creator.newBootstrap();
+                    final List<Channel> awaitChannels = new CopyOnWriteArrayList<>();
                     bootstrap.childHandler(new Initializer() {
                         @Override
                         protected void initChannel(final Channel channel) throws Exception {
@@ -100,11 +103,18 @@ public class DefaultHttpServer implements HttpServer {
                                 }
                             }
                             APPLY.HTTPSERVER.applyTo(channel.pipeline());
-                            awaitInboundRequest(channel, subscriber);
+                            awaitInboundRequest(channel, subscriber, awaitChannels);
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
                     subscriber.add(Subscriptions.from(future));
                     subscriber.add(RxNettys.subscriptionForCloseChannel(future.channel()));
+                    subscriber.add(Subscriptions.create(new Action0() {
+                        @Override
+                        public void call() {
+                            while (!awaitChannels.isEmpty()) {
+                                awaitChannels.remove(0).close();
+                            }
+                        }}));
                     future.addListener(RxNettys.listenerOfOnError(subscriber))
                         .addListener(RxNettys.listenerOfSetServerChannel(serverChannelAwareOf(features)));
                 }
@@ -113,19 +123,24 @@ public class DefaultHttpServer implements HttpServer {
 
     private void awaitInboundRequest(
             final Channel channel,
-            final Subscriber<? super HttpTrade> subscriber) {
-//        subscriber.add(Subscriptions.create(RxNettys.actionToRemoveHandler(channel, 
-            APPLY.ON_CHANNEL_READ.applyTo(channel.pipeline(), 
-                new Action0() {
-                    @Override
-                    public void call() {
-                        if (!subscriber.isUnsubscribed()) {
-                            subscriber.onNext(
-                                httpTradeOf(channel)
-                                .doOnClosed(actionRecycleChannel(channel, subscriber)));
-                        }
-                    }});
-//            )));
+            final Subscriber<? super HttpTrade> subscriber, 
+            final List<Channel> awaitChannels) {
+        awaitChannels.add(channel);
+        APPLY.ON_CHANNEL_READ.applyTo(channel.pipeline(), 
+            new Action0() {
+                @Override
+                public void call() {
+                    awaitChannels.remove(channel);
+                    if (!subscriber.isUnsubscribed()) {
+                        subscriber.onNext(
+                            httpTradeOf(channel)
+                            .doOnClosed(actionRecycleChannel(channel, subscriber, awaitChannels)));
+                    } else {
+                        LOG.warn("HttpTrade Subscriber {} has unsubscribed, so close channel({})",
+                                subscriber, channel);
+                        channel.close();
+                    }
+                }});
     }
 
     private HttpTrade httpTradeOf(final Channel channel) {
@@ -136,7 +151,8 @@ public class DefaultHttpServer implements HttpServer {
 
     private Action1<HttpTrade> actionRecycleChannel(
             final Channel channel,
-            final Subscriber<? super HttpTrade> subscriber) {
+            final Subscriber<? super HttpTrade> subscriber, 
+            final List<Channel> awaitChannels) {
         return new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade trade) {
@@ -144,7 +160,7 @@ public class DefaultHttpServer implements HttpServer {
                     && trade.isEndedWithKeepAlive()
                     && !subscriber.isUnsubscribed()) {
                     channel.flush();
-                    awaitInboundRequest(channel, subscriber);
+                    awaitInboundRequest(channel, subscriber, awaitChannels);
                 } else {
                     //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
                     //  Detail:

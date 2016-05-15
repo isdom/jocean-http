@@ -55,10 +55,11 @@ class DefaultHttpTrade implements HttpTrade {
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
     DefaultHttpTrade(
-            final Channel channel, 
-            final Observable<? extends HttpObject> requestObservable) {
+        final Channel channel, 
+        final Observable<? extends HttpObject> requestObservable) {
         this._channel = channel;
-        requestObservable.subscribe(this._requestObserver);
+        //  TODO when to unsubscribe
+        requestObservable.subscribe(this._requestRelay);
     }
 
     @Override
@@ -73,6 +74,12 @@ class DefaultHttpTrade implements HttpTrade {
             && this._isKeepAlive.get());
     }
 
+    @Override
+    public void close() {
+        // TODO Auto-generated method stub
+        throw new RuntimeException();
+    }
+    
     @Override
     public Object transport() {
         return this._channel;
@@ -110,6 +117,15 @@ class DefaultHttpTrade implements HttpTrade {
             final CachedRequest cached = new CachedRequest(this, maxBlockSize);
             return new CachedHttpTrade() {
     
+                /* (non-Javadoc)
+                 * @see java.lang.Object#toString()
+                 */
+                @Override
+                public String toString() {
+                    // TODO Auto-generated method stub
+                    return super.toString();
+                }
+
                 @Override
                 public boolean isActive() {
                     return DefaultHttpTrade.this.isActive();
@@ -120,6 +136,11 @@ class DefaultHttpTrade implements HttpTrade {
                     return DefaultHttpTrade.this.isEndedWithKeepAlive();
                 }
     
+                @Override
+                public void close() {
+                    DefaultHttpTrade.this.close();
+                }
+                
                 @Override
                 public Observable<? extends HttpObject> request() {
                     return cached.request();
@@ -264,8 +285,7 @@ class DefaultHttpTrade implements HttpTrade {
         }
     });
     
-    private final Observer<HttpObject> _requestObserver = new Observer<HttpObject>() {
-
+    private final Observer<HttpObject> _requestRelay = new Observer<HttpObject>() {
         @Override
         public void onCompleted() {
             if (LOG.isDebugEnabled()) {
@@ -273,13 +293,13 @@ class DefaultHttpTrade implements HttpTrade {
             }
             _isRequestCompleted.set(true);
             for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
-                try {
-                    if (!subscriber.isUnsubscribed()) {
+                if (!subscriber.isUnsubscribed()) {
+                    try {
                         subscriber.onCompleted();
+                    } catch (Exception e) {
+                        LOG.warn("exception when invoke subscriber({}).onCompleted, detail:{}",
+                                subscriber, ExceptionUtils.exception2detail(e));
                     }
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke subscriber({}).onCompleted, detail:{}",
-                            subscriber, ExceptionUtils.exception2detail(e));
                 }
             }
         }
@@ -295,13 +315,13 @@ class DefaultHttpTrade implements HttpTrade {
                 _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpObject));
             }
             for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
-                try {
-                    if (!subscriber.isUnsubscribed()) {
+                if (!subscriber.isUnsubscribed()) {
+                    try {
                         subscriber.onNext(httpObject);
+                    } catch (Exception e) {
+                        LOG.warn("exception when invoke subscriber({}).onNext, detail:{}",
+                                subscriber, ExceptionUtils.exception2detail(e));
                     }
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke subscriber({}).onNext, detail:{}",
-                            subscriber, ExceptionUtils.exception2detail(e));
                 }
             }
         }
@@ -311,13 +331,13 @@ class DefaultHttpTrade implements HttpTrade {
             LOG.warn("trade({}) requestObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
-                try {
-                    if (!subscriber.isUnsubscribed()) {
+                if (!subscriber.isUnsubscribed()) {
+                    try {
                         subscriber.onError(e);
+                    } catch (Exception e1) {
+                        LOG.warn("exception when invoke subscriber({}).onError, detail:{}",
+                                subscriber, ExceptionUtils.exception2detail(e1));
                     }
-                } catch (Exception e1) {
-                    LOG.warn("exception when invoke subscriber({}).onError, detail:{}",
-                            subscriber, ExceptionUtils.exception2detail(e1));
                 }
             }
             doCloseTrade(false);
