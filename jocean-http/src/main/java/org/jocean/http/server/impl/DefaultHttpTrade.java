@@ -122,8 +122,11 @@ class DefaultHttpTrade implements HttpTrade {
                  */
                 @Override
                 public String toString() {
-                    // TODO Auto-generated method stub
-                    return super.toString();
+                    StringBuilder builder = new StringBuilder();
+                    builder.append("CachedHttpTrade for [")
+                        .append(DefaultHttpTrade.this.toString())
+                        .append("]");
+                    return builder.toString();
                 }
 
                 @Override
