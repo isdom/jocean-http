@@ -12,7 +12,7 @@ import org.jocean.http.Feature;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
-import rx.Observer;
+import rx.Subscription;
 import rx.functions.Action1;
 import rx.functions.Func0;
 
@@ -41,7 +41,7 @@ public interface HttpServer extends Closeable {
         //  try to close trade explicit
         public void close();
         public Observable<? extends HttpObject> inboundRequest();
-        public void outboundResponse(final Observable<? extends HttpObject> response);
+        public Subscription outboundResponse(final Observable<? extends HttpObject> response);
         public Executor requestExecutor();
         public Object transport();
         public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed);
