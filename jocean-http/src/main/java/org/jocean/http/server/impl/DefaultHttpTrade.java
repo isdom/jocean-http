@@ -11,9 +11,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServer.CachedHttpTrade;
 import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.idiom.ActiveRef;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.StatefulRef;
 import org.jocean.idiom.rx.Action1_N;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,12 +96,12 @@ class DefaultHttpTrade implements HttpTrade {
     public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
         synchronized(this._subscriptionOfResponse) {
             //  对 outboundResponse 方法加锁
-            final Subscription olds =  this._subscriptionOfResponse.get();
-            if (null==olds ||
-                (olds.isUnsubscribed() && !this._isResponseSended.get())) {
-                final Subscription news = response.subscribe(this._responseObserver);
-                this._subscriptionOfResponse.set(news);
-                return news;
+            final Subscription oldsubsc =  this._subscriptionOfResponse.get();
+            if (null==oldsubsc ||
+                (oldsubsc.isUnsubscribed() && !this._isResponseSended.get())) {
+                final Subscription newsubsc = response.subscribe(this._responseObserver);
+                this._subscriptionOfResponse.set(newsubsc);
+                return newsubsc;
             }
         }
         return null;
@@ -245,26 +245,26 @@ class DefaultHttpTrade implements HttpTrade {
         }
     }
     
-    private final StatefulRef<COWCompositeSupport<Action1<HttpTrade>>> _onClosedsRef = 
-            new StatefulRef<>(new COWCompositeSupport<Action1<HttpTrade>>());
+    private final ActiveRef<COWCompositeSupport<Action1<HttpTrade>>> _onClosedsRef = 
+            new ActiveRef<>(new COWCompositeSupport<Action1<HttpTrade>>());
     
     private final ActionN _addOnClosed = this._onClosedsRef.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
-                oncloseds.addComponent(StatefulRef.<Action1<HttpTrade>>getArgAs(0, args));
+                oncloseds.addComponent(ActiveRef.<Action1<HttpTrade>>getArgAs(0, args));
             }})
         .submitWhenDestroyed(new ActionN() {
             @Override
             public void call(final Object...args) {
-                StatefulRef.<Action1<HttpTrade>>getArgAs(0, args).call(DefaultHttpTrade.this);
+                ActiveRef.<Action1<HttpTrade>>getArgAs(0, args).call(DefaultHttpTrade.this);
             }});
     
     private final ActionN _removeOnClosed = this._onClosedsRef.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
         @Override
         public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds,final Object...args) {
-            oncloseds.removeComponent(StatefulRef.<Action1<HttpTrade>>getArgAs(0, args));
+            oncloseds.removeComponent(ActiveRef.<Action1<HttpTrade>>getArgAs(0, args));
         }});
     
     private final Channel _channel;
@@ -275,7 +275,7 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicBoolean _isActive = new AtomicBoolean(true);
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
     private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
-    private final AtomicReference<Subscription> _subscriptionOfResponse = new AtomicReference<Subscription>();
+    private final AtomicReference<Subscription> _subscriptionOfResponse = new AtomicReference<Subscription>(null);
     
     private final Observer<HttpObject> _responseObserver = new Observer<HttpObject>() {
         @Override

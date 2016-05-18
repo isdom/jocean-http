@@ -8,8 +8,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.Nettys;
+import org.jocean.idiom.ActiveRef;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.StatefulRef;
 import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
 import org.slf4j.Logger;
@@ -180,8 +180,8 @@ class CachedRequest {
     
     private final int _maxBlockSize;
     
-    private final StatefulRef<List<HttpContent>> _currentBlockRef = 
-            new StatefulRef<>((List<HttpContent>)new ArrayList<HttpContent>());
+    private final ActiveRef<List<HttpContent>> _currentBlockRef = 
+            new ActiveRef<>((List<HttpContent>)new ArrayList<HttpContent>());
     private int _currentBlockSize = 0;
     
     private final ActionN _updateCurrentBlockAction = 
@@ -189,7 +189,7 @@ class CachedRequest {
             new Action1_N<List<HttpContent>>() {
         @Override
         public void call(final List<HttpContent> currentBlock, final Object...args) {
-            final HttpContent httpContent = StatefulRef.<HttpContent>getArgAs(0, args);
+            final HttpContent httpContent = ActiveRef.<HttpContent>getArgAs(0, args);
             currentBlock.add(httpContent);
             _currentBlockSize += httpContent.content().readableBytes();
         }});
@@ -223,15 +223,15 @@ class CachedRequest {
             }
         }});
     
-    private final StatefulRef<List<HttpObject>> _reqHttpObjectsRef = 
-            new StatefulRef<>((List<HttpObject>)new ArrayList<HttpObject>());
+    private final ActiveRef<List<HttpObject>> _reqHttpObjectsRef = 
+            new ActiveRef<>((List<HttpObject>)new ArrayList<HttpObject>());
     
     private final ActionN _addHttpObjectAndNotifySubscribersAction = 
             this._reqHttpObjectsRef.submitWhenActive(
             new Action1_N<List<HttpObject>>() {
         @Override
         public void call(final List<HttpObject> reqs,final Object...args) {
-            final HttpObject httpobj = StatefulRef.<HttpObject>getArgAs(0, args);
+            final HttpObject httpobj = ActiveRef.<HttpObject>getArgAs(0, args);
             reqs.add(httpobj);
             for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
                 try {
