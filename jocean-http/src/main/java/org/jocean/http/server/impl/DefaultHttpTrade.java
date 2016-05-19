@@ -273,14 +273,16 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
     private final AtomicBoolean _isActive = new AtomicBoolean(true);
-    private final List<Subscriber<? super HttpObject>> _requestSubscribers = new CopyOnWriteArrayList<>();
+    private final List<Subscriber<? super HttpObject>> _requestSubscribers = 
+            new CopyOnWriteArrayList<>();
     private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
-    private final AtomicReference<Subscription> _subscriptionOfResponse = new AtomicReference<Subscription>(null);
+    private final AtomicReference<Subscription> _subscriptionOfResponse = 
+            new AtomicReference<Subscription>(null);
     
-    private final Observer<HttpObject> _responseObserver = new Observer<HttpObject>() {
-        @Override
-        public void onCompleted() {
-            if (isActive()) {
+    private final ActionN _onResponseCompleted = this._onClosedsRef.submitWhenActive(
+            new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
+            @Override
+            public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
                 _isResponseSended.compareAndSet(false, true);
                 _channel.flush();
                 try {
@@ -289,10 +291,33 @@ class DefaultHttpTrade implements HttpTrade {
                     LOG.warn("exception when ({}).doCloseTrade, detail:{}",
                         DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
                 }
-            } else {
-                LOG.warn("onCompleted on closed transport[channel: {}]",
-                        _channel);
-            }
+            }});
+            
+    private final ActionN _onResponseNext = this._onClosedsRef.submitWhenActive(
+            new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
+            @Override
+            public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
+                _isResponseSended.compareAndSet(false, true);
+                _channel.write(ReferenceCountUtil.retain(ActiveRef.<HttpObject>getArgAs(0, args)));
+            }});
+    
+    private final Observer<HttpObject> _responseObserver = new Observer<HttpObject>() {
+        @Override
+        public void onCompleted() {
+            _onResponseCompleted.call();
+//            if (isActive()) {
+//                _isResponseSended.compareAndSet(false, true);
+//                _channel.flush();
+//                try {
+//                    doCloseTrade(true);
+//                } catch (Exception e) {
+//                    LOG.warn("exception when ({}).doCloseTrade, detail:{}",
+//                        DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
+//                }
+//            } else {
+//                LOG.warn("onCompleted on closed transport[channel: {}]",
+//                        _channel);
+//            }
         }
 
         @Override
@@ -310,6 +335,8 @@ class DefaultHttpTrade implements HttpTrade {
 
         @Override
         public void onNext(final HttpObject msg) {
+            _onResponseNext.call(msg);
+            /*
             if (isActive()) {
                 _isResponseSended.compareAndSet(false, true);
                 _channel.write(ReferenceCountUtil.retain(msg));
@@ -317,6 +344,7 @@ class DefaultHttpTrade implements HttpTrade {
                 LOG.warn("sendback msg({}) on closed transport[channel: {}]",
                     msg, _channel);
             }
+            */
         }
     };
     
