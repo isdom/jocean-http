@@ -77,7 +77,7 @@ class DefaultHttpTrade implements HttpTrade {
     }
 
     @Override
-    public void close() {
+    public void abort() {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException();
     }
@@ -152,8 +152,8 @@ class DefaultHttpTrade implements HttpTrade {
                 }
     
                 @Override
-                public void close() {
-                    DefaultHttpTrade.this.close();
+                public void abort() {
+                    DefaultHttpTrade.this.abort();
                 }
                 
                 @Override
