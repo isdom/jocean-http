@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServer.CachedHttpTrade;
 import org.jocean.http.server.HttpServer.HttpTrade;
-import org.jocean.idiom.ActiveRef;
+import org.jocean.idiom.ActiveHolder;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.Action1_N;
@@ -66,7 +66,7 @@ class DefaultHttpTrade implements HttpTrade {
 
     @Override
     public boolean isActive() {
-        return this._tradeActiveRef.isActive();
+        return this._tradeActive.isActive();
     }
 
     @Override
@@ -216,7 +216,7 @@ class DefaultHttpTrade implements HttpTrade {
     }
     
     private void doCloseTrade(final boolean isResponseCompleted) {
-        this._tradeActiveRef.destroy(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
+        this._tradeActive.destroy(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds) {
                 _isResponseCompleted.set(isResponseCompleted);
@@ -237,26 +237,26 @@ class DefaultHttpTrade implements HttpTrade {
             }});
     }
     
-    private final ActiveRef<COWCompositeSupport<Action1<HttpTrade>>> _tradeActiveRef = 
-            new ActiveRef<>(new COWCompositeSupport<Action1<HttpTrade>>());
+    private final ActiveHolder<COWCompositeSupport<Action1<HttpTrade>>> _tradeActive = 
+            new ActiveHolder<>(new COWCompositeSupport<Action1<HttpTrade>>());
     
-    private final ActionN _doOnClosed = this._tradeActiveRef.submitWhenActive(
+    private final ActionN _doOnClosed = this._tradeActive.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
-                oncloseds.addComponent(ActiveRef.<Action1<HttpTrade>>getArgAs(0, args));
+                oncloseds.addComponent(ActiveHolder.<Action1<HttpTrade>>getArgAs(0, args));
             }})
         .submitWhenDestroyed(new ActionN() {
             @Override
             public void call(final Object...args) {
-                ActiveRef.<Action1<HttpTrade>>getArgAs(0, args).call(DefaultHttpTrade.this);
+                ActiveHolder.<Action1<HttpTrade>>getArgAs(0, args).call(DefaultHttpTrade.this);
             }});
     
-    private final ActionN _undoOnClosed = this._tradeActiveRef.submitWhenActive(
+    private final ActionN _undoOnClosed = this._tradeActive.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
         @Override
         public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds,final Object...args) {
-            oncloseds.removeComponent(ActiveRef.<Action1<HttpTrade>>getArgAs(0, args));
+            oncloseds.removeComponent(ActiveHolder.<Action1<HttpTrade>>getArgAs(0, args));
         }});
     
     private final Channel _channel;
@@ -270,7 +270,7 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicReference<Subscription> _subscriptionOfResponse = 
             new AtomicReference<Subscription>(null);
     
-    private final ActionN _responseOnCompleted = this._tradeActiveRef.submitWhenActive(
+    private final ActionN _responseOnCompleted = this._tradeActive.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
@@ -284,12 +284,12 @@ class DefaultHttpTrade implements HttpTrade {
                 }
             }});
             
-    private final ActionN _responseOnNext = this._tradeActiveRef.submitWhenActive(
+    private final ActionN _responseOnNext = this._tradeActive.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
                 _isResponseSended.compareAndSet(false, true);
-                _channel.write(ReferenceCountUtil.retain(ActiveRef.<HttpObject>getArgAs(0, args)));
+                _channel.write(ReferenceCountUtil.retain(ActiveHolder.<HttpObject>getArgAs(0, args)));
             }});
     
     private final Observer<HttpObject> _responseObserver = new Observer<HttpObject>() {
