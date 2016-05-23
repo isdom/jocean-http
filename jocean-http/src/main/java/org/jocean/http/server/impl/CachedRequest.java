@@ -10,6 +10,7 @@ import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ActiveHolder;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
 import org.slf4j.Logger;
@@ -189,7 +190,7 @@ class CachedRequest {
             new Action1_N<List<HttpContent>>() {
         @Override
         public void call(final List<HttpContent> currentBlock, final Object...args) {
-            final HttpContent httpContent = ActiveHolder.<HttpContent>getArgAs(0, args);
+            final HttpContent httpContent = JOArrays.<HttpContent>takeArgAs(0, args);
             currentBlock.add(httpContent);
             _currentBlockSize += httpContent.content().readableBytes();
         }});
@@ -231,7 +232,7 @@ class CachedRequest {
             new Action1_N<List<HttpObject>>() {
         @Override
         public void call(final List<HttpObject> reqs,final Object...args) {
-            final HttpObject httpobj = ActiveHolder.<HttpObject>getArgAs(0, args);
+            final HttpObject httpobj = JOArrays.<HttpObject>takeArgAs(0, args);
             reqs.add(httpobj);
             for (Subscriber<? super HttpObject> subscriber : _subscribers ) {
                 try {
