@@ -16,6 +16,7 @@ import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.rx.Action1_N;
+import org.jocean.idiom.rx.RxActions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,7 +101,10 @@ class DefaultHttpTrade implements HttpTrade {
             final Subscription oldsubsc =  this._subscriptionOfResponse.get();
             if (null==oldsubsc ||
                 (oldsubsc.isUnsubscribed() && !this._isResponseSended.get())) {
-                final Subscription newsubsc = response.subscribe(this._responseObserver);
+                final Subscription newsubsc = response.subscribe(
+                        this._responseOnNext,
+                        this._responseOnError,
+                        this._responseOnCompleted);
                 this._subscriptionOfResponse.set(newsubsc);
                 return newsubsc;
             }
@@ -270,7 +274,7 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicReference<Subscription> _subscriptionOfResponse = 
             new AtomicReference<Subscription>(null);
     
-    private final ActionN _responseOnCompleted = this._tradeActive.submitWhenActive(
+    private final Action0 _responseOnCompleted = RxActions.toAction0(this._tradeActive.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
@@ -283,16 +287,31 @@ class DefaultHttpTrade implements HttpTrade {
                     LOG.warn("exception when ({}).doCloseTrade, detail:{}",
                         DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
                 }
-            }});
+            }}));
             
-    private final ActionN _responseOnNext = this._tradeActive.submitWhenActive(
+    private final Action1<HttpObject> _responseOnNext = RxActions.toAction1(this._tradeActive.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
                 _isResponseSended.compareAndSet(false, true);
                 _channel.write(ReferenceCountUtil.retain(JOArrays.<HttpObject>takeArgAs(0, args)));
-            }});
+            }}));
     
+    private final Action1<Throwable> _responseOnError = new Action1<Throwable>() {
+        @Override
+        public void call(final Throwable e) {
+            LOG.warn("trade({})'s responseObserver.onError, detail:{}",
+                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
+            try {
+                //  TODO, ignore onError? for other response Observable
+                doCloseTrade();
+            } catch (Exception e1) {
+                LOG.warn("exception when trade({}).doCloseTrade, detail:{}",
+                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e1));
+            }
+        }};
+    
+    /*
     private final Observer<HttpObject> _responseObserver = new Observer<HttpObject>() {
         @Override
         public void onCompleted() {
@@ -337,6 +356,7 @@ class DefaultHttpTrade implements HttpTrade {
 //            }
         }
     };
+    */
     
     private final Observable<? extends HttpObject> _requestObservable = 
             Observable.create(new OnSubscribe<HttpObject>() {
