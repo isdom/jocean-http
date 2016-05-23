@@ -216,14 +216,13 @@ class DefaultHttpTrade implements HttpTrade {
         }
     }
     
-    private void doCloseTrade(final boolean isResponseCompleted) {
+    private void doCloseTrade() {
         this._tradeActive.destroy(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds) {
-                _isResponseCompleted.set(isResponseCompleted);
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("invoke doCloseTrade on active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
-                            _channel, isResponseCompleted, isEndedWithKeepAlive());
+                            _channel, _isResponseCompleted.get(), isEndedWithKeepAlive());
                 }
                 oncloseds.foreachComponent(new Action1<Action1<HttpTrade>>() {
                     @Override
@@ -276,9 +275,10 @@ class DefaultHttpTrade implements HttpTrade {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
                 _isResponseSended.compareAndSet(false, true);
+                _isResponseCompleted.compareAndSet(false, true);
                 _channel.flush();
                 try {
-                    doCloseTrade(true);
+                    doCloseTrade();
                 } catch (Exception e) {
                     LOG.warn("exception when ({}).doCloseTrade, detail:{}",
                         DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
@@ -318,7 +318,7 @@ class DefaultHttpTrade implements HttpTrade {
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             try {
                 //  TODO, ignore onError? for other response Observable
-                doCloseTrade(false);
+                doCloseTrade();
             } catch (Exception e1) {
                 LOG.warn("exception when trade({}).doCloseTrade, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e1));
@@ -408,7 +408,7 @@ class DefaultHttpTrade implements HttpTrade {
                     }
                 }
             }
-            doCloseTrade(false);
+            doCloseTrade();
         }
     };
 }
