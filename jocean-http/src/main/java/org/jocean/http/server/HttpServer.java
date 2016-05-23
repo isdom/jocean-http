@@ -38,7 +38,7 @@ public interface HttpServer extends Closeable {
     public interface HttpTrade {
         public boolean isActive();
         public boolean isEndedWithKeepAlive();
-        //  try to close trade explicit
+        //  try to abort trade explicit
         public void abort();
         public Observable<? extends HttpObject> inboundRequest();
         public Subscription outboundResponse(final Observable<? extends HttpObject> response);
