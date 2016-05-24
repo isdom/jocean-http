@@ -68,7 +68,7 @@ class DefaultHttpTrade implements HttpTrade {
 
     @Override
     public boolean isActive() {
-        return this._tradeActive.isActive();
+        return this._activeHolder.isActive();
     }
 
     @Override
@@ -130,7 +130,7 @@ class DefaultHttpTrade implements HttpTrade {
     
     @Override
     public CachedHttpTrade cached(final int maxBlockSize) {
-        if (!this._isRequestStart.get()) {
+        if (!this._isRequestReceived.get()) {
             final CachedRequest cached = new CachedRequest(this, maxBlockSize);
             return new CachedHttpTrade() {
     
@@ -221,7 +221,7 @@ class DefaultHttpTrade implements HttpTrade {
     }
     
     private void doCloseTrade() {
-        this._tradeActive.destroy(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
+        this._activeHolder.destroy(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds) {
                 if (LOG.isDebugEnabled()) {
@@ -241,10 +241,10 @@ class DefaultHttpTrade implements HttpTrade {
             }});
     }
     
-    private final ActiveHolder<COWCompositeSupport<Action1<HttpTrade>>> _tradeActive = 
+    private final ActiveHolder<COWCompositeSupport<Action1<HttpTrade>>> _activeHolder = 
             new ActiveHolder<>(new COWCompositeSupport<Action1<HttpTrade>>());
     
-    private final ActionN _doOnClosed = this._tradeActive.submitWhenActive(
+    private final ActionN _doOnClosed = this._activeHolder.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
@@ -256,7 +256,7 @@ class DefaultHttpTrade implements HttpTrade {
                 JOArrays.<Action1<HttpTrade>>takeArgAs(0, args).call(DefaultHttpTrade.this);
             }});
     
-    private final ActionN _undoOnClosed = this._tradeActive.submitWhenActive(
+    private final ActionN _undoOnClosed = this._activeHolder.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
         @Override
         public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds,final Object...args) {
@@ -264,17 +264,17 @@ class DefaultHttpTrade implements HttpTrade {
         }});
     
     private final Channel _channel;
-    private final AtomicBoolean _isRequestStart = new AtomicBoolean(false);
+    private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
+    private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = 
             new CopyOnWriteArrayList<>();
-    private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
     private final AtomicReference<Subscription> _subscriptionOfResponse = 
             new AtomicReference<Subscription>(null);
     
-    private final Action0 _responseOnCompleted = RxActions.toAction0(this._tradeActive.submitWhenActive(
+    private final Action0 _responseOnCompleted = RxActions.toAction0(this._activeHolder.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
@@ -289,7 +289,7 @@ class DefaultHttpTrade implements HttpTrade {
                 }
             }}));
             
-    private final Action1<HttpObject> _responseOnNext = RxActions.toAction1(this._tradeActive.submitWhenActive(
+    private final Action1<HttpObject> _responseOnNext = RxActions.toAction1(this._activeHolder.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
             public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
@@ -398,7 +398,7 @@ class DefaultHttpTrade implements HttpTrade {
                 LOG.debug("trade({}) requestObserver.onNext, httpobj:{}",
                         DefaultHttpTrade.this, httpObject);
             }
-            _isRequestStart.compareAndSet(false, true);
+            _isRequestReceived.compareAndSet(false, true);
             if (httpObject instanceof HttpRequest) {
                 _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpObject));
             }
