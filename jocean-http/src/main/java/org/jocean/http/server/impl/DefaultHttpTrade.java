@@ -47,7 +47,10 @@ class DefaultHttpTrade implements HttpTrade {
         StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpTrade [request's subscribers.size=")
                 .append(_requestSubscribers.size())
+                .append(", isRequestReceived=").append(_isRequestReceived.get())
                 .append(", isRequestCompleted=").append(_isRequestCompleted.get())
+                .append(", isResponseSended=").append(_isResponseSended.get())
+                .append(", isResponseCompleted=").append(_isResponseCompleted.get())
                 .append(", isKeepAlive=").append(_isKeepAlive.get())
                 .append(", isActive=").append(isActive())
                 .append(", channel=").append(_channel)
