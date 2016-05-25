@@ -21,7 +21,7 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 
@@ -55,10 +55,10 @@ public class SslDemo {
     
     public static void main(String[] args) throws Exception {
         
-        final SslContext sslCtx = SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
+        final SslContext sslCtx = SslContextBuilder.forClient().build();
 //        https://github.com/isdom
-//        final String host = "www.alipay.com";
-        final String host = "www.csdn.net";
+        final String host = "www.alipay.com";
+//        final String host = "www.csdn.net";
         final String cs = "UTF-8";
             
         final DefaultFullHttpRequest request = 
