@@ -116,6 +116,16 @@ class DefaultHttpTrade implements HttpTrade {
     }
     
     @Override
+    public boolean readyforOutboundResponse() {
+        synchronized(this._subscriptionOfResponse) {
+            //  对 outboundResponse 方法加锁
+            final Subscription oldsubsc =  this._subscriptionOfResponse.get();
+            return (null==oldsubsc ||
+                (oldsubsc.isUnsubscribed() && !this._isResponseSended.get()));
+        }
+    }
+    
+    @Override
     public Executor requestExecutor() {
         return this._channel.eventLoop();
     }
@@ -179,6 +189,11 @@ class DefaultHttpTrade implements HttpTrade {
                     return DefaultHttpTrade.this.outboundResponse(response);
                 }
     
+                @Override
+                public boolean readyforOutboundResponse() {
+                    return DefaultHttpTrade.this.readyforOutboundResponse();
+                }
+                
                 @Override
                 public Object transport() {
                     return DefaultHttpTrade.this.transport();
@@ -305,13 +320,13 @@ class DefaultHttpTrade implements HttpTrade {
         public void call(final Throwable e) {
             LOG.warn("trade({})'s responseObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-            try {
-                //  TODO, ignore onError? for other response Observable
-                doCloseTrade();
-            } catch (Exception e1) {
-                LOG.warn("exception when trade({}).doCloseTrade, detail:{}",
-                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e1));
-            }
+//            try {
+//                //  TODO, ignore onError? for other response Observable
+//                doCloseTrade();
+//            } catch (Exception e1) {
+//                LOG.warn("exception when trade({}).doCloseTrade, detail:{}",
+//                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e1));
+//            }
         }};
     
     /*

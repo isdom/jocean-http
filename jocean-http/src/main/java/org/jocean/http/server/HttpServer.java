@@ -42,6 +42,7 @@ public interface HttpServer extends Closeable {
         public void abort();
         public Observable<? extends HttpObject> inboundRequest();
         public Subscription outboundResponse(final Observable<? extends HttpObject> response);
+        public boolean readyforOutboundResponse();
         public Executor requestExecutor();
         public Object transport();
         public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed);
