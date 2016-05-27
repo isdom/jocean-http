@@ -83,8 +83,7 @@ class DefaultHttpTrade implements HttpTrade {
 
     @Override
     public void abort() {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException();
+        this._activeHolder.destroy(this._closeChannelAndInvokeDoOnClose);
     }
     
     @Override
@@ -252,25 +251,8 @@ class DefaultHttpTrade implements HttpTrade {
         }
     }
     
-    private void doCloseTrade() {
-        this._activeHolder.destroy(new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
-            @Override
-            public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("invoke doCloseTrade on active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
-                            _channel, _isResponseCompleted.get(), isEndedWithKeepAlive());
-                }
-                oncloseds.foreachComponent(new Action1<Action1<HttpTrade>>() {
-                    @Override
-                    public void call(final Action1<HttpTrade> onClosed) {
-                        try {
-                            onClosed.call(DefaultHttpTrade.this);
-                        } catch (Exception e) {
-                            LOG.warn("exception when trade({}) invoke onClosed({}), detail: {}",
-                                    DefaultHttpTrade.this, onClosed, ExceptionUtils.exception2detail(e));
-                        }
-                    }});
-            }});
+    private void doClose() {
+        this._activeHolder.destroy(this._invokeDoOnClose);
     }
     
     private final ActiveHolder<COWCompositeSupport<Action1<HttpTrade>>> _activeHolder = 
@@ -306,6 +288,32 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicReference<Subscription> _subscriptionOfResponse = 
             new AtomicReference<Subscription>(null);
     
+    private final Action1<COWCompositeSupport<Action1<HttpTrade>>> _closeChannelAndInvokeDoOnClose = new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
+        @Override
+        public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds) {
+            _channel.close();
+            _invokeDoOnClose.call(oncloseds);
+        }};
+        
+    private final Action1<COWCompositeSupport<Action1<HttpTrade>>> _invokeDoOnClose = new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
+        @Override
+        public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
+                        _channel, _isResponseCompleted.get(), isEndedWithKeepAlive());
+            }
+            oncloseds.foreachComponent(new Action1<Action1<HttpTrade>>() {
+                @Override
+                public void call(final Action1<HttpTrade> onClosed) {
+                    try {
+                        onClosed.call(DefaultHttpTrade.this);
+                    } catch (Exception e) {
+                        LOG.warn("exception when trade({}) invoke onClosed({}), detail: {}",
+                                DefaultHttpTrade.this, onClosed, ExceptionUtils.exception2detail(e));
+                    }
+                }});
+        }};
+        
     private final Action0 _responseOnCompleted = RxActions.toAction0(this._activeHolder.submitWhenActive(
             new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
             @Override
@@ -314,7 +322,7 @@ class DefaultHttpTrade implements HttpTrade {
                 _isResponseCompleted.compareAndSet(false, true);
                 _channel.flush();
                 try {
-                    doCloseTrade();
+                    doClose();
                 } catch (Exception e) {
                     LOG.warn("exception when ({}).doCloseTrade, detail:{}",
                         DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
@@ -462,7 +470,7 @@ class DefaultHttpTrade implements HttpTrade {
                     }
                 }
             }
-            doCloseTrade();
+            doClose();
         }
     };
 }
