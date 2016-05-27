@@ -99,6 +99,13 @@ class DefaultHttpTrade implements HttpTrade {
 
     @Override
     public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
+        return outboundResponse(response, null);
+    }
+    
+    @Override
+    public Subscription outboundResponse(
+            final Observable<? extends HttpObject> response,
+            final Action1<Throwable> onError) {
         synchronized(this._subscriptionOfResponse) {
             //  对 outboundResponse 方法加锁
             final Subscription oldsubsc =  this._subscriptionOfResponse.get();
@@ -106,7 +113,7 @@ class DefaultHttpTrade implements HttpTrade {
                 (oldsubsc.isUnsubscribed() && !this._isResponseSended.get())) {
                 final Subscription newsubsc = response.subscribe(
                         this._responseOnNext,
-                        this._responseOnError,
+                        null!=onError ? onError : this._responseOnError,
                         this._responseOnCompleted);
                 this._subscriptionOfResponse.set(newsubsc);
                 return newsubsc;
@@ -189,6 +196,13 @@ class DefaultHttpTrade implements HttpTrade {
                     return DefaultHttpTrade.this.outboundResponse(response);
                 }
     
+                @Override
+                public Subscription outboundResponse(
+                        final Observable<? extends HttpObject> response,
+                        final Action1<Throwable> onError) {
+                    return DefaultHttpTrade.this.outboundResponse(response, onError);
+                }
+                
                 @Override
                 public boolean readyforOutboundResponse() {
                     return DefaultHttpTrade.this.readyforOutboundResponse();
@@ -320,6 +334,8 @@ class DefaultHttpTrade implements HttpTrade {
         public void call(final Throwable e) {
             LOG.warn("trade({})'s responseObserver.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
+            //  default action is abort this trade
+            abort();
 //            try {
 //                //  TODO, ignore onError? for other response Observable
 //                doCloseTrade();
