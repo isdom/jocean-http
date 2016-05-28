@@ -83,9 +83,9 @@ class DefaultHttpTrade implements HttpTrade {
 
     @Override
     public void abort() {
-        this._activeHolder.destroy(this._closeChannelAndInvokeDoOnClose);
+        doAbort();
     }
-    
+
     @Override
     public Object transport() {
         return this._channel;
@@ -251,31 +251,98 @@ class DefaultHttpTrade implements HttpTrade {
         }
     }
     
-    private void doClose() {
-        this._activeHolder.destroy(this._invokeDoOnClose);
+    private void doAbort() {
+        this._activeHolder.destroy(DO_ABORT_TRADE);
     }
     
-    private final ActiveHolder<COWCompositeSupport<Action1<HttpTrade>>> _activeHolder = 
-            new ActiveHolder<>(new COWCompositeSupport<Action1<HttpTrade>>());
+    private void doClose() {
+        this._activeHolder.destroy(DO_CLOSE_TRADE);
+    }
     
-    private final ActionN _doOnClosed = this._activeHolder.submitWhenActive(
-            new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
+    private void fireDoOnClosed() {
+        this._onClosedList.foreachComponent(new Action1<Action1<HttpTrade>>() {
             @Override
-            public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
-                oncloseds.addComponent(JOArrays.<Action1<HttpTrade>>takeArgAs(0, args));
-            }})
-        .submitWhenDestroyed(new ActionN() {
-            @Override
-            public void call(final Object...args) {
-                JOArrays.<Action1<HttpTrade>>takeArgAs(0, args).call(DefaultHttpTrade.this);
+            public void call(final Action1<HttpTrade> onClosed) {
+                try {
+                    onClosed.call(DefaultHttpTrade.this);
+                } catch (Exception e) {
+                    LOG.warn("exception when trade({}) invoke onClosed({}), detail: {}",
+                            DefaultHttpTrade.this, onClosed, ExceptionUtils.exception2detail(e));
+                }
             }});
-    
-    private final ActionN _undoOnClosed = this._activeHolder.submitWhenActive(
-            new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
+    }
+
+    private final static Action1_N<DefaultHttpTrade> ADD_ON_CLOSED = new Action1_N<DefaultHttpTrade>() {
         @Override
-        public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds,final Object...args) {
-            oncloseds.removeComponent(JOArrays.<Action1<HttpTrade>>takeArgAs(0, args));
-        }});
+        public void call(final DefaultHttpTrade trade, final Object...args) {
+            trade._onClosedList.addComponent(JOArrays.<Action1<HttpTrade>>takeArgAs(0, args));
+        }};
+        
+    private static final Action1_N<DefaultHttpTrade> REMOVE_DO_ON_CLOSE= new Action1_N<DefaultHttpTrade>() {
+        @Override
+        public void call(final DefaultHttpTrade trade,final Object...args) {
+          trade._onClosedList.removeComponent(JOArrays.<Action1<HttpTrade>>takeArgAs(0, args));
+        }};
+        
+    private static final Action1<DefaultHttpTrade> DO_ABORT_TRADE = new Action1<DefaultHttpTrade>() {
+        @Override
+        public void call(final DefaultHttpTrade trade) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
+                        trade._channel, trade._isResponseCompleted.get(), trade.isEndedWithKeepAlive());
+            }
+            trade._channel.close();
+            trade.fireDoOnClosed();
+        }};
+        
+    private static final Action1<DefaultHttpTrade> DO_CLOSE_TRADE = new Action1<DefaultHttpTrade>() {
+        @Override
+        public void call(final DefaultHttpTrade trade) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
+                        trade._channel, trade._isResponseCompleted.get(), trade.isEndedWithKeepAlive());
+            }
+            trade.fireDoOnClosed();
+        }};
+            
+    private static final Action1_N<DefaultHttpTrade> DO_RESP_ON_COMPLETED = new Action1_N<DefaultHttpTrade>() {
+        @Override
+        public void call(final DefaultHttpTrade trade, final Object...args) {
+            trade._isResponseSended.compareAndSet(false, true);
+            trade._isResponseCompleted.compareAndSet(false, true);
+            trade._channel.flush();
+            try {
+                trade.doClose();
+            } catch (Exception e) {
+                LOG.warn("exception when ({}).doCloseTrade, detail:{}",
+                        trade, ExceptionUtils.exception2detail(e));
+            }
+        }};
+            
+    private static final Action1_N<DefaultHttpTrade> DO_RESP_ON_NEXT = new Action1_N<DefaultHttpTrade>() {
+        @Override
+        public void call(final DefaultHttpTrade trade, final Object...args) {
+            trade._isResponseSended.compareAndSet(false, true);
+            trade._channel.write(ReferenceCountUtil.retain(JOArrays.<HttpObject>takeArgAs(0, args)));
+        }};
+            
+    private final COWCompositeSupport<Action1<HttpTrade>> _onClosedList = 
+            new COWCompositeSupport<Action1<HttpTrade>>();
+    
+    private final ActiveHolder<DefaultHttpTrade> _activeHolder = 
+            new ActiveHolder<>(this);
+    
+    private final Action1<Action1<HttpTrade>> _doOnClosed = RxActions.toAction1(
+            this._activeHolder.submitWhenActive(ADD_ON_CLOSED)
+                .submitWhenDestroyed(new ActionN() {
+                    @Override
+                    public void call(final Object...args) {
+                        JOArrays.<Action1<HttpTrade>>takeArgAs(0, args).call(DefaultHttpTrade.this);
+                    }}));
+
+    private final Action1<Action1<HttpTrade>> _undoOnClosed = RxActions.toAction1(
+            this._activeHolder.submitWhenActive(REMOVE_DO_ON_CLOSE));
+
     
     private final Channel _channel;
     private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
@@ -288,118 +355,20 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicReference<Subscription> _subscriptionOfResponse = 
             new AtomicReference<Subscription>(null);
     
-    private final Action1<COWCompositeSupport<Action1<HttpTrade>>> _closeChannelAndInvokeDoOnClose = new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
-        @Override
-        public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds) {
-            _channel.close();
-            _invokeDoOnClose.call(oncloseds);
-        }};
-        
-    private final Action1<COWCompositeSupport<Action1<HttpTrade>>> _invokeDoOnClose = new Action1<COWCompositeSupport<Action1<HttpTrade>>>() {
-        @Override
-        public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
-                        _channel, _isResponseCompleted.get(), isEndedWithKeepAlive());
-            }
-            oncloseds.foreachComponent(new Action1<Action1<HttpTrade>>() {
-                @Override
-                public void call(final Action1<HttpTrade> onClosed) {
-                    try {
-                        onClosed.call(DefaultHttpTrade.this);
-                    } catch (Exception e) {
-                        LOG.warn("exception when trade({}) invoke onClosed({}), detail: {}",
-                                DefaultHttpTrade.this, onClosed, ExceptionUtils.exception2detail(e));
-                    }
-                }});
-        }};
-        
-    private final Action0 _responseOnCompleted = RxActions.toAction0(this._activeHolder.submitWhenActive(
-            new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
-            @Override
-            public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
-                _isResponseSended.compareAndSet(false, true);
-                _isResponseCompleted.compareAndSet(false, true);
-                _channel.flush();
-                try {
-                    doClose();
-                } catch (Exception e) {
-                    LOG.warn("exception when ({}).doCloseTrade, detail:{}",
-                        DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-                }
-            }}));
-            
-    private final Action1<HttpObject> _responseOnNext = RxActions.toAction1(this._activeHolder.submitWhenActive(
-            new Action1_N<COWCompositeSupport<Action1<HttpTrade>>>() {
-            @Override
-            public void call(final COWCompositeSupport<Action1<HttpTrade>> oncloseds, final Object...args) {
-                _isResponseSended.compareAndSet(false, true);
-                _channel.write(ReferenceCountUtil.retain(JOArrays.<HttpObject>takeArgAs(0, args)));
-            }}));
+    private final Action0 _responseOnCompleted = 
+            RxActions.toAction0(this._activeHolder.submitWhenActive(DO_RESP_ON_COMPLETED));
+
+    private final Action1<HttpObject> _responseOnNext = 
+            RxActions.toAction1(this._activeHolder.submitWhenActive(DO_RESP_ON_NEXT));
     
     private final Action1<Throwable> _responseOnError = new Action1<Throwable>() {
         @Override
         public void call(final Throwable e) {
-            LOG.warn("trade({})'s responseObserver.onError, detail:{}",
+            LOG.warn("trade({})'s responseObserver.onError, default action is invoke doAbort() and detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-            //  default action is abort this trade
-            abort();
-//            try {
-//                //  TODO, ignore onError? for other response Observable
-//                doCloseTrade();
-//            } catch (Exception e1) {
-//                LOG.warn("exception when trade({}).doCloseTrade, detail:{}",
-//                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e1));
-//            }
+            doAbort();
         }};
-    
-    /*
-    private final Observer<HttpObject> _responseObserver = new Observer<HttpObject>() {
-        @Override
-        public void onCompleted() {
-            _responseOnCompleted.call();
-//            if (isActive()) {
-//                _isResponseSended.compareAndSet(false, true);
-//                _channel.flush();
-//                try {
-//                    doCloseTrade(true);
-//                } catch (Exception e) {
-//                    LOG.warn("exception when ({}).doCloseTrade, detail:{}",
-//                        DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-//                }
-//            } else {
-//                LOG.warn("onCompleted on closed transport[channel: {}]",
-//                        _channel);
-//            }
-        }
-
-        @Override
-        public void onError(final Throwable e) {
-            LOG.warn("trade({})'s responseObserver.onError, detail:{}",
-                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-            try {
-                //  TODO, ignore onError? for other response Observable
-                doCloseTrade();
-            } catch (Exception e1) {
-                LOG.warn("exception when trade({}).doCloseTrade, detail:{}",
-                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e1));
-            }
-        }
-
-        @Override
-        public void onNext(final HttpObject msg) {
-            _responseOnNext.call(msg);
-//            if (isActive()) {
-//                _isResponseSended.compareAndSet(false, true);
-//                _channel.write(ReferenceCountUtil.retain(msg));
-//            } else {
-//                LOG.warn("sendback msg({}) on closed transport[channel: {}]",
-//                    msg, _channel);
-//            }
-        }
-    };
-    */
-    
+        
     private final Observable<? extends HttpObject> _requestObservable = 
             Observable.create(new OnSubscribe<HttpObject>() {
         @Override
