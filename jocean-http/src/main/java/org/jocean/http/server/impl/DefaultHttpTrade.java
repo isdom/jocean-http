@@ -16,6 +16,7 @@ import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.rx.Action1_N;
+import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +35,7 @@ import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.ActionN;
+import rx.functions.FuncN;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -105,20 +107,32 @@ class DefaultHttpTrade implements HttpTrade {
     public Subscription outboundResponse(
             final Observable<? extends HttpObject> response,
             final Action1<Throwable> onError) {
-        synchronized(this._subscriptionOfResponse) {
-            //  对 outboundResponse 方法加锁
-            final Subscription oldsubsc =  this._subscriptionOfResponse.get();
-            if (null==oldsubsc ||
-                (oldsubsc.isUnsubscribed() && !this._isResponseSended.get())) {
-                final Subscription newsubsc = response.subscribe(
-                        this._responseOnNext,
-                        null!=onError ? onError : this._responseOnError,
-                        this._responseOnCompleted);
-                this._subscriptionOfResponse.set(newsubsc);
-                return newsubsc;
-            }
-        }
-        return null;
+        //  TODO 2016-05-29
+        return this._activeHolder.callWhenActive(new Func1_N<DefaultHttpTrade, Subscription>() {
+
+            @Override
+            public Subscription call(DefaultHttpTrade t, Object... args) {
+                synchronized(_subscriptionOfResponse) {
+                    //  对 outboundResponse 方法加锁
+                    final Subscription oldsubsc =  _subscriptionOfResponse.get();
+                    if (null==oldsubsc ||
+                        (oldsubsc.isUnsubscribed() && !_isResponseSended.get())) {
+                        final Subscription newsubsc = response.subscribe(
+                                _responseOnNext,
+                                null!=onError ? onError : _responseOnError,
+                                _responseOnCompleted);
+                        _subscriptionOfResponse.set(newsubsc);
+                        return newsubsc;
+                    }
+                }
+                return null;
+            }})
+            .callWhenDestroyed(new FuncN<Subscription>() {
+                @Override
+                public Subscription call(Object... args) {
+                    return null;
+                }})
+            .call();
     }
     
     @Override
@@ -150,105 +164,109 @@ class DefaultHttpTrade implements HttpTrade {
     @Override
     public CachedHttpTrade cached(final int maxBlockSize) {
         if (!this._isRequestReceived.get()) {
-            final CachedRequest cached = new CachedRequest(this, maxBlockSize);
-            return new CachedHttpTrade() {
-    
-                /* (non-Javadoc)
-                 * @see java.lang.Object#toString()
-                 */
-                @Override
-                public String toString() {
-                    StringBuilder builder = new StringBuilder();
-                    builder.append("CachedHttpTrade for [")
-                        .append(DefaultHttpTrade.this.toString())
-                        .append("]");
-                    return builder.toString();
-                }
-
-                @Override
-                public boolean isActive() {
-                    return DefaultHttpTrade.this.isActive();
-                }
-    
-                @Override
-                public boolean isEndedWithKeepAlive() {
-                    return DefaultHttpTrade.this.isEndedWithKeepAlive();
-                }
-    
-                @Override
-                public void abort() {
-                    DefaultHttpTrade.this.abort();
-                }
-                
-                @Override
-                public Observable<? extends HttpObject> inboundRequest() {
-                    return cached.request();
-                }
-    
-                @Override
-                public Executor requestExecutor() {
-                    return DefaultHttpTrade.this.requestExecutor();
-                }
-    
-                @Override
-                public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
-                    return DefaultHttpTrade.this.outboundResponse(response);
-                }
-    
-                @Override
-                public Subscription outboundResponse(
-                        final Observable<? extends HttpObject> response,
-                        final Action1<Throwable> onError) {
-                    return DefaultHttpTrade.this.outboundResponse(response, onError);
-                }
-                
-                @Override
-                public boolean readyforOutboundResponse() {
-                    return DefaultHttpTrade.this.readyforOutboundResponse();
-                }
-                
-                @Override
-                public Object transport() {
-                    return DefaultHttpTrade.this.transport();
-                }
-    
-                @Override
-                public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed) {
-                    return DefaultHttpTrade.this.doOnClosed(onClosed);
-                }
-    
-                @Override
-                public void undoOnClosed(Action1<HttpTrade> onClosed) {
-                    DefaultHttpTrade.this.undoOnClosed(onClosed);
-                }
-    
-                @Override
-                public CachedHttpTrade cached(int maxBlockSize) {
-                    return DefaultHttpTrade.this.cached(maxBlockSize);
-                }
-    
-                @Override
-                public FullHttpRequest retainFullHttpRequest() {
-                    return cached.retainFullHttpRequest();
-                }
-    
-                @Override
-                public int currentBlockSize() {
-                    return cached.currentBlockSize();
-                }
-    
-                @Override
-                public int currentBlockCount() {
-                    return cached.currentBlockCount();
-                }
-    
-                @Override
-                public int requestHttpObjCount() {
-                    return cached.requestHttpObjCount();
-                }};
+            return buildCachedTrade(maxBlockSize);
         } else {
             throw new RuntimeException("request has already started!");
         }
+    }
+
+    private CachedHttpTrade buildCachedTrade(final int maxBlockSize) {
+        final CachedRequest cached = new CachedRequest(this, maxBlockSize);
+        return new CachedHttpTrade() {
+   
+            /* (non-Javadoc)
+             * @see java.lang.Object#toString()
+             */
+            @Override
+            public String toString() {
+                StringBuilder builder = new StringBuilder();
+                builder.append("CachedHttpTrade for [")
+                    .append(DefaultHttpTrade.this.toString())
+                    .append("]");
+                return builder.toString();
+            }
+
+            @Override
+            public boolean isActive() {
+                return DefaultHttpTrade.this.isActive();
+            }
+   
+            @Override
+            public boolean isEndedWithKeepAlive() {
+                return DefaultHttpTrade.this.isEndedWithKeepAlive();
+            }
+   
+            @Override
+            public void abort() {
+                DefaultHttpTrade.this.abort();
+            }
+            
+            @Override
+            public Observable<? extends HttpObject> inboundRequest() {
+                return cached.request();
+            }
+   
+            @Override
+            public Executor requestExecutor() {
+                return DefaultHttpTrade.this.requestExecutor();
+            }
+   
+            @Override
+            public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
+                return DefaultHttpTrade.this.outboundResponse(response);
+            }
+   
+            @Override
+            public Subscription outboundResponse(
+                    final Observable<? extends HttpObject> response,
+                    final Action1<Throwable> onError) {
+                return DefaultHttpTrade.this.outboundResponse(response, onError);
+            }
+            
+            @Override
+            public boolean readyforOutboundResponse() {
+                return DefaultHttpTrade.this.readyforOutboundResponse();
+            }
+            
+            @Override
+            public Object transport() {
+                return DefaultHttpTrade.this.transport();
+            }
+   
+            @Override
+            public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed) {
+                return DefaultHttpTrade.this.doOnClosed(onClosed);
+            }
+   
+            @Override
+            public void undoOnClosed(Action1<HttpTrade> onClosed) {
+                DefaultHttpTrade.this.undoOnClosed(onClosed);
+            }
+   
+            @Override
+            public CachedHttpTrade cached(int maxBlockSize) {
+                return DefaultHttpTrade.this.cached(maxBlockSize);
+            }
+   
+            @Override
+            public FullHttpRequest retainFullHttpRequest() {
+                return cached.retainFullHttpRequest();
+            }
+   
+            @Override
+            public int currentBlockSize() {
+                return cached.currentBlockSize();
+            }
+   
+            @Override
+            public int currentBlockCount() {
+                return cached.currentBlockCount();
+            }
+   
+            @Override
+            public int requestHttpObjCount() {
+                return cached.requestHttpObjCount();
+            }};
     }
     
     private void doAbort() {
