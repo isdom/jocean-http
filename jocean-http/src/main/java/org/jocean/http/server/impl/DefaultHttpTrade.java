@@ -260,7 +260,7 @@ class DefaultHttpTrade implements HttpTrade {
     }
     
     private void fireDoOnClosed() {
-        this._onClosedList.foreachComponent(new Action1<Action1<HttpTrade>>() {
+        this._onClosedActions.foreachComponent(new Action1<Action1<HttpTrade>>() {
             @Override
             public void call(final Action1<HttpTrade> onClosed) {
                 try {
@@ -272,16 +272,16 @@ class DefaultHttpTrade implements HttpTrade {
             }});
     }
 
-    private final static Action1_N<DefaultHttpTrade> ADD_ON_CLOSED = new Action1_N<DefaultHttpTrade>() {
+    private final static Action1_N<DefaultHttpTrade> ADD_ON_CLOSED_WHEN_ACTIVE = new Action1_N<DefaultHttpTrade>() {
         @Override
         public void call(final DefaultHttpTrade trade, final Object...args) {
-            trade._onClosedList.addComponent(JOArrays.<Action1<HttpTrade>>takeArgAs(0, args));
+            trade._onClosedActions.addComponent(JOArrays.<Action1<HttpTrade>>takeArgAs(0, args));
         }};
         
-    private static final Action1_N<DefaultHttpTrade> REMOVE_DO_ON_CLOSE= new Action1_N<DefaultHttpTrade>() {
+    private static final Action1_N<DefaultHttpTrade> REMOVE_DO_ON_CLOSE_WHEN_ACTIVE= new Action1_N<DefaultHttpTrade>() {
         @Override
         public void call(final DefaultHttpTrade trade,final Object...args) {
-          trade._onClosedList.removeComponent(JOArrays.<Action1<HttpTrade>>takeArgAs(0, args));
+          trade._onClosedActions.removeComponent(JOArrays.<Action1<HttpTrade>>takeArgAs(0, args));
         }};
         
     private static final Action1<DefaultHttpTrade> DO_ABORT_TRADE = new Action1<DefaultHttpTrade>() {
@@ -305,7 +305,7 @@ class DefaultHttpTrade implements HttpTrade {
             trade.fireDoOnClosed();
         }};
             
-    private static final Action1_N<DefaultHttpTrade> DO_RESP_ON_COMPLETED = new Action1_N<DefaultHttpTrade>() {
+    private static final Action1_N<DefaultHttpTrade> DO_RESP_ON_COMPLETED_WHEN_ACTIVE = new Action1_N<DefaultHttpTrade>() {
         @Override
         public void call(final DefaultHttpTrade trade, final Object...args) {
             trade._isResponseSended.compareAndSet(false, true);
@@ -319,30 +319,18 @@ class DefaultHttpTrade implements HttpTrade {
             }
         }};
             
-    private static final Action1_N<DefaultHttpTrade> DO_RESP_ON_NEXT = new Action1_N<DefaultHttpTrade>() {
+    private static final Action1_N<DefaultHttpTrade> DO_RESP_ON_NEXT_WHEN_ACTIVE = new Action1_N<DefaultHttpTrade>() {
         @Override
         public void call(final DefaultHttpTrade trade, final Object...args) {
             trade._isResponseSended.compareAndSet(false, true);
             trade._channel.write(ReferenceCountUtil.retain(JOArrays.<HttpObject>takeArgAs(0, args)));
         }};
             
-    private final COWCompositeSupport<Action1<HttpTrade>> _onClosedList = 
+    private final COWCompositeSupport<Action1<HttpTrade>> _onClosedActions = 
             new COWCompositeSupport<Action1<HttpTrade>>();
     
     private final ActiveHolder<DefaultHttpTrade> _activeHolder = 
             new ActiveHolder<>(this);
-    
-    private final Action1<Action1<HttpTrade>> _doOnClosed = RxActions.toAction1(
-            this._activeHolder.submitWhenActive(ADD_ON_CLOSED)
-                .submitWhenDestroyed(new ActionN() {
-                    @Override
-                    public void call(final Object...args) {
-                        JOArrays.<Action1<HttpTrade>>takeArgAs(0, args).call(DefaultHttpTrade.this);
-                    }}));
-
-    private final Action1<Action1<HttpTrade>> _undoOnClosed = RxActions.toAction1(
-            this._activeHolder.submitWhenActive(REMOVE_DO_ON_CLOSE));
-
     
     private final Channel _channel;
     private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
@@ -355,11 +343,22 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicReference<Subscription> _subscriptionOfResponse = 
             new AtomicReference<Subscription>(null);
     
+    private final Action1<Action1<HttpTrade>> _doOnClosed = RxActions.toAction1(
+            this._activeHolder.submitWhenActive(ADD_ON_CLOSED_WHEN_ACTIVE)
+                .submitWhenDestroyed(new ActionN() {
+                    @Override
+                    public void call(final Object...args) {
+                        JOArrays.<Action1<HttpTrade>>takeArgAs(0, args).call(DefaultHttpTrade.this);
+                    }}));
+
+    private final Action1<Action1<HttpTrade>> _undoOnClosed = RxActions.toAction1(
+            this._activeHolder.submitWhenActive(REMOVE_DO_ON_CLOSE_WHEN_ACTIVE));
+    
     private final Action0 _responseOnCompleted = 
-            RxActions.toAction0(this._activeHolder.submitWhenActive(DO_RESP_ON_COMPLETED));
+            RxActions.toAction0(this._activeHolder.submitWhenActive(DO_RESP_ON_COMPLETED_WHEN_ACTIVE));
 
     private final Action1<HttpObject> _responseOnNext = 
-            RxActions.toAction1(this._activeHolder.submitWhenActive(DO_RESP_ON_NEXT));
+            RxActions.toAction1(this._activeHolder.submitWhenActive(DO_RESP_ON_NEXT_WHEN_ACTIVE));
     
     private final Action1<Throwable> _responseOnError = new Action1<Throwable>() {
         @Override
