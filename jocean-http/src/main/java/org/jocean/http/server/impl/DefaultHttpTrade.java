@@ -117,7 +117,7 @@ class DefaultHttpTrade implements HttpTrade {
         synchronized(this._subscriptionOfResponse) {
             //  对 outboundResponse 方法加锁
             final Subscription oldsubsc =  this._subscriptionOfResponse.get();
-            return (null==oldsubsc ||
+            return this._activeHolder.isActive() && (null==oldsubsc ||
                 (oldsubsc.isUnsubscribed() && !this._isResponseSended.get()));
         }
     }
