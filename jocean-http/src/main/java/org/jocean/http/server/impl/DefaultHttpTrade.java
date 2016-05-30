@@ -109,7 +109,7 @@ class DefaultHttpTrade implements HttpTrade {
     public Subscription outboundResponse(
             final Observable<? extends HttpObject> response,
             final Action1<Throwable> onError) {
-        return this._outboundResponse.call(response, onError);
+        return this._funcOutboundResponse.call(response, onError);
     }
 
     @Override
@@ -129,13 +129,13 @@ class DefaultHttpTrade implements HttpTrade {
     
     @Override
     public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed) {
-        this._doOnClosed.call(onClosed);
+        this._actionDoOnClosed.call(onClosed);
         return this;
     }
     
     @Override
     public void undoOnClosed(final Action1<HttpTrade> onClosed) {
-        this._undoOnClosed.call(onClosed);
+        this._actionUndoOnClosed.call(onClosed);
     }
     
     @Override
@@ -269,7 +269,6 @@ class DefaultHttpTrade implements HttpTrade {
 
     private final static Func1_N<DefaultHttpTrade, Subscription> OUTBOUND_RESPONSE_WHEN_ACTIVE = 
             new Func1_N<DefaultHttpTrade, Subscription>() {
-
             @Override
             public Subscription call(final DefaultHttpTrade trade, final Object... args) {
                 final Observable<? extends HttpObject> response = 
@@ -282,9 +281,9 @@ class DefaultHttpTrade implements HttpTrade {
                     if (null==oldsubsc ||
                         (oldsubsc.isUnsubscribed() && !trade._isResponseSended.get())) {
                         final Subscription newsubsc = response.subscribe(
-                                trade._responseOnNext,
+                                trade._actionResponseOnNext,
                                 null!=onError ? onError : trade._responseOnError,
-                                        trade._responseOnCompleted);
+                                        trade._actionResponseOnCompleted);
                         trade._subscriptionOfResponse.set(newsubsc);
                         return newsubsc;
                     }
@@ -340,7 +339,7 @@ class DefaultHttpTrade implements HttpTrade {
             try {
                 trade.doClose();
             } catch (Exception e) {
-                LOG.warn("exception when ({}).doCloseTrade, detail:{}",
+                LOG.warn("exception when ({}).doClose, detail:{}",
                         trade, ExceptionUtils.exception2detail(e));
             }
         }};
@@ -369,11 +368,11 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicReference<Subscription> _subscriptionOfResponse = 
             new AtomicReference<Subscription>(null);
     
-    private final Func2<Observable<? extends HttpObject>, Action1<Throwable>, Subscription> _outboundResponse = 
+    private final Func2<Observable<? extends HttpObject>, Action1<Throwable>, Subscription> _funcOutboundResponse = 
             RxFunctions.toFunc2(this._activeHolder.callWhenActive(OUTBOUND_RESPONSE_WHEN_ACTIVE)
                 .callWhenDestroyed(RETURN_NULL_SUBSCRIPTION));
     
-    private final Action1<Action1<HttpTrade>> _doOnClosed = RxActions.toAction1(
+    private final Action1<Action1<HttpTrade>> _actionDoOnClosed = RxActions.toAction1(
             this._activeHolder.submitWhenActive(ADD_ON_CLOSED_WHEN_ACTIVE)
                 .submitWhenDestroyed(new ActionN() {
                     @Override
@@ -381,13 +380,13 @@ class DefaultHttpTrade implements HttpTrade {
                         JOArrays.<Action1<HttpTrade>>takeArgAs(0, args).call(DefaultHttpTrade.this);
                     }}));
 
-    private final Action1<Action1<HttpTrade>> _undoOnClosed = RxActions.toAction1(
+    private final Action1<Action1<HttpTrade>> _actionUndoOnClosed = RxActions.toAction1(
             this._activeHolder.submitWhenActive(REMOVE_DO_ON_CLOSE_WHEN_ACTIVE));
     
-    private final Action0 _responseOnCompleted = 
+    private final Action0 _actionResponseOnCompleted = 
             RxActions.toAction0(this._activeHolder.submitWhenActive(DO_RESP_ON_COMPLETED_WHEN_ACTIVE));
 
-    private final Action1<HttpObject> _responseOnNext = 
+    private final Action1<HttpObject> _actionResponseOnNext = 
             RxActions.toAction1(this._activeHolder.submitWhenActive(DO_RESP_ON_NEXT_WHEN_ACTIVE));
     
     private final Action1<Throwable> _responseOnError = new Action1<Throwable>() {
@@ -417,7 +416,7 @@ class DefaultHttpTrade implements HttpTrade {
         @Override
         public void onCompleted() {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("trade({}) requestObserver.onCompleted", DefaultHttpTrade.this);
+                LOG.debug("trade({}) requestRelay.onCompleted", DefaultHttpTrade.this);
             }
             _isRequestCompleted.set(true);
             for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
@@ -435,7 +434,7 @@ class DefaultHttpTrade implements HttpTrade {
         @Override
         public void onNext(final HttpObject httpObject) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("trade({}) requestObserver.onNext, httpobj:{}",
+                LOG.debug("trade({}) requestRelay.onNext, httpobj:{}",
                         DefaultHttpTrade.this, httpObject);
             }
             _isRequestReceived.compareAndSet(false, true);
@@ -456,7 +455,7 @@ class DefaultHttpTrade implements HttpTrade {
         
         @Override
         public void onError(final Throwable e) {
-            LOG.warn("trade({}) requestObserver.onError, detail:{}",
+            LOG.warn("trade({}) requestRelay.onError, detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
                 if (!subscriber.isUnsubscribed()) {
