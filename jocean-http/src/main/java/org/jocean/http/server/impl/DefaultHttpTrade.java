@@ -18,6 +18,7 @@ import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
+import org.jocean.idiom.rx.RxFunctions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +36,7 @@ import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.ActionN;
+import rx.functions.Func2;
 import rx.functions.FuncN;
 import rx.subscriptions.Subscriptions;
 
@@ -107,34 +109,9 @@ class DefaultHttpTrade implements HttpTrade {
     public Subscription outboundResponse(
             final Observable<? extends HttpObject> response,
             final Action1<Throwable> onError) {
-        //  TODO 2016-05-29
-        return this._activeHolder.callWhenActive(new Func1_N<DefaultHttpTrade, Subscription>() {
-
-            @Override
-            public Subscription call(DefaultHttpTrade t, Object... args) {
-                synchronized(_subscriptionOfResponse) {
-                    //  对 outboundResponse 方法加锁
-                    final Subscription oldsubsc =  _subscriptionOfResponse.get();
-                    if (null==oldsubsc ||
-                        (oldsubsc.isUnsubscribed() && !_isResponseSended.get())) {
-                        final Subscription newsubsc = response.subscribe(
-                                _responseOnNext,
-                                null!=onError ? onError : _responseOnError,
-                                _responseOnCompleted);
-                        _subscriptionOfResponse.set(newsubsc);
-                        return newsubsc;
-                    }
-                }
-                return null;
-            }})
-            .callWhenDestroyed(new FuncN<Subscription>() {
-                @Override
-                public Subscription call(Object... args) {
-                    return null;
-                }})
-            .call();
+        return this._outboundResponse.call(response, onError);
     }
-    
+
     @Override
     public boolean readyforOutboundResponse() {
         synchronized(this._subscriptionOfResponse) {
@@ -290,6 +267,37 @@ class DefaultHttpTrade implements HttpTrade {
             }});
     }
 
+    private final static Func1_N<DefaultHttpTrade, Subscription> OUTBOUND_RESPONSE_WHEN_ACTIVE = 
+            new Func1_N<DefaultHttpTrade, Subscription>() {
+
+            @Override
+            public Subscription call(final DefaultHttpTrade trade, final Object... args) {
+                final Observable<? extends HttpObject> response = 
+                        JOArrays.<Observable<? extends HttpObject>>takeArgAs(0, args);
+                final Action1<Throwable> onError = 
+                        JOArrays.<Action1<Throwable>>takeArgAs(1, args);
+                synchronized(trade._subscriptionOfResponse) {
+                    //  对 outboundResponse 方法加锁
+                    final Subscription oldsubsc =  trade._subscriptionOfResponse.get();
+                    if (null==oldsubsc ||
+                        (oldsubsc.isUnsubscribed() && !trade._isResponseSended.get())) {
+                        final Subscription newsubsc = response.subscribe(
+                                trade._responseOnNext,
+                                null!=onError ? onError : trade._responseOnError,
+                                        trade._responseOnCompleted);
+                        trade._subscriptionOfResponse.set(newsubsc);
+                        return newsubsc;
+                    }
+                }
+                return null;
+            }};
+            
+    private final static FuncN<Subscription> RETURN_NULL_SUBSCRIPTION = new FuncN<Subscription>() {
+        @Override
+        public Subscription call(final Object... args) {
+            return null;
+        }};
+
     private final static Action1_N<DefaultHttpTrade> ADD_ON_CLOSED_WHEN_ACTIVE = new Action1_N<DefaultHttpTrade>() {
         @Override
         public void call(final DefaultHttpTrade trade, final Object...args) {
@@ -360,6 +368,10 @@ class DefaultHttpTrade implements HttpTrade {
             new CopyOnWriteArrayList<>();
     private final AtomicReference<Subscription> _subscriptionOfResponse = 
             new AtomicReference<Subscription>(null);
+    
+    private final Func2<Observable<? extends HttpObject>, Action1<Throwable>, Subscription> _outboundResponse = 
+            RxFunctions.toFunc2(this._activeHolder.callWhenActive(OUTBOUND_RESPONSE_WHEN_ACTIVE)
+                .callWhenDestroyed(RETURN_NULL_SUBSCRIPTION));
     
     private final Action1<Action1<HttpTrade>> _doOnClosed = RxActions.toAction1(
             this._activeHolder.submitWhenActive(ADD_ON_CLOSED_WHEN_ACTIVE)
