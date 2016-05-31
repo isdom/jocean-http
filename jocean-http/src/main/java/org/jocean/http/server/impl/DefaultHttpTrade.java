@@ -36,6 +36,7 @@ import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.ActionN;
+import rx.functions.Func0;
 import rx.functions.Func2;
 import rx.functions.FuncN;
 import rx.subscriptions.Subscriptions;
@@ -97,7 +98,7 @@ class DefaultHttpTrade implements HttpTrade {
     
     @Override
     public Observable<? extends HttpObject> inboundRequest() {
-        return this._requestObservable;
+        return this._funcGetInboundRequest.call();
     }
 
     @Override
@@ -109,7 +110,7 @@ class DefaultHttpTrade implements HttpTrade {
     public Subscription outboundResponse(
             final Observable<? extends HttpObject> response,
             final Action1<Throwable> onError) {
-        return this._funcOutboundResponse.call(response, onError);
+        return this._funcSetOutboundResponse.call(response, onError);
     }
 
     @Override
@@ -267,7 +268,21 @@ class DefaultHttpTrade implements HttpTrade {
             }});
     }
 
-    private final static Func1_N<DefaultHttpTrade, Subscription> OUTBOUND_RESPONSE_WHEN_ACTIVE = 
+    private final static Func1_N<DefaultHttpTrade, Observable<? extends HttpObject>> GET_INBOUND_REQ_WHEN_ACTIVE = 
+        new Func1_N<DefaultHttpTrade, Observable<? extends HttpObject>>() {
+        @Override
+        public Observable<? extends HttpObject> call(final DefaultHttpTrade trade,
+                final Object... args) {
+            return trade._requestObservable;
+        }};
+    private final static FuncN<Observable<? extends HttpObject>> GET_INBOUND_REQ_ABOUT_ERROR = 
+        new FuncN<Observable<? extends HttpObject>>() {
+        @Override
+        public Observable<? extends HttpObject> call(Object... args) {
+            return Observable.error(new RuntimeException("trade unactive"));
+        }};
+        
+    private final static Func1_N<DefaultHttpTrade, Subscription> SET_OUTBOUND_RESP_WHEN_ACTIVE = 
             new Func1_N<DefaultHttpTrade, Subscription>() {
             @Override
             public Subscription call(final DefaultHttpTrade trade, final Object... args) {
@@ -368,8 +383,12 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicReference<Subscription> _subscriptionOfResponse = 
             new AtomicReference<Subscription>(null);
     
-    private final Func2<Observable<? extends HttpObject>, Action1<Throwable>, Subscription> _funcOutboundResponse = 
-            RxFunctions.toFunc2(this._activeHolder.callWhenActive(OUTBOUND_RESPONSE_WHEN_ACTIVE)
+    private final Func0<Observable<? extends HttpObject>> _funcGetInboundRequest = 
+            RxFunctions.toFunc0(this._activeHolder.callWhenActive(GET_INBOUND_REQ_WHEN_ACTIVE)
+                .callWhenDestroyed(GET_INBOUND_REQ_ABOUT_ERROR));
+    
+    private final Func2<Observable<? extends HttpObject>, Action1<Throwable>, Subscription> _funcSetOutboundResponse = 
+            RxFunctions.toFunc2(this._activeHolder.callWhenActive(SET_OUTBOUND_RESP_WHEN_ACTIVE)
                 .callWhenDestroyed(RETURN_NULL_SUBSCRIPTION));
     
     private final Action1<Action1<HttpTrade>> _actionDoOnClosed = RxActions.toAction1(
