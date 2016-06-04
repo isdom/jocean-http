@@ -65,22 +65,13 @@ public class DefaultHttpClient implements HttpClient {
                 JOArrays.addFirst(Feature[].class, 
                         cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
                         HttpClientConstants.APPLY_HTTPCLIENT);
-                        
-//                        _channelPool.retainChannelAsSingle(remoteAddress)
-//                            .doOnSuccess(RxNettys.<Channel>enableReleaseChannelWhenUnsubscribe(doOnUnsubscribe))
-//                            .doOnSuccess(RxNettys.actionUndoableApplyFeatures(
-//                                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures, doOnUnsubscribe))
-//                            .onErrorResumeNext(createChannelAndConnectToAsSingle(remoteAddress, fullFeatures, doOnUnsubscribe))
-//                            .doOnSuccess(implFeatures(fullFeatures, doOnUnsubscribe))
-//                            .flatMap(sendRequestThenPushChannelAsSingle(request, fullFeatures, doOnUnsubscribe))
-//                            .flatMapObservable(waitforResponse(doOnUnsubscribe))
-            return _channelPool.retainChannel(remoteAddress)
-                .doOnNext(RxNettys.actionUndoableApplyFeatures(
-                        HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
-                .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
-                .doOnNext(hookFeatures(fullFeatures))
-                .flatMap(sendRequestThenPushChannel(request, fullFeatures))
-                .flatMap(waitforResponse());
+        return this._channelPool.retainChannel(remoteAddress)
+            .doOnNext(RxNettys.actionUndoableApplyFeatures(
+                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
+            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
+            .doOnNext(hookFeatures(fullFeatures))
+            .flatMap(sendRequestThenPushChannel(request, fullFeatures))
+            .flatMap(waitforResponse());
     }
 
     protected Action1<? super Channel> hookFeatures(final Feature[] features) {
