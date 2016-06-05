@@ -5,7 +5,6 @@ package org.jocean.http.server;
 
 import java.io.Closeable;
 import java.net.SocketAddress;
-import java.util.concurrent.Executor;
 
 import org.jocean.http.Feature;
 
