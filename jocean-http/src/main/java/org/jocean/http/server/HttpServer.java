@@ -46,21 +46,10 @@ public interface HttpServer extends Closeable {
         public Subscription outboundResponse(final Observable<? extends HttpObject> response,
                     final Action1<Throwable> onError);
         public boolean readyforOutboundResponse();
-        public Executor requestExecutor();
         public Object transport();
         public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed);
         public void undoOnClosed(final Action1<HttpTrade> onClosed);
-//        public CachedHttpTrade cached(final int maxBlockSize);
     }
-    
-    /*
-    public interface CachedHttpTrade extends HttpTrade {
-        public FullHttpRequest retainFullHttpRequest();
-        public int currentBlockSize();
-        public int currentBlockCount();
-        public int requestHttpObjCount();
-    }
-    */
     
     public class TransportException extends RuntimeException {
 
