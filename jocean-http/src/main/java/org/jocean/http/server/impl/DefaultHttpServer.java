@@ -144,11 +144,9 @@ public class DefaultHttpServer implements HttpServer {
     }
 
     private HttpTrade httpTradeOf(final Channel channel) {
-        return new DefaultHttpTrade(
-                channel,
-                RxNettys.httpobjObservable(channel));
+        return new DefaultHttpTrade(channel, RxNettys.httpobjObservable(channel));
     }
-
+    
     private Action1<HttpTrade> actionRecycleChannel(
             final Channel channel,
             final Subscriber<? super HttpTrade> subscriber, 
@@ -226,6 +224,7 @@ public class DefaultHttpServer implements HttpServer {
 
     private final BootstrapCreator _creator;
     private final Feature[] _defaultFeatures;
+//    private final boolean _cacheRequest;
     
     private static final Class2ApplyBuilder _APPLY_BUILDER;
         

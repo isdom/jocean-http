@@ -100,6 +100,8 @@ public class DefaultHttpClientTestCase {
         return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
     }
 
+    //  TODO, add more multi-call for same interaction define
+    //       and check if each call generate different channel instance
     //  Happy Path
     @Test
     public void testHttpHappyPathOnce() throws Exception {

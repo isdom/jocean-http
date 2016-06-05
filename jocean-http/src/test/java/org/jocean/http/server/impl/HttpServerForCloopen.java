@@ -8,7 +8,6 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import java.net.InetSocketAddress;
 
 import org.jocean.http.server.HttpServer;
-import org.jocean.http.server.HttpServer.CachedHttpTrade;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
@@ -43,11 +42,10 @@ public class HttpServerForCloopen {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    final CachedHttpTrade cached = trade.cached(-1);
-                    cached.inboundRequest().subscribe(new Subscriber<HttpObject>() {
+                    trade.inboundRequest().subscribe(new Subscriber<HttpObject>() {
                         @Override
                         public void onCompleted() {
-                            final FullHttpRequest req = cached.retainFullHttpRequest();
+                            final FullHttpRequest req = trade.retainFullHttpRequest();
                             if (null!=req) {
                                 try {
                                     final byte[] bytes = Nettys.dumpByteBufAsBytes(req.content());
@@ -67,7 +65,7 @@ public class HttpServerForCloopen {
                                     Unpooled.wrappedBuffer(bytes));
                             response.headers().set(CONTENT_TYPE, "text/plain");
                             response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                            cached.outboundResponse(Observable.<HttpObject>just(response));
+                            trade.outboundResponse(Observable.<HttpObject>just(response));
                         }
                         @Override
                         public void onError(Throwable e) {

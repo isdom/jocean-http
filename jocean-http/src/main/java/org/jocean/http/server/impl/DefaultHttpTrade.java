@@ -9,7 +9,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.jocean.http.server.HttpServer.CachedHttpTrade;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.idiom.ActiveHolder;
 import org.jocean.idiom.COWCompositeSupport;
@@ -30,7 +29,6 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
-import rx.Observer;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -47,10 +45,24 @@ import rx.subscriptions.Subscriptions;
  */
 class DefaultHttpTrade implements HttpTrade {
     
+    private static final Func0<FullHttpRequest> RETAIN_REQ_RETURN_NULL = new Func0<FullHttpRequest>() {
+        @Override
+        public FullHttpRequest call() {
+            return null;
+        }};
+    private static final Action1<HttpObject> NOP_ON_NEXT = new Action1<HttpObject>() {
+        @Override
+        public void call(HttpObject t) {
+        }};
+    private static final Action1<Throwable> NOP_ON_ERROR = new Action1<Throwable>() {
+        @Override
+        public void call(Throwable t) {
+        }};
+        
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("DefaultHttpTrade [request's subscribers.size=")
+        final StringBuilder builder = new StringBuilder();
+        builder.append("DefaultHttpTrade [request subscriber count=")
                 .append(_requestSubscribers.size())
                 .append(", isRequestReceived=").append(_isRequestReceived.get())
                 .append(", isRequestCompleted=").append(_isRequestCompleted.get())
@@ -67,13 +79,61 @@ class DefaultHttpTrade implements HttpTrade {
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
     DefaultHttpTrade(
+            final Channel channel, 
+            final Observable<? extends HttpObject> requestObservable) {
+        this(channel, requestObservable, new HttpObjectHolder(-1));
+    }
+    
+    @SafeVarargs
+    DefaultHttpTrade(
         final Channel channel, 
-        final Observable<? extends HttpObject> requestObservable) {
+        final Observable<? extends HttpObject> requestObservable,
+        final HttpObjectHolder holder,
+        final Action1<HttpTrade> ... doOnCloseds) {
         this._channel = channel;
-        //  TODO when to unsubscribe
-        requestObservable.subscribe(this._requestRelay);
+        final Observable<? extends HttpObject> hookedObservable = requestObservable
+            .doOnNext(new Action1<HttpObject>() {
+                @Override
+                public void call(final HttpObject msg) {
+                    _isRequestReceived.compareAndSet(false, true);
+                  if (msg instanceof HttpRequest) {
+                      _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)msg));
+                  }
+                }})
+            .doOnCompleted(new Action0() {
+                @Override
+                public void call() {
+                    _isRequestCompleted.set(true);
+                }})
+            .doOnError(new Action1<Throwable>() {
+                @Override
+                public void call(Throwable e) {
+                    doClose();
+                }});
+        if (null!=holder) {
+            this._requestObservable = hookedObservable.flatMap(holder.composite()).cache();
+            this._retainFullRequest = holder.retainFullHttpRequest();
+            doOnClosed(RxActions.<HttpTrade>toAction1(holder.destroy()));
+        } else {
+            this._requestObservable = hookedObservable.publish().refCount();
+            this._retainFullRequest = RETAIN_REQ_RETURN_NULL;
+        }
+        for (Action1<HttpTrade> onclosed : doOnCloseds) {
+            doOnClosed(onclosed);
+        }
+//        //  TODO when to unsubscribe ?
+        this._requestObservable.subscribe(NOP_ON_NEXT, NOP_ON_ERROR);
     }
 
+    private Observable<? extends HttpObject> internalRequestObservable() {
+        return _requestObservableProxy;
+    }
+
+    @Override
+    public FullHttpRequest retainFullHttpRequest() {
+        return this._retainFullRequest.call();
+    }
+    
     @Override
     public boolean isActive() {
         return this._activeHolder.isActive();
@@ -139,6 +199,7 @@ class DefaultHttpTrade implements HttpTrade {
         this._actionUndoOnClosed.call(onClosed);
     }
     
+    /*
     @Override
     public CachedHttpTrade cached(final int maxBlockSize) {
         if (!this._isRequestReceived.get()) {
@@ -147,14 +208,12 @@ class DefaultHttpTrade implements HttpTrade {
             throw new RuntimeException("request has already started!");
         }
     }
+    */
 
+    /*
     private CachedHttpTrade buildCachedTrade(final int maxBlockSize) {
         final CachedRequest cached = new CachedRequest(this, maxBlockSize);
         return new CachedHttpTrade() {
-   
-            /* (non-Javadoc)
-             * @see java.lang.Object#toString()
-             */
             @Override
             public String toString() {
                 StringBuilder builder = new StringBuilder();
@@ -246,6 +305,7 @@ class DefaultHttpTrade implements HttpTrade {
                 return cached.requestHttpObjCount();
             }};
     }
+    */
     
     private void doAbort() {
         this._activeHolder.destroy(DO_ABORT_TRADE);
@@ -256,6 +316,19 @@ class DefaultHttpTrade implements HttpTrade {
     }
     
     private void fireDoOnClosed() {
+        //  fire all pending subscribers onError with unactived exception
+        @SuppressWarnings("unchecked")
+        final Subscriber<? super HttpObject>[] subscribers = (Subscriber<? super HttpObject>[])this._requestSubscribers.toArray(new Subscriber[0]);
+        for (Subscriber<? super HttpObject> subscriber : subscribers) {
+            if (!subscriber.isUnsubscribed()) {
+                try {
+                    subscriber.onError(new RuntimeException("trade unactived"));
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke ({}).onError, detail: {}",
+                            subscriber, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }
         this._onClosedActions.foreachComponent(new Action1<Action1<HttpTrade>>() {
             @Override
             public void call(final Action1<HttpTrade> onClosed) {
@@ -273,13 +346,13 @@ class DefaultHttpTrade implements HttpTrade {
         @Override
         public Observable<? extends HttpObject> call(final DefaultHttpTrade trade,
                 final Object... args) {
-            return trade._requestObservable;
+            return trade.internalRequestObservable();
         }};
     private final static FuncN<Observable<? extends HttpObject>> GET_INBOUND_REQ_ABOUT_ERROR = 
         new FuncN<Observable<? extends HttpObject>>() {
         @Override
-        public Observable<? extends HttpObject> call(Object... args) {
-            return Observable.error(new RuntimeException("trade unactive"));
+        public Observable<? extends HttpObject> call(final Object... args) {
+            return Observable.error(new RuntimeException("trade unactived"));
         }};
         
     private final static Func1_N<DefaultHttpTrade, Subscription> SET_OUTBOUND_RESP_WHEN_ACTIVE = 
@@ -372,14 +445,13 @@ class DefaultHttpTrade implements HttpTrade {
     private final ActiveHolder<DefaultHttpTrade> _activeHolder = 
             new ActiveHolder<>(this);
     
+    private final Func0<FullHttpRequest> _retainFullRequest;
     private final Channel _channel;
     private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
-    private final List<Subscriber<? super HttpObject>> _requestSubscribers = 
-            new CopyOnWriteArrayList<>();
     private final AtomicReference<Subscription> _subscriptionOfResponse = 
             new AtomicReference<Subscription>(null);
     
@@ -387,7 +459,8 @@ class DefaultHttpTrade implements HttpTrade {
             RxFunctions.toFunc0(this._activeHolder.callWhenActive(GET_INBOUND_REQ_WHEN_ACTIVE)
                 .callWhenDestroyed(GET_INBOUND_REQ_ABOUT_ERROR));
     
-    private final Func2<Observable<? extends HttpObject>, Action1<Throwable>, Subscription> _funcSetOutboundResponse = 
+    private final Func2<Observable<? extends HttpObject>, Action1<Throwable>, Subscription> 
+        _funcSetOutboundResponse = 
             RxFunctions.toFunc2(this._activeHolder.callWhenActive(SET_OUTBOUND_RESP_WHEN_ACTIVE)
                 .callWhenDestroyed(RETURN_NULL_SUBSCRIPTION));
     
@@ -416,8 +489,24 @@ class DefaultHttpTrade implements HttpTrade {
             doAbort();
         }};
         
-    private final Observable<? extends HttpObject> _requestObservable = 
-            Observable.create(new OnSubscribe<HttpObject>() {
+    private final Observable<? extends HttpObject> _requestObservable;
+    private final List<Subscriber<? super HttpObject>> _requestSubscribers = 
+            new CopyOnWriteArrayList<>();
+    private final Observable<HttpObject> _requestObservableProxy = Observable.create(new OnSubscribe<HttpObject>() {
+        @Override
+        public void call(final Subscriber<? super HttpObject> subscriber) {
+            if (!subscriber.isUnsubscribed()) {
+                _requestSubscribers.add(subscriber);
+                subscriber.add(Subscriptions.create(new Action0() {
+                    @Override
+                    public void call() {
+                        _requestSubscribers.remove(subscriber);
+                    }}));
+                _requestObservable.subscribe(subscriber);
+            }
+        }});
+    /*
+        = Observable.create(new OnSubscribe<HttpObject>() {
         @Override
         public void call(final Subscriber<? super HttpObject> subscriber) {
             if (!subscriber.isUnsubscribed()) {
@@ -429,64 +518,64 @@ class DefaultHttpTrade implements HttpTrade {
                     }}));
             }
         }
-    });
+    });*/
     
-    private final Observer<HttpObject> _requestRelay = new Observer<HttpObject>() {
-        @Override
-        public void onCompleted() {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("trade({}) requestRelay.onCompleted", DefaultHttpTrade.this);
-            }
-            _isRequestCompleted.set(true);
-            for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
-                if (!subscriber.isUnsubscribed()) {
-                    try {
-                        subscriber.onCompleted();
-                    } catch (Exception e) {
-                        LOG.warn("exception when invoke subscriber({}).onCompleted, detail:{}",
-                                subscriber, ExceptionUtils.exception2detail(e));
-                    }
-                }
-            }
-        }
-
-        @Override
-        public void onNext(final HttpObject httpObject) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("trade({}) requestRelay.onNext, httpobj:{}",
-                        DefaultHttpTrade.this, httpObject);
-            }
-            _isRequestReceived.compareAndSet(false, true);
-            if (httpObject instanceof HttpRequest) {
-                _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpObject));
-            }
-            for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
-                if (!subscriber.isUnsubscribed()) {
-                    try {
-                        subscriber.onNext(httpObject);
-                    } catch (Exception e) {
-                        LOG.warn("exception when invoke subscriber({}).onNext, detail:{}",
-                                subscriber, ExceptionUtils.exception2detail(e));
-                    }
-                }
-            }
-        }
-        
-        @Override
-        public void onError(final Throwable e) {
-            LOG.warn("trade({}) requestRelay.onError, detail:{}",
-                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-            for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
-                if (!subscriber.isUnsubscribed()) {
-                    try {
-                        subscriber.onError(e);
-                    } catch (Exception e1) {
-                        LOG.warn("exception when invoke subscriber({}).onError, detail:{}",
-                                subscriber, ExceptionUtils.exception2detail(e1));
-                    }
-                }
-            }
-            doClose();
-        }
-    };
+//    private final Observer<HttpObject> _requestRelay = new Observer<HttpObject>() {
+//        @Override
+//        public void onCompleted() {
+//            if (LOG.isDebugEnabled()) {
+//                LOG.debug("trade({}) requestRelay.onCompleted", DefaultHttpTrade.this);
+//            }
+//            _isRequestCompleted.set(true);
+//            for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
+//                if (!subscriber.isUnsubscribed()) {
+//                    try {
+//                        subscriber.onCompleted();
+//                    } catch (Exception e) {
+//                        LOG.warn("exception when invoke subscriber({}).onCompleted, detail:{}",
+//                                subscriber, ExceptionUtils.exception2detail(e));
+//                    }
+//                }
+//            }
+//        }
+//
+//        @Override
+//        public void onNext(final HttpObject httpObject) {
+//            if (LOG.isDebugEnabled()) {
+//                LOG.debug("trade({}) requestRelay.onNext, httpobj:{}",
+//                        DefaultHttpTrade.this, httpObject);
+//            }
+//            _isRequestReceived.compareAndSet(false, true);
+//            if (httpObject instanceof HttpRequest) {
+//                _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)httpObject));
+//            }
+//            for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
+//                if (!subscriber.isUnsubscribed()) {
+//                    try {
+//                        subscriber.onNext(httpObject);
+//                    } catch (Exception e) {
+//                        LOG.warn("exception when invoke subscriber({}).onNext, detail:{}",
+//                                subscriber, ExceptionUtils.exception2detail(e));
+//                    }
+//                }
+//            }
+//        }
+//        
+//        @Override
+//        public void onError(final Throwable e) {
+//            LOG.warn("trade({}) requestRelay.onError, detail:{}",
+//                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
+//            for (Subscriber<? super HttpObject> subscriber : _requestSubscribers) {
+//                if (!subscriber.isUnsubscribed()) {
+//                    try {
+//                        subscriber.onError(e);
+//                    } catch (Exception e1) {
+//                        LOG.warn("exception when invoke subscriber({}).onError, detail:{}",
+//                                subscriber, ExceptionUtils.exception2detail(e1));
+//                    }
+//                }
+//            }
+//            doClose();
+//        }
+//    };
 }
