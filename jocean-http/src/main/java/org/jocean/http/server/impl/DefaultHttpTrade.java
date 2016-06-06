@@ -77,6 +77,9 @@ class DefaultHttpTrade implements HttpTrade {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
+    private final ActiveHolder<DefaultHttpTrade> _activeHolder = 
+            new ActiveHolder<>(this);
+    
     DefaultHttpTrade(
             final Channel channel, 
             final Observable<? extends HttpObject> requestObservable) {
@@ -112,7 +115,7 @@ class DefaultHttpTrade implements HttpTrade {
         if (null!=holder) {
             this._requestObservable = hookedObservable.flatMap(holder.composite()).cache();
             this._retainFullRequest = holder.retainFullHttpRequest();
-            doOnClosed(RxActions.<HttpTrade>toAction1(holder.destroy()));
+            doOnClosed(RxActions.<HttpTrade>toAction1(holder.release()));
         } else {
             this._requestObservable = hookedObservable.publish().refCount();
             this._retainFullRequest = RETAIN_REQ_RETURN_NULL;
@@ -122,10 +125,6 @@ class DefaultHttpTrade implements HttpTrade {
         }
 //        //  TODO when to unsubscribe ?
         this._requestObservable.subscribe(NOP_ON_NEXT, NOP_ON_ERROR);
-    }
-
-    private Observable<? extends HttpObject> internalRequestObservable() {
-        return _requestObservableProxy;
     }
 
     @Override
@@ -160,6 +159,41 @@ class DefaultHttpTrade implements HttpTrade {
         return this._funcGetInboundRequest.call();
     }
 
+    private final Func0<Observable<? extends HttpObject>> _funcGetInboundRequest = 
+            RxFunctions.toFunc0(
+                this._activeHolder.callWhenActive(GET_INBOUND_REQ_WHEN_ACTIVE)
+                                .callWhenDestroyed(GET_INBOUND_REQ_ABOUT_ERROR));
+    
+    private final static Func1_N<DefaultHttpTrade, Observable<? extends HttpObject>> 
+        GET_INBOUND_REQ_WHEN_ACTIVE = 
+            new Func1_N<DefaultHttpTrade, Observable<? extends HttpObject>>() {
+                @Override
+                public Observable<? extends HttpObject> call(final DefaultHttpTrade trade,
+                        final Object... args) {
+                    return trade._requestObservableProxy;
+                }};
+    private final Observable<HttpObject> _requestObservableProxy = Observable.create(new OnSubscribe<HttpObject>() {
+        @Override
+        public void call(final Subscriber<? super HttpObject> subscriber) {
+            if (!subscriber.isUnsubscribed()) {
+                _requestSubscribers.add(subscriber);
+                subscriber.add(Subscriptions.create(new Action0() {
+                    @Override
+                    public void call() {
+                        _requestSubscribers.remove(subscriber);
+                    }}));
+                _requestObservable.subscribe(subscriber);
+            }
+        }});
+            
+    private final static FuncN<Observable<? extends HttpObject>> GET_INBOUND_REQ_ABOUT_ERROR = 
+        new FuncN<Observable<? extends HttpObject>>() {
+            @Override
+            public Observable<? extends HttpObject> call(final Object... args) {
+                return Observable.error(new RuntimeException("trade unactived"));
+            }};
+            
+
     @Override
     public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
         return outboundResponse(response, null);
@@ -172,6 +206,43 @@ class DefaultHttpTrade implements HttpTrade {
         return this._funcSetOutboundResponse.call(response, onError);
     }
 
+    private final Func2<Observable<? extends HttpObject>, Action1<Throwable>, Subscription> 
+        _funcSetOutboundResponse = 
+            RxFunctions.toFunc2(
+                this._activeHolder.callWhenActive(SET_OUTBOUND_RESP_WHEN_ACTIVE)
+                                .callWhenDestroyed(RETURN_NULL_SUBSCRIPTION));
+    
+    private final static Func1_N<DefaultHttpTrade, Subscription> SET_OUTBOUND_RESP_WHEN_ACTIVE = 
+        new Func1_N<DefaultHttpTrade, Subscription>() {
+            @Override
+            public Subscription call(final DefaultHttpTrade trade, final Object... args) {
+                final Observable<? extends HttpObject> response = 
+                        JOArrays.<Observable<? extends HttpObject>>takeArgAs(0, args);
+                final Action1<Throwable> onError = 
+                        JOArrays.<Action1<Throwable>>takeArgAs(1, args);
+                synchronized(trade._subscriptionOfResponse) {
+                    //  对 outboundResponse 方法加锁
+                    final Subscription oldsubsc =  trade._subscriptionOfResponse.get();
+                    if (null==oldsubsc ||
+                        (oldsubsc.isUnsubscribed() && !trade._isResponseSended.get())) {
+                        final Subscription newsubsc = response.subscribe(
+                                trade._actionResponseOnNext,
+                                null!=onError ? onError : trade._responseOnError,
+                                trade._actionResponseOnCompleted);
+                        trade._subscriptionOfResponse.set(newsubsc);
+                        return newsubsc;
+                    }
+                }
+                return null;
+            }};
+            
+    private final static FuncN<Subscription> RETURN_NULL_SUBSCRIPTION = 
+        new FuncN<Subscription>() {
+            @Override
+            public Subscription call(final Object... args) {
+                return null;
+            }};
+        
     @Override
     public boolean readyforOutboundResponse() {
         synchronized(this._subscriptionOfResponse) {
@@ -226,50 +297,6 @@ class DefaultHttpTrade implements HttpTrade {
                 }
             }});
     }
-
-    private final static Func1_N<DefaultHttpTrade, Observable<? extends HttpObject>> GET_INBOUND_REQ_WHEN_ACTIVE = 
-        new Func1_N<DefaultHttpTrade, Observable<? extends HttpObject>>() {
-        @Override
-        public Observable<? extends HttpObject> call(final DefaultHttpTrade trade,
-                final Object... args) {
-            return trade.internalRequestObservable();
-        }};
-    private final static FuncN<Observable<? extends HttpObject>> GET_INBOUND_REQ_ABOUT_ERROR = 
-        new FuncN<Observable<? extends HttpObject>>() {
-        @Override
-        public Observable<? extends HttpObject> call(final Object... args) {
-            return Observable.error(new RuntimeException("trade unactived"));
-        }};
-        
-    private final static Func1_N<DefaultHttpTrade, Subscription> SET_OUTBOUND_RESP_WHEN_ACTIVE = 
-            new Func1_N<DefaultHttpTrade, Subscription>() {
-            @Override
-            public Subscription call(final DefaultHttpTrade trade, final Object... args) {
-                final Observable<? extends HttpObject> response = 
-                        JOArrays.<Observable<? extends HttpObject>>takeArgAs(0, args);
-                final Action1<Throwable> onError = 
-                        JOArrays.<Action1<Throwable>>takeArgAs(1, args);
-                synchronized(trade._subscriptionOfResponse) {
-                    //  对 outboundResponse 方法加锁
-                    final Subscription oldsubsc =  trade._subscriptionOfResponse.get();
-                    if (null==oldsubsc ||
-                        (oldsubsc.isUnsubscribed() && !trade._isResponseSended.get())) {
-                        final Subscription newsubsc = response.subscribe(
-                                trade._actionResponseOnNext,
-                                null!=onError ? onError : trade._responseOnError,
-                                trade._actionResponseOnCompleted);
-                        trade._subscriptionOfResponse.set(newsubsc);
-                        return newsubsc;
-                    }
-                }
-                return null;
-            }};
-            
-    private final static FuncN<Subscription> RETURN_NULL_SUBSCRIPTION = new FuncN<Subscription>() {
-        @Override
-        public Subscription call(final Object... args) {
-            return null;
-        }};
 
     private final static Action1_N<DefaultHttpTrade> ADD_ON_CLOSED_WHEN_ACTIVE = new Action1_N<DefaultHttpTrade>() {
         @Override
@@ -328,9 +355,6 @@ class DefaultHttpTrade implements HttpTrade {
     private final COWCompositeSupport<Action1<HttpTrade>> _onClosedActions = 
             new COWCompositeSupport<Action1<HttpTrade>>();
     
-    private final ActiveHolder<DefaultHttpTrade> _activeHolder = 
-            new ActiveHolder<>(this);
-    
     private final Func0<FullHttpRequest> _retainFullRequest;
     private final Channel _channel;
     private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
@@ -340,15 +364,6 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
     private final AtomicReference<Subscription> _subscriptionOfResponse = 
             new AtomicReference<Subscription>(null);
-    
-    private final Func0<Observable<? extends HttpObject>> _funcGetInboundRequest = 
-            RxFunctions.toFunc0(this._activeHolder.callWhenActive(GET_INBOUND_REQ_WHEN_ACTIVE)
-                .callWhenDestroyed(GET_INBOUND_REQ_ABOUT_ERROR));
-    
-    private final Func2<Observable<? extends HttpObject>, Action1<Throwable>, Subscription> 
-        _funcSetOutboundResponse = 
-            RxFunctions.toFunc2(this._activeHolder.callWhenActive(SET_OUTBOUND_RESP_WHEN_ACTIVE)
-                .callWhenDestroyed(RETURN_NULL_SUBSCRIPTION));
     
     private final Action1<Action1<HttpTrade>> _actionDoOnClosed = RxActions.toAction1(
             this._activeHolder.submitWhenActive(ADD_ON_CLOSED_WHEN_ACTIVE)
@@ -378,17 +393,4 @@ class DefaultHttpTrade implements HttpTrade {
     private final Observable<? extends HttpObject> _requestObservable;
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = 
             new CopyOnWriteArrayList<>();
-    private final Observable<HttpObject> _requestObservableProxy = Observable.create(new OnSubscribe<HttpObject>() {
-        @Override
-        public void call(final Subscriber<? super HttpObject> subscriber) {
-            if (!subscriber.isUnsubscribed()) {
-                _requestSubscribers.add(subscriber);
-                subscriber.add(Subscriptions.create(new Action0() {
-                    @Override
-                    public void call() {
-                        _requestSubscribers.remove(subscriber);
-                    }}));
-                _requestObservable.subscribe(subscriber);
-            }
-        }});
 }
