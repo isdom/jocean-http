@@ -9,9 +9,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
-import org.jocean.idiom.ActiveHolder;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
@@ -77,8 +77,8 @@ class DefaultHttpTrade implements HttpTrade {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
-    private final ActiveHolder<DefaultHttpTrade> _activeHolder = 
-            new ActiveHolder<>(this);
+    private final FuncSelector<DefaultHttpTrade> _selector = 
+            new FuncSelector<>(this);
     
     DefaultHttpTrade(
             final Channel channel, 
@@ -134,7 +134,7 @@ class DefaultHttpTrade implements HttpTrade {
     
     @Override
     public boolean isActive() {
-        return this._activeHolder.isActive();
+        return this._selector.isActive();
     }
 
     @Override
@@ -160,18 +160,17 @@ class DefaultHttpTrade implements HttpTrade {
     }
 
     private final Func0<Observable<? extends HttpObject>> _funcGetInboundRequest = 
-            RxFunctions.toFunc0(
-                this._activeHolder.callWhenActive(GET_INBOUND_REQ_WHEN_ACTIVE)
-                                .callWhenDestroyed(GET_INBOUND_REQ_ABOUT_ERROR));
+        RxFunctions.toFunc0(
+            this._selector.callWhenActive(
+                RxFunctions.<DefaultHttpTrade,Observable<? extends HttpObject>>toFunc1_N(
+                    DefaultHttpTrade.class, "doGetRequest"))
+                .callWhenDestroyed(GET_INBOUND_REQ_ABOUT_ERROR));
     
-    private final static Func1_N<DefaultHttpTrade, Observable<? extends HttpObject>> 
-        GET_INBOUND_REQ_WHEN_ACTIVE = 
-            new Func1_N<DefaultHttpTrade, Observable<? extends HttpObject>>() {
-                @Override
-                public Observable<? extends HttpObject> call(final DefaultHttpTrade trade,
-                        final Object... args) {
-                    return trade._requestObservableProxy;
-                }};
+    @SuppressWarnings("unused")
+    private Observable<? extends HttpObject> doGetRequest() {
+        return this._requestObservableProxy;
+    }
+    
     private final Observable<HttpObject> _requestObservableProxy = Observable.create(new OnSubscribe<HttpObject>() {
         @Override
         public void call(final Subscriber<? super HttpObject> subscriber) {
@@ -209,7 +208,7 @@ class DefaultHttpTrade implements HttpTrade {
     private final Func2<Observable<? extends HttpObject>, Action1<Throwable>, Subscription> 
         _funcSetOutboundResponse = 
             RxFunctions.toFunc2(
-                this._activeHolder.callWhenActive(SET_OUTBOUND_RESP_WHEN_ACTIVE)
+                this._selector.callWhenActive(SET_OUTBOUND_RESP_WHEN_ACTIVE)
                                 .callWhenDestroyed(RETURN_NULL_SUBSCRIPTION));
     
     private final static Func1_N<DefaultHttpTrade, Subscription> SET_OUTBOUND_RESP_WHEN_ACTIVE = 
@@ -248,7 +247,7 @@ class DefaultHttpTrade implements HttpTrade {
         synchronized(this._subscriptionOfResponse) {
             //  对 outboundResponse 方法加锁
             final Subscription oldsubsc =  this._subscriptionOfResponse.get();
-            return this._activeHolder.isActive() && (null==oldsubsc ||
+            return this._selector.isActive() && (null==oldsubsc ||
                 (oldsubsc.isUnsubscribed() && !this._isResponseSended.get()));
         }
     }
@@ -265,11 +264,11 @@ class DefaultHttpTrade implements HttpTrade {
     }
     
     private void doAbort() {
-        this._activeHolder.destroy(DO_ABORT_TRADE);
+        this._selector.destroy(DO_ABORT_TRADE);
     }
     
     private void doClose() {
-        this._activeHolder.destroy(DO_CLOSE_TRADE);
+        this._selector.destroy(DO_CLOSE_TRADE);
     }
     
     private void fireDoOnClosed() {
@@ -366,7 +365,7 @@ class DefaultHttpTrade implements HttpTrade {
             new AtomicReference<Subscription>(null);
     
     private final Action1<Action1<HttpTrade>> _actionDoOnClosed = RxActions.toAction1(
-            this._activeHolder.submitWhenActive(ADD_ON_CLOSED_WHEN_ACTIVE)
+            this._selector.submitWhenActive(ADD_ON_CLOSED_WHEN_ACTIVE)
                 .submitWhenDestroyed(new ActionN() {
                     @Override
                     public void call(final Object...args) {
@@ -374,13 +373,13 @@ class DefaultHttpTrade implements HttpTrade {
                     }}));
 
     private final Action1<Action1<HttpTrade>> _actionUndoOnClosed = RxActions.toAction1(
-            this._activeHolder.submitWhenActive(REMOVE_DO_ON_CLOSE_WHEN_ACTIVE));
+            this._selector.submitWhenActive(REMOVE_DO_ON_CLOSE_WHEN_ACTIVE));
     
     private final Action0 _actionResponseOnCompleted = 
-            RxActions.toAction0(this._activeHolder.submitWhenActive(DO_RESP_ON_COMPLETED_WHEN_ACTIVE));
+            RxActions.toAction0(this._selector.submitWhenActive(DO_RESP_ON_COMPLETED_WHEN_ACTIVE));
 
     private final Action1<HttpObject> _actionResponseOnNext = 
-            RxActions.toAction1(this._activeHolder.submitWhenActive(DO_RESP_ON_NEXT_WHEN_ACTIVE));
+            RxActions.toAction1(this._selector.submitWhenActive(DO_RESP_ON_NEXT_WHEN_ACTIVE));
     
     private final Action1<Throwable> _responseOnError = new Action1<Throwable>() {
         @Override

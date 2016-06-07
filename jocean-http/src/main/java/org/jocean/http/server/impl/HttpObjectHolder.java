@@ -5,9 +5,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.util.Nettys;
-import org.jocean.idiom.ActiveHolder;
-import org.jocean.idiom.JOArrays;
-import org.jocean.idiom.rx.Action1_N;
+import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
@@ -51,8 +49,8 @@ class HttpObjectHolder {
     private static final Logger LOG = LoggerFactory
             .getLogger(HttpObjectHolder.class);
     
-    private final ActiveHolder<HttpObjectHolder> _activeHolder = 
-            new ActiveHolder<>(this);
+    private final FuncSelector<HttpObjectHolder> _selector = 
+            new FuncSelector<>(this);
     
     public HttpObjectHolder(final int maxBlockSize) {
         this._maxBlockSize = maxBlockSize > 0 ? maxBlockSize : _MAX_BLOCK_SIZE;
@@ -63,14 +61,12 @@ class HttpObjectHolder {
     }
     
     private final Func0<FullHttpRequest> _funcRetainFullHttpRequest = 
-            RxFunctions.toFunc0(
-            this._activeHolder.callWhenActive(
-            new Func1_N<HttpObjectHolder,FullHttpRequest>() {
-                @Override
-                public FullHttpRequest call(final HttpObjectHolder holder,final Object...args) {
-                    return holder.doRetainFullHttpRequest();
-        }}));
+        RxFunctions.toFunc0(
+            this._selector.callWhenActive(
+                    RxFunctions.<HttpObjectHolder, FullHttpRequest>toFunc1_N(
+                            HttpObjectHolder.class, "doRetainFullHttpRequest")));
     
+    @SuppressWarnings("unused")
     private FullHttpRequest doRetainFullHttpRequest() {
         if (this._isCompleted.get() && this._cachedHttpObjects.size()>0) {
             if (this._cachedHttpObjects.get(0) instanceof FullHttpRequest) {
@@ -99,7 +95,7 @@ class HttpObjectHolder {
         return new Action0() {
         @Override
         public void call() {
-            _activeHolder.destroy(new Action1<HttpObjectHolder>() {
+            _selector.destroy(new Action1<HttpObjectHolder>() {
                 @Override
                 public void call(final HttpObjectHolder holder) {
                     holder.doRelease();
@@ -128,7 +124,7 @@ class HttpObjectHolder {
     }
     
     public int currentBlockCount() {
-        return this._activeHolder.callWhenActive(new Func1_N<HttpObjectHolder, Integer>() {
+        return this._selector.callWhenActive(new Func1_N<HttpObjectHolder, Integer>() {
             @Override
             public Integer call(final HttpObjectHolder holder, final Object... args) {
                 return holder._currentBlock.size();
@@ -140,7 +136,7 @@ class HttpObjectHolder {
     }
     
     public int cachedHttpObjectCount() {
-        return this._activeHolder.callWhenActive(new Func1_N<HttpObjectHolder, Integer>() {
+        return this._selector.callWhenActive(new Func1_N<HttpObjectHolder, Integer>() {
             @Override
             public Integer call(final HttpObjectHolder holder, final Object... args) {
                 return holder._cachedHttpObjects.size();
@@ -199,15 +195,10 @@ class HttpObjectHolder {
 
     private final Action1<HttpContent> _actionRetainAndUpdateCurrentBlock = 
         RxActions.toAction1(
-            this._activeHolder.submitWhenActive(RETAIN_AND_UPDATE_BLOCK));
+            this._selector.submitWhenActive(
+                RxActions.toAction1_N(HttpObjectHolder.class, "doRetainAndUpdateCurrentBlock")));
 
-    private final static Action1_N<HttpObjectHolder> RETAIN_AND_UPDATE_BLOCK = 
-        new Action1_N<HttpObjectHolder>() {
-            @Override
-            public void call(final HttpObjectHolder holder, final Object...args) {
-                holder.doRetainAndUpdateCurrentBlock(JOArrays.<HttpContent>takeArgAs(0, args));
-            }};
-            
+    @SuppressWarnings("unused")
     private void doRetainAndUpdateCurrentBlock(final HttpContent content) {
         if (null != content) {
             this._currentBlock.add(ReferenceCountUtil.retain(content));
@@ -220,15 +211,12 @@ class HttpObjectHolder {
     }
     
     private final Func1<HttpObject, HttpObject> _funcRetainAndHoldHttpObject = 
-            RxFunctions.toFunc1(
-            this._activeHolder.callWhenActive(
-            new Func1_N<HttpObjectHolder, HttpObject>() {
-                @Override
-                public HttpObject call(final HttpObjectHolder holder,final Object...args) {
-                    //  retain httpobj by caller
-                    return holder.doRetainAndHoldHttpObject(JOArrays.<HttpObject>takeArgAs(0, args));
-        }}));
+        RxFunctions.toFunc1(
+            this._selector.callWhenActive(
+                RxFunctions.<HttpObjectHolder, HttpObject>toFunc1_N(
+                        HttpObjectHolder.class, "doRetainAndHoldHttpObject")));
     
+    @SuppressWarnings("unused")
     private HttpObject doRetainAndHoldHttpObject(final HttpObject httpobj) {
         if (null != httpobj) {
             this._cachedHttpObjects.add(ReferenceCountUtil.retain(httpobj));
@@ -248,14 +236,12 @@ class HttpObjectHolder {
     }
 
     private final Func0<HttpContent> _funcBuildCurrentBlockAndReset = 
-            RxFunctions.toFunc0(
-            this._activeHolder.callWhenActive(
-            new Func1_N<HttpObjectHolder,HttpContent>() {
-                @Override
-                public HttpContent call(final HttpObjectHolder holder, final Object... args) {
-                    return holder.doBuildCurrentBlockAndReset();
-        }}));
+        RxFunctions.toFunc0(
+            this._selector.callWhenActive(
+                    RxFunctions.<HttpObjectHolder, HttpContent>toFunc1_N(
+                            HttpObjectHolder.class, "doBuildCurrentBlockAndReset")));
 
+    @SuppressWarnings("unused")
     private HttpContent doBuildCurrentBlockAndReset() {
         try {
             if (this._currentBlock.size()>1) {
