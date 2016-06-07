@@ -325,10 +325,6 @@ class DefaultHttpTrade implements HttpTrade {
     private static final Action1<DefaultHttpTrade> DO_ABORT_TRADE = new Action1<DefaultHttpTrade>() {
         @Override
         public void call(final DefaultHttpTrade trade) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
-                        trade._channel, trade._isResponseCompleted.get(), trade.isEndedWithKeepAlive());
-            }
             trade._channel.close();
             trade.fireDoOnClosed();
         }};
@@ -340,14 +336,14 @@ class DefaultHttpTrade implements HttpTrade {
     private static final Action1<DefaultHttpTrade> DO_CLOSE_TRADE = new Action1<DefaultHttpTrade>() {
         @Override
         public void call(final DefaultHttpTrade trade) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
-                        trade._channel, trade._isResponseCompleted.get(), trade.isEndedWithKeepAlive());
-            }
             trade.fireDoOnClosed();
         }};
             
     private void fireDoOnClosed() {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
+                    this._channel, this._isResponseCompleted.get(), this.isEndedWithKeepAlive());
+        }
         //  fire all pending subscribers onError with unactived exception
         @SuppressWarnings("unchecked")
         final Subscriber<? super HttpObject>[] subscribers = 
