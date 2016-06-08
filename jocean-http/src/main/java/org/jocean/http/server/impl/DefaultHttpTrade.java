@@ -12,8 +12,6 @@ import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
-import org.jocean.idiom.JOArrays;
-import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
@@ -28,6 +26,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
+import rx.Observable.Transformer;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -91,31 +90,18 @@ class DefaultHttpTrade implements HttpTrade {
         final HttpObjectHolder holder,
         final Action1<HttpTrade> ... doOnCloseds) {
         this._channel = channel;
-        final Observable<? extends HttpObject> hookedObservable = requestObservable
-            .doOnNext(new Action1<HttpObject>() {
-                @Override
-                public void call(final HttpObject msg) {
-                    _isRequestReceived.compareAndSet(false, true);
-                  if (msg instanceof HttpRequest) {
-                      _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)msg));
-                  }
-                }})
-            .doOnCompleted(new Action0() {
-                @Override
-                public void call() {
-                    _isRequestCompleted.set(true);
-                }})
-            .doOnError(new Action1<Throwable>() {
-                @Override
-                public void call(Throwable e) {
-                    doClose();
-                }});
         if (null!=holder) {
-            this._requestObservable = hookedObservable.flatMap(holder.composite()).cache();
+            this._requestObservable = requestObservable
+                    .compose(hookRequest())
+                    .flatMap(holder.composite())
+                    .cache();
             this._retainFullRequest = holder.retainFullHttpRequest();
             doOnClosed(RxActions.<HttpTrade>toAction1(holder.release()));
         } else {
-            this._requestObservable = hookedObservable.publish().refCount();
+            this._requestObservable = requestObservable
+                    .compose(hookRequest())
+                    .publish()
+                    .refCount();
             this._retainFullRequest = RETAIN_REQ_RETURN_NULL;
         }
         for (Action1<HttpTrade> onclosed : doOnCloseds) {
@@ -125,6 +111,31 @@ class DefaultHttpTrade implements HttpTrade {
         this._requestObservable.subscribe(NOP_ON_NEXT, NOP_ON_ERROR);
     }
 
+    private Transformer<HttpObject, HttpObject> hookRequest() {
+        return new Transformer<HttpObject, HttpObject>() {
+            @Override
+            public Observable<HttpObject> call(final Observable<HttpObject> src) {
+                return src.doOnNext(new Action1<HttpObject>() {
+                    @Override
+                    public void call(final HttpObject msg) {
+                        _isRequestReceived.compareAndSet(false, true);
+                      if (msg instanceof HttpRequest) {
+                          _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)msg));
+                      }
+                    }})
+                .doOnCompleted(new Action0() {
+                    @Override
+                    public void call() {
+                        _isRequestCompleted.set(true);
+                    }})
+                .doOnError(new Action1<Throwable>() {
+                    @Override
+                    public void call(Throwable e) {
+                        doClose();
+                    }});
+            }};
+    }
+    
     @Override
     public FullHttpRequest retainFullHttpRequest() {
         return this._retainFullRequest.call();
@@ -208,7 +219,7 @@ class DefaultHttpTrade implements HttpTrade {
             RxFunctions.toFunc2(
                 this._selector.callWhenActive(RxFunctions.<DefaultHttpTrade,Subscription>toFunc1_N(
                         DefaultHttpTrade.class, "doSetOutboundResponse"))
-                .callWhenDestroyed(RETURN_NULL_SUBSCRIPTION));
+                .callWhenDestroyed(Func1_N.Util.<DefaultHttpTrade,Subscription>returnNull()));
     
     @SuppressWarnings("unused")
     private Subscription doSetOutboundResponse(
@@ -263,13 +274,6 @@ class DefaultHttpTrade implements HttpTrade {
             doAbort();
         }};
         
-    private final static Func1_N<DefaultHttpTrade,Subscription> RETURN_NULL_SUBSCRIPTION = 
-        new Func1_N<DefaultHttpTrade,Subscription>() {
-            @Override
-            public Subscription call(final DefaultHttpTrade trade, final Object... args) {
-                return null;
-            }};
-        
     @Override
     public boolean readyforOutboundResponse() {
         if (!isActive()) {
@@ -293,15 +297,17 @@ class DefaultHttpTrade implements HttpTrade {
     private final Action1<Action1<HttpTrade>> _actionDoOnClosed = RxActions.toAction1(
             this._selector.submitWhenActive(
                 RxActions.toAction1_N(DefaultHttpTrade.class, "internalDoOnClosed"))
-            .submitWhenDestroyed(new Action1_N<DefaultHttpTrade>() {
-                @Override
-                public void call(final DefaultHttpTrade trade, final Object...args) {
-                    JOArrays.<Action1<HttpTrade>>takeArgAs(0, args).call(trade);
-                }}));
+            .submitWhenDestroyed(
+                RxActions.toAction1_N(DefaultHttpTrade.class, "fireOnClosedOf")));
     
     @SuppressWarnings("unused")
     private void internalDoOnClosed(final Action1<HttpTrade> onClosed) {
         this._onClosedActions.addComponent(onClosed);
+    }
+    
+    @SuppressWarnings("unused")
+    private void fireOnClosedOf(final Action1<HttpTrade> onClosed) {
+        onClosed.call(this);
     }
     
     @Override
@@ -319,25 +325,18 @@ class DefaultHttpTrade implements HttpTrade {
     }
         
     private void doAbort() {
-        this._selector.destroy(DO_ABORT_TRADE);
+        this._selector.destroy(RxActions.toAction1_N(DefaultHttpTrade.class, "closeChannelAndFireDoOnClosed"));
     }
     
-    private static final Action1_N<DefaultHttpTrade> DO_ABORT_TRADE = new Action1_N<DefaultHttpTrade>() {
-        @Override
-        public void call(final DefaultHttpTrade trade,final Object... args) {
-            trade._channel.close();
-            trade.fireDoOnClosed();
-        }};
-        
+    @SuppressWarnings("unused")
+    private void closeChannelAndFireDoOnClosed() {
+        this._channel.close();
+        fireDoOnClosed();
+    }
+    
     private void doClose() {
-        this._selector.destroy(DO_CLOSE_TRADE);
+        this._selector.destroy(RxActions.toAction1_N(DefaultHttpTrade.class, "fireDoOnClosed"));
     }
-    
-    private static final Action1_N<DefaultHttpTrade> DO_CLOSE_TRADE = new Action1_N<DefaultHttpTrade>() {
-        @Override
-        public void call(final DefaultHttpTrade trade,final Object... args) {
-            trade.fireDoOnClosed();
-        }};
             
     private void fireDoOnClosed() {
         if (LOG.isDebugEnabled()) {
