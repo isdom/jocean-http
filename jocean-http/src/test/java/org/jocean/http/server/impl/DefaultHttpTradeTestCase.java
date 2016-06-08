@@ -182,6 +182,31 @@ public class DefaultHttpTradeTestCase {
     }
     
     @Test
+    public final void tesTradeForCallAbortAndUseInboundRequest() throws Exception {
+        final ByteBuf content = Unpooled.buffer(0);
+        content.writeBytes("test content".getBytes(Charsets.UTF_8));
+        final DefaultFullHttpRequest request = 
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
+        
+        final ConnectableObservable<HttpObject> requestObservable = 
+                Observable.<HttpObject>just(request).publish();
+        
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                requestObservable);
+        
+        requestObservable.connect();
+        trade.abort();
+        
+        final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber);
+        
+        reqSubscriber.assertError(Exception.class);
+        reqSubscriber.assertValueCount(0);
+        
+        assertFalse(trade.isActive());
+    }
+    
+    @Test
     public final void tesTradeForCompleteRound() throws Exception {
         final ByteBuf content = Unpooled.buffer(0);
         content.writeBytes("test content".getBytes(Charsets.UTF_8));
