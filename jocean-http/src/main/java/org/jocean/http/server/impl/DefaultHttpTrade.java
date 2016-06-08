@@ -34,6 +34,7 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func2;
+import rx.observers.SerializedSubscriber;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -173,17 +174,26 @@ class DefaultHttpTrade implements HttpTrade {
         return this._requestObservableProxy;
     }
     
+    private static <T> Subscriber<T> serialized(final Subscriber<T> subscriber) {
+        if (subscriber instanceof SerializedSubscriber) {
+            return subscriber;
+        } else {
+            return new SerializedSubscriber<T>(subscriber);
+        }
+    }
+    
     private final Observable<HttpObject> _requestObservableProxy = Observable.create(new OnSubscribe<HttpObject>() {
         @Override
         public void call(final Subscriber<? super HttpObject> subscriber) {
-            if (!subscriber.isUnsubscribed()) {
-                _requestSubscribers.add(subscriber);
-                subscriber.add(Subscriptions.create(new Action0() {
+            final Subscriber<? super HttpObject> serializedSubscriber = serialized(subscriber);
+            if (!serializedSubscriber.isUnsubscribed()) {
+                _requestSubscribers.add(serializedSubscriber);
+                serializedSubscriber.add(Subscriptions.create(new Action0() {
                     @Override
                     public void call() {
-                        _requestSubscribers.remove(subscriber);
+                        _requestSubscribers.remove(serializedSubscriber);
                     }}));
-                _requestObservable.subscribe(subscriber);
+                _requestObservable.subscribe(serializedSubscriber);
             }
         }});
             

@@ -177,6 +177,8 @@ public class DefaultHttpTradeTestCase {
         
         reqSubscriber.assertValueCount(1);
         assertSame(reqSubscriber.getOnNextEvents().get(0), request);
+        reqSubscriber.assertCompleted();
+        reqSubscriber.assertNoErrors();
         
         assertFalse(trade.isActive());
     }
@@ -202,6 +204,36 @@ public class DefaultHttpTradeTestCase {
         
         reqSubscriber.assertError(Exception.class);
         reqSubscriber.assertValueCount(0);
+        
+        assertFalse(trade.isActive());
+    }
+    
+    @Test
+    public final void tesTradeForCallAbortAfterPartRequestIncome() throws Exception {
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.create(holder), null);
+        
+        final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber);
+        
+        assertEquals(holder.getSubscriberCount(), 1);
+        
+        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents[0]);
+        
+        trade.abort();
+        
+        reqSubscriber.assertError(Exception.class);
+        reqSubscriber.assertValueCount(2);
+        reqSubscriber.assertValues(request, req_contents[0]);
         
         assertFalse(trade.isActive());
     }
