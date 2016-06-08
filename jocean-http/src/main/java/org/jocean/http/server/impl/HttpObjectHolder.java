@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.FuncSelector;
+import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
@@ -28,7 +29,6 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
-import rx.functions.FuncN;
 
 class HttpObjectHolder {
     private static int _block_size = 128 * 1024; // 128KB
@@ -95,9 +95,9 @@ class HttpObjectHolder {
         return new Action0() {
         @Override
         public void call() {
-            _selector.destroy(new Action1<HttpObjectHolder>() {
+            _selector.destroy(new Action1_N<HttpObjectHolder>() {
                 @Override
-                public void call(final HttpObjectHolder holder) {
+                public void call(final HttpObjectHolder holder,final Object ...args) {
                     holder.doRelease();
                 }});
         }};
@@ -128,9 +128,9 @@ class HttpObjectHolder {
             @Override
             public Integer call(final HttpObjectHolder holder, final Object... args) {
                 return holder._currentBlock.size();
-            }}).callWhenDestroyed(new FuncN<Integer>() {
+            }}).callWhenDestroyed(new Func1_N<HttpObjectHolder, Integer>() {
             @Override
-            public Integer call(final Object... args) {
+            public Integer call(final HttpObjectHolder holder, final Object... args) {
                 return 0;
             }}).call();
     }
@@ -140,9 +140,9 @@ class HttpObjectHolder {
             @Override
             public Integer call(final HttpObjectHolder holder, final Object... args) {
                 return holder._cachedHttpObjects.size();
-            }}).callWhenDestroyed(new FuncN<Integer>() {
+            }}).callWhenDestroyed(new Func1_N<HttpObjectHolder, Integer>() {
             @Override
-            public Integer call(final Object... args) {
+            public Integer call(final HttpObjectHolder holder, final Object... args) {
                 return 0;
             }}).call();
     }

@@ -13,6 +13,8 @@ import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.JOArrays;
+import org.jocean.idiom.rx.Action1_N;
+import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
 import org.slf4j.Logger;
@@ -30,10 +32,8 @@ import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.ActionN;
 import rx.functions.Func0;
 import rx.functions.Func2;
-import rx.functions.FuncN;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -183,10 +183,10 @@ class DefaultHttpTrade implements HttpTrade {
             }
         }});
             
-    private final static FuncN<Observable<? extends HttpObject>> GET_INBOUND_REQ_ABOUT_ERROR = 
-        new FuncN<Observable<? extends HttpObject>>() {
+    private final static Func1_N<DefaultHttpTrade,Observable<? extends HttpObject>> GET_INBOUND_REQ_ABOUT_ERROR = 
+        new Func1_N<DefaultHttpTrade,Observable<? extends HttpObject>>() {
             @Override
-            public Observable<? extends HttpObject> call(final Object... args) {
+            public Observable<? extends HttpObject> call(final DefaultHttpTrade trade,final Object... args) {
                 return Observable.error(new RuntimeException("trade unactived"));
             }};
             
@@ -263,10 +263,10 @@ class DefaultHttpTrade implements HttpTrade {
             doAbort();
         }};
         
-    private final static FuncN<Subscription> RETURN_NULL_SUBSCRIPTION = 
-        new FuncN<Subscription>() {
+    private final static Func1_N<DefaultHttpTrade,Subscription> RETURN_NULL_SUBSCRIPTION = 
+        new Func1_N<DefaultHttpTrade,Subscription>() {
             @Override
-            public Subscription call(final Object... args) {
+            public Subscription call(final DefaultHttpTrade trade, final Object... args) {
                 return null;
             }};
         
@@ -293,10 +293,10 @@ class DefaultHttpTrade implements HttpTrade {
     private final Action1<Action1<HttpTrade>> _actionDoOnClosed = RxActions.toAction1(
             this._selector.submitWhenActive(
                 RxActions.toAction1_N(DefaultHttpTrade.class, "internalDoOnClosed"))
-            .submitWhenDestroyed(new ActionN() {
+            .submitWhenDestroyed(new Action1_N<DefaultHttpTrade>() {
                 @Override
-                public void call(final Object...args) {
-                    JOArrays.<Action1<HttpTrade>>takeArgAs(0, args).call(DefaultHttpTrade.this);
+                public void call(final DefaultHttpTrade trade, final Object...args) {
+                    JOArrays.<Action1<HttpTrade>>takeArgAs(0, args).call(trade);
                 }}));
     
     @SuppressWarnings("unused")
@@ -322,9 +322,9 @@ class DefaultHttpTrade implements HttpTrade {
         this._selector.destroy(DO_ABORT_TRADE);
     }
     
-    private static final Action1<DefaultHttpTrade> DO_ABORT_TRADE = new Action1<DefaultHttpTrade>() {
+    private static final Action1_N<DefaultHttpTrade> DO_ABORT_TRADE = new Action1_N<DefaultHttpTrade>() {
         @Override
-        public void call(final DefaultHttpTrade trade) {
+        public void call(final DefaultHttpTrade trade,final Object... args) {
             trade._channel.close();
             trade.fireDoOnClosed();
         }};
@@ -333,9 +333,9 @@ class DefaultHttpTrade implements HttpTrade {
         this._selector.destroy(DO_CLOSE_TRADE);
     }
     
-    private static final Action1<DefaultHttpTrade> DO_CLOSE_TRADE = new Action1<DefaultHttpTrade>() {
+    private static final Action1_N<DefaultHttpTrade> DO_CLOSE_TRADE = new Action1_N<DefaultHttpTrade>() {
         @Override
-        public void call(final DefaultHttpTrade trade) {
+        public void call(final DefaultHttpTrade trade,final Object... args) {
             trade.fireDoOnClosed();
         }};
             
