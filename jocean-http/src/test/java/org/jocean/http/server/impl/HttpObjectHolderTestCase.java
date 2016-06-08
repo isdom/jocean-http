@@ -35,7 +35,7 @@ import rx.Observable;
 import rx.functions.Action1;
 import rx.observables.ConnectableObservable;
 
-public class HttpObjectCompositorTestCase {
+public class HttpObjectHolderTestCase {
 
     @Test
     public final void test() {

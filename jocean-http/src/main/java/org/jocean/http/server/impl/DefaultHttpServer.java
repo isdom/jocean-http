@@ -48,7 +48,7 @@ public class DefaultHttpServer implements HttpServer {
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
         if (!(InternalLoggerFactory.getDefaultFactory() instanceof Slf4JLoggerFactory)) {
-            InternalLoggerFactory.setDefaultFactory(new Slf4JLoggerFactory());
+            InternalLoggerFactory.setDefaultFactory(Slf4JLoggerFactory.INSTANCE);
         }
     }
     

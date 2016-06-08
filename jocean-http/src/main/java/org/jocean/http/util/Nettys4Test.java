@@ -323,6 +323,28 @@ public class Nettys4Test {
             @Override
             public ChannelFuture writeAndFlush(Object msg) {
                 return null;
-            }};
+            }
+
+            /*
+            @Override
+            public <T> boolean hasAttr(AttributeKey<T> key) {
+                return false;
+            }
+
+            @Override
+            public ChannelId id() {
+                return null;
+            }
+
+            @Override
+            public long bytesBeforeUnwritable() {
+                return 0;
+            }
+
+            @Override
+            public long bytesBeforeWritable() {
+                return 0;
+            }*/
+            };
     }
 }

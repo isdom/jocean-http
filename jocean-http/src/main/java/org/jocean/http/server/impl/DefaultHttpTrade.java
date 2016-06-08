@@ -15,6 +15,7 @@ import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
+import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,14 +46,6 @@ class DefaultHttpTrade implements HttpTrade {
         @Override
         public FullHttpRequest call() {
             return null;
-        }};
-    private static final Action1<HttpObject> NOP_ON_NEXT = new Action1<HttpObject>() {
-        @Override
-        public void call(HttpObject t) {
-        }};
-    private static final Action1<Throwable> NOP_ON_ERROR = new Action1<Throwable>() {
-        @Override
-        public void call(Throwable t) {
         }};
         
     @Override
@@ -108,7 +101,7 @@ class DefaultHttpTrade implements HttpTrade {
             doOnClosed(onclosed);
         }
 //        //  TODO when to unsubscribe ?
-        this._requestObservable.subscribe(NOP_ON_NEXT, NOP_ON_ERROR);
+        this._requestObservable.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
     }
 
     private Transformer<HttpObject, HttpObject> hookRequest() {

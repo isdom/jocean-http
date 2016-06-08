@@ -8,10 +8,8 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -38,13 +36,10 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Subscriber;
 import rx.Subscription;
@@ -59,10 +54,9 @@ public class DefaultHttpServerTestCase {
                     transportRef.set(trade.transport());
                 }
                 trade.inboundRequest().subscribe(new Subscriber<HttpObject>() {
-                    private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
                     @Override
                     public void onCompleted() {
-                        final FullHttpRequest req = retainFullHttpRequest();
+                        final FullHttpRequest req = trade.retainFullHttpRequest();
                         if (null!=req) {
                             try {
                                 final InputStream is = new ByteBufInputStream(req.content());
@@ -83,29 +77,8 @@ public class DefaultHttpServerTestCase {
                     @Override
                     public void onError(Throwable e) {
                     }
-                    private FullHttpRequest retainFullHttpRequest() {
-                        if (this._reqHttpObjects.size()>0) {
-                            if (this._reqHttpObjects.get(0) instanceof FullHttpRequest) {
-                                return ((FullHttpRequest)this._reqHttpObjects.get(0)).retain();
-                            }
-                            
-                            final HttpRequest req = (HttpRequest)this._reqHttpObjects.get(0);
-                            final ByteBuf[] bufs = new ByteBuf[this._reqHttpObjects.size()-1];
-                            for (int idx = 1; idx<this._reqHttpObjects.size(); idx++) {
-                                bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
-                            }
-                            return new DefaultFullHttpRequest(
-                                    req.getProtocolVersion(), 
-                                    req.getMethod(), 
-                                    req.getUri(), 
-                                    Unpooled.wrappedBuffer(bufs));
-                        } else {
-                            return null;
-                        }
-                    }
                     @Override
                     public void onNext(final HttpObject msg) {
-                        this._reqHttpObjects.add(ReferenceCountUtil.retain(msg));
                     }});
             }};
     }
