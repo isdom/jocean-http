@@ -6,7 +6,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.FuncSelector;
-import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
@@ -95,14 +94,11 @@ class HttpObjectHolder {
         return new Action0() {
         @Override
         public void call() {
-            _selector.destroy(new Action1_N<HttpObjectHolder>() {
-                @Override
-                public void call(final HttpObjectHolder holder,final Object ...args) {
-                    holder.doRelease();
-                }});
+            _selector.destroy(RxActions.toAction1_N(HttpObjectHolder.class, "doRelease"));
         }};
     }
     
+    @SuppressWarnings("unused")
     private void doRelease() {
         releaseReferenceCountedList(this._currentBlock);
         releaseReferenceCountedList(this._cachedHttpObjects);
