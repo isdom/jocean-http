@@ -6,6 +6,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
@@ -45,6 +46,7 @@ import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.functions.Action1;
 import rx.observables.ConnectableObservable;
+import rx.observers.TestSubscriber;
 
 public class DefaultHttpTradeTestCase {
 
@@ -126,6 +128,59 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
     }
 
+    @Test
+    public final void tesTradeForCallAbortBeforeRequestPublish() throws Exception {
+        final ByteBuf content = Unpooled.buffer(0);
+        content.writeBytes("test content".getBytes(Charsets.UTF_8));
+        final DefaultFullHttpRequest request = 
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
+        
+        final ConnectableObservable<HttpObject> requestObservable = 
+                Observable.<HttpObject>just(request).publish();
+        
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                requestObservable, null);
+        
+        final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
+        
+        trade.inboundRequest().subscribe(reqSubscriber);
+        
+        trade.abort();
+        reqSubscriber.assertError(Exception.class);
+        
+        requestObservable.connect();
+        reqSubscriber.assertValueCount(0);
+        
+        assertFalse(trade.isActive());
+    }
+    
+    @Test
+    public final void tesTradeForCallAbortAfterRequestPublish() throws Exception {
+        final ByteBuf content = Unpooled.buffer(0);
+        content.writeBytes("test content".getBytes(Charsets.UTF_8));
+        final DefaultFullHttpRequest request = 
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
+        
+        final ConnectableObservable<HttpObject> requestObservable = 
+                Observable.<HttpObject>just(request).publish();
+        
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                requestObservable, null);
+        
+        final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
+        
+        trade.inboundRequest().subscribe(reqSubscriber);
+        
+        requestObservable.connect();
+        
+        trade.abort();
+        
+        reqSubscriber.assertValueCount(1);
+        assertSame(reqSubscriber.getOnNextEvents().get(0), request);
+        
+        assertFalse(trade.isActive());
+    }
+    
     @Test
     public final void tesTradeForCompleteRound() throws Exception {
         final ByteBuf content = Unpooled.buffer(0);

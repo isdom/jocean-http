@@ -22,6 +22,7 @@ import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.RxFunctions;
+import org.jocean.idiom.rx.RxSubscribers;
 import org.junit.Test;
 
 import io.netty.bootstrap.ServerBootstrap;
@@ -41,8 +42,8 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import rx.Observable;
-import rx.Subscriber;
 import rx.Subscription;
+import rx.functions.Action0;
 import rx.functions.Action1;
 
 public class DefaultHttpServerTestCase {
@@ -53,33 +54,30 @@ public class DefaultHttpServerTestCase {
                 if (null!=transportRef) {
                     transportRef.set(trade.transport());
                 }
-                trade.inboundRequest().subscribe(new Subscriber<HttpObject>() {
-                    @Override
-                    public void onCompleted() {
-                        final FullHttpRequest req = trade.retainFullHttpRequest();
-                        if (null!=req) {
-                            try {
-                                final InputStream is = new ByteBufInputStream(req.content());
-                                final byte[] bytes = new byte[is.available()];
-                                is.read(bytes);
-                                final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
-                                        Unpooled.wrappedBuffer(bytes));
-                                response.headers().set(CONTENT_TYPE, "text/plain");
-                                response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                                trade.outboundResponse(Observable.<HttpObject>just(response));
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            } finally {
-                                req.release();
+                trade.inboundRequest().subscribe(
+                    RxSubscribers.nopOnNext(),
+                    RxSubscribers.nopOnError(),
+                    new Action0() {
+                        @Override
+                        public void call() {
+                            final FullHttpRequest req = trade.retainFullHttpRequest();
+                            if (null!=req) {
+                                try {
+                                    final InputStream is = new ByteBufInputStream(req.content());
+                                    final byte[] bytes = new byte[is.available()];
+                                    is.read(bytes);
+                                    final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
+                                            Unpooled.wrappedBuffer(bytes));
+                                    response.headers().set(CONTENT_TYPE, "text/plain");
+                                    response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                                    trade.outboundResponse(Observable.<HttpObject>just(response));
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                } finally {
+                                    req.release();
+                                }
                             }
-                        }
-                    }
-                    @Override
-                    public void onError(Throwable e) {
-                    }
-                    @Override
-                    public void onNext(final HttpObject msg) {
-                    }});
+                        }});
             }};
     }
 
