@@ -52,9 +52,14 @@ class HttpObjectHolder {
             new FuncSelector<>(this);
     
     public HttpObjectHolder(final int maxBlockSize) {
+        //  TODO 2016-06-09 
+        //  0 : using _MAX_BLOCK_SIZE 
+        //  -1 : disable assemble piece to a big block feature
         this._maxBlockSize = maxBlockSize > 0 ? maxBlockSize : _MAX_BLOCK_SIZE;
     }
     
+    //  TODO 2016-06-09 
+    //  remove from Holder and move to Common Utils class 
     public Func0<FullHttpRequest> retainFullHttpRequest() {
         return this._funcRetainFullHttpRequest;
     }
@@ -149,30 +154,32 @@ class HttpObjectHolder {
             public Observable<? extends HttpObject> call(final HttpObject msg) {
                 if (LOG.isDebugEnabled()) {
                     if (msg instanceof ByteBufHolder) {
-                        LOG.debug("HttpObjectCompositor: receive ByteBufHolder's content: {}", 
+                        LOG.debug("HttpObjectHolder: receive ByteBufHolder's content: {}", 
                                 Nettys.dumpByteBufHolder((ByteBufHolder)msg));
                     }
                 }
                 if (msg instanceof HttpContent) {
                     if (msg instanceof LastHttpContent) {
-                        HttpObject httpObject = null;
-                        _isCompleted.set(true);
-                        if (_currentBlockSize > 0) {
-                            // build block left
-                            httpObject = retainCurrentBlockAndReset();
-                        }
-                        return asObservable(httpObject, retainAndHoldHttpObject(msg));
+                        return asObservable(retainAnyCurrentBlockLeft(), retainAndHoldHttpObject(msg));
                     } else {
-                        retainAndUpdateCurrentBlock((HttpContent)msg);
-                        if (_currentBlockSize >= _maxBlockSize) {
-                            return asObservable(retainCurrentBlockAndReset());
-                        }
+                        return assembleAndAsObservable((HttpContent)msg);
                     }
-                    return Observable.<HttpObject>empty();
                 } else {
                     return asObservable(retainAndHoldHttpObject(msg));
                 }
             }};
+    }
+
+    private HttpObject retainAnyCurrentBlockLeft() {
+        return (this._currentBlockSize > 0) ? retainCurrentBlockAndReset() : null;
+    }
+
+    private Observable<? extends HttpObject> assembleAndAsObservable(
+            final HttpContent msg) {
+        retainAndUpdateCurrentBlock(msg);
+        return (this._currentBlockSize >= this._maxBlockSize) 
+                ? asObservable(retainCurrentBlockAndReset())
+                : Observable.<HttpObject>empty();
     }
 
     private static Observable<HttpObject> asObservable(final HttpObject... httpObjects) {
@@ -216,6 +223,9 @@ class HttpObjectHolder {
     private HttpObject doRetainAndHoldHttpObject(final HttpObject httpobj) {
         if (null != httpobj) {
             this._cachedHttpObjects.add(ReferenceCountUtil.retain(httpobj));
+            if (httpobj instanceof LastHttpContent) {
+                this._isCompleted.set(true);
+            }
         }
         return httpobj;
     }
