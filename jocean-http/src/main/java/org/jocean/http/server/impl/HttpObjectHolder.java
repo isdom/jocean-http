@@ -52,9 +52,9 @@ class HttpObjectHolder {
             new FuncSelector<>(this);
     
     public HttpObjectHolder(final int maxBlockSize) {
-        //  TODO 2016-06-09 
         //  0 : using _MAX_BLOCK_SIZE 
         //  -1 : disable assemble piece to a big block feature
+        this._enableAssemble = maxBlockSize >= 0;
         this._maxBlockSize = maxBlockSize > 0 ? maxBlockSize : _MAX_BLOCK_SIZE;
     }
     
@@ -148,7 +148,7 @@ class HttpObjectHolder {
             }}).call();
     }
     
-    public Func1<HttpObject, Observable<? extends HttpObject>> composite() {
+    public Func1<HttpObject, Observable<? extends HttpObject>> assembleAndHold() {
         return new Func1<HttpObject, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final HttpObject msg) {
@@ -158,11 +158,11 @@ class HttpObjectHolder {
                                 Nettys.dumpByteBufHolder((ByteBufHolder)msg));
                     }
                 }
-                if (msg instanceof HttpContent) {
+                if (_enableAssemble && (msg instanceof HttpContent)) {
                     if (msg instanceof LastHttpContent) {
-                        return asObservable(retainAnyCurrentBlockLeft(), retainAndHoldHttpObject(msg));
+                        return asObservable(retainAnyBlockLeft(), retainAndHoldHttpObject(msg));
                     } else {
-                        return assembleAndAsObservable((HttpContent)msg);
+                        return assembleAndReturnObservable((HttpContent)msg);
                     }
                 } else {
                     return asObservable(retainAndHoldHttpObject(msg));
@@ -170,11 +170,11 @@ class HttpObjectHolder {
             }};
     }
 
-    private HttpObject retainAnyCurrentBlockLeft() {
+    private HttpObject retainAnyBlockLeft() {
         return (this._currentBlockSize > 0) ? retainCurrentBlockAndReset() : null;
     }
 
-    private Observable<? extends HttpObject> assembleAndAsObservable(
+    private Observable<? extends HttpObject> assembleAndReturnObservable(
             final HttpContent msg) {
         retainAndUpdateCurrentBlock(msg);
         return (this._currentBlockSize >= this._maxBlockSize) 
@@ -272,6 +272,8 @@ class HttpObjectHolder {
             this._currentBlockSize = 0;
         }
     }
+    
+    private final boolean _enableAssemble;
     
     private final int _maxBlockSize;
     

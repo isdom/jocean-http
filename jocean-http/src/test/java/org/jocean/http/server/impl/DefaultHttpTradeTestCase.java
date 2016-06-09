@@ -238,6 +238,8 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
     }
     
+    //  TODO,  2016-06-09 add multi subscriber of inbound request, and check source observable is only subscribe for once.
+    
     @Test
     public final void tesTradeForCompleteRound() throws Exception {
         final ByteBuf content = Unpooled.buffer(0);

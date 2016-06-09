@@ -1,47 +1,54 @@
 package org.jocean.http.server.impl;
 
-import static io.netty.handler.codec.http.HttpResponseStatus.OK;
-import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
-import static org.junit.Assert.*;
-
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
-import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys4Test;
-import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.Pair;
-import org.jocean.idiom.rx.RxActions;
-import org.jocean.idiom.rx.SubscriberHolder;
 import org.junit.Test;
 
 import com.google.common.base.Charsets;
 
-import io.netty.channel.Channel;
-import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpRequest;
-import io.netty.handler.codec.http.DefaultHttpResponse;
-import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
-import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
-import rx.functions.Action1;
-import rx.observables.ConnectableObservable;
+import rx.observers.TestSubscriber;
 
 public class HttpObjectHolderTestCase {
 
     @Test
-    public final void test() {
-        fail("Not yet implemented");
+    public final void tesHttpObjectHolderForDisableAssemble() throws Exception {
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final HttpObjectHolder holder = new HttpObjectHolder(-1);
+        
+        final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
+        final List<HttpObject> reqs = new ArrayList<HttpObject>() {
+            private static final long serialVersionUID = 1L;
+        {
+            this.add(request);
+            this.addAll(Arrays.asList(req_contents));
+            this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+        }};
+        
+        Observable.<HttpObject>from(reqs)
+            .flatMap(holder.assembleAndHold())
+            .subscribe(reqSubscriber);
+        
+        reqSubscriber.assertValueCount(reqs.size());
+        reqSubscriber.assertValues(reqs.toArray(new HttpObject[0]));
+        reqSubscriber.assertNoErrors();
+        reqSubscriber.assertCompleted();
     }
-
+    
     /*
     @Test
     public final void tesTradeForCompleteRoundWithMultiContentRequest() throws Exception {

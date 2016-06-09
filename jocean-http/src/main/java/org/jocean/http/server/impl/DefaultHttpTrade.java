@@ -87,7 +87,7 @@ class DefaultHttpTrade implements HttpTrade {
         if (null!=holder) {
             this._requestObservable = requestObservable
                     .compose(hookRequest())
-                    .flatMap(holder.composite())
+                    .flatMap(holder.assembleAndHold())
                     .cache();
             this._retainFullRequest = holder.retainFullHttpRequest();
             doOnClosed(RxActions.<HttpTrade>toAction1(holder.release()));
