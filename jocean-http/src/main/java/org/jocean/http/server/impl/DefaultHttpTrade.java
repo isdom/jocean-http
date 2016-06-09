@@ -74,7 +74,7 @@ class DefaultHttpTrade implements HttpTrade {
     DefaultHttpTrade(
             final Channel channel, 
             final Observable<? extends HttpObject> requestObservable) {
-        this(channel, requestObservable, new HttpObjectHolder(-1));
+        this(channel, requestObservable, new HttpObjectHolder(0));
     }
     
     @SafeVarargs
