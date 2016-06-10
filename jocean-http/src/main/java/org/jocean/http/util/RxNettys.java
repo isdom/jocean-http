@@ -27,14 +27,18 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.ReferenceCounted;
@@ -633,4 +637,32 @@ public class RxNettys {
                 }
             }} );
     }
+    
+    public static Func1<HttpObject[], FullHttpRequest> BUILD_FULL_REQUEST = new Func1<HttpObject[], FullHttpRequest>() {
+        @Override
+        public FullHttpRequest call(final HttpObject[] httpobjs) {
+            if (httpobjs.length>0 
+            && (httpobjs[0] instanceof HttpRequest) 
+            && (httpobjs[httpobjs.length-1] instanceof LastHttpContent)) {
+                if (httpobjs[0] instanceof FullHttpRequest) {
+                    return ((FullHttpRequest)httpobjs[0]).retain();
+                }
+                
+                final HttpRequest req = (HttpRequest)httpobjs[0];
+                final ByteBuf[] bufs = new ByteBuf[httpobjs.length-1];
+                for (int idx = 1; idx<httpobjs.length; idx++) {
+                    bufs[idx-1] = ((HttpContent)httpobjs[idx]).content().retain();
+                }
+                final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
+                        req.getProtocolVersion(), 
+                        req.getMethod(), 
+                        req.getUri(), 
+                        Unpooled.wrappedBuffer(bufs));
+                fullreq.headers().add(req.headers());
+                //  ? need update Content-Length header field ?
+                return fullreq;
+            } else {
+                return null;
+            }
+        }};
 }

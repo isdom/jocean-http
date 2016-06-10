@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
@@ -89,7 +90,11 @@ class DefaultHttpTrade implements HttpTrade {
                     .compose(hookRequest())
                     .flatMap(holder.assembleAndHold())
                     .cache();
-            this._retainFullRequest = holder.retainFullHttpRequest();
+            this._retainFullRequest = new Func0<FullHttpRequest>() {
+                @Override
+                public FullHttpRequest call() {
+                    return holder.visitHttpObjects(RxNettys.BUILD_FULL_REQUEST);
+                }};
             doOnClosed(RxActions.<HttpTrade>toAction1(holder.release()));
         } else {
             this._requestObservable = requestObservable

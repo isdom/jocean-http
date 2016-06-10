@@ -2,9 +2,9 @@ package org.jocean.http.server.impl;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.util.Nettys;
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
@@ -15,12 +15,9 @@ import org.slf4j.LoggerFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpContent;
-import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
@@ -30,6 +27,8 @@ import rx.functions.Func0;
 import rx.functions.Func1;
 
 class HttpObjectHolder {
+    private static final HttpObject[] ZERO_HTTPOBJS = new HttpObject[0];
+
     private static int _block_size = 128 * 1024; // 128KB
     static {
         // possible system property for overriding
@@ -58,39 +57,24 @@ class HttpObjectHolder {
         this._maxBlockSize = maxBlockSize > 0 ? maxBlockSize : _MAX_BLOCK_SIZE;
     }
     
-    //  TODO 2016-06-09 
-    //  remove from Holder and move to Common Utils class 
-    public Func0<FullHttpRequest> retainFullHttpRequest() {
-        return this._funcRetainFullHttpRequest;
+    @SuppressWarnings("unchecked")
+    public <R> R visitHttpObjects(final Func1<HttpObject[], R> visitor) {
+        return (R) this._funcVisitHttpObjects.call((Func1<HttpObject[], Object>) visitor);
     }
     
-    private final Func0<FullHttpRequest> _funcRetainFullHttpRequest = 
-        RxFunctions.toFunc0(
+    private final Func1<Func1<HttpObject[], Object>,Object> _funcVisitHttpObjects = 
+        RxFunctions.toFunc1(
             this._selector.callWhenActive(
-                    RxFunctions.<HttpObjectHolder, FullHttpRequest>toFunc1_N(
-                            HttpObjectHolder.class, "doRetainFullHttpRequest")));
+                RxFunctions.<HttpObjectHolder, Object>toFunc1_N(
+                    HttpObjectHolder.class, "doVisitHttpObjects")));
     
     @SuppressWarnings("unused")
-    private FullHttpRequest doRetainFullHttpRequest() {
-        if (this._isCompleted.get() && this._cachedHttpObjects.size()>0) {
-            if (this._cachedHttpObjects.get(0) instanceof FullHttpRequest) {
-                return ((FullHttpRequest)this._cachedHttpObjects.get(0)).retain();
-            }
-            
-            final HttpRequest req = (HttpRequest)this._cachedHttpObjects.get(0);
-            final ByteBuf[] bufs = new ByteBuf[this._cachedHttpObjects.size()-1];
-            for (int idx = 1; idx<this._cachedHttpObjects.size(); idx++) {
-                bufs[idx-1] = ((HttpContent)this._cachedHttpObjects.get(idx)).content().retain();
-            }
-            final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
-                    req.getProtocolVersion(), 
-                    req.getMethod(), 
-                    req.getUri(), 
-                    Unpooled.wrappedBuffer(bufs));
-            fullreq.headers().add(req.headers());
-            //  ? need update Content-Length header field ?
-            return fullreq;
-        } else {
+    private Object doVisitHttpObjects(final Func1<HttpObject[], Object> visitor) {
+        try {
+            return visitor.call(this._cachedHttpObjects.toArray(ZERO_HTTPOBJS));
+        } catch (Exception e) {
+            LOG.warn("exception when invoke visitor({}), detail: {}",
+                    visitor, ExceptionUtils.exception2detail(e));
             return null;
         }
     }
@@ -223,9 +207,6 @@ class HttpObjectHolder {
     private HttpObject doRetainAndHoldHttpObject(final HttpObject httpobj) {
         if (null != httpobj) {
             this._cachedHttpObjects.add(ReferenceCountUtil.retain(httpobj));
-            if (httpobj instanceof LastHttpContent) {
-                this._isCompleted.set(true);
-            }
         }
         return httpobj;
     }
@@ -282,6 +263,4 @@ class HttpObjectHolder {
     private volatile int _currentBlockSize = 0;
 
     private final List<HttpObject> _cachedHttpObjects = new ArrayList<>();
-    
-    private final AtomicBoolean _isCompleted = new AtomicBoolean(false);
 }

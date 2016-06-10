@@ -1,15 +1,22 @@
 package org.jocean.http.server.impl;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys4Test;
+import org.jocean.http.util.RxNettys;
 import org.junit.Test;
 
 import com.google.common.base.Charsets;
 
 import io.netty.handler.codec.http.DefaultHttpRequest;
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
@@ -47,6 +54,66 @@ public class HttpObjectHolderTestCase {
         reqSubscriber.assertValues(reqs.toArray(new HttpObject[0]));
         reqSubscriber.assertNoErrors();
         reqSubscriber.assertCompleted();
+    }
+    
+    @Test
+    public final void tesHttpObjectHolderForVisitHttpObjsSuccess() throws Exception {
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final HttpObjectHolder holder = new HttpObjectHolder(-1);
+        
+        final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
+        final List<HttpObject> reqs = new ArrayList<HttpObject>() {
+            private static final long serialVersionUID = 1L;
+        {
+            this.add(request);
+            this.addAll(Arrays.asList(req_contents));
+            this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+        }};
+        
+        Observable.<HttpObject>from(reqs)
+            .flatMap(holder.assembleAndHold())
+            .subscribe(reqSubscriber);
+        
+        final FullHttpRequest fullreq = holder.visitHttpObjects(RxNettys.BUILD_FULL_REQUEST);
+        
+        assertNotNull(fullreq);
+        
+        assertEquals(REQ_CONTENT, new String(Nettys.dumpByteBufAsBytes(fullreq.content()), Charsets.UTF_8));
+    }
+    
+    @Test
+    public final void tesHttpObjectHolderForVisitHttpObjsFailure() throws Exception {
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final HttpObjectHolder holder = new HttpObjectHolder(-1);
+        
+        final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
+        final List<HttpObject> reqs = new ArrayList<HttpObject>() {
+            private static final long serialVersionUID = 1L;
+        {
+            this.add(request);
+            this.addAll(Arrays.asList(req_contents));
+            this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+        }};
+        
+        Observable.<HttpObject>from(reqs)
+            .flatMap(holder.assembleAndHold())
+            .subscribe(reqSubscriber);
+        
+        holder.release().call();
+        
+        final FullHttpRequest fullreq = holder.visitHttpObjects(RxNettys.BUILD_FULL_REQUEST);
+        
+        assertNull(fullreq);
     }
     
     /*
