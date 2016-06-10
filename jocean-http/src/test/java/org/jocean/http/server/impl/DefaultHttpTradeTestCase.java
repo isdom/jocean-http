@@ -238,6 +238,140 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
     }
     
+    @Test
+    public final void tesTradeForMultiSubscribeRequestOnlyOneToSourceNotCached() throws Exception {
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.create(holder), null);
+        
+        final TestSubscriber<HttpObject> reqSubscriber1 = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber1);
+        
+        assertEquals(holder.getSubscriberCount(), 1);
+        
+        final TestSubscriber<HttpObject> reqSubscriber2 = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber2);
+        
+        assertEquals(holder.getSubscriberCount(), 1);
+        
+        final TestSubscriber<HttpObject> reqSubscriber3 = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber3);
+        
+        assertEquals(holder.getSubscriberCount(), 1);
+        
+        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents[0]);
+        
+        reqSubscriber1.assertValueCount(2);
+        reqSubscriber1.assertValues(request, req_contents[0]);
+        
+        reqSubscriber2.assertValueCount(2);
+        reqSubscriber2.assertValues(request, req_contents[0]);
+        
+        reqSubscriber3.assertValueCount(2);
+        reqSubscriber3.assertValues(request, req_contents[0]);
+    }
+    
+    //  3 subscriber subscribe inbound request at different time, 
+    //  so push with different httpobject
+    @Test
+    public final void tesTradeForMultiSubscribeRequestOnlyOneToSourceNotCached2() throws Exception {
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.create(holder), null);
+        
+        final TestSubscriber<HttpObject> reqSubscriber1 = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber1);
+        
+        assertEquals(holder.getSubscriberCount(), 1);
+        
+        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        
+        reqSubscriber1.assertValueCount(1);
+        reqSubscriber1.assertValues(request);
+        
+        final TestSubscriber<HttpObject> reqSubscriber2 = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber2);
+        
+        assertEquals(holder.getSubscriberCount(), 1);
+        
+        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents[0]);
+        
+        reqSubscriber1.assertValueCount(2);
+        reqSubscriber1.assertValues(request, req_contents[0]);
+        
+        reqSubscriber2.assertValueCount(1);
+        reqSubscriber2.assertValues(req_contents[0]);
+        
+        final TestSubscriber<HttpObject> reqSubscriber3 = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber3);
+        
+        assertEquals(holder.getSubscriberCount(), 1);
+        
+        reqSubscriber1.assertValueCount(2);
+        reqSubscriber1.assertValues(request, req_contents[0]);
+        
+        reqSubscriber2.assertValueCount(1);
+        reqSubscriber2.assertValues(req_contents[0]);
+        
+        reqSubscriber3.assertValueCount(0);
+    }
+    
+    @Test
+    public final void tesTradeForMultiSubscribeRequestOnlyOneToSourceCachedNotAssemble() throws Exception {
+        final String REQ_CONTENT = "testcontent";
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
+        
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.create(holder), new HttpObjectHolder(-1));
+        
+        final TestSubscriber<HttpObject> reqSubscriber1 = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber1);
+        
+        assertEquals(holder.getSubscriberCount(), 1);
+        
+        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents[0]);
+        
+        reqSubscriber1.assertValueCount(2);
+        reqSubscriber1.assertValues(request, req_contents[0]);
+        
+        final TestSubscriber<HttpObject> reqSubscriber2 = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber2);
+        
+        assertEquals(holder.getSubscriberCount(), 1);
+        
+        final TestSubscriber<HttpObject> reqSubscriber3 = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber3);
+        
+        assertEquals(holder.getSubscriberCount(), 1);
+        
+        reqSubscriber2.assertValueCount(2);
+        reqSubscriber2.assertValues(request, req_contents[0]);
+        
+        reqSubscriber3.assertValueCount(2);
+        reqSubscriber3.assertValues(request, req_contents[0]);
+    }
+    
     //  TODO,  2016-06-09 add multi subscriber of inbound request, and check source observable is only subscribe for once.
     
     @Test
