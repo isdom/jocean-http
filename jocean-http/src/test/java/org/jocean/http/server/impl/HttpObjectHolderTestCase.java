@@ -11,6 +11,7 @@ import java.util.List;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys4Test;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.rx.RxActions;
 import org.junit.Test;
 
 import com.google.common.base.Charsets;
@@ -23,6 +24,8 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
+import rx.functions.Action1;
+import rx.observables.ConnectableObservable;
 import rx.observers.TestSubscriber;
 
 public class HttpObjectHolderTestCase {
@@ -116,9 +119,8 @@ public class HttpObjectHolderTestCase {
         assertNull(fullreq);
     }
     
-    /*
     @Test
-    public final void tesTradeForCompleteRoundWithMultiContentRequest() throws Exception {
+    public final void testHttpObjectHolderForAssembleWithMaxBlockSize16() throws Exception {
         final String REQ_CONTENT = "testcontent";
         
         final DefaultHttpRequest request = 
@@ -140,23 +142,23 @@ public class HttpObjectHolderTestCase {
                     this.add(LastHttpContent.EMPTY_LAST_CONTENT);
                 }}).publish();
         
-        final DefaultHttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable, null).cached(16);
+        final HttpObjectHolder holder = new HttpObjectHolder(16);
+        
+        requestObservable.flatMap(holder.assembleAndHold()).subscribe();
         
         requestObservable.connect();
         
-        assertTrue(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
                 assertEquals(2, c.refCnt());
             }});
         
-        assertEquals(0, trade.currentBlockSize());
-        assertEquals(0, trade.currentBlockCount());
-        assertEquals(3, trade.requestHttpObjCount());
+        assertEquals(0, holder.currentBlockSize());
+        assertEquals(0, holder.currentBlockCount());
+        assertEquals(3, holder.cachedHttpObjectCount());
         
-        final FullHttpRequest fullrequest = trade.retainFullHttpRequest();
+        final FullHttpRequest fullrequest = holder.visitHttpObjects(RxNettys.BUILD_FULL_REQUEST);
         assertNotNull(fullrequest);
         
         //  注意：因为 cached request 中 HttpContent 被重组为 2 个 CompositeByteBuf
@@ -181,11 +183,8 @@ public class HttpObjectHolderTestCase {
                 assertEquals(2, c.refCnt());
             }});
         
-        final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
+        holder.release().call();
         
-        trade.outboundResponse(Observable.<HttpObject>just(response));
-        
-        assertFalse(trade.isActive());
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
@@ -193,6 +192,7 @@ public class HttpObjectHolderTestCase {
             }});
     }
     
+    /*
     @Test
     public final void tesTradeForCompleteRoundWithMultiContentRequestLessMaxBlockSize() throws Exception {
         final String REQ_CONTENT = "testcontent";
