@@ -82,7 +82,7 @@ public class HttpObjectHolderTestCase {
             .flatMap(holder.assembleAndHold())
             .subscribe(reqSubscriber);
         
-        final FullHttpRequest fullreq = holder.visitHttpObjects(RxNettys.BUILD_FULL_REQUEST);
+        final FullHttpRequest fullreq = holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST).call();
         
         assertNotNull(fullreq);
         
@@ -114,7 +114,7 @@ public class HttpObjectHolderTestCase {
         
         holder.release().call();
         
-        final FullHttpRequest fullreq = holder.visitHttpObjects(RxNettys.BUILD_FULL_REQUEST);
+        final FullHttpRequest fullreq = holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST).call();
         
         assertNull(fullreq);
     }
@@ -158,7 +158,7 @@ public class HttpObjectHolderTestCase {
         assertEquals(0, holder.currentBlockCount());
         assertEquals(3, holder.cachedHttpObjectCount());
         
-        final FullHttpRequest fullrequest = holder.visitHttpObjects(RxNettys.BUILD_FULL_REQUEST);
+        final FullHttpRequest fullrequest = holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST).call();
         assertNotNull(fullrequest);
         
         //  注意：因为 cached request 中 HttpContent 被重组为 2 个 CompositeByteBuf

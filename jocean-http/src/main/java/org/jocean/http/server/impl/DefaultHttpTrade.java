@@ -90,11 +90,7 @@ class DefaultHttpTrade implements HttpTrade {
                     .compose(hookRequest())
                     .flatMap(holder.assembleAndHold())
                     .cache();
-            this._retainFullRequest = new Func0<FullHttpRequest>() {
-                @Override
-                public FullHttpRequest call() {
-                    return holder.visitHttpObjects(RxNettys.BUILD_FULL_REQUEST);
-                }};
+            this._retainFullRequest = holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST);
             doOnClosed(RxActions.<HttpTrade>toAction1(holder.release()));
         } else {
             this._requestObservable = requestObservable

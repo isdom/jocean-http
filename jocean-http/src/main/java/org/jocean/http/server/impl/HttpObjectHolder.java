@@ -58,25 +58,38 @@ class HttpObjectHolder {
     }
     
     @SuppressWarnings("unchecked")
-    public <R> R visitHttpObjects(final Func1<HttpObject[], R> visitor) {
-        return (R) this._funcVisitHttpObjects.call((Func1<HttpObject[], Object>) visitor);
+    public <R> Func0<R> bindHttpObjects(final Func1<HttpObject[], R> visitor) {
+        return (Func0<R>) this._funcBindHttpObjects.call((Func1<HttpObject[], Object>) visitor);
     }
     
-    private final Func1<Func1<HttpObject[], Object>,Object> _funcVisitHttpObjects = 
+    private final Func1<Func1<HttpObject[], Object>,Func0<Object>> _funcBindHttpObjects = 
         RxFunctions.toFunc1(
             this._selector.callWhenActive(
-                RxFunctions.<HttpObjectHolder, Object>toFunc1_N(
-                    HttpObjectHolder.class, "doVisitHttpObjects")));
+                RxFunctions.<HttpObjectHolder, Func0<Object>>toFunc1_N(
+                    HttpObjectHolder.class, "doBindHttpObjects"))
+            .callWhenDestroyed(new Func1_N<HttpObjectHolder, Func0<Object>>() {
+                @Override
+                public Func0<Object> call(HttpObjectHolder t, Object... args) {
+                    return new Func0<Object>() {
+                        @Override
+                        public Object call() {
+                            return null;
+                        }};
+                }}));
     
     @SuppressWarnings("unused")
-    private Object doVisitHttpObjects(final Func1<HttpObject[], Object> visitor) {
-        try {
-            return visitor.call(this._cachedHttpObjects.toArray(ZERO_HTTPOBJS));
-        } catch (Exception e) {
-            LOG.warn("exception when invoke visitor({}), detail: {}",
-                    visitor, ExceptionUtils.exception2detail(e));
-            return null;
-        }
+    private Func0<Object> doBindHttpObjects(final Func1<HttpObject[], Object> visitor) {
+        return new Func0<Object>() {
+            @Override
+            public Object call() {
+                try {
+                    return visitor.call(_cachedHttpObjects.toArray(ZERO_HTTPOBJS));
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke visitor({}), detail: {}",
+                            visitor, ExceptionUtils.exception2detail(e));
+                    return null;
+                }
+            }};
     }
     
     public Action0 release() {
