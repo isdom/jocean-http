@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.http.util.HttpObjectHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys4Test;
 import org.jocean.http.util.RxNettys;

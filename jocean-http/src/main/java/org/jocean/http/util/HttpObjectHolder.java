@@ -1,9 +1,8 @@
-package org.jocean.http.server.impl;
+package org.jocean.http.util;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.rx.Func1_N;
@@ -26,7 +25,7 @@ import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
 
-class HttpObjectHolder {
+public class HttpObjectHolder {
     private static final HttpObject[] ZERO_HTTPOBJS = new HttpObject[0];
 
     private static int _block_size = 128 * 1024; // 128KB
