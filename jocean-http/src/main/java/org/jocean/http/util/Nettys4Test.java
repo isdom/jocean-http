@@ -11,6 +11,8 @@ import org.jocean.idiom.UnsafeOp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Charsets;
+
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
@@ -48,6 +50,12 @@ public class Nettys4Test {
 
     private Nettys4Test() {
         throw new IllegalStateException("No instances!");
+    }
+    
+    public static ByteBuf buildByteBuf(final String content) {
+        final ByteBuf buf = Unpooled.buffer(0);
+        buf.writeBytes(content.getBytes(Charsets.UTF_8));
+        return buf;
     }
     
     public static HttpContent[] buildContentArray(final byte[] srcBytes, final int bytesPerContent) {

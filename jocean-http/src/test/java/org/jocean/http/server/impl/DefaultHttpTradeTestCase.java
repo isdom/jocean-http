@@ -19,8 +19,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -42,12 +40,6 @@ public class DefaultHttpTradeTestCase {
             LoggerFactory.getLogger(DefaultHttpTradeTestCase.class);
     
     private final String REQ_CONTENT = "testcontent";
-    
-    private static ByteBuf buildContent(final String content) {
-        final ByteBuf buf = Unpooled.buffer(0);
-        buf.writeBytes(content.getBytes(Charsets.UTF_8));
-        return buf;
-    }
     
     @Test
     public final void testDoOnClosedBeforeAndAfterOutboundResponse() {
@@ -90,7 +82,7 @@ public class DefaultHttpTradeTestCase {
     @Test
     public final void testTradeForCallAbortBeforeRequestPublish() throws Exception {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", buildContent("testcontent"));
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("testcontent"));
         
         final ConnectableObservable<HttpObject> requestObservable = 
                 Observable.<HttpObject>just(request).publish();
@@ -114,7 +106,7 @@ public class DefaultHttpTradeTestCase {
     @Test
     public final void testTradeForCallAbortAfterRequestPublish() throws Exception {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", buildContent("testcontent"));
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("testcontent"));
         
         final ConnectableObservable<HttpObject> requestObservable = 
                 Observable.<HttpObject>just(request).publish();
@@ -133,7 +125,6 @@ public class DefaultHttpTradeTestCase {
         
         reqSubscriber.assertValueCount(1);
         reqSubscriber.assertValues(request);
-        
         reqSubscriber.assertCompleted();
         reqSubscriber.assertNoErrors();
         
@@ -142,7 +133,7 @@ public class DefaultHttpTradeTestCase {
     @Test
     public final void testTradeForCallAbortAndUseInboundRequest() throws Exception {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", buildContent("testcontent"));
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("testcontent"));
         
         final ConnectableObservable<HttpObject> requestObservable = 
                 Observable.<HttpObject>just(request).publish();
@@ -282,7 +273,7 @@ public class DefaultHttpTradeTestCase {
     @Test
     public final void testTradeForCompleteRound() throws Exception {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", buildContent("test content"));
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("test content"));
         
         final ConnectableObservable<HttpObject> requestObservable = 
                 Observable.<HttpObject>just(request).publish();
