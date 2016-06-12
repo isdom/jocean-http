@@ -34,13 +34,14 @@ import rx.observers.TestSubscriber;
 public class HttpObjectHolderTestCase {
 
     @Test
-    public final void tesHttpObjectHolderForDisableAssemble() throws Exception {
+    public final void tesHttpObjectHolderForDisableAssembleOnlyCached() throws Exception {
         final String REQ_CONTENT = "testcontent";
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
         final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
+        // max block size == -1 means disable assemble
         final HttpObjectHolder holder = new HttpObjectHolder(-1);
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
@@ -53,7 +54,7 @@ public class HttpObjectHolderTestCase {
         }};
         
         Observable.<HttpObject>from(reqs)
-            .flatMap(holder.assembleAndHold())
+            .compose(holder.assembleAndHold())
             .subscribe(reqSubscriber);
         
         reqSubscriber.assertValueCount(reqs.size());
@@ -63,7 +64,7 @@ public class HttpObjectHolderTestCase {
     }
     
     @Test
-    public final void tesHttpObjectHolderForInvokeBindHttpObjsSuccess() throws Exception {
+    public final void tesHttpObjectHolderForDisableAssembleAndInvokeBindHttpObjsSuccess() throws Exception {
         final String REQ_CONTENT = "testcontent";
         
         final DefaultHttpRequest request = 
@@ -82,7 +83,7 @@ public class HttpObjectHolderTestCase {
         }};
         
         Observable.<HttpObject>from(reqs)
-            .flatMap(holder.assembleAndHold())
+            .compose(holder.assembleAndHold())
             .subscribe(reqSubscriber);
         
         final FullHttpRequest fullreq = holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST).call();
@@ -93,7 +94,7 @@ public class HttpObjectHolderTestCase {
     }
     
     @Test
-    public final void tesHttpObjectHolderForInvokeBindHttpObjsAfterRelease() throws Exception {
+    public final void tesHttpObjectHolderForDisableAssembleInvokeBindHttpObjsAfterRelease() throws Exception {
         final String REQ_CONTENT = "testcontent";
         
         final DefaultHttpRequest request = 
@@ -112,7 +113,7 @@ public class HttpObjectHolderTestCase {
         }};
         
         Observable.<HttpObject>from(reqs)
-            .flatMap(holder.assembleAndHold())
+            .compose(holder.assembleAndHold())
             .subscribe(reqSubscriber);
         
         holder.release().call();
@@ -147,7 +148,7 @@ public class HttpObjectHolderTestCase {
         
         final HttpObjectHolder holder = new HttpObjectHolder(16);
         
-        requestObservable.flatMap(holder.assembleAndHold()).subscribe();
+        requestObservable.compose(holder.assembleAndHold()).subscribe();
         
         requestObservable.connect();
         
@@ -220,7 +221,7 @@ public class HttpObjectHolderTestCase {
         
         final HttpObjectHolder holder = new HttpObjectHolder(8);
         
-        requestObservable.flatMap(holder.assembleAndHold()).subscribe();
+        requestObservable.compose(holder.assembleAndHold()).subscribe();
         
         requestObservable.connect();
         
@@ -292,7 +293,7 @@ public class HttpObjectHolderTestCase {
                 }}).publish();
         
         final HttpObjectHolder holder = new HttpObjectHolder(1);
-        requestObservable.flatMap(holder.assembleAndHold()).subscribe();
+        requestObservable.compose(holder.assembleAndHold()).subscribe();
         
         requestObservable.connect();
         
@@ -356,7 +357,7 @@ public class HttpObjectHolderTestCase {
         final SubscriberHolder<HttpObject> subscholder = new SubscriberHolder<>();
         
         final HttpObjectHolder holder = new HttpObjectHolder(8);
-        Observable.create(subscholder).flatMap(holder.assembleAndHold()).subscribe();
+        Observable.create(subscholder).compose(holder.assembleAndHold()).subscribe();
         
         assertEquals(1, subscholder.getSubscriberCount());
         
@@ -441,7 +442,7 @@ public class HttpObjectHolderTestCase {
                 }
             }}),
             Observable.<HttpObject>error(new RuntimeException("RequestPartError"))
-        ).flatMap(holder.assembleAndHold()).subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
+        ).compose(holder.assembleAndHold()).subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
         
         /*
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {

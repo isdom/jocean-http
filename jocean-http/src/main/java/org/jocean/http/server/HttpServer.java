@@ -39,7 +39,6 @@ public interface HttpServer extends Closeable {
         public boolean isEndedWithKeepAlive();
         //  try to abort trade explicit
         public void abort();
-        public FullHttpRequest retainFullHttpRequest();
         public Observable<? extends HttpObject> inboundRequest();
         public Subscription outboundResponse(final Observable<? extends HttpObject> response);
         public Subscription outboundResponse(final Observable<? extends HttpObject> response,

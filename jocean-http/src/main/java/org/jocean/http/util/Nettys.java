@@ -182,10 +182,11 @@ public class Nettys {
     
     public static byte[] dumpByteBufAsBytes(final ByteBuf bytebuf)
         throws IOException {
-        final InputStream is = new ByteBufInputStream(bytebuf);
-        final byte[] bytes = new byte[is.available()];
-        is.read(bytes);
-        return bytes;
+        try (final InputStream is = new ByteBufInputStream(bytebuf)) {
+            final byte[] bytes = new byte[is.available()];
+            is.read(bytes);
+            return bytes;
+        }
     }
 
     public static String dumpByteBufHolder(final ByteBufHolder holder) {

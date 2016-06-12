@@ -20,6 +20,7 @@ import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.server.HttpTestServer;
+import org.jocean.http.util.HttpObjectHolder;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.RxFunctions;
 import org.jocean.idiom.rx.RxSubscribers;
@@ -54,23 +55,25 @@ public class DefaultHttpServerTestCase {
                 if (null!=transportRef) {
                     transportRef.set(trade.transport());
                 }
-                trade.inboundRequest().subscribe(
+                final HttpObjectHolder holder = new HttpObjectHolder(0);
+                trade.inboundRequest().compose(holder.assembleAndHold()).subscribe(
                     RxSubscribers.nopOnNext(),
                     RxSubscribers.nopOnError(),
                     new Action0() {
                         @Override
                         public void call() {
-                            final FullHttpRequest req = trade.retainFullHttpRequest();
+                            final FullHttpRequest req = holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST).call();
                             if (null!=req) {
                                 try {
-                                    final InputStream is = new ByteBufInputStream(req.content());
-                                    final byte[] bytes = new byte[is.available()];
-                                    is.read(bytes);
-                                    final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
-                                            Unpooled.wrappedBuffer(bytes));
-                                    response.headers().set(CONTENT_TYPE, "text/plain");
-                                    response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                                    trade.outboundResponse(Observable.<HttpObject>just(response));
+                                    try (final InputStream is = new ByteBufInputStream(req.content())) {
+                                        final byte[] bytes = new byte[is.available()];
+                                        is.read(bytes);
+                                        final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
+                                                Unpooled.wrappedBuffer(bytes));
+                                        response.headers().set(CONTENT_TYPE, "text/plain");
+                                        response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                                        trade.outboundResponse(Observable.<HttpObject>just(response));
+                                    }
                                 } catch (IOException e) {
                                     e.printStackTrace();
                                 } finally {

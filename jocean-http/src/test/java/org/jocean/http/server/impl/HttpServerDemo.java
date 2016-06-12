@@ -6,7 +6,6 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -16,13 +15,13 @@ import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.local.LocalAddress;
@@ -85,11 +84,8 @@ public class HttpServerDemo {
                             final FullHttpRequest req = retainFullHttpRequest();
                             if (null!=req) {
                                 try {
-                                    final InputStream is = new ByteBufInputStream(req.content());
-                                    final byte[] bytes = new byte[is.available()];
-                                    is.read(bytes);
                                     final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
-                                            Unpooled.wrappedBuffer(bytes));
+                                            Unpooled.wrappedBuffer(Nettys.dumpByteBufAsBytes(req.content())));
                                     response.headers().set(CONTENT_TYPE, "text/plain");
                                     response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
                                     trade.outboundResponse(Observable.<HttpObject>just(response));

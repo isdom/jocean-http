@@ -20,6 +20,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
+import rx.Observable.Transformer;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
@@ -144,25 +145,32 @@ public class HttpObjectHolder {
             }}).call();
     }
     
-    public Func1<HttpObject, Observable<? extends HttpObject>> assembleAndHold() {
-        return new Func1<HttpObject, Observable<? extends HttpObject>>() {
-            @Override
-            public Observable<? extends HttpObject> call(final HttpObject msg) {
-                if (LOG.isDebugEnabled()) {
-                    if (msg instanceof ByteBufHolder) {
-                        LOG.debug("HttpObjectHolder: receive ByteBufHolder's content: {}", 
-                                Nettys.dumpByteBufHolder((ByteBufHolder)msg));
-                    }
+    private final Func1<HttpObject, Observable<? extends HttpObject>> _ASSEMBLE_AND_HOLD = 
+    new Func1<HttpObject, Observable<? extends HttpObject>>() {
+        @Override
+        public Observable<? extends HttpObject> call(final HttpObject msg) {
+            if (LOG.isDebugEnabled()) {
+                if (msg instanceof ByteBufHolder) {
+                    LOG.debug("HttpObjectHolder: receive ByteBufHolder's content: {}", 
+                            Nettys.dumpByteBufHolder((ByteBufHolder)msg));
                 }
-                if (_enableAssemble && (msg instanceof HttpContent)) {
-                    if (msg instanceof LastHttpContent) {
-                        return asObservable(retainAnyBlockLeft(), retainAndHoldHttpObject(msg));
-                    } else {
-                        return assembleAndReturnObservable((HttpContent)msg);
-                    }
+            }
+            if (_enableAssemble && (msg instanceof HttpContent)) {
+                if (msg instanceof LastHttpContent) {
+                    return asObservable(retainAnyBlockLeft(), retainAndHoldHttpObject(msg));
                 } else {
-                    return asObservable(retainAndHoldHttpObject(msg));
+                    return assembleAndReturnObservable((HttpContent)msg);
                 }
+            } else {
+                return asObservable(retainAndHoldHttpObject(msg));
+            }
+        }};
+        
+    public Transformer<HttpObject, HttpObject> assembleAndHold() {
+        return new Transformer<HttpObject, HttpObject>() {
+            @Override
+            public Observable<HttpObject> call(final Observable<HttpObject> source) {
+                return source.flatMap(_ASSEMBLE_AND_HOLD);
             }};
     }
 

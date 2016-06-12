@@ -9,8 +9,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
-import org.jocean.http.util.HttpObjectHolder;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
@@ -22,7 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
-import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
@@ -36,7 +33,6 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func2;
-import rx.observers.SerializedSubscriber;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -45,12 +41,6 @@ import rx.subscriptions.Subscriptions;
  */
 class DefaultHttpTrade implements HttpTrade {
     
-    private static final Func0<FullHttpRequest> RETAIN_REQ_RETURN_NULL = new Func0<FullHttpRequest>() {
-        @Override
-        public FullHttpRequest call() {
-            return null;
-        }};
-        
     @Override
     public String toString() {
         final StringBuilder builder = new StringBuilder();
@@ -73,33 +63,16 @@ class DefaultHttpTrade implements HttpTrade {
     private final FuncSelector<DefaultHttpTrade> _selector = 
             new FuncSelector<>(this);
     
-    DefaultHttpTrade(
-            final Channel channel, 
-            final Observable<? extends HttpObject> requestObservable) {
-        this(channel, requestObservable, new HttpObjectHolder(0));
-    }
-    
     @SafeVarargs
     DefaultHttpTrade(
         final Channel channel, 
         final Observable<? extends HttpObject> requestObservable,
-        final HttpObjectHolder holder,
         final Action1<HttpTrade> ... doOnCloseds) {
         this._channel = channel;
-        if (null!=holder) {
-            this._requestObservable = requestObservable
-                    .compose(hookRequest())
-                    .flatMap(holder.assembleAndHold())
-                    .cache();
-            this._retainFullRequest = holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST);
-            doOnClosed(RxActions.<HttpTrade>toAction1(holder.release()));
-        } else {
-            this._requestObservable = requestObservable
-                    .compose(hookRequest())
-                    .publish()
-                    .refCount();
-            this._retainFullRequest = RETAIN_REQ_RETURN_NULL;
-        }
+        this._requestObservable = requestObservable
+                .compose(hookRequest())
+                .publish()
+                .refCount();
         for (Action1<HttpTrade> onclosed : doOnCloseds) {
             doOnClosed(onclosed);
         }
@@ -130,11 +103,6 @@ class DefaultHttpTrade implements HttpTrade {
                         doClose();
                     }});
             }};
-    }
-    
-    @Override
-    public FullHttpRequest retainFullHttpRequest() {
-        return this._retainFullRequest.call();
     }
     
     @Override
@@ -176,18 +144,10 @@ class DefaultHttpTrade implements HttpTrade {
         return this._requestObservableProxy;
     }
     
-    private static <T> Subscriber<T> serialized(final Subscriber<T> subscriber) {
-        if (subscriber instanceof SerializedSubscriber) {
-            return subscriber;
-        } else {
-            return new SerializedSubscriber<T>(subscriber);
-        }
-    }
-    
     private final Observable<HttpObject> _requestObservableProxy = Observable.create(new OnSubscribe<HttpObject>() {
         @Override
         public void call(final Subscriber<? super HttpObject> subscriber) {
-            final Subscriber<? super HttpObject> serializedSubscriber = serialized(subscriber);
+            final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
             if (!serializedSubscriber.isUnsubscribed()) {
                 _requestSubscribers.add(serializedSubscriber);
                 serializedSubscriber.add(Subscriptions.create(new Action0() {
@@ -377,7 +337,6 @@ class DefaultHttpTrade implements HttpTrade {
     private final COWCompositeSupport<Action1<HttpTrade>> _onClosedActions = 
             new COWCompositeSupport<Action1<HttpTrade>>();
     
-    private final Func0<FullHttpRequest> _retainFullRequest;
     private final Channel _channel;
     private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
