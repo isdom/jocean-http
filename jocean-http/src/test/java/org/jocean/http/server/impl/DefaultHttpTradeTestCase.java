@@ -8,6 +8,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
@@ -327,24 +328,35 @@ public class DefaultHttpTradeTestCase {
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
         final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
+        final List<HttpObject> part_req = new ArrayList<HttpObject>() {
+            private static final long serialVersionUID = 1L;
+        {
+            this.add(request);
+            for (int idx = 0; idx < 5; idx++) {
+                this.add(req_contents[idx]);
+            }
+        }};
+        final RuntimeException error = new RuntimeException("RequestPartError");
         final ConnectableObservable<HttpObject> requestObservable = 
                 Observable.concat(
-                    Observable.<HttpObject>from(new ArrayList<HttpObject>() {
-                        private static final long serialVersionUID = 1L;
-                    {
-                        this.add(request);
-                        for (int idx = 0; idx < 5; idx++) {
-                            this.add(req_contents[idx]);
-                        }
-                    }}),
-                    Observable.<HttpObject>error(new RuntimeException("RequestPartError"))
+                    Observable.<HttpObject>from(part_req),
+                    Observable.<HttpObject>error(error)
                 ).publish();
         
         final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 requestObservable);
         
+        final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
+        trade.inboundRequest().subscribe(reqSubscriber);
+        
         requestObservable.connect();
         
         assertFalse(trade.isActive());
+        reqSubscriber.assertTerminalEvent();
+        //  java.lang.AssertionError: Exceptions differ; expected: java.lang.RuntimeException: RequestPartError, 
+        //      actual: java.lang.RuntimeException: trade unactived
+        reqSubscriber.assertError(Exception.class);
+        reqSubscriber.assertNotCompleted();
+        reqSubscriber.assertValues(part_req.toArray(new HttpObject[0]));
     }
 }
