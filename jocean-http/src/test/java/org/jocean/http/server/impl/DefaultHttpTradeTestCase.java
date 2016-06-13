@@ -4,12 +4,16 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.util.Nettys4Test;
@@ -30,6 +34,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
+import rx.Subscription;
 import rx.functions.Action1;
 import rx.observables.ConnectableObservable;
 import rx.observers.TestSubscriber;
@@ -359,4 +364,37 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber.assertNotCompleted();
         reqSubscriber.assertValues(part_req.toArray(new HttpObject[0]));
     }
+
+    @Test
+    public final void tesTradeForFirstResponseErrorThenRetry() {
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.<HttpObject>empty());
+        
+        final AtomicReference<Throwable> onError = new AtomicReference<>();
+        assertTrue(trade.isActive());
+        
+        final RuntimeException error = new RuntimeException("ResponseError");
+        final Subscription subscription = outputResponseWithOnError(trade, Observable.<HttpObject>error(error), onError);
+    
+        assertTrue(trade.isActive());
+        assertSame(error, onError.get());
+        assertTrue(subscription.isUnsubscribed());
+        
+        final AtomicReference<Throwable> onError2 = new AtomicReference<>();
+        final Subscription subscription2 = outputResponseWithOnError(trade, Observable.<HttpObject>empty(), onError2);
+        assertNotNull(subscription2);
+        assertNull(onError2.get());
+        assertFalse(trade.isActive());
+    }
+
+    private Subscription outputResponseWithOnError(final HttpTrade trade,
+            final Observable<HttpObject> response,
+            final AtomicReference<Throwable> onError) {
+        return trade.outboundResponse(response, new Action1<Throwable>() {
+            @Override
+            public void call(Throwable e) {
+                onError.set(e);
+            }});
+    }
+    
 }

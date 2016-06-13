@@ -211,7 +211,6 @@ class DefaultHttpTrade implements HttpTrade {
 
     @SuppressWarnings("unused")
     private void respOnCompleted() {
-        this._isResponseSended.compareAndSet(false, true);
         this._isResponseCompleted.compareAndSet(false, true);
         this._channel.flush();
         try {

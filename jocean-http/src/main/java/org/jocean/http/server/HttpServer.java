@@ -8,7 +8,6 @@ import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
 
-import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 import rx.Subscription;
