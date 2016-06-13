@@ -6,6 +6,7 @@ package org.jocean.http.server.impl;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
@@ -32,6 +33,7 @@ import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
+import rx.functions.Func1;
 import rx.functions.Func2;
 import rx.subscriptions.Subscriptions;
 
@@ -46,6 +48,7 @@ class DefaultHttpTrade implements HttpTrade {
         final StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpTrade [request subscriber count=")
                 .append(_requestSubscribers.size())
+                .append(", currentResponseIdx=").append(_responseIdx.get())
                 .append(", isRequestReceived=").append(_isRequestReceived.get())
                 .append(", isRequestCompleted=").append(_isRequestCompleted.get())
                 .append(", isResponseSended=").append(_isResponseSended.get())
@@ -195,10 +198,12 @@ class DefaultHttpTrade implements HttpTrade {
             final Subscription oldsubsc =  this._subscriptionOfResponse.get();
             if (null==oldsubsc ||
                 (oldsubsc.isUnsubscribed() && !this._isResponseSended.get())) {
-                final Subscription newsubsc = response.subscribe(
-                        this._actionResponseOnNext,
-                        null!=onError ? onError : this._responseOnError,
-                        this._actionResponseOnCompleted);
+                final Subscription newsubsc = response
+                        .map(addid(updateResponseIdx()))
+                        .subscribe(
+                            this._actionResponseOnNext,
+                            null!=onError ? onError : this._responseOnError,
+                            this._actionResponseOnCompleted);
                 this._subscriptionOfResponse.set(newsubsc);
                 return newsubsc;
             }
@@ -206,6 +211,37 @@ class DefaultHttpTrade implements HttpTrade {
         return null;
     }
 
+    private Func1<HttpObject, HttpObjWithId> addid(final int responseIdx) {
+        return new Func1<HttpObject, HttpObjWithId>() {
+            @Override
+            public HttpObjWithId call(final HttpObject httpobj) {
+                return new HttpObjWithId(responseIdx, httpobj);
+            }};
+    }
+
+    private int updateResponseIdx() {
+        return this._responseIdx.incrementAndGet();
+    }
+    
+    private final AtomicInteger _responseIdx = new AtomicInteger(0);
+    static class HttpObjWithId {
+        final int id;
+        final HttpObject httpobj;
+        
+        HttpObjWithId(final int id, final HttpObject httpobj) {
+            this.id = id;
+            this.httpobj = httpobj;
+        }
+
+        @Override
+        public String toString() {
+            final StringBuilder builder = new StringBuilder();
+            builder.append("HttpObjWithId [id=").append(id).append(", httpobj=")
+                    .append(httpobj).append("]");
+            return builder.toString();
+        }
+    }
+    
     private final Action0 _actionResponseOnCompleted = RxActions.toAction0(
         this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnCompleted")));
 
@@ -221,13 +257,18 @@ class DefaultHttpTrade implements HttpTrade {
         }
     }
 
-    private final Action1<HttpObject> _actionResponseOnNext = RxActions.toAction1(
+    private final Action1<HttpObjWithId> _actionResponseOnNext = RxActions.toAction1(
         this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnNext")));
     
     @SuppressWarnings("unused")
-    private void respOnNext(final HttpObject msg) {
-        this._isResponseSended.compareAndSet(false, true);
-        this._channel.write(ReferenceCountUtil.retain(msg));
+    private void respOnNext(final HttpObjWithId msg) {
+        if (this._responseIdx.get() == msg.id) {
+            this._isResponseSended.compareAndSet(false, true);
+            this._channel.write(ReferenceCountUtil.retain(msg.httpobj));
+        } else {
+            LOG.warn("msg ({})'s id NOT EQUALS current response idx:{}, just ignore."
+                    , msg, this._responseIdx.get());
+        }
     }
 
     private final Action1<Throwable> _responseOnError = new Action1<Throwable>() {
