@@ -11,8 +11,6 @@ import org.jocean.idiom.UnsafeOp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Charsets;
-
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
@@ -37,6 +35,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
+import io.netty.util.CharsetUtil;
 import rx.Observer;
 
 public class Nettys4Test {
@@ -54,7 +53,7 @@ public class Nettys4Test {
     
     public static ByteBuf buildByteBuf(final String content) {
         final ByteBuf buf = Unpooled.buffer(0);
-        buf.writeBytes(content.getBytes(Charsets.UTF_8));
+        buf.writeBytes(content.getBytes(CharsetUtil.UTF_8));
         return buf;
     }
     
