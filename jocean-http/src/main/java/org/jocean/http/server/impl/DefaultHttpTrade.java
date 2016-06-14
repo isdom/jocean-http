@@ -191,8 +191,7 @@ class DefaultHttpTrade implements HttpTrade {
     private Subscription doSetOutboundResponse(
         final Observable<? extends HttpObject> response,
         final Action1<Throwable> onError) {
-        if (!this._isResponseSended.get() 
-            && !this._isResponseCompleted.get()) {
+        if (!isResponseStarted()) {
             final int responseIdx = updateResponseIdx();
             return response.subscribe(
                     actionResponseOnNext(responseIdx),
@@ -205,6 +204,11 @@ class DefaultHttpTrade implements HttpTrade {
                     this, response);
             return null;
         }
+    }
+
+    private boolean isResponseStarted() {
+        return this._isResponseSended.get() 
+            || this._isResponseCompleted.get();
     }
 
     private int updateResponseIdx() {

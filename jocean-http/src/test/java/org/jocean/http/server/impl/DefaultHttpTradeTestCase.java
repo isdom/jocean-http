@@ -9,6 +9,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -24,6 +25,15 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelConfig;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelMetadata;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.ChannelProgressivePromise;
+import io.netty.channel.ChannelPromise;
+import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -33,6 +43,8 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.util.Attribute;
+import io.netty.util.AttributeKey;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
@@ -49,7 +61,6 @@ public class DefaultHttpTradeTestCase {
     
     //  TODO 
     //  1. add test case for readyforOutboundResponse
-    //  2. abort after outbound response's close action, and NOT effect
     
     @Test
     public final void testDoOnClosedBeforeAndAfterOutboundResponse() {
@@ -90,7 +101,7 @@ public class DefaultHttpTradeTestCase {
     }
 
     @Test
-    public final void testTradeForCallAbortBeforeRequestPublish() throws Exception {
+    public final void testTradeForCallAbortBeforeRequestPublish() {
         final DefaultFullHttpRequest request = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("testcontent"));
         
@@ -114,7 +125,7 @@ public class DefaultHttpTradeTestCase {
     }
 
     @Test
-    public final void testTradeForCallAbortAfterRequestPublish() throws Exception {
+    public final void testTradeForCallAbortAfterRequestPublish() {
         final DefaultFullHttpRequest request = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("testcontent"));
         
@@ -141,7 +152,7 @@ public class DefaultHttpTradeTestCase {
     }
     
     @Test
-    public final void testTradeForCallAbortAndUseInboundRequest() throws Exception {
+    public final void testTradeForCallAbortAndUseInboundRequest() {
         final DefaultFullHttpRequest request = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("testcontent"));
         
@@ -164,7 +175,7 @@ public class DefaultHttpTradeTestCase {
     }
     
     @Test
-    public final void testTradeForCallAbortAfterPartRequestThenPushError() throws Exception {
+    public final void testTradeForCallAbortAfterPartRequestThenPushError() {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
         final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
@@ -192,7 +203,7 @@ public class DefaultHttpTradeTestCase {
     }
     
     @Test
-    public final void testTradeForMultiSubscribeRequestOnlyOneToSource() throws Exception {
+    public final void testTradeForMultiSubscribeRequestOnlyOneToSource() {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
         final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
@@ -233,7 +244,7 @@ public class DefaultHttpTradeTestCase {
     //  3 subscriber subscribe inbound request at different time, 
     //  so push with different httpobject
     @Test
-    public final void testTradeForMultiSubscribeRequestOnlyOneToSource2() throws Exception {
+    public final void testTradeForMultiSubscribeRequestOnlyOneToSource2() {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
         final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
@@ -281,7 +292,7 @@ public class DefaultHttpTradeTestCase {
     }
     
     @Test
-    public final void testTradeForCompleteRound() throws Exception {
+    public final void testTradeForCompleteRound() {
         final DefaultFullHttpRequest request = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("test content"));
         
@@ -303,7 +314,7 @@ public class DefaultHttpTradeTestCase {
     }
 
     @Test
-    public final void testTradeForCompleteRoundWithMultiContentRequest() throws Exception {
+    public final void testTradeForCompleteRoundWithMultiContentRequest() {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
         final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
@@ -332,7 +343,7 @@ public class DefaultHttpTradeTestCase {
     }
     
     @Test
-    public final void testTradeForRequestPartError() throws Exception {
+    public final void testTradeForRequestPartError() {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
         final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
@@ -401,4 +412,288 @@ public class DefaultHttpTradeTestCase {
             }});
     }
     
+    public static Channel dummyChannel(final AtomicReference<Object> output) {
+        return new Channel() {
+
+            @Override
+            public <T> Attribute<T> attr(AttributeKey<T> key) {
+                return null;
+            }
+
+            @Override
+            public int compareTo(Channel o) {
+                return 0;
+            }
+
+            @Override
+            public EventLoop eventLoop() {
+                return null;
+            }
+
+            @Override
+            public Channel parent() {
+                return null;
+            }
+
+            @Override
+            public ChannelConfig config() {
+                return null;
+            }
+
+            @Override
+            public boolean isOpen() {
+                return false;
+            }
+
+            @Override
+            public boolean isRegistered() {
+                return false;
+            }
+
+            @Override
+            public boolean isActive() {
+                return false;
+            }
+
+            @Override
+            public ChannelMetadata metadata() {
+                return null;
+            }
+
+            @Override
+            public SocketAddress localAddress() {
+                return null;
+            }
+
+            @Override
+            public SocketAddress remoteAddress() {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture closeFuture() {
+                return null;
+            }
+
+            @Override
+            public boolean isWritable() {
+                return false;
+            }
+
+            @Override
+            public Unsafe unsafe() {
+                return null;
+            }
+
+            @Override
+            public ChannelPipeline pipeline() {
+                return null;
+            }
+
+            @Override
+            public ByteBufAllocator alloc() {
+                return null;
+            }
+
+            @Override
+            public ChannelPromise newPromise() {
+                return null;
+            }
+
+            @Override
+            public ChannelProgressivePromise newProgressivePromise() {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture newSucceededFuture() {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture newFailedFuture(Throwable cause) {
+                return null;
+            }
+
+            @Override
+            public ChannelPromise voidPromise() {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture bind(SocketAddress localAddress) {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture connect(SocketAddress remoteAddress) {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture connect(SocketAddress remoteAddress,
+                    SocketAddress localAddress) {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture disconnect() {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture close() {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture deregister() {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture bind(SocketAddress localAddress,
+                    ChannelPromise promise) {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture connect(SocketAddress remoteAddress,
+                    ChannelPromise promise) {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture connect(SocketAddress remoteAddress,
+                    SocketAddress localAddress, ChannelPromise promise) {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture disconnect(ChannelPromise promise) {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture close(ChannelPromise promise) {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture deregister(ChannelPromise promise) {
+                return null;
+            }
+
+            @Override
+            public Channel read() {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture write(Object msg) {
+                output.set(msg);
+                return null;
+            }
+
+            @Override
+            public ChannelFuture write(Object msg, ChannelPromise promise) {
+                output.set(msg);
+                return null;
+            }
+
+            @Override
+            public Channel flush() {
+                return null;
+            }
+
+            @Override
+            public ChannelFuture writeAndFlush(Object msg,
+                    ChannelPromise promise) {
+                output.set(msg);
+                return null;
+            }
+
+            @Override
+            public ChannelFuture writeAndFlush(Object msg) {
+                output.set(msg);
+                return null;
+            }
+        };
+    }
+    
+    @Test
+    public final void tesTradeForResponseReplaceSuccess() {
+        final AtomicReference<Object> output = new AtomicReference<>();
+        final HttpTrade trade = new DefaultHttpTrade(dummyChannel(output), 
+                Observable.<HttpObject>empty());
+        
+        assertTrue(trade.isActive());
+        
+        final SubscriberHolder<HttpObject> subsholder1 = new SubscriberHolder<>();
+        final Subscription subscription1 = trade.outboundResponse(Observable.create(subsholder1));
+    
+        assertTrue(trade.isActive());
+        assertNotNull(subscription1);
+        assertEquals(1, subsholder1.getSubscriberCount());
+        
+        final SubscriberHolder<HttpObject> subsholder2 = new SubscriberHolder<>();
+        final Subscription subscription2 = trade.outboundResponse(Observable.create(subsholder2));
+        
+        assertTrue(trade.isActive());
+        assertNotNull(subscription2);
+        assertEquals(1, subsholder2.getSubscriberCount());
+        
+        final DefaultHttpRequest req1 = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        Nettys4Test.emitHttpObjects(subsholder1.getAt(0), req1);
+        assertNull(output.get());
+        
+        final DefaultHttpRequest req2 = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        Nettys4Test.emitHttpObjects(subsholder2.getAt(0), req2);
+        assertSame(req2, output.get());
+    }
+
+    @Test
+    public final void tesTradeForResponseReplaceFailure() {
+        final AtomicReference<Object> output = new AtomicReference<>();
+        final HttpTrade trade = new DefaultHttpTrade(dummyChannel(output), 
+                Observable.<HttpObject>empty());
+        
+        assertTrue(trade.isActive());
+        
+        final SubscriberHolder<HttpObject> subsholder1 = new SubscriberHolder<>();
+        final Subscription subscription1 = trade.outboundResponse(Observable.create(subsholder1));
+    
+        assertTrue(trade.isActive());
+        assertNotNull(subscription1);
+        assertEquals(1, subsholder1.getSubscriberCount());
+        
+        final DefaultHttpRequest req1 = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        Nettys4Test.emitHttpObjects(subsholder1.getAt(0), req1);
+        assertSame(req1, output.get());
+        
+        final SubscriberHolder<HttpObject> subsholder2 = new SubscriberHolder<>();
+        final Subscription subscription2 = trade.outboundResponse(Observable.create(subsholder2));
+        
+        assertTrue(trade.isActive());
+        assertNull(subscription2);
+        assertEquals(0, subsholder2.getSubscriberCount());
+    }
+
+    @Test
+    public final void testTradeForResponseAfterAbort() {
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.<HttpObject>empty());
+        
+        trade.abort();
+        assertFalse(trade.isActive());
+        
+        final SubscriberHolder<HttpObject> subsholder = new SubscriberHolder<>();
+        final Subscription subscription = trade.outboundResponse(Observable.create(subsholder));
+        
+        assertNull(subscription);
+        assertEquals(0, subsholder.getSubscriberCount());
+    }
 }
