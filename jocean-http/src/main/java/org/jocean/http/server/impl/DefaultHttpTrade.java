@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.idiom.COWCompositeSupport;
@@ -33,7 +32,6 @@ import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
-import rx.functions.Func1;
 import rx.functions.Func2;
 import rx.subscriptions.Subscriptions;
 
@@ -191,32 +189,22 @@ class DefaultHttpTrade implements HttpTrade {
     
     @SuppressWarnings("unused")
     private Subscription doSetOutboundResponse(
-            final Observable<? extends HttpObject> response,
-            final Action1<Throwable> onError) {
-        synchronized(this._subscriptionOfResponse) {
-            //  对 outboundResponse 方法加锁
-            final Subscription oldsubsc =  this._subscriptionOfResponse.get();
-            if (null==oldsubsc ||
-                (oldsubsc.isUnsubscribed() && !this._isResponseSended.get())) {
-                final Subscription newsubsc = response
-                        .map(addid(updateResponseIdx()))
-                        .subscribe(
-                            this._actionResponseOnNext,
-                            null!=onError ? onError : this._responseOnError,
-                            this._actionResponseOnCompleted);
-                this._subscriptionOfResponse.set(newsubsc);
-                return newsubsc;
-            }
+        final Observable<? extends HttpObject> response,
+        final Action1<Throwable> onError) {
+        if (!this._isResponseSended.get() 
+            && !this._isResponseCompleted.get()) {
+            final int responseIdx = updateResponseIdx();
+            return response.subscribe(
+                    actionResponseOnNext(responseIdx),
+                    null!=onError 
+                        ? wrapResponseOnError(responseIdx, onError) 
+                        : actionResponseOnError(responseIdx),
+                    actionResponseOnCompleted(responseIdx));
+        } else {
+            LOG.warn("trade({}) 's outboundResponse has taken effect, ignore new response({})",
+                    this, response);
+            return null;
         }
-        return null;
-    }
-
-    private Func1<HttpObject, HttpObjWithId> addid(final int responseIdx) {
-        return new Func1<HttpObject, HttpObjWithId>() {
-            @Override
-            public HttpObjWithId call(final HttpObject httpobj) {
-                return new HttpObjWithId(responseIdx, httpobj);
-            }};
     }
 
     private int updateResponseIdx() {
@@ -224,73 +212,84 @@ class DefaultHttpTrade implements HttpTrade {
     }
     
     private final AtomicInteger _responseIdx = new AtomicInteger(0);
-    static class HttpObjWithId {
-        final int id;
-        final HttpObject httpobj;
-        
-        HttpObjWithId(final int id, final HttpObject httpobj) {
-            this.id = id;
-            this.httpobj = httpobj;
-        }
-
-        @Override
-        public String toString() {
-            final StringBuilder builder = new StringBuilder();
-            builder.append("HttpObjWithId [id=").append(id).append(", httpobj=")
-                    .append(httpobj).append("]");
-            return builder.toString();
-        }
-    }
     
-    private final Action0 _actionResponseOnCompleted = RxActions.toAction0(
-        this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnCompleted")));
-
-    @SuppressWarnings("unused")
-    private void respOnCompleted() {
-        this._isResponseCompleted.compareAndSet(false, true);
-        this._channel.flush();
-        try {
-            this.doClose();
-        } catch (Exception e) {
-            LOG.warn("exception when ({}).doClose, detail:{}",
-                    this, ExceptionUtils.exception2detail(e));
-        }
+    private final Action0 actionResponseOnCompleted(final int responseIdx) {
+        return RxActions.bindParameter(responseIdx, RxActions.<Integer>toAction1(
+            this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnCompleted"))));
     }
 
-    private final Action1<HttpObjWithId> _actionResponseOnNext = RxActions.toAction1(
-        this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnNext")));
-    
     @SuppressWarnings("unused")
-    private void respOnNext(final HttpObjWithId msg) {
-        if (this._responseIdx.get() == msg.id) {
-            this._isResponseSended.compareAndSet(false, true);
-            this._channel.write(ReferenceCountUtil.retain(msg.httpobj));
+    private void respOnCompleted(final int responseIdx) {
+        if (this._responseIdx.get() == responseIdx) {
+            this._isResponseCompleted.compareAndSet(false, true);
+            this._channel.flush();
+            try {
+                this.doClose();
+            } catch (Exception e) {
+                LOG.warn("exception when ({}).doClose, detail:{}",
+                        this, ExceptionUtils.exception2detail(e));
+            }
         } else {
-            LOG.warn("msg ({})'s id NOT EQUALS current response idx:{}, just ignore."
-                    , msg, this._responseIdx.get());
+            LOG.warn("onCompleted 's id({}) NOT EQUALS current response idx:{}, just ignore."
+                    , responseIdx, this._responseIdx.get());
         }
     }
 
-    private final Action1<Throwable> _responseOnError = new Action1<Throwable>() {
-        @Override
-        public void call(final Throwable e) {
+    private final Action1<HttpObject> actionResponseOnNext(final int responseIdx) {
+        return RxActions.bindParameter(responseIdx,
+                RxActions.<Integer, HttpObject>toAction2(
+                    this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnNext"))));
+    }
+    
+    @SuppressWarnings("unused")
+    private void respOnNext(final int responseIdx, final HttpObject msg) {
+        if (this._responseIdx.get() == responseIdx) {
+            this._isResponseSended.compareAndSet(false, true);
+            this._channel.write(ReferenceCountUtil.retain(msg));
+        } else {
+            LOG.warn("msg ({})'s id({}) NOT EQUALS current response idx:{}, just ignore."
+                    , msg, responseIdx, this._responseIdx.get());
+        }
+    }
+
+    private final Action1<Throwable> wrapResponseOnError(final int responseIdx, final Action1<Throwable> onError) {
+        return new Action1<Throwable>() {
+            @Override
+            public void call(final Throwable e) {
+                if (_responseIdx.get() == responseIdx) {
+                    LOG.warn("trade({})'s responseObserver.onError, custom action({}) is invoke and detail:{}",
+                            DefaultHttpTrade.this, onError, ExceptionUtils.exception2detail(e));
+                    onError.call(e);
+                } else {
+                    LOG.warn("onError ({})'s id({}) NOT EQUALS current response idx:{}, just ignore."
+                            , responseIdx, _responseIdx.get());
+                }
+            }};
+    }
+    
+    private final Action1<Throwable> actionResponseOnError(final int responseIdx) {
+        return RxActions.bindParameter(responseIdx,
+                RxActions.<Integer, Throwable>toAction2(
+                    this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnError"))));
+    }
+    
+    @SuppressWarnings("unused")
+    private void respOnError(final int responseIdx, final Throwable e) {
+        if (this._responseIdx.get() == responseIdx) {
             LOG.warn("trade({})'s responseObserver.onError, default action is invoke doAbort() and detail:{}",
                     DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
             doAbort();
-        }};
+        } else {
+            LOG.warn("onError ({})'s id({}) NOT EQUALS current response idx:{}, just ignore."
+                    , responseIdx, this._responseIdx.get());
+        }
+    }
         
     @Override
     public boolean readyforOutboundResponse() {
-        if (!isActive()) {
-            return false;
-        } else {
-            synchronized(this._subscriptionOfResponse) {
-                //  对 outboundResponse 方法加锁
-                final Subscription oldsubsc =  this._subscriptionOfResponse.get();
-                return this._selector.isActive() && (null==oldsubsc ||
-                    (oldsubsc.isUnsubscribed() && !this._isResponseSended.get()));
-            }
-        }
+        return this._selector.isActive() 
+            && !this._isResponseSended.get()
+            && !this._isResponseCompleted.get();
     }
     
     @Override
@@ -383,8 +382,6 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
-    private final AtomicReference<Subscription> _subscriptionOfResponse = 
-            new AtomicReference<Subscription>(null);
     private final Observable<? extends HttpObject> _requestObservable;
     private final List<Subscriber<? super HttpObject>> _requestSubscribers = 
             new CopyOnWriteArrayList<>();

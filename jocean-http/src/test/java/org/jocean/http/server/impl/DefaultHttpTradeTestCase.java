@@ -47,6 +47,10 @@ public class DefaultHttpTradeTestCase {
     
     private final String REQ_CONTENT = "testcontent";
     
+    //  TODO 
+    //  1. add test case for readyforOutboundResponse
+    //  2. abort after outbound response's close action, and NOT effect
+    
     @Test
     public final void testDoOnClosedBeforeAndAfterOutboundResponse() {
         final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
