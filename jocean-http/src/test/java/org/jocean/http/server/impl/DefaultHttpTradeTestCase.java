@@ -59,9 +59,6 @@ public class DefaultHttpTradeTestCase {
     
     private final String REQ_CONTENT = "testcontent";
     
-    //  TODO 
-    //  1. add test case for readyforOutboundResponse
-    
     @Test
     public final void testDoOnClosedBeforeAndAfterOutboundResponse() {
         final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
@@ -381,7 +378,7 @@ public class DefaultHttpTradeTestCase {
     }
 
     @Test
-    public final void tesTradeForFirstResponseErrorThenRetry() {
+    public final void testTradeForFirstResponseErrorThenRetry() {
         final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
                 Observable.<HttpObject>empty());
         
@@ -622,7 +619,7 @@ public class DefaultHttpTradeTestCase {
     }
     
     @Test
-    public final void tesTradeForResponseReplaceSuccess() {
+    public final void testTradeForReplaceResponseSuccess() {
         final AtomicReference<Object> output = new AtomicReference<>();
         final HttpTrade trade = new DefaultHttpTrade(dummyChannel(output), 
                 Observable.<HttpObject>empty());
@@ -655,7 +652,7 @@ public class DefaultHttpTradeTestCase {
     }
 
     @Test
-    public final void tesTradeForResponseReplaceFailure() {
+    public final void testTradeForReplaceResponseFailure() {
         final AtomicReference<Object> output = new AtomicReference<>();
         final HttpTrade trade = new DefaultHttpTrade(dummyChannel(output), 
                 Observable.<HttpObject>empty());
@@ -682,6 +679,104 @@ public class DefaultHttpTradeTestCase {
         assertEquals(0, subsholder2.getSubscriberCount());
     }
 
+    @Test
+    public final void testTradeForReplaceResponseSuccessThenInvokeOnCompletedOnFirstResponse() {
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.<HttpObject>empty());
+        
+        assertTrue(trade.isActive());
+        
+        final SubscriberHolder<HttpObject> subsholder1 = new SubscriberHolder<>();
+        final Subscription subscription1 = trade.outboundResponse(Observable.create(subsholder1));
+    
+        assertTrue(trade.isActive());
+        assertNotNull(subscription1);
+        assertEquals(1, subsholder1.getSubscriberCount());
+        
+        final SubscriberHolder<HttpObject> subsholder2 = new SubscriberHolder<>();
+        final Subscription subscription2 = trade.outboundResponse(Observable.create(subsholder2));
+        
+        assertTrue(trade.isActive());
+        assertNotNull(subscription2);
+        assertEquals(1, subsholder2.getSubscriberCount());
+        
+        subsholder1.getAt(0).onCompleted();
+        assertTrue(trade.isActive());
+        
+        subsholder2.getAt(0).onCompleted();
+        assertFalse(trade.isActive());
+    }
+    
+    @Test
+    public final void testTradeForReadyOutboundResponse() {
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.<HttpObject>empty());
+        
+        assertTrue(trade.isActive());
+        
+        assertTrue(trade.readyforOutboundResponse());
+        
+        final SubscriberHolder<HttpObject> subsholder1 = new SubscriberHolder<>();
+        final Subscription subscription1 = trade.outboundResponse(Observable.create(subsholder1));
+    
+        assertNotNull(subscription1);
+        assertTrue(trade.readyforOutboundResponse());
+        
+        final DefaultHttpRequest req1 = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        Nettys4Test.emitHttpObjects(subsholder1.getAt(0), req1);
+        
+        assertFalse(trade.readyforOutboundResponse());
+    }
+    
+    @Test
+    public final void testTradeForReadyOutboundResponse2() {
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.<HttpObject>empty());
+        
+        assertTrue(trade.isActive());
+        
+        assertTrue(trade.readyforOutboundResponse());
+        
+        final SubscriberHolder<HttpObject> subsholder1 = new SubscriberHolder<>();
+        final Subscription subscription1 = trade.outboundResponse(Observable.create(subsholder1));
+    
+        assertNotNull(subscription1);
+        assertTrue(trade.readyforOutboundResponse());
+        
+        subsholder1.getAt(0).onCompleted();
+        
+        assertFalse(trade.readyforOutboundResponse());
+    }
+    
+    @Test
+    public final void testTradeForReplaceResponseSuccessThenInvokeOnErrorOnFirstResponse() {
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                Observable.<HttpObject>empty());
+        
+        assertTrue(trade.isActive());
+        
+        final SubscriberHolder<HttpObject> subsholder1 = new SubscriberHolder<>();
+        final Subscription subscription1 = trade.outboundResponse(Observable.create(subsholder1));
+    
+        assertTrue(trade.isActive());
+        assertNotNull(subscription1);
+        assertEquals(1, subsholder1.getSubscriberCount());
+        
+        final SubscriberHolder<HttpObject> subsholder2 = new SubscriberHolder<>();
+        final Subscription subscription2 = trade.outboundResponse(Observable.create(subsholder2));
+        
+        assertTrue(trade.isActive());
+        assertNotNull(subscription2);
+        assertEquals(1, subsholder2.getSubscriberCount());
+        
+        subsholder1.getAt(0).onError(new RuntimeException());
+        assertTrue(trade.isActive());
+        
+        subsholder2.getAt(0).onError(new RuntimeException());
+        assertFalse(trade.isActive());
+    }
+    
     @Test
     public final void testTradeForResponseAfterAbort() {
         final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
