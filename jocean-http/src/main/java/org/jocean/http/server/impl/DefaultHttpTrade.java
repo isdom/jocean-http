@@ -291,9 +291,7 @@ class DefaultHttpTrade implements HttpTrade {
         
     @Override
     public boolean readyforOutboundResponse() {
-        return this._selector.isActive() 
-            && !this._isResponseSended.get()
-            && !this._isResponseCompleted.get();
+        return this._selector.isActive() && !isResponseStarted();
     }
     
     @Override
