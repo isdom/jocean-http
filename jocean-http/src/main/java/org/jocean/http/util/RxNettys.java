@@ -27,12 +27,15 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
+import io.netty.handler.codec.DecoderResult;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpMessage;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
@@ -665,4 +668,127 @@ public class RxNettys {
                 return null;
             }
         }};
+        
+        public static Func1<HttpObject, Observable<? extends HttpObject>> splitFullHttpMessage() {
+            return new Func1<HttpObject, Observable<? extends HttpObject>>() {
+                @Override
+                public Observable<? extends HttpObject> call(final HttpObject obj) {
+                    if ( obj instanceof FullHttpMessage) {
+                        if ( obj instanceof FullHttpRequest) {
+                            return Observable.just(requestOf((FullHttpRequest)obj), lastContentOf((FullHttpMessage)obj));
+                        }
+                        return Observable.just(obj);
+                    } else {
+                        return Observable.just(obj);
+                    }
+                }};
+        }
+
+        private static HttpRequest requestOf(final FullHttpRequest fullReq) {
+            return new HttpRequest() {
+
+                @Override
+                public HttpVersion getProtocolVersion() {
+                    return fullReq.getProtocolVersion();
+                }
+
+                @Override
+                public HttpHeaders headers() {
+                    return fullReq.headers();
+                }
+
+                @Override
+                public DecoderResult getDecoderResult() {
+                    return fullReq.getDecoderResult();
+                }
+
+                @Override
+                public void setDecoderResult(DecoderResult result) {
+                    fullReq.setDecoderResult(result);
+                }
+
+                @Override
+                public HttpMethod getMethod() {
+                    return fullReq.getMethod();
+                }
+
+                @Override
+                public HttpRequest setMethod(HttpMethod method) {
+                    return fullReq.setMethod(method);
+                }
+
+                @Override
+                public String getUri() {
+                    return fullReq.getUri();
+                }
+
+                @Override
+                public HttpRequest setUri(String uri) {
+                    return fullReq.setUri(uri);
+                }
+
+                @Override
+                public HttpRequest setProtocolVersion(HttpVersion version) {
+                    return fullReq.setProtocolVersion(version);
+                }};
+        }
+        
+        private static LastHttpContent lastContentOf(final FullHttpMessage msg) {
+            return new LastHttpContent() {
+
+                @Override
+                public HttpContent duplicate() {
+                    return msg.duplicate();
+                }
+
+                @Override
+                public DecoderResult getDecoderResult() {
+                    return msg.getDecoderResult();
+                }
+
+                @Override
+                public void setDecoderResult(DecoderResult result) {
+                    msg.setDecoderResult(result);
+                }
+
+                @Override
+                public ByteBuf content() {
+                    return msg.content();
+                }
+
+                @Override
+                public int refCnt() {
+                    return msg.refCnt();
+                }
+
+                @Override
+                public boolean release() {
+                    return msg.release();
+                }
+
+                @Override
+                public boolean release(int decrement) {
+                    return msg.release(decrement);
+                }
+
+                @Override
+                public HttpHeaders trailingHeaders() {
+                    return msg.trailingHeaders();
+                }
+
+                @Override
+                public LastHttpContent copy() {
+                    return msg.copy();
+                }
+
+                @Override
+                public LastHttpContent retain(int increment) {
+                    return msg.retain(increment);
+                }
+
+                @Override
+                public LastHttpContent retain() {
+                    return msg.retain();
+                }};
+        }
 }
