@@ -11,7 +11,7 @@ dependencies {
     compile 'org.jocean:jocean-idiom:0.1.4-SNAPSHOT'
     
     compile 'io.netty:netty-all:4.0.37.Final'
-    compile 'io.reactivex:rxjava:1.1.5'
+    compile 'io.reactivex:rxjava:1.1.6'
     runtime 'org.javassist:javassist:3.19.0-GA'
     compile 'com.jcraft:jzlib:1.1.3'
     
