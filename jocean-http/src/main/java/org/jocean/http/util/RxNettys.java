@@ -669,7 +669,11 @@ public class RxNettys {
         }};
         
         public static Func1<HttpObject, Observable<? extends HttpObject>> splitFullHttpMessage() {
-            return new Func1<HttpObject, Observable<? extends HttpObject>>() {
+            return SPLIT_FULLHTTPMSG;
+        }
+
+        private final static Func1<HttpObject, Observable<? extends HttpObject>> SPLIT_FULLHTTPMSG = 
+                new Func1<HttpObject, Observable<? extends HttpObject>>() {
                 @Override
                 public Observable<? extends HttpObject> call(final HttpObject obj) {
                     if ( obj instanceof FullHttpMessage) {
@@ -684,8 +688,7 @@ public class RxNettys {
                         return Observable.just(obj);
                     }
                 }};
-        }
-
+                
         private static HttpRequest requestOf(final FullHttpRequest fullReq) {
             return new ProxyBuilder<>(HttpRequest.class, fullReq).buildProxy();
         }
