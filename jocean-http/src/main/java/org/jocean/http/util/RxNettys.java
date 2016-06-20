@@ -11,6 +11,7 @@ import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.util.Nettys.ServerChannelAware;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.ProxyBuilder;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
 import org.slf4j.Logger;
@@ -27,7 +28,6 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
-import io.netty.handler.codec.DecoderResult;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpMessage;
@@ -35,7 +35,6 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
@@ -674,10 +673,13 @@ public class RxNettys {
                 @Override
                 public Observable<? extends HttpObject> call(final HttpObject obj) {
                     if ( obj instanceof FullHttpMessage) {
-                        if ( obj instanceof FullHttpRequest) {
+                        if (obj instanceof FullHttpRequest) {
                             return Observable.just(requestOf((FullHttpRequest)obj), lastContentOf((FullHttpMessage)obj));
+                        } else if (obj instanceof FullHttpResponse) {
+                            return Observable.just(responseOf((FullHttpResponse)obj), lastContentOf((FullHttpMessage)obj));
+                        } else {
+                            return Observable.just(obj);
                         }
-                        return Observable.just(obj);
                     } else {
                         return Observable.just(obj);
                     }
@@ -685,110 +687,14 @@ public class RxNettys {
         }
 
         private static HttpRequest requestOf(final FullHttpRequest fullReq) {
-            return new HttpRequest() {
-
-                @Override
-                public HttpVersion getProtocolVersion() {
-                    return fullReq.getProtocolVersion();
-                }
-
-                @Override
-                public HttpHeaders headers() {
-                    return fullReq.headers();
-                }
-
-                @Override
-                public DecoderResult getDecoderResult() {
-                    return fullReq.getDecoderResult();
-                }
-
-                @Override
-                public void setDecoderResult(DecoderResult result) {
-                    fullReq.setDecoderResult(result);
-                }
-
-                @Override
-                public HttpMethod getMethod() {
-                    return fullReq.getMethod();
-                }
-
-                @Override
-                public HttpRequest setMethod(HttpMethod method) {
-                    return fullReq.setMethod(method);
-                }
-
-                @Override
-                public String getUri() {
-                    return fullReq.getUri();
-                }
-
-                @Override
-                public HttpRequest setUri(String uri) {
-                    return fullReq.setUri(uri);
-                }
-
-                @Override
-                public HttpRequest setProtocolVersion(HttpVersion version) {
-                    return fullReq.setProtocolVersion(version);
-                }};
+            return new ProxyBuilder<>(HttpRequest.class, fullReq).buildProxy();
+        }
+        
+        private static HttpResponse responseOf(final FullHttpResponse fullResp) {
+            return new ProxyBuilder<>(HttpResponse.class, fullResp).buildProxy();
         }
         
         private static LastHttpContent lastContentOf(final FullHttpMessage msg) {
-            return new LastHttpContent() {
-
-                @Override
-                public HttpContent duplicate() {
-                    return msg.duplicate();
-                }
-
-                @Override
-                public DecoderResult getDecoderResult() {
-                    return msg.getDecoderResult();
-                }
-
-                @Override
-                public void setDecoderResult(DecoderResult result) {
-                    msg.setDecoderResult(result);
-                }
-
-                @Override
-                public ByteBuf content() {
-                    return msg.content();
-                }
-
-                @Override
-                public int refCnt() {
-                    return msg.refCnt();
-                }
-
-                @Override
-                public boolean release() {
-                    return msg.release();
-                }
-
-                @Override
-                public boolean release(int decrement) {
-                    return msg.release(decrement);
-                }
-
-                @Override
-                public HttpHeaders trailingHeaders() {
-                    return msg.trailingHeaders();
-                }
-
-                @Override
-                public LastHttpContent copy() {
-                    return msg.copy();
-                }
-
-                @Override
-                public LastHttpContent retain(int increment) {
-                    return msg.retain(increment);
-                }
-
-                @Override
-                public LastHttpContent retain() {
-                    return msg.retain();
-                }};
+            return new ProxyBuilder<>(LastHttpContent.class, msg).buildProxy();
         }
 }

@@ -1,5 +1,7 @@
 package org.jocean.http.util;
 
+import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
+import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -9,15 +11,20 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.jocean.http.server.HttpTestServer;
 import org.jocean.idiom.rx.RxActions;
 import org.junit.Test;
 
 import com.google.common.base.Charsets;
 
+import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpHeaders.Names;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
@@ -106,16 +113,38 @@ public class RxNettysTestCase {
     }
     
     @Test
-    public final void  testSplitFullHttpMessageForRequest() {
+    public final void  testSplitFullHttpMessageForRequest() throws Exception {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf(REQ_CONTENT));
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", 
+                        Nettys4Test.buildByteBuf(REQ_CONTENT));
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         Observable.just(request).flatMap(RxNettys.splitFullHttpMessage())
             .subscribe(reqSubscriber);
         
         reqSubscriber.assertValueCount(2);
-        final FullHttpRequest fullreq = RxNettys.BUILD_FULL_REQUEST.call(reqSubscriber.getOnNextEvents().toArray(new HttpObject[0]));
+        final FullHttpRequest fullreq = RxNettys.BUILD_FULL_REQUEST.call(
+                reqSubscriber.getOnNextEvents().toArray(new HttpObject[0]));
         assertNotNull(fullreq);
+        assertEquals(REQ_CONTENT, new String(Nettys.dumpByteBufAsBytes(fullreq.content()), Charsets.UTF_8));
+    }
+
+    @Test
+    public final void  testSplitFullHttpMessageForResponse() {
+        final FullHttpResponse response = new DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1, OK, 
+                Nettys4Test.buildByteBuf(REQ_CONTENT));
+        response.headers().set(Names.CONTENT_TYPE, "text/plain");
+        response.headers().set(Names.CONTENT_LENGTH, response.content().readableBytes());
+
+        final TestSubscriber<HttpObject> respSubscriber = new TestSubscriber<>();
+        Observable.just(response).flatMap(RxNettys.splitFullHttpMessage())
+            .subscribe(respSubscriber);
+        
+        respSubscriber.assertValueCount(2);
+//        final FullHttpRequest fullreq = RxNettys.BUILD_FULL_REQUEST.call(
+//                respSubscriber.getOnNextEvents().toArray(new HttpObject[0]));
+//        assertNotNull(fullreq);
+//        assertEquals(REQ_CONTENT, new String(Nettys.dumpByteBufAsBytes(fullreq.content()), Charsets.UTF_8));
     }
 }
