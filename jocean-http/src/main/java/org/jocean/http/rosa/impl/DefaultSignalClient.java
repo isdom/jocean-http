@@ -274,7 +274,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 }
             }
         }
-        httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/json");
+        httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/json; charset=UTF-8");
     }
     
     public Action0 registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
