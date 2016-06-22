@@ -40,6 +40,13 @@ public interface Feature extends Func2<Feature.HandlerBuilder, ChannelPipeline, 
         }
     };
     
+    public static final Feature ENABLE_LOGGING_PREV_SSL = new AbstractFeature0() {
+        @Override
+        public String toString() {
+            return "ENABLE_LOGGING_PREV_SSL";
+        }
+    };
+    
     public static final Feature ENABLE_COMPRESSOR = new AbstractFeature0() {
         @Override
         public String toString() {

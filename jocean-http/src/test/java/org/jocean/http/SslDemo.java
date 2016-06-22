@@ -74,13 +74,14 @@ public class SslDemo {
                         new InetSocketAddress(host, 443), 
 //                        new InetSocketAddress("58.215.107.207", 443), 
                         Observable.just(request),
-                        Feature.ENABLE_LOGGING,
+                        Feature.ENABLE_LOGGING_PREV_SSL,
                         new Feature.ENABLE_SSL(sslCtx)
                         )
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
-                LOG.info("recv:{}", new String(responseAsBytes(itr), cs));
+                responseAsBytes(itr);
+//                LOG.info("recv:{}", new String(responseAsBytes(itr), cs));
             }
             {
                 final Iterator<HttpObject> itr = 
@@ -94,7 +95,8 @@ public class SslDemo {
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
-                LOG.info("recv 2nd:{}", new String(responseAsBytes(itr), cs));
+                responseAsBytes(itr);
+//                LOG.info("recv 2nd:{}", new String(responseAsBytes(itr), cs));
             }
         }
     }
