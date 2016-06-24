@@ -29,13 +29,13 @@ import rx.functions.Func1;
 import rx.observables.ConnectableObservable;
 import rx.observers.TestSubscriber;
 
-public class HttpObjectHolderTestCase {
+public class HttpMessageHolderTestCase {
     final String REQ_CONTENT = "testcontent";
     
     @Test
-    public final void testHttpObjectHolderForDisableAssembleOnlyCached() {
+    public final void testHttpMessageHolderForDisableAssembleOnlyCached() {
         // max block size == -1 means disable assemble
-        final HttpObjectHolder holder = new HttpObjectHolder(-1);
+        final HttpMessageHolder holder = new HttpMessageHolder(-1);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -67,8 +67,8 @@ public class HttpObjectHolderTestCase {
     }
     
     @Test
-    public final void testHttpObjectHolderForPushFullRequestAfterRelease() {
-        final HttpObjectHolder holder = new HttpObjectHolder(-1);
+    public final void testHttpMessageHolderForPushFullRequestAfterRelease() {
+        final HttpMessageHolder holder = new HttpMessageHolder(-1);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -96,8 +96,8 @@ public class HttpObjectHolderTestCase {
     }
     
     @Test
-    public final void testHttpObjectHolderForRequestPartError() {
-        final HttpObjectHolder holder = new HttpObjectHolder(-1);
+    public final void testHttpMessageHolderForRequestPartError() {
+        final HttpMessageHolder holder = new HttpMessageHolder(-1);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -127,8 +127,8 @@ public class HttpObjectHolderTestCase {
     }
     
     @Test
-    public final void testHttpObjectHolderForDisableAssembleAndInvokeBindHttpObjsSuccess() {
-        final HttpObjectHolder holder = new HttpObjectHolder(-1);
+    public final void testHttpMessageHolderForDisableAssembleAndInvokeBindHttpObjsSuccess() {
+        final HttpMessageHolder holder = new HttpMessageHolder(-1);
         final AtomicReference<HttpObject[]> objsRef = new AtomicReference<>();
         final Func1<HttpObject[], Void> visitorHttpObjs = new Func1<HttpObject[], Void>() {
             @Override
@@ -160,8 +160,8 @@ public class HttpObjectHolderTestCase {
     }
     
     @Test
-    public final void testHttpObjectHolderForDisableAssembleInvokeBindHttpObjsAfterRelease() {
-        final HttpObjectHolder holder = new HttpObjectHolder(-1);
+    public final void testHttpMessageHolderForDisableAssembleInvokeBindHttpObjsAfterRelease() {
+        final HttpMessageHolder holder = new HttpMessageHolder(-1);
         final AtomicReference<HttpObject[]> objsRef = new AtomicReference<>();
         final Func1<HttpObject[], Void> visitorHttpObjs = new Func1<HttpObject[], Void>() {
             @Override
@@ -193,8 +193,8 @@ public class HttpObjectHolderTestCase {
     }
     
     @Test
-    public final void testHttpObjectHolderForDisableAssembleGetAndInvokeBindHttpObjsAfterRelease() {
-        final HttpObjectHolder holder = new HttpObjectHolder(-1);
+    public final void testHttpMessageHolderForDisableAssembleGetAndInvokeBindHttpObjsAfterRelease() {
+        final HttpMessageHolder holder = new HttpMessageHolder(-1);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -226,15 +226,15 @@ public class HttpObjectHolderTestCase {
     }
     
     @Test
-    public final void testHttpObjectHolderForAssembleWithMaxBlockSizeMoreThanZero() {
-        testHttpObjectHolderForAssembleFor(16, 1);
-        testHttpObjectHolderForAssembleFor(8, 1);
-        testHttpObjectHolderForAssembleFor(4, 1);
-        testHttpObjectHolderForAssembleFor(1, 1);
+    public final void testHttpMessageHolderForAssembleWithMaxBlockSizeMoreThanZero() {
+        testHttpMessageHolderForAssembleFor(16, 1);
+        testHttpMessageHolderForAssembleFor(8, 1);
+        testHttpMessageHolderForAssembleFor(4, 1);
+        testHttpMessageHolderForAssembleFor(1, 1);
     }
     
-    public final void testHttpObjectHolderForAssembleFor(final int MAX_BLOCK_SIZE, final int PIECE_SIZE) {
-        final HttpObjectHolder holder = new HttpObjectHolder(MAX_BLOCK_SIZE);
+    public final void testHttpMessageHolderForAssembleFor(final int MAX_BLOCK_SIZE, final int PIECE_SIZE) {
+        final HttpMessageHolder holder = new HttpMessageHolder(MAX_BLOCK_SIZE);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");

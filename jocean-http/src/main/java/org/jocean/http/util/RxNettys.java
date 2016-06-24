@@ -667,37 +667,63 @@ public class RxNettys {
                 return null;
             }
         }};
+    public static Func1<HttpObject[], FullHttpResponse> BUILD_FULL_RESPONSE = new Func1<HttpObject[], FullHttpResponse>() {
+        @Override
+        public FullHttpResponse call(final HttpObject[] httpobjs) {
+            if (httpobjs.length>0 
+            && (httpobjs[0] instanceof HttpResponse) 
+            && (httpobjs[httpobjs.length-1] instanceof LastHttpContent)) {
+                if (httpobjs[0] instanceof FullHttpResponse) {
+                    return ((FullHttpResponse)httpobjs[0]).retain();
+                }
+                
+                final HttpResponse resp = (HttpResponse)httpobjs[0];
+                final ByteBuf[] bufs = new ByteBuf[httpobjs.length-1];
+                for (int idx = 1; idx<httpobjs.length; idx++) {
+                    bufs[idx-1] = ((HttpContent)httpobjs[idx]).content().retain();
+                }
+                final DefaultFullHttpResponse fullresp = new DefaultFullHttpResponse(
+                        resp.getProtocolVersion(), 
+                        resp.getStatus(),
+                        Unpooled.wrappedBuffer(bufs));
+                fullresp.headers().add(resp.headers());
+                //  ? need update Content-Length header field ?
+                return fullresp;
+            } else {
+                return null;
+            }
+        }};
         
-        public static Func1<HttpObject, Observable<? extends HttpObject>> splitFullHttpMessage() {
-            return SPLIT_FULLHTTPMSG;
-        }
+    public static Func1<HttpObject, Observable<? extends HttpObject>> splitFullHttpMessage() {
+        return SPLIT_FULLHTTPMSG;
+    }
 
-        private final static Func1<HttpObject, Observable<? extends HttpObject>> SPLIT_FULLHTTPMSG = 
-                new Func1<HttpObject, Observable<? extends HttpObject>>() {
-                @Override
-                public Observable<? extends HttpObject> call(final HttpObject obj) {
-                    if ( obj instanceof FullHttpMessage) {
-                        if (obj instanceof FullHttpRequest) {
-                            return Observable.just(requestOf((FullHttpRequest)obj), lastContentOf((FullHttpMessage)obj));
-                        } else if (obj instanceof FullHttpResponse) {
-                            return Observable.just(responseOf((FullHttpResponse)obj), lastContentOf((FullHttpMessage)obj));
-                        } else {
-                            return Observable.just(obj);
-                        }
+    private final static Func1<HttpObject, Observable<? extends HttpObject>> SPLIT_FULLHTTPMSG = 
+            new Func1<HttpObject, Observable<? extends HttpObject>>() {
+            @Override
+            public Observable<? extends HttpObject> call(final HttpObject obj) {
+                if ( obj instanceof FullHttpMessage) {
+                    if (obj instanceof FullHttpRequest) {
+                        return Observable.just(requestOf((FullHttpRequest)obj), lastContentOf((FullHttpMessage)obj));
+                    } else if (obj instanceof FullHttpResponse) {
+                        return Observable.just(responseOf((FullHttpResponse)obj), lastContentOf((FullHttpMessage)obj));
                     } else {
                         return Observable.just(obj);
                     }
-                }};
-                
-        private static HttpRequest requestOf(final FullHttpRequest fullReq) {
-            return new ProxyBuilder<>(HttpRequest.class, fullReq).buildProxy();
-        }
-        
-        private static HttpResponse responseOf(final FullHttpResponse fullResp) {
-            return new ProxyBuilder<>(HttpResponse.class, fullResp).buildProxy();
-        }
-        
-        private static LastHttpContent lastContentOf(final FullHttpMessage msg) {
-            return new ProxyBuilder<>(LastHttpContent.class, msg).buildProxy();
-        }
+                } else {
+                    return Observable.just(obj);
+                }
+            }};
+            
+    private static HttpRequest requestOf(final FullHttpRequest fullReq) {
+        return new ProxyBuilder<>(HttpRequest.class, fullReq).buildProxy();
+    }
+    
+    private static HttpResponse responseOf(final FullHttpResponse fullResp) {
+        return new ProxyBuilder<>(HttpResponse.class, fullResp).buildProxy();
+    }
+    
+    private static LastHttpContent lastContentOf(final FullHttpMessage msg) {
+        return new ProxyBuilder<>(LastHttpContent.class, msg).buildProxy();
+    }
 }

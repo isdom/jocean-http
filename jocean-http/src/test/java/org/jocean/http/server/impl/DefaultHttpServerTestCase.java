@@ -20,7 +20,7 @@ import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.server.HttpTestServer;
-import org.jocean.http.util.HttpObjectHolder;
+import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.RxFunctions;
 import org.jocean.idiom.rx.RxSubscribers;
@@ -55,7 +55,7 @@ public class DefaultHttpServerTestCase {
                 if (null!=transportRef) {
                     transportRef.set(trade.transport());
                 }
-                final HttpObjectHolder holder = new HttpObjectHolder(0);
+                final HttpMessageHolder holder = new HttpMessageHolder(0);
                 trade.inboundRequest().compose(holder.assembleAndHold()).subscribe(
                     RxSubscribers.nopOnNext(),
                     RxSubscribers.nopOnError(),

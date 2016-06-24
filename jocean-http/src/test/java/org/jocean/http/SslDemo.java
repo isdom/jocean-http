@@ -1,35 +1,36 @@
 package org.jocean.http;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.InetSocketAddress;
-import java.util.Iterator;
+import java.util.concurrent.CountDownLatch;
 
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.impl.DefaultHttpClient;
+import org.jocean.http.util.HttpMessageHolder;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.buffer.ByteBufInputStream;
-import io.netty.buffer.CompositeByteBuf;
-import io.netty.buffer.Unpooled;
+import com.google.common.base.Charsets;
+
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
+import rx.functions.Action0;
 
 public class SslDemo {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(SslDemo.class);
     
+    /*
     private static byte[] responseAsBytes(final Iterator<HttpObject> itr)
             throws IOException {
         final CompositeByteBuf composite = Unpooled.compositeBuffer();
@@ -52,52 +53,86 @@ public class SslDemo {
             ReferenceCountUtil.release(composite);
         }
     }
+    */
     
     public static void main(String[] args) throws Exception {
         
+        final CountDownLatch latch = new CountDownLatch(2);
         final SslContext sslCtx = SslContextBuilder.forClient().build();
-//        https://github.com/isdom
-        final String host = "www.alipay.com";
-//        final String host = "www.csdn.net";
-        final String cs = "UTF-8";
-            
-        final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
-        HttpHeaders.setKeepAlive(request, true);
-        HttpHeaders.setHost(request, host);
+        final Feature sslfeature = new Feature.ENABLE_SSL(sslCtx);
         
-        LOG.debug("send request:{}", request);
         try (final HttpClient client = new DefaultHttpClient()) {
             {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new InetSocketAddress(host, 443), 
-//                        new InetSocketAddress("58.215.107.207", 443), 
-                        Observable.just(request),
-                        Feature.ENABLE_LOGGING_PREV_SSL,
-                        new Feature.ENABLE_SSL(sslCtx)
-                        )
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
+                final String host = "www.alipay.com";
+
+                final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
+                        HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+                HttpHeaders.setKeepAlive(request, true);
+                HttpHeaders.setHost(request, host);
+
+                LOG.debug("send request:{}", request);
+              
+                final HttpMessageHolder holder = new HttpMessageHolder(-1);
                 
-                responseAsBytes(itr);
-//                LOG.info("recv:{}", new String(responseAsBytes(itr), cs));
+                client.defineInteraction(
+                    new InetSocketAddress(host, 443), 
+                    Observable.just(request),
+                    Feature.ENABLE_LOGGING_PREV_SSL,
+                    sslfeature
+                    )
+                .compose(holder.assembleAndHold())
+                .subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError(), new Action0() {
+                    @Override
+                    public void call() {
+                        final FullHttpResponse resp = holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE).call();
+                        holder.release().call();
+                        
+                        try {
+                            LOG.info("recv:{}", new String(Nettys.dumpByteBufAsBytes(resp.content()), Charsets.UTF_8));
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        resp.release();
+                        latch.countDown();
+                    }});
+                
             }
             {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new InetSocketAddress(host, 443), 
-//                        new InetSocketAddress("58.215.107.207", 443), 
-                        Observable.just(request),
-                        Feature.ENABLE_LOGGING,
-                        new Feature.ENABLE_SSL(sslCtx)
-                        )
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
+                final String host = "github.com";
+
+                final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
+                        HttpVersion.HTTP_1_1, HttpMethod.GET, "/isdom");
+                HttpHeaders.setKeepAlive(request, true);
+                HttpHeaders.setHost(request, host);
+
+                LOG.debug("send request:{}", request);
+              
+                final HttpMessageHolder holder = new HttpMessageHolder(-1);
                 
-                responseAsBytes(itr);
-//                LOG.info("recv 2nd:{}", new String(responseAsBytes(itr), cs));
+                client.defineInteraction(
+                    new InetSocketAddress(host, 443), 
+                    Observable.just(request),
+                    Feature.ENABLE_LOGGING_PREV_SSL,
+                    sslfeature
+                    )
+                .compose(holder.assembleAndHold())
+                .subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError(), new Action0() {
+                    @Override
+                    public void call() {
+                        final FullHttpResponse resp = holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE).call();
+                        holder.release().call();
+                        
+                        try {
+                            LOG.info("recv:{}", new String(Nettys.dumpByteBufAsBytes(resp.content()), Charsets.UTF_8));
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        resp.release();
+                        latch.countDown();
+                    }});
             }
+            
+            latch.await();
         }
     }
 

@@ -26,7 +26,7 @@ import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
 
-public class HttpObjectHolder {
+public class HttpMessageHolder {
     private static final HttpObject[] ZERO_HTTPOBJS = new HttpObject[0];
 
     private static int _block_size = 128 * 1024; // 128KB
@@ -45,12 +45,12 @@ public class HttpObjectHolder {
     private final static int _MAX_BLOCK_SIZE = _block_size;
     
     private static final Logger LOG = LoggerFactory
-            .getLogger(HttpObjectHolder.class);
+            .getLogger(HttpMessageHolder.class);
     
-    private final FuncSelector<HttpObjectHolder> _selector = 
+    private final FuncSelector<HttpMessageHolder> _selector = 
             new FuncSelector<>(this);
     
-    public HttpObjectHolder(final int maxBlockSize) {
+    public HttpMessageHolder(final int maxBlockSize) {
         //  0 : using _MAX_BLOCK_SIZE 
         //  -1 : disable assemble piece to a big block feature
         this._enableAssemble = maxBlockSize >= 0;
@@ -69,11 +69,11 @@ public class HttpObjectHolder {
     private final Func1<Func1<HttpObject[], Object>,Object> _funcVisitHttpObjects = 
         RxFunctions.toFunc1(
             this._selector.callWhenActive(
-                RxFunctions.<HttpObjectHolder, Object>toFunc1_N(
-                    HttpObjectHolder.class, "doVisitHttpObjects"))
-            .callWhenDestroyed(new Func1_N<HttpObjectHolder, Object>() {
+                RxFunctions.<HttpMessageHolder, Object>toFunc1_N(
+                    HttpMessageHolder.class, "doVisitHttpObjects"))
+            .callWhenDestroyed(new Func1_N<HttpMessageHolder, Object>() {
                 @Override
-                public Object call(HttpObjectHolder t, Object... args) {
+                public Object call(HttpMessageHolder t, Object... args) {
                     return null;
                 }}));
     
@@ -92,7 +92,7 @@ public class HttpObjectHolder {
         return new Action0() {
         @Override
         public void call() {
-            _selector.destroy(RxActions.toAction1_N(HttpObjectHolder.class, "doRelease"));
+            _selector.destroy(RxActions.toAction1_N(HttpMessageHolder.class, "doRelease"));
         }};
     }
     
@@ -118,25 +118,25 @@ public class HttpObjectHolder {
     }
     
     public int currentBlockCount() {
-        return this._selector.callWhenActive(new Func1_N<HttpObjectHolder, Integer>() {
+        return this._selector.callWhenActive(new Func1_N<HttpMessageHolder, Integer>() {
             @Override
-            public Integer call(final HttpObjectHolder holder, final Object... args) {
+            public Integer call(final HttpMessageHolder holder, final Object... args) {
                 return holder._currentBlock.size();
-            }}).callWhenDestroyed(new Func1_N<HttpObjectHolder, Integer>() {
+            }}).callWhenDestroyed(new Func1_N<HttpMessageHolder, Integer>() {
             @Override
-            public Integer call(final HttpObjectHolder holder, final Object... args) {
+            public Integer call(final HttpMessageHolder holder, final Object... args) {
                 return 0;
             }}).call();
     }
     
     public int cachedHttpObjectCount() {
-        return this._selector.callWhenActive(new Func1_N<HttpObjectHolder, Integer>() {
+        return this._selector.callWhenActive(new Func1_N<HttpMessageHolder, Integer>() {
             @Override
-            public Integer call(final HttpObjectHolder holder, final Object... args) {
+            public Integer call(final HttpMessageHolder holder, final Object... args) {
                 return holder._cachedHttpObjects.size();
-            }}).callWhenDestroyed(new Func1_N<HttpObjectHolder, Integer>() {
+            }}).callWhenDestroyed(new Func1_N<HttpMessageHolder, Integer>() {
             @Override
-            public Integer call(final HttpObjectHolder holder, final Object... args) {
+            public Integer call(final HttpMessageHolder holder, final Object... args) {
                 return 0;
             }}).call();
     }
@@ -199,7 +199,7 @@ public class HttpObjectHolder {
     private final Action1<HttpContent> _actionRetainAndUpdateCurrentBlock = 
         RxActions.toAction1(
             this._selector.submitWhenActive(
-                RxActions.toAction1_N(HttpObjectHolder.class, "doRetainAndUpdateCurrentBlock")));
+                RxActions.toAction1_N(HttpMessageHolder.class, "doRetainAndUpdateCurrentBlock")));
 
     @SuppressWarnings("unused")
     private void doRetainAndUpdateCurrentBlock(final HttpContent content) {
@@ -216,8 +216,8 @@ public class HttpObjectHolder {
     private final Func1<HttpObject, HttpObject> _funcRetainAndHoldHttpObject = 
         RxFunctions.toFunc1(
             this._selector.callWhenActive(
-                RxFunctions.<HttpObjectHolder, HttpObject>toFunc1_N(
-                        HttpObjectHolder.class, "doRetainAndHoldHttpObject")));
+                RxFunctions.<HttpMessageHolder, HttpObject>toFunc1_N(
+                        HttpMessageHolder.class, "doRetainAndHoldHttpObject")));
     
     @SuppressWarnings("unused")
     private HttpObject doRetainAndHoldHttpObject(final HttpObject httpobj) {
@@ -241,8 +241,8 @@ public class HttpObjectHolder {
     private final Func0<HttpContent> _funcBuildCurrentBlockAndReset = 
         RxFunctions.toFunc0(
             this._selector.callWhenActive(
-                    RxFunctions.<HttpObjectHolder, HttpContent>toFunc1_N(
-                            HttpObjectHolder.class, "doBuildCurrentBlockAndReset")));
+                    RxFunctions.<HttpMessageHolder, HttpContent>toFunc1_N(
+                            HttpMessageHolder.class, "doBuildCurrentBlockAndReset")));
 
     @SuppressWarnings("unused")
     private HttpContent doBuildCurrentBlockAndReset() {

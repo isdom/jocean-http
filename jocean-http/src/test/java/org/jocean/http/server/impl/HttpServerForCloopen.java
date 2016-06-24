@@ -9,7 +9,7 @@ import java.net.InetSocketAddress;
 
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpServer.HttpTrade;
-import org.jocean.http.util.HttpObjectHolder;
+import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
@@ -44,7 +44,7 @@ public class HttpServerForCloopen {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    final HttpObjectHolder holder = new HttpObjectHolder(0);
+                    final HttpMessageHolder holder = new HttpMessageHolder(0);
                     trade.inboundRequest().compose(holder.assembleAndHold()).subscribe(new Subscriber<HttpObject>() {
                         @Override
                         public void onCompleted() {
