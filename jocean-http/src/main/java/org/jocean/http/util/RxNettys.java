@@ -545,28 +545,6 @@ public class RxNettys {
         }
     }
     
-    public static <T, E extends T> Observable.Transformer<? super T, ? extends T> retainAtFirst(
-            final Collection<E> objs, 
-            final Class<E> elementCls) {
-        return new Observable.Transformer<T, T>() {
-            @Override
-            public Observable<T> call(final Observable<T> source) {
-                return source.doOnNext(new Action1<T>() {
-                    @SuppressWarnings("unchecked")
-                    @Override
-                    public void call(final T input) {
-                        if (input != null && elementCls.isAssignableFrom(input.getClass())) {
-                            objs.add(ReferenceCountUtil.retain((E)input));
-                            if ( LOG.isDebugEnabled()) {
-                                if ( input instanceof ReferenceCounted) {
-                                    LOG.debug("({}) retaind,so refcnt is {}.", input, ((ReferenceCounted)input).refCnt()); 
-                                }
-                            }
-                        }
-                    }});
-            }};
-    }
-    
     public static <E, T> Observable.Transformer<? super T, ? extends T> releaseAtLast(final Collection<E> objs) {
         return new Observable.Transformer<T, T>() {
             @Override

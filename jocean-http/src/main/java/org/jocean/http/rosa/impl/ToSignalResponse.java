@@ -2,9 +2,8 @@ package org.jocean.http.rosa.impl;
 
 import java.io.InputStream;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.List;
 
+import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
@@ -47,23 +46,25 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
     
     @Override
     public Observable<RESP> call(final Observable<HttpObject> source) {
-        final List<HttpObject> httpObjects = new ArrayList<>();
+        final HttpMessageHolder holder = new HttpMessageHolder(0);
         
-        return source.compose(RxNettys.<HttpObject,HttpObject>retainAtFirst(httpObjects, HttpObject.class))
-                .flatMap(buildOnNext(), buildOnError(), buildOnCompleted(httpObjects) )
-                .compose(RxNettys.<HttpObject,RESP>releaseAtLast(httpObjects));
+        return source.compose(holder.assembleAndHold())
+                .flatMap(buildOnNext(), buildOnError(), 
+                    buildOnCompleted(holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE)))
+                .doAfterTerminate(holder.release())
+                .doOnUnsubscribe(holder.release());
     }
 
     private Func0<Observable<RESP>> buildOnCompleted(
-            final List<HttpObject> httpObjects) {
+            final Func0<FullHttpResponse> getHttpResponse) {
         return new Func0<Observable<RESP>>() {
             @SuppressWarnings("unchecked")
             @Override
             public Observable<RESP> call() {
-                final FullHttpResponse httpResp = RxNettys.BUILD_FULL_RESPONSE.call(httpObjects.toArray(new HttpObject[0]));
-                if (null!=httpResp) {
+                final FullHttpResponse fullresp = getHttpResponse.call();
+                if (null!=fullresp) {
                     try {
-                        final InputStream is = new ByteBufInputStream(httpResp.content());
+                        final InputStream is = new ByteBufInputStream(fullresp.content());
                         try {
                             final byte[] bytes = new byte[is.available()];
                             @SuppressWarnings("unused")
@@ -79,10 +80,10 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
                         }
                     } catch (Exception e) {
                         LOG.warn("exception when parse response {}, detail:{}",
-                                httpResp, ExceptionUtils.exception2detail(e));
+                                fullresp, ExceptionUtils.exception2detail(e));
                         Observable.error(e);
                     } finally {
-                        httpResp.release();
+                        fullresp.release();
                     }
                 }
                 return Observable.error(new RuntimeException("invalid response"));
