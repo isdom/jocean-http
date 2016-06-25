@@ -702,14 +702,10 @@ public class RxNettys {
             new Func1<HttpObject, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final HttpObject obj) {
-                if ( obj instanceof FullHttpMessage) {
-                    if (obj instanceof FullHttpRequest) {
-                        return Observable.just(requestOf((FullHttpRequest)obj), lastContentOf((FullHttpMessage)obj));
-                    } else if (obj instanceof FullHttpResponse) {
-                        return Observable.just(responseOf((FullHttpResponse)obj), lastContentOf((FullHttpMessage)obj));
-                    } else {
-                        return Observable.just(obj);
-                    }
+                if (obj instanceof FullHttpRequest) {
+                    return Observable.just(requestOf((FullHttpRequest)obj), lastContentOf((FullHttpMessage)obj));
+                } else if (obj instanceof FullHttpResponse) {
+                    return Observable.just(responseOf((FullHttpResponse)obj), lastContentOf((FullHttpMessage)obj));
                 } else {
                     return Observable.just(obj);
                 }
