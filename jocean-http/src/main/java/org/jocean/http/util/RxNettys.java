@@ -506,12 +506,6 @@ public class RxNettys {
         }
     }
     
-    public static final Func1<Object, Boolean> NOT_HTTPOBJECT = new Func1<Object, Boolean>() {
-        @Override
-        public Boolean call(final Object obj) {
-            return !(obj instanceof HttpObject);
-        }};
-        
     public static <T> void releaseObjects(final Collection<T> objs) {
         synchronized (objs) {
             try {
