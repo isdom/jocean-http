@@ -36,7 +36,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.handler.ssl.SslContextBuilder;
 import rx.functions.Func0;
 import rx.functions.Func1;
 
@@ -55,7 +55,7 @@ public class DefaultSignalClientTestCase {
 
     private static SslContext initSslCtx() {
         try {
-            return SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
+            return SslContextBuilder.forClient().build();
         } catch (SSLException e) {
             return null;
         }
