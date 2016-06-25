@@ -60,7 +60,7 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
             @SuppressWarnings("unchecked")
             @Override
             public Observable<RESP> call() {
-                final FullHttpResponse httpResp = RxNettys.retainAsFullHttpResponse(httpObjects);
+                final FullHttpResponse httpResp = RxNettys.BUILD_FULL_RESPONSE.call(httpObjects.toArray(new HttpObject[0]));
                 if (null!=httpResp) {
                     try {
                         final InputStream is = new ByteBufInputStream(httpResp.content());

@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.net.SocketAddress;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.List;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
@@ -606,26 +605,6 @@ public class RxNettys {
                 version, HttpResponseStatus.OK);
         HttpHeaders.setHeader(response, HttpHeaders.Names.CONTENT_LENGTH, 0);
         return Observable.<HttpObject>just(response);
-    }
-    
-    public static FullHttpResponse retainAsFullHttpResponse(final List<HttpObject> httpObjs) {
-        if (httpObjs.size()>0) {
-            if (httpObjs.get(0) instanceof FullHttpResponse) {
-                return ((FullHttpResponse)httpObjs.get(0)).retain();
-            }
-            
-            final HttpResponse resp = (HttpResponse)httpObjs.get(0);
-            final ByteBuf[] bufs = new ByteBuf[httpObjs.size()-1];
-            for (int idx = 1; idx<httpObjs.size(); idx++) {
-                bufs[idx-1] = ((HttpContent)httpObjs.get(idx)).content().retain();
-            }
-            return new DefaultFullHttpResponse(
-                    resp.getProtocolVersion(), 
-                    resp.getStatus(),
-                    Unpooled.wrappedBuffer(bufs));
-        } else {
-            return null;
-        }
     }
     
     public static Observable<? extends HttpObject> httpobjObservable(final Channel channel) {
