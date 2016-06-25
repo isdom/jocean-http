@@ -1,9 +1,7 @@
 package org.jocean.http.rosa.impl;
 
-import java.io.InputStream;
-import java.nio.charset.Charset;
-
 import org.jocean.http.util.HttpMessageHolder;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
@@ -11,9 +9,9 @@ import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
 
-import io.netty.buffer.ByteBufInputStream;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.util.CharsetUtil;
 import rx.Observable;
 import rx.Observable.Transformer;
 import rx.functions.Func0;
@@ -64,20 +62,13 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
                 final FullHttpResponse fullresp = getHttpResponse.call();
                 if (null!=fullresp) {
                     try {
-                        final InputStream is = new ByteBufInputStream(fullresp.content());
-                        try {
-                            final byte[] bytes = new byte[is.available()];
-                            @SuppressWarnings("unused")
-                            final int readed = is.read(bytes);
-                            if (LOG.isDebugEnabled()) {
-                                LOG.debug("receive signal response: {}",
-                                        new String(bytes, Charset.forName("UTF-8")));
-                            }
-                            final Object resp = JSON.parseObject(bytes, _respCls);
-                            return Observable.just((RESP)resp);
-                        } finally {
-                            is.close();
+                        final byte[] bytes = Nettys.dumpByteBufAsBytes(fullresp.content());
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("receive signal response: {}",
+                                    new String(bytes, CharsetUtil.UTF_8));
                         }
+                        final Object resp = JSON.parseObject(bytes, _respCls);
+                        return Observable.just((RESP)resp);
                     } catch (Exception e) {
                         LOG.warn("exception when parse response {}, detail:{}",
                                 fullresp, ExceptionUtils.exception2detail(e));
