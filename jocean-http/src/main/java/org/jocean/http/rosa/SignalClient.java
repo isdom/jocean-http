@@ -14,6 +14,7 @@ public interface SignalClient {
         
         public final String filename;
         public final String contentType;
+        //  add direct content for test
     }
     
     public <RESP> Observable<? extends RESP> defineInteraction(final Object request);

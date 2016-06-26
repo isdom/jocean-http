@@ -48,7 +48,6 @@ import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
 import io.netty.handler.codec.http.multipart.DiskFileUpload;
 import io.netty.handler.codec.http.multipart.HttpDataFactory;
 import io.netty.handler.codec.http.multipart.HttpPostRequestEncoder;
-import io.netty.handler.codec.http.multipart.InterfaceHttpData;
 import io.netty.handler.codec.http.multipart.MemoryFileUpload;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
@@ -82,7 +81,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     
     @Override
-    public <RESP> Observable<? extends RESP> defineInteraction(final Object request, final Feature[] features, final Attachment[] attachments) {
+    public <RESP> Observable<? extends RESP> defineInteraction(
+            final Object request, 
+            final Feature[] features, 
+            final Attachment[] attachments) {
         return Observable.create(new OnSubscribe<RESP>() {
 
             @Override
@@ -146,6 +148,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }};
     }
     
+    //  TODO return class with request (outgoing)/totoal size/close function
     private Pair<List<Object>,Long> buildHttpRequest(
             final URI uri,
             final Object request, 
@@ -173,11 +176,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             
             long total = 0;
             // Use the PostBody encoder
-            final HttpPostRequestEncoder bodyRequestEncoder =
+            final HttpPostRequestEncoder postRequestEncoder =
                     new HttpPostRequestEncoder(factory, httpRequest, true); // true => multipart
 
-            final List<InterfaceHttpData> datas = new ArrayList<>();
-            
             final byte[] jsonBytes = JSON.toJSONBytes(request);
             final MemoryFileUpload jsonFile = 
                     new MemoryFileUpload("json", "json", "application/json", null, null, jsonBytes.length) {
@@ -190,7 +191,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             jsonFile.setContent(Unpooled.wrappedBuffer(jsonBytes));
             
             total += jsonBytes.length;
-            datas.add(jsonFile);
+            postRequestEncoder.addBodyHttpData(jsonFile);
             
             for (Attachment attachment : attachments) {
                 final File file = new File(attachment.filename);
@@ -204,18 +205,15 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 };
                 diskFile.setContent(file);
                 total += file.length();
-                datas.add(diskFile);
+                postRequestEncoder.addBodyHttpData(diskFile);
             }
             
-            // add Form attribute from previous request in formpost()
-            bodyRequestEncoder.setBodyHttpDatas(datas);
-
             // finalize request
-            final HttpRequest requestToSend = bodyRequestEncoder.finalizeRequest();
+            final HttpRequest requestToSend = postRequestEncoder.finalizeRequest();
 
             // test if request was chunked and if so, finish the write
-            if (bodyRequestEncoder.isChunked()) {
-                ret.addAll(Arrays.asList(new Object[]{requestToSend, bodyRequestEncoder}));
+            if (postRequestEncoder.isChunked()) {
+                ret.addAll(Arrays.asList(new Object[]{requestToSend, postRequestEncoder}));
             } else {
                 ret.addAll(Arrays.asList(new Object[]{requestToSend}));
             }
