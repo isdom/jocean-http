@@ -6,7 +6,6 @@ import java.net.SocketAddress;
 import java.util.Collection;
 import java.util.Iterator;
 
-import org.jocean.http.DoOnUnsubscribe;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.util.Nettys.ServerChannelAware;
@@ -14,6 +13,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ProxyBuilder;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
+import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -6,9 +6,9 @@ package org.jocean.http.client.impl;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.jocean.http.DoOnUnsubscribe;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.Ordered;
+import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

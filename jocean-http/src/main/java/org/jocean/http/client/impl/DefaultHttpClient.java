@@ -6,7 +6,6 @@ package org.jocean.http.client.impl;
 import java.io.IOException;
 import java.net.SocketAddress;
 
-import org.jocean.http.DoOnUnsubscribe;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TrafficCounter;
@@ -21,6 +20,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.ReflectUtils;
+import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
