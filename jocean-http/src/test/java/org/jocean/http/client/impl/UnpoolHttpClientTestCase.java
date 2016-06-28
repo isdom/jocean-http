@@ -1,7 +1,20 @@
 package org.jocean.http.client.impl;
 
+import static org.jocean.http.Feature.ENABLE_LOGGING;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+
+import java.util.Arrays;
+import java.util.Iterator;
+
+import javax.net.ssl.SSLException;
+
+import org.jocean.http.Feature.ENABLE_SSL;
+import org.jocean.http.server.HttpTestServer;
+import org.jocean.http.util.Nettys;
+import org.jocean.http.util.RxNettys;
+import org.junit.Test;
+
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
@@ -10,20 +23,7 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-
-import java.util.Arrays;
-import java.util.Iterator;
-
-import javax.net.ssl.SSLException;
-
-import static org.jocean.http.Feature.ENABLE_LOGGING;
-import org.jocean.http.Feature.ENABLE_SSL;
-import org.jocean.http.server.HttpTestServer;
-import org.jocean.http.util.Nettys;
-import org.jocean.http.util.RxNettys;
-import org.junit.Test;
-
+import io.netty.handler.ssl.SslContextBuilder;
 import rx.Observable;
 
 public class UnpoolHttpClientTestCase {
@@ -35,7 +35,7 @@ public class UnpoolHttpClientTestCase {
 
     private static SslContext initSslCtx() {
         try {
-            return SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
+            return SslContextBuilder.forClient().build();
         } catch (SSLException e) {
             return null;
         }

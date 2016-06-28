@@ -1,22 +1,22 @@
 package org.jocean.http.client.impl;
 
-import io.netty.channel.Channel;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.util.AttributeKey;
-import rx.Subscription;
-
 import java.net.SocketAddress;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 
+import org.jocean.http.DoOnUnsubscribe;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
-import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.netty.channel.Channel;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.util.AttributeKey;
+import rx.Subscription;
 
 public class DefaultChannelPool extends AbstractChannelPool {
 

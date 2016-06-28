@@ -2,7 +2,7 @@ package org.jocean.http.client.impl;
 
 import java.io.Closeable;
 
-import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
+import org.jocean.http.DoOnUnsubscribe;
 
 import io.netty.channel.Channel;
 import rx.Observable;

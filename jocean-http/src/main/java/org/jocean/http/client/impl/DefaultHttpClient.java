@@ -6,6 +6,7 @@ package org.jocean.http.client.impl;
 import java.io.IOException;
 import java.net.SocketAddress;
 
+import org.jocean.http.DoOnUnsubscribe;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TrafficCounter;
@@ -14,7 +15,6 @@ import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
-import org.jocean.http.util.RxNettys.DoOnUnsubscribe;
 import org.jocean.http.util.TrafficCounterAware;
 import org.jocean.http.util.TrafficCounterHandler;
 import org.jocean.idiom.ExceptionUtils;

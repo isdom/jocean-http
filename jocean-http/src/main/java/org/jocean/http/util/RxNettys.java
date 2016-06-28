@@ -6,6 +6,7 @@ import java.net.SocketAddress;
 import java.util.Collection;
 import java.util.Iterator;
 
+import org.jocean.http.DoOnUnsubscribe;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.util.Nettys.ServerChannelAware;
@@ -64,9 +65,6 @@ public class RxNettys {
         throw new IllegalStateException("No instances!");
     }
 
-    public interface DoOnUnsubscribe extends Action1<Subscription> {
-    }
-    
     public static class DefaultDoOnUnsubscribe implements DoOnUnsubscribe, Subscription {
 
         @Override

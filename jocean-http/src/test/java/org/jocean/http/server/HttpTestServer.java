@@ -44,6 +44,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 import rx.functions.Func0;
 
@@ -106,7 +107,7 @@ public final class HttpTestServer {
         final SslContext sslCtx;
         if (enableSSL) {
             SelfSignedCertificate ssc = new SelfSignedCertificate();
-            sslCtx = SslContext.newServerContext(ssc.certificate(), ssc.privateKey());
+            sslCtx = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
         } else {
             sslCtx = null;
         }

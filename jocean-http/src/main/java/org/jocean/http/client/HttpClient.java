@@ -17,6 +17,8 @@ import rx.Observable;
  */
 public interface HttpClient extends Closeable {
     
+    //  TODO add new interface method to impl
+    //  after channel pushed, begin to assemble http request message
     /**
      * 定义一次与http server的交互, 指定了远端地址和要发送的request和可选特性
      * 当返回的Observable<? extends Object> 实例被subscribe时,才基于上述指定的参数真正发起交互动作
