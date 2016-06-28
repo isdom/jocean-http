@@ -175,7 +175,7 @@ class FACTORYFUNCS {
             new Func1<Subscriber<? super HttpObject>, ChannelHandler>() {
         @Override
         public ChannelHandler call(final Subscriber<? super HttpObject> httpObjectSubscriber) {
-            return new SimpleChannelInboundHandler<HttpObject>() {
+            return new SimpleChannelInboundHandler<HttpObject>(true) {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx,
                         Throwable cause) throws Exception {
