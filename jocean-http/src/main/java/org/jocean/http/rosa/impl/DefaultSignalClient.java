@@ -30,6 +30,7 @@ import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.SimpleCache;
 import org.jocean.idiom.io.FilenameUtils;
+import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,6 +56,7 @@ import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Func0;
 import rx.functions.Func1;
+import rx.subscriptions.Subscriptions;
 
 public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
@@ -85,41 +87,68 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final Object request, 
             final Feature[] features, 
             final Attachment[] attachments) {
+        final URI uri = req2uri(request);
+        final SocketAddress remoteAddress = safeGetAddress(request, uri);
         return Observable.create(new OnSubscribe<RESP>() {
-
             @Override
             public void call(final Subscriber<? super RESP> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
-                    final URI uri = req2uri(request);
-                    
-                    final SocketAddress remoteAddress = safeGetAddress(request, uri);
-                    
-                    Pair<List<Object>,Long> pair;
-                    
-                    try {
-                        pair = buildHttpRequest(uri, request, attachments);
-                    } catch (Exception e) {
-                        subscriber.onError(e);
-                        return;
-                    }
-                    
-                    final long uploadTotal = pair.second;
-                    final List<Object> httpRequest = pair.first;
-                    
-                    hookPayloadCounter(uploadTotal, features);
+//                    Pair<List<Object>,Long> pair;
+//                    
+//                    try {
+//                        pair = buildHttpRequest(uri, request, attachments);
+//                    } catch (Exception e) {
+//                        subscriber.onError(e);
+//                        return;
+//                    }
+//                    
+//                    final long uploadTotal = pair.second;
+//                    final List<Object> httpRequest = pair.first;
+//                    
+//                    hookPayloadCounter(uploadTotal, features);
                     
                     _httpClient.defineInteraction(
                             remoteAddress, 
-                            Observable.from(httpRequest),
+                            requestProviderOf(uri, request, attachments, features),
+//                            Observable.from(httpRequest),
                             JOArrays.addFirst(Feature[].class, 
                                 safeGetRequestFeatures(request), 
                                 features))
                     .compose(new ToSignalResponse<RESP>(safeGetResponseClass(request)))
-                    .compose(RxNettys.<Object,RESP>releaseAtLast(httpRequest))
+//                    .compose(RxNettys.<Object,RESP>releaseAtLast(httpRequest))
                     .subscribe(subscriber);
                 }
             }
         });
+    }
+
+    private Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProviderOf(
+            final URI uri, final Object request, final Attachment[] attachments, final Feature[] features) {
+        return new Func1<DoOnUnsubscribe, Observable<? extends Object>>() {
+
+            @Override
+            public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
+                Pair<List<Object>,Long> pair;
+                
+                try {
+                    pair = buildHttpRequest(uri, request, attachments);
+                } catch (Exception e) {
+                    return Observable.error(e);
+                }
+                
+                final long uploadTotal = pair.second;
+                final List<Object> httpRequest = pair.first;
+                
+                doOnUnsubscribe.call(Subscriptions.create(
+                    new Action0() {
+                        @Override
+                        public void call() {
+                            RxNettys.releaseObjects(httpRequest);
+                        }}));
+                
+                hookPayloadCounter(uploadTotal, features);
+                return Observable.from(httpRequest);
+            }};
     }
 
     private void hookPayloadCounter(final long uploadTotal, final Feature[] features) {

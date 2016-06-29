@@ -134,7 +134,7 @@ public class DefaultSignalClientTestCase {
         
         pool.awaitRecycleChannels();
         
-        //Thread.sleep(1000);
+//        Thread.sleep(1000000);
         server.stop();
     }
 }
