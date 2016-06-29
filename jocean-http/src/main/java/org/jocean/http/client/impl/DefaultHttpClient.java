@@ -59,6 +59,24 @@ public class DefaultHttpClient implements HttpClient {
     @Override
     public Observable<? extends HttpObject> defineInteraction(
             final SocketAddress remoteAddress,
+            final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
+            final Feature... features) {
+        final Feature[] fullFeatures = 
+                JOArrays.addFirst(Feature[].class, 
+                        cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
+                        HttpClientConstants.APPLY_HTTPCLIENT);
+        return this._channelPool.retainChannel(remoteAddress)
+            .doOnNext(RxNettys.actionUndoableApplyFeatures(
+                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
+            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
+            .doOnNext(hookFeatures(fullFeatures))
+            .flatMap(buildAndSendRequestThenPushChannel(requestProvider, fullFeatures))
+            .flatMap(waitforResponse());
+    }
+    
+    @Override
+    public Observable<? extends HttpObject> defineInteraction(
+            final SocketAddress remoteAddress,
             final Observable<? extends Object> request,
             final Feature... features) {
         final Feature[] fullFeatures = 
@@ -161,6 +179,30 @@ public class DefaultHttpClient implements HttpClient {
         };
     }
     
+    private Func1<Channel, Observable<? extends Channel>> buildAndSendRequestThenPushChannel(
+            final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
+            final Feature[] features) {
+        return new Func1<Channel, Observable<? extends Channel>> () {
+            @Override
+            public Observable<? extends Channel> call(final Channel channel) {
+                return safeBuildRequestByProvider(requestProvider, channel)
+                    .doOnNext(doOnRequest(features, channel))
+                    .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
+                    .compose(RxNettys.<Object>sendRequestThenPushChannel(channel));
+            }
+        };
+    }
+
+    private Observable<? extends Object> safeBuildRequestByProvider(
+            final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
+            final Channel channel) {
+        final Observable<? extends Object> requestObservable = 
+                requestProvider.call(RxNettys.queryDoOnUnsubscribe(channel));
+        return null != requestObservable 
+                ? requestObservable 
+                : Observable.error(new RuntimeException("Can't build request observable"));
+    }
+
     private Action1<Object> doOnRequest(final Feature[] features, final Channel channel) {
         final ApplyToRequest applyToRequest = 
                 InterfaceUtils.compositeIncludeType(
