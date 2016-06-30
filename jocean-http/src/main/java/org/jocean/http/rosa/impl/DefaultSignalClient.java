@@ -87,12 +87,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final Object request, 
             final Feature[] features, 
             final Attachment[] attachments) {
-        final URI uri = req2uri(request);
-        final SocketAddress remoteAddress = safeGetAddress(request, uri);
         return Observable.create(new OnSubscribe<RESP>() {
             @Override
             public void call(final Subscriber<? super RESP> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
+                    final URI uri = req2uri(request);
+                    final SocketAddress remoteAddress = safeGetAddress(request, uri);
+                    
 //                    Pair<List<Object>,Long> pair;
 //                    
 //                    try {
