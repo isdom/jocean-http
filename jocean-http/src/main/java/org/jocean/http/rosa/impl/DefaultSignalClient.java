@@ -7,7 +7,6 @@ import java.net.SocketAddress;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,7 +19,6 @@ import org.jocean.http.client.HttpClient;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.util.FeaturesBuilder;
 import org.jocean.http.util.PayloadCounterAware;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.BeanHolder;
 import org.jocean.idiom.BeanHolderAware;
@@ -50,6 +48,7 @@ import io.netty.handler.codec.http.multipart.DiskFileUpload;
 import io.netty.handler.codec.http.multipart.HttpDataFactory;
 import io.netty.handler.codec.http.multipart.HttpPostRequestEncoder;
 import io.netty.handler.codec.http.multipart.MemoryFileUpload;
+import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
@@ -129,26 +128,16 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
             @Override
             public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
-                Pair<List<Object>,Long> pair;
+                Pair<Observable<Object>,Long> pair;
                 
                 try {
-                    pair = buildHttpRequest(uri, request, attachments);
+                    pair = buildHttpRequest(doOnUnsubscribe, uri, request, attachments);
                 } catch (Exception e) {
                     return Observable.error(e);
                 }
                 
-                final long uploadTotal = pair.second;
-                final List<Object> httpRequest = pair.first;
-                
-                doOnUnsubscribe.call(Subscriptions.create(
-                    new Action0() {
-                        @Override
-                        public void call() {
-                            RxNettys.releaseObjects(httpRequest);
-                        }}));
-                
-                hookPayloadCounter(uploadTotal, features);
-                return Observable.from(httpRequest);
+                hookPayloadCounter(pair.second, features);
+                return pair.first;
             }};
     }
 
@@ -179,12 +168,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     
     //  TODO return class with request (outgoing)/totoal size/close function
-    private Pair<List<Object>,Long> buildHttpRequest(
+    private Pair<Observable<Object>,Long> buildHttpRequest(
+            final DoOnUnsubscribe doOnUnsubscribe, 
             final URI uri,
             final Object request, 
             final Attachment[] attachments) throws Exception {
         
-        final List<Object> ret = new ArrayList<>();
         final HttpRequest httpRequest = 
                 genHttpRequest(uri, 
                         getHttpMethodAsNettyForm(request.getClass()), 
@@ -198,8 +187,14 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 fillContentAsJSON((FullHttpRequest)httpRequest, JSON.toJSONBytes(request));
             }
             
-            ret.addAll(Arrays.asList(new Object[]{httpRequest}));
-            return Pair.of(ret, -1L);
+            doOnUnsubscribe.call(Subscriptions.create(
+                    new Action0() {
+                        @Override
+                        public void call() {
+                            ReferenceCountUtil.release(httpRequest);
+                        }}));
+            
+            return Pair.of(Observable.<Object>just(httpRequest), -1L);
         } else {
             // multipart
             final HttpDataFactory factory = new DefaultHttpDataFactory(false);
@@ -241,13 +236,19 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             // finalize request
             final HttpRequest requestToSend = postRequestEncoder.finalizeRequest();
 
+            doOnUnsubscribe.call(Subscriptions.create(
+                    new Action0() {
+                        @Override
+                        public void call() {
+                            ReferenceCountUtil.release(requestToSend);
+                        }}));
+            
             // test if request was chunked and if so, finish the write
             if (postRequestEncoder.isChunked()) {
-                ret.addAll(Arrays.asList(new Object[]{requestToSend, postRequestEncoder}));
+                return Pair.of(Observable.<Object>just(requestToSend, postRequestEncoder), total);
             } else {
-                ret.addAll(Arrays.asList(new Object[]{requestToSend}));
+                return Pair.of(Observable.<Object>just(requestToSend), total);
             }
-            return Pair.of(ret, total);
         }
     }
 
