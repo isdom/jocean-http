@@ -93,29 +93,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     final URI uri = req2uri(request);
                     final SocketAddress remoteAddress = safeGetAddress(request, uri);
                     
-//                    Pair<List<Object>,Long> pair;
-//                    
-//                    try {
-//                        pair = buildHttpRequest(uri, request, attachments);
-//                    } catch (Exception e) {
-//                        subscriber.onError(e);
-//                        return;
-//                    }
-//                    
-//                    final long uploadTotal = pair.second;
-//                    final List<Object> httpRequest = pair.first;
-//                    
-//                    hookPayloadCounter(uploadTotal, features);
-                    
                     _httpClient.defineInteraction(
                             remoteAddress, 
                             requestProviderOf(uri, request, attachments, features),
-//                            Observable.from(httpRequest),
                             JOArrays.addFirst(Feature[].class, 
                                 safeGetRequestFeatures(request), 
                                 features))
                     .compose(new ToSignalResponse<RESP>(safeGetResponseClass(request)))
-//                    .compose(RxNettys.<Object,RESP>releaseAtLast(httpRequest))
                     .subscribe(subscriber);
                 }
             }
