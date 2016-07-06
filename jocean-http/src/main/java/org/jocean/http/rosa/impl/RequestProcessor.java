@@ -20,6 +20,7 @@ import org.jocean.idiom.ReflectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 
 final class RequestProcessor {
@@ -90,7 +91,8 @@ final class RequestProcessor {
     private void applyQueryParams(
             final Object request, 
             final HttpRequest httpRequest) {
-        if ( null != this._queryFields ) {
+        //  TODO, only GET method will assemble query parameters
+        if ( null != this._queryFields && httpRequest.getMethod().equals(HttpMethod.GET) ) {
             final StringBuilder sb = new StringBuilder();
             char link = '?';
             for ( Field field : this._queryFields ) {

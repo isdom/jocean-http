@@ -72,7 +72,7 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
                     } catch (Exception e) {
                         LOG.warn("exception when parse response {}, detail:{}",
                                 fullresp, ExceptionUtils.exception2detail(e));
-                        Observable.error(e);
+                        return Observable.error(e);
                     } finally {
                         fullresp.release();
                     }
