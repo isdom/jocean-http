@@ -163,6 +163,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                         getHttpMethodAsNettyForm(request.getClass()), 
                         0 == attachments.length);
         
+        if (null != uri.getHost()) {
+            httpRequest.headers().set(HttpHeaders.Names.HOST, uri.getHost());
+        }
         this._processorCache.get(request.getClass())
             .applyParams(request, httpRequest);
         
@@ -237,23 +240,17 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends HttpRequest> T genHttpRequest(final URI uri, 
-            final HttpMethod httpMethod, final boolean isFull) {
-        // Prepare the HTTP request.
-        final String host = uri.getHost() == null ? "localhost" : uri.getHost();
-
-        HttpRequest request;
-        
+    private static <T extends HttpRequest> T genHttpRequest(
+            final URI uri, 
+            final HttpMethod httpMethod, 
+            final boolean isFull) {
         if (isFull) {
-            request = new DefaultFullHttpRequest(
+            return (T)new DefaultFullHttpRequest(
                 HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
         } else {
-            request = new DefaultHttpRequest(
+            return (T)new DefaultHttpRequest(
                 HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
         }
-        request.headers().set(HttpHeaders.Names.HOST, host);
-
-        return (T)request;
     }
     
     private static HttpMethod getHttpMethodAsNettyForm(final Class<?> reqCls) {
