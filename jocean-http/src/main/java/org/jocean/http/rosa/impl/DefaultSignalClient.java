@@ -19,6 +19,7 @@ import org.jocean.http.client.HttpClient;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.util.FeaturesBuilder;
 import org.jocean.http.util.PayloadCounterAware;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.BeanHolder;
 import org.jocean.idiom.BeanHolderAware;
@@ -228,6 +229,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                         @Override
                         public void call() {
                             ReferenceCountUtil.release(requestToSend);
+                            RxNettys.releaseObjects(postRequestEncoder.getBodyListAttributes());
                         }}));
             
             // test if request was chunked and if so, finish the write

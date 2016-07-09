@@ -147,6 +147,9 @@ public class SignalTest {
                 @Override
                 public void onCompleted() {
                     LOG.debug("AddMultiMediasToJourneyRequest: onCompleted.");
+                    LOG.debug("traffic: upload: {}/download: {}", trafficCounter.uploadBytes(), trafficCounter.downloadBytes());
+                    LOG.debug("payload: totalUpload: {}/totalDownload: {}", payloadCounter.totalUploadBytes(), 
+                            payloadCounter.totalDownloadBytes());
                 }
     
                 @Override
