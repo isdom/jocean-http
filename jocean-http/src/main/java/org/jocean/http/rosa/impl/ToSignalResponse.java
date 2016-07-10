@@ -32,10 +32,10 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
     
     private Func1<Throwable, Observable<RESP>> buildOnError() {
         return new Func1<Throwable, Observable<RESP>>() {
-        @Override
-        public Observable<RESP> call(final Throwable e) {
-            return Observable.error(e);
-        }};
+            @Override
+            public Observable<RESP> call(final Throwable e) {
+                return Observable.error(e);
+            }};
     }
 
     ToSignalResponse(final Class<?> respCls) {
@@ -47,8 +47,9 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
         final HttpMessageHolder holder = new HttpMessageHolder(0);
         
         return source.compose(holder.assembleAndHold())
-                .flatMap(buildOnNext(), buildOnError(), 
-                    buildOnCompleted(holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE)))
+                .flatMap(buildOnNext(), 
+                        buildOnError(), 
+                        buildOnCompleted(holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE)))
                 .doAfterTerminate(holder.release())
                 .doOnUnsubscribe(holder.release());
     }
