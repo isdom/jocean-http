@@ -26,7 +26,6 @@ import org.jocean.idiom.BeanHolderAware;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
-import org.jocean.idiom.Pair;
 import org.jocean.idiom.SimpleCache;
 import org.jocean.idiom.io.FilenameUtils;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
@@ -113,16 +112,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
             @Override
             public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
-                Pair<Observable<Object>,Long> pair;
-                
                 try {
-                    pair = buildHttpRequest(doOnUnsubscribe, uri, request, attachments);
+                    final Outgoing outgoing = buildHttpRequest(doOnUnsubscribe, uri, request, attachments);
+                    hookPayloadCounter(outgoing.bytes(), features);
+                    return outgoing.request();
                 } catch (Exception e) {
                     return Observable.error(e);
                 }
-                
-                hookPayloadCounter(pair.second, features);
-                return pair.first;
             }};
     }
 
@@ -152,8 +148,27 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }};
     }
     
+    final static class Outgoing {
+        
+        final Observable<Object> _request;
+        final long _bytes;
+        
+        Outgoing(Observable<Object> request, long bytes) {
+            this._request = request;
+            this._bytes = bytes;
+        }
+        
+        Observable<Object> request() {
+            return this._request;
+        }
+        
+        long bytes() {
+            return this._bytes;
+        }
+    }
+    
     //  TODO return class with request (outgoing)/totoal size/close function
-    private Pair<Observable<Object>,Long> buildHttpRequest(
+    private Outgoing buildHttpRequest(
             final DoOnUnsubscribe doOnUnsubscribe, 
             final URI uri,
             final Object request, 
@@ -182,7 +197,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             ReferenceCountUtil.release(httpRequest);
                         }}));
             
-            return Pair.of(Observable.<Object>just(httpRequest), -1L);
+            return new Outgoing(Observable.<Object>just(httpRequest), -1L);
         } else {
             // multipart
             final HttpDataFactory factory = new DefaultHttpDataFactory(false);
@@ -234,9 +249,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             
             // test if request was chunked and if so, finish the write
             if (postRequestEncoder.isChunked()) {
-                return Pair.of(Observable.<Object>just(requestToSend, postRequestEncoder), total);
+                return new Outgoing(Observable.<Object>just(requestToSend, postRequestEncoder), total);
             } else {
-                return Pair.of(Observable.<Object>just(requestToSend), total);
+                return new Outgoing(Observable.<Object>just(requestToSend), total);
             }
         }
     }
