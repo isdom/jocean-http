@@ -147,7 +147,7 @@ public class HttpMessageHolder {
         public Observable<? extends HttpObject> call(final HttpObject msg) {
             if (LOG.isDebugEnabled()) {
                 if (msg instanceof ByteBufHolder) {
-                    LOG.debug("HttpObjectHolder: receive ByteBufHolder's content: {}", 
+                    LOG.debug("HttpMessageHolder: receive ByteBufHolder's content: {}", 
                             Nettys.dumpByteBufHolder((ByteBufHolder)msg));
                 }
             }
