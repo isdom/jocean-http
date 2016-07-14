@@ -3,7 +3,6 @@ package org.jocean.http.rosa.impl;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -22,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.QueryStringEncoder;
 
 final class RequestProcessor {
     private static final Logger LOG =
@@ -62,18 +62,18 @@ final class RequestProcessor {
         return this._pathSuffix;
     }
 
-    public void applyParams(final Object request, final HttpRequest httpRequest) {
-        applyQueryParams(request, httpRequest);
-        applyHeaderParams(request, httpRequest);
+    public void applyParams(final Object signalBean, final HttpRequest httpRequest) {
+        applyQueryParams(signalBean, httpRequest);
+        applyHeaderParams(signalBean, httpRequest);
     }
 
     private void applyHeaderParams(
-            final Object request,
+            final Object signalBean,
             final HttpRequest httpRequest) {
         if ( null != this._headerFields ) {
             for ( Field field : this._headerFields ) {
                 try {
-                    final Object value = field.get(request);
+                    final Object value = field.get(signalBean);
                     if ( null != value ) {
                         final String headername = 
                             field.getAnnotation(HeaderParam.class).value();
@@ -89,25 +89,18 @@ final class RequestProcessor {
     }
 
     private void applyQueryParams(
-            final Object request, 
+            final Object signalBean, 
             final HttpRequest httpRequest) {
         //  TODO, only GET method will assemble query parameters
         if ( null != this._queryFields && httpRequest.getMethod().equals(HttpMethod.GET) ) {
-            final StringBuilder sb = new StringBuilder();
-            char link = '?';
+            final QueryStringEncoder encoder = new QueryStringEncoder(httpRequest.getUri());
             for ( Field field : this._queryFields ) {
                 try {
-                    final Object value = field.get(request);
+                    final Object value = field.get(signalBean);
                     if ( null != value ) {
                         final String paramkey = 
                                 field.getAnnotation(QueryParam.class).value();
-                        final String paramvalue = 
-                                URLEncoder.encode(String.valueOf(value), "UTF-8");
-                        sb.append(link);
-                        sb.append(paramkey);
-                        sb.append("=");
-                        sb.append(paramvalue);
-                        link = '&';
+                        encoder.addParam(paramkey, String.valueOf(value));
                     }
                 }
                 catch (Exception e) {
@@ -116,9 +109,7 @@ final class RequestProcessor {
                 }
             }
             
-            if ( sb.length() > 0 ) {
-                httpRequest.setUri( httpRequest.getUri() + sb.toString() );
-            }
+            httpRequest.setUri(encoder.toString());
         }
     }
 

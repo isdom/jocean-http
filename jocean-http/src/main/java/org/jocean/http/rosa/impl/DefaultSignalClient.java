@@ -171,33 +171,33 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     private Outgoing buildHttpRequest(
             final DoOnUnsubscribe doOnUnsubscribe, 
             final URI uri,
-            final Object request, 
+            final Object signalBean, 
             final Attachment[] attachments) throws Exception {
         
-        final HttpRequest httpRequest = 
+        final HttpRequest request = 
                 genHttpRequest(uri, 
-                        getHttpMethodAsNettyForm(request.getClass()), 
+                        getHttpMethodAsNettyForm(signalBean.getClass()), 
                         0 == attachments.length);
         
         if (null != uri.getHost()) {
-            httpRequest.headers().set(HttpHeaders.Names.HOST, uri.getHost());
+            request.headers().set(HttpHeaders.Names.HOST, uri.getHost());
         }
-        this._processorCache.get(request.getClass())
-            .applyParams(request, httpRequest);
+        this._processorCache.get(signalBean.getClass())
+            .applyParams(signalBean, request);
         
         if (0 == attachments.length) {
-            if ( httpRequest.getMethod().equals(HttpMethod.POST)) {
-                fillContentAsJSON((FullHttpRequest)httpRequest, JSON.toJSONBytes(request));
+            if ( request.getMethod().equals(HttpMethod.POST)) {
+                fillContentAsJSON((FullHttpRequest)request, JSON.toJSONBytes(signalBean));
             }
             
             doOnUnsubscribe.call(Subscriptions.create(
                     new Action0() {
                         @Override
                         public void call() {
-                            ReferenceCountUtil.release(httpRequest);
+                            ReferenceCountUtil.release(request);
                         }}));
             
-            return new Outgoing(Observable.<Object>just(httpRequest), -1L);
+            return new Outgoing(Observable.<Object>just(request), -1L);
         } else {
             // multipart
             final HttpDataFactory factory = new DefaultHttpDataFactory(false);
@@ -205,10 +205,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             long total = 0;
             // Use the PostBody encoder
             final HttpPostRequestEncoder postRequestEncoder =
-                    new HttpPostRequestEncoder(factory, httpRequest, true); // true => multipart
+                    new HttpPostRequestEncoder(factory, request, true); // true => multipart
 
-            final byte[] jsonBytes = JSON.toJSONBytes(request);
-            final MemoryFileUpload jsonFile = 
+            final byte[] jsonBytes = JSON.toJSONBytes(signalBean);
+            final MemoryFileUpload jsonPayload = 
                     new MemoryFileUpload("json", "json", "application/json", null, null, jsonBytes.length) {
                         @Override
                         public Charset getCharset() {
@@ -216,14 +216,14 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                         }
             };
                 
-            jsonFile.setContent(Unpooled.wrappedBuffer(jsonBytes));
+            jsonPayload.setContent(Unpooled.wrappedBuffer(jsonBytes));
             
             total += jsonBytes.length;
-            postRequestEncoder.addBodyHttpData(jsonFile);
+            postRequestEncoder.addBodyHttpData(jsonPayload);
             
             for (Attachment attachment : attachments) {
                 final File file = new File(attachment.filename);
-                final DiskFileUpload diskFile = 
+                final DiskFileUpload filePayload = 
                         new DiskFileUpload(FilenameUtils.getBaseName(attachment.filename), 
                             attachment.filename, attachment.contentType, null, null, file.length()) {
                     @Override
@@ -231,27 +231,27 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                         return null;
                     }
                 };
-                diskFile.setContent(file);
+                filePayload.setContent(file);
                 total += file.length();
-                postRequestEncoder.addBodyHttpData(diskFile);
+                postRequestEncoder.addBodyHttpData(filePayload);
             }
             
             // finalize request
-            final HttpRequest requestToSend = postRequestEncoder.finalizeRequest();
+            final HttpRequest toSend = postRequestEncoder.finalizeRequest();
 
             doOnUnsubscribe.call(Subscriptions.create(
                     new Action0() {
                         @Override
                         public void call() {
-                            ReferenceCountUtil.release(requestToSend);
+                            ReferenceCountUtil.release(toSend);
                             RxNettys.releaseObjects(postRequestEncoder.getBodyListAttributes());
                         }}));
             
             // test if request was chunked and if so, finish the write
             if (postRequestEncoder.isChunked()) {
-                return new Outgoing(Observable.<Object>just(requestToSend, postRequestEncoder), total);
+                return new Outgoing(Observable.<Object>just(toSend, postRequestEncoder), total);
             } else {
-                return new Outgoing(Observable.<Object>just(requestToSend), total);
+                return new Outgoing(Observable.<Object>just(toSend), total);
             }
         }
     }
