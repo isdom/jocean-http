@@ -2,12 +2,14 @@ package org.jocean.http.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.net.SocketAddress;
 import java.util.Iterator;
 import java.util.Map.Entry;
 
 import org.jocean.http.client.impl.AbstractChannelPool;
 import org.jocean.http.client.impl.ChannelPool;
+import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Ordered;
 import org.jocean.idiom.PairedVisitor;
@@ -22,6 +24,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCounted;
@@ -198,5 +201,15 @@ public class Nettys {
         sb.append('@');
         sb.append(UnsafeOp.toAddress(unwrap));
         return sb.toString();
+    }
+
+    public static boolean isFieldAnnotatedOfHttpMethod(final Field field, final HttpMethod httpMethod) {
+        final AnnotationWrapper wrapper = 
+                field.getAnnotation(AnnotationWrapper.class);
+        if ( null != wrapper ) {
+            return wrapper.value().getSimpleName().equals(httpMethod.name());
+        } else {
+            return false;
+        }
     }
 }

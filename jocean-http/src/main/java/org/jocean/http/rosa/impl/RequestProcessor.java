@@ -12,6 +12,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 
+import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.PropertyPlaceholderHelper;
 import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
@@ -91,21 +92,27 @@ final class RequestProcessor {
     private void applyQueryParams(
             final Object signalBean, 
             final HttpRequest httpRequest) {
-        //  TODO, only GET method will assemble query parameters
-        if ( null != this._queryFields && httpRequest.getMethod().equals(HttpMethod.GET) ) {
+        //  only GET method will assemble query parameters
+        //  or the QueryParam field explicit annotated HttpMethod via AnnotationWrapper 
+        //      assemble query parameters
+        final boolean isGetMethod = httpRequest.getMethod().equals(HttpMethod.GET);
+        if ( null != this._queryFields) {
             final QueryStringEncoder encoder = new QueryStringEncoder(httpRequest.getUri());
             for ( Field field : this._queryFields ) {
-                try {
-                    final Object value = field.get(signalBean);
-                    if ( null != value ) {
-                        final String paramkey = 
-                                field.getAnnotation(QueryParam.class).value();
-                        encoder.addParam(paramkey, String.valueOf(value));
+                if (isGetMethod ||
+                   Nettys.isFieldAnnotatedOfHttpMethod(field, httpRequest.getMethod())) {
+                    try {
+                        final Object value = field.get(signalBean);
+                        if ( null != value ) {
+                            final String paramkey = 
+                                    field.getAnnotation(QueryParam.class).value();
+                            encoder.addParam(paramkey, String.valueOf(value));
+                        }
                     }
-                }
-                catch (Exception e) {
-                    LOG.warn("exception when get field({})'s value, detail:{}", 
-                            field, ExceptionUtils.exception2detail(e));
+                    catch (Exception e) {
+                        LOG.warn("exception when get field({})'s value, detail:{}", 
+                                field, ExceptionUtils.exception2detail(e));
+                    }
                 }
             }
             
