@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
 
+import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -217,7 +218,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             }
                 };
                 
-                Nettys.fillByteBufHolderUsingBytes(jsonPayload, json);
+                jsonPayload.setContent(Unpooled.wrappedBuffer(json));
                     
                 total += json.length;
                 postRequestEncoder.addBodyHttpData(jsonPayload);
