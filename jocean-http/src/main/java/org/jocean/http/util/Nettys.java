@@ -2,6 +2,7 @@ package org.jocean.http.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.net.SocketAddress;
 import java.util.Iterator;
@@ -20,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.ByteBufInputStream;
+import io.netty.buffer.ByteBufOutputStream;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
@@ -210,6 +212,16 @@ public class Nettys {
             return wrapper.value().getSimpleName().equals(httpMethod.name());
         } else {
             return false;
+        }
+    }
+    
+    public static void fillByteBufHolderUsingBytes(final ByteBufHolder holder, final byte[] bytes) {
+        try(final OutputStream os = new ByteBufOutputStream(holder.content())) {
+            os.write(bytes);
+        }
+        catch (Throwable e) {
+            LOG.warn("exception when write bytes to holder {}, detail:{}", 
+                    holder, ExceptionUtils.exception2detail(e));
         }
     }
 }

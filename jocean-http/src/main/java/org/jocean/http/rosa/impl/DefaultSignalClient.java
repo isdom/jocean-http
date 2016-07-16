@@ -1,7 +1,6 @@
 package org.jocean.http.rosa.impl;
 
 import java.io.File;
-import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.URI;
@@ -18,6 +17,7 @@ import org.jocean.http.PayloadCounter;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.util.FeaturesBuilder;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.PayloadCounterAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.AnnotationWrapper;
@@ -34,8 +34,6 @@ import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
 
-import io.netty.buffer.ByteBufOutputStream;
-import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -167,7 +165,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
     
-    //  TODO return class with request (outgoing)/totoal size/close function
     private Outgoing buildHttpRequest(
             final DoOnUnsubscribe doOnUnsubscribe, 
             final URI uri,
@@ -187,7 +184,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         
         if (0 == attachments.length) {
             if ( request.getMethod().equals(HttpMethod.POST)) {
-                fillContentAsJSON((FullHttpRequest)request, JSON.toJSONBytes(signalBean));
+                final byte[] json = JSON.toJSONBytes(signalBean);
+                Nettys.fillByteBufHolderUsingBytes((FullHttpRequest)request, json);
+                HttpHeaders.setContentLength(request, json.length);
+                HttpHeaders.setHeader(request, HttpHeaders.Names.CONTENT_TYPE, "application/json; charset=UTF-8");
             }
             
             doOnUnsubscribe.call(Subscriptions.create(
@@ -207,19 +207,21 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final HttpPostRequestEncoder postRequestEncoder =
                     new HttpPostRequestEncoder(factory, request, true); // true => multipart
 
-            final byte[] jsonBytes = JSON.toJSONBytes(signalBean);
-            final MemoryFileUpload jsonPayload = 
-                    new MemoryFileUpload("json", "json", "application/json", null, null, jsonBytes.length) {
-                        @Override
-                        public Charset getCharset() {
-                            return null;
-                        }
-            };
+            {
+                final byte[] json = JSON.toJSONBytes(signalBean);
+                final MemoryFileUpload jsonPayload = 
+                        new MemoryFileUpload("json", "json", "application/json", null, null, json.length) {
+                            @Override
+                            public Charset getCharset() {
+                                return null;
+                            }
+                };
                 
-            jsonPayload.setContent(Unpooled.wrappedBuffer(jsonBytes));
-            
-            total += jsonBytes.length;
-            postRequestEncoder.addBodyHttpData(jsonPayload);
+                Nettys.fillByteBufHolderUsingBytes(jsonPayload, json);
+                    
+                total += json.length;
+                postRequestEncoder.addBodyHttpData(jsonPayload);
+            }
             
             for (Attachment attachment : attachments) {
                 final File file = new File(attachment.filename);
@@ -279,29 +281,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         else {
             return HttpMethod.GET;
         }
-    }
-    
-    private static void fillContentAsJSON(
-            final FullHttpRequest httpRequest,
-            final byte[] jsonBytes) {
-        final OutputStream os = new ByteBufOutputStream(httpRequest.content());
-        try {
-            os.write(jsonBytes);
-            HttpHeaders.setContentLength(httpRequest, jsonBytes.length);
-        }
-        catch (Throwable e) {
-            LOG.warn("exception when write json to response, detail:{}", 
-                    ExceptionUtils.exception2detail(e));
-        }
-        finally {
-            if ( null != os ) {
-                try {
-                    os.close();
-                } catch (Exception e) {
-                }
-            }
-        }
-        httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/json; charset=UTF-8");
     }
     
     public Action0 registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
