@@ -3,6 +3,7 @@ package org.jocean.http.rosa;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -136,5 +137,10 @@ public class DefaultSignalClientTestCase {
         
 //        Thread.sleep(1000000);
         server.stop();
+    }
+    
+    @Test
+    public void testSignalClientWithAttachment() throws Exception {
+        fail("Not Test");
     }
 }
