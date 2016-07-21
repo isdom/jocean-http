@@ -1,7 +1,6 @@
 package org.jocean.http.rosa;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertSame;
 
 import java.util.List;
 
@@ -60,7 +59,7 @@ public class HttpPostRequestEncoderTestCase {
         final List<InterfaceHttpData> attrs = postRequestEncoder.getBodyListAttributes();
         final InterfaceHttpData[] datas = new InterfaceHttpData[]{f1,f2,f3};
         for (int idx = 0; idx < datas.length; idx++) {
-            assertSame( datas[idx], attrs.toArray(new InterfaceHttpData[0])[idx]);
+            assertEquals( datas[idx], attrs.toArray(new InterfaceHttpData[0])[idx]);
         }
     }
 
