@@ -40,7 +40,7 @@ final class RequestProcessor {
                 ( null != this._pathparamResolver ? new PropertyPlaceholderHelper("{", "}") : null);
     }
 
-    public String req2path(final Object request, final String pathPrefix) {
+    public String req2path(final Object signalBean, final String pathPrefix) {
         if ( null == pathPrefix && null == this._pathSuffix ) {
             // class not registered, return null
             return null;
@@ -49,7 +49,7 @@ final class RequestProcessor {
         final String fullPath = safeConcatPath(pathPrefix, this._pathSuffix );
         if ( null != this._pathparamReplacer ) {
             return this._pathparamReplacer.replacePlaceholders(
-                    request,
+                    signalBean,
                     fullPath, 
                     this._pathparamResolver, 
                     null);
@@ -63,14 +63,14 @@ final class RequestProcessor {
         return this._pathSuffix;
     }
 
-    public void applyParams(final Object signalBean, final HttpRequest httpRequest) {
-        applyQueryParams(signalBean, httpRequest);
-        applyHeaderParams(signalBean, httpRequest);
+    public void applyParams(final Object signalBean, final HttpRequest request) {
+        applyQueryParams(signalBean, request);
+        applyHeaderParams(signalBean, request);
     }
 
     private void applyHeaderParams(
             final Object signalBean,
-            final HttpRequest httpRequest) {
+            final HttpRequest request) {
         if ( null != this._headerFields ) {
             for ( Field field : this._headerFields ) {
                 try {
@@ -78,7 +78,7 @@ final class RequestProcessor {
                     if ( null != value ) {
                         final String headername = 
                             field.getAnnotation(HeaderParam.class).value();
-                        httpRequest.headers().set(headername, value);
+                        request.headers().set(headername, value);
                     }
                 } catch (Exception e) {
                     LOG.warn("exception when get value from field:[{}], detail:{}",
@@ -91,16 +91,16 @@ final class RequestProcessor {
 
     private void applyQueryParams(
             final Object signalBean, 
-            final HttpRequest httpRequest) {
+            final HttpRequest request) {
         //  only GET method will assemble query parameters
         //  or the QueryParam field explicit annotated HttpMethod via AnnotationWrapper 
         //      assemble query parameters
-        final boolean isGetMethod = httpRequest.getMethod().equals(HttpMethod.GET);
+        final boolean isGetMethod = request.getMethod().equals(HttpMethod.GET);
         if ( null != this._queryFields) {
-            final QueryStringEncoder encoder = new QueryStringEncoder(httpRequest.getUri());
+            final QueryStringEncoder encoder = new QueryStringEncoder(request.getUri());
             for ( Field field : this._queryFields ) {
                 if (isGetMethod ||
-                   Nettys.isFieldAnnotatedOfHttpMethod(field, httpRequest.getMethod())) {
+                   Nettys.isFieldAnnotatedOfHttpMethod(field, request.getMethod())) {
                     try {
                         final Object value = field.get(signalBean);
                         if ( null != value ) {
@@ -116,7 +116,7 @@ final class RequestProcessor {
                 }
             }
             
-            httpRequest.setUri(encoder.toString());
+            request.setUri(encoder.toString());
         }
     }
 
