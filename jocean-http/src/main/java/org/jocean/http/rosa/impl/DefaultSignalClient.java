@@ -35,13 +35,13 @@ import org.slf4j.LoggerFactory;
 import com.alibaba.fastjson.JSON;
 
 import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpRequest;
-import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
 import io.netty.handler.codec.http.multipart.DiskFileUpload;
 import io.netty.handler.codec.http.multipart.HttpDataFactory;
@@ -149,16 +149,16 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     
     final static class Outgoing {
         
-        final Observable<Object> _request;
+        final Observable<Object> _requestObservable;
         final long _bytes;
         
         Outgoing(Observable<Object> request, long bytes) {
-            this._request = request;
+            this._requestObservable = request;
             this._bytes = bytes;
         }
         
         Observable<Object> request() {
-            return this._request;
+            return this._requestObservable;
         }
         
         long bytes() {
@@ -172,33 +172,29 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final Object signalBean, 
             final Attachment[] attachments) throws Exception {
         
-        final HttpRequest request = 
-                genHttpRequest(uri, 
-                        getHttpMethodAsNettyForm(signalBean.getClass()), 
-                        0 == attachments.length);
+        final HttpRequest request = new DefaultHttpRequest(
+                HttpVersion.HTTP_1_1, 
+                getHttpMethodAsNettyForm(signalBean.getClass()), 
+                uri.getRawPath());
         
         if (null != uri.getHost()) {
             request.headers().set(HttpHeaders.Names.HOST, uri.getHost());
         }
         this._processorCache.get(signalBean.getClass())
-            .applyParams(signalBean, request);
+            .applyParamsToRequest(signalBean, request);
         
         if (0 == attachments.length) {
-            if ( request.getMethod().equals(HttpMethod.POST)) {
-                final byte[] json = JSON.toJSONBytes(signalBean);
-                Nettys.fillByteBufHolderUsingBytes((FullHttpRequest)request, json);
-                HttpHeaders.setContentLength(request, json.length);
-                HttpHeaders.setHeader(request, HttpHeaders.Names.CONTENT_TYPE, "application/json; charset=UTF-8");
-            }
+            final LastHttpContent lastContent = buildLastContent(signalBean, request);
             
             doOnUnsubscribe.call(Subscriptions.create(
                     new Action0() {
                         @Override
                         public void call() {
                             ReferenceCountUtil.release(request);
+                            ReferenceCountUtil.release(lastContent);
                         }}));
             
-            return new Outgoing(Observable.<Object>just(request), -1L);
+            return new Outgoing(Observable.<Object>just(request, lastContent), -1L);
         } else {
             // multipart
             final HttpDataFactory factory = new DefaultHttpDataFactory(false);
@@ -259,20 +255,21 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T extends HttpRequest> T genHttpRequest(
-            final URI uri, 
-            final HttpMethod httpMethod, 
-            final boolean isFull) {
-        if (isFull) {
-            return (T)new DefaultFullHttpRequest(
-                HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
+    private LastHttpContent buildLastContent(
+            final Object signalBean,
+            final HttpRequest request) {
+        if ( request.getMethod().equals(HttpMethod.POST)) {
+            final byte[] json = JSON.toJSONBytes(signalBean);
+            HttpHeaders.setContentLength(request, json.length);
+            HttpHeaders.setHeader(request, HttpHeaders.Names.CONTENT_TYPE, "application/json; charset=UTF-8");
+            final LastHttpContent lastContent = new DefaultLastHttpContent();
+            Nettys.fillByteBufHolderUsingBytes(lastContent, json);
+            return lastContent;
         } else {
-            return (T)new DefaultHttpRequest(
-                HttpVersion.HTTP_1_1, httpMethod, uri.getRawPath());
+            return LastHttpContent.EMPTY_LAST_CONTENT;
         }
     }
-    
+
     private static HttpMethod getHttpMethodAsNettyForm(final Class<?> reqCls) {
         final AnnotationWrapper wrapper = 
                 reqCls.getAnnotation(AnnotationWrapper.class);

@@ -63,7 +63,7 @@ final class RequestProcessor {
         return this._pathSuffix;
     }
 
-    public void applyParams(final Object signalBean, final HttpRequest request) {
+    public void applyParamsToRequest(final Object signalBean, final HttpRequest request) {
         applyQueryParams(signalBean, request);
         applyHeaderParams(signalBean, request);
     }
