@@ -10,13 +10,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import javax.ws.rs.POST;
-
 import org.jocean.http.Feature;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.util.FeaturesBuilder;
+import org.jocean.http.util.HttpUtil;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.PayloadCounterAware;
 import org.jocean.http.util.RxNettys;
@@ -174,7 +173,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         
         final HttpRequest request = new DefaultHttpRequest(
                 HttpVersion.HTTP_1_1, 
-                getHttpMethodAsNettyForm(signalBean.getClass()), 
+                methodOf(signalBean.getClass()), 
                 uri.getRawPath());
         
         if (null != uri.getHost()) {
@@ -270,15 +269,11 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
 
-    private static HttpMethod getHttpMethodAsNettyForm(final Class<?> reqCls) {
+    static HttpMethod methodOf(final Class<?> reqCls) {
         final AnnotationWrapper wrapper = 
                 reqCls.getAnnotation(AnnotationWrapper.class);
-        if ( null != wrapper ) {
-            return wrapper.value().equals(POST.class) ? HttpMethod.POST : HttpMethod.GET;
-        }
-        else {
-            return HttpMethod.GET;
-        }
+        final HttpMethod method = null != wrapper ? HttpUtil.fromJSR331Type(wrapper.value()) : null;
+        return null != method ? method : HttpMethod.GET;
     }
     
     public Action0 registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 

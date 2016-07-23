@@ -1,7 +1,8 @@
-package org.jocean.http.rosa;
+package org.jocean.http.rosa.impl;
 
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
@@ -10,14 +11,21 @@ import java.net.SocketAddress;
 import java.net.URI;
 
 import javax.net.ssl.SSLException;
+import javax.ws.rs.OPTIONS;
+import javax.ws.rs.POST;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.client.impl.TestChannelPool;
+import org.jocean.http.rosa.FetchMetadataRequest;
+import org.jocean.http.rosa.FetchMetadataResponse;
+import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
+import org.jocean.idiom.AnnotationWrapper;
+import org.jocean.idiom.ExceptionUtils;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +41,7 @@ import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
@@ -45,7 +54,6 @@ public class DefaultSignalClientTestCase {
 
     private static final String TEST_ADDR = "test";
 
-    @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClientTestCase.class);
 
@@ -82,9 +90,9 @@ public class DefaultSignalClientTestCase {
             CONTENT = Resources.asByteSource(
                     Resources.getResource(DefaultSignalClientTestCase.class, "fetchMetadataResp.json")).read();
         } catch (IOException e) {
-            e.printStackTrace();
+            LOG.warn("exception when Resources.asByteSource fetchMetadataResp.json, detail:{}",
+                    ExceptionUtils.exception2detail(e));
         }
-        
     }
     
     final Func1<URI, SocketAddress> TO_TEST_ADDR = new Func1<URI, SocketAddress>() {
@@ -140,7 +148,44 @@ public class DefaultSignalClientTestCase {
     }
     
     @Test
+    public void testSignalClientMethodOf() {
+        
+        @AnnotationWrapper(OPTIONS.class)
+        class Req4Options {}
+        
+        assertEquals(HttpMethod.OPTIONS, DefaultSignalClient.methodOf(Req4Options.class));
+        
+        @AnnotationWrapper(POST.class)
+        class Req4Post {}
+        
+        assertEquals(HttpMethod.POST, DefaultSignalClient.methodOf(Req4Post.class));
+        
+        class ReqWithoutExplicitMethod {}
+        
+        assertEquals(HttpMethod.GET, DefaultSignalClient.methodOf(ReqWithoutExplicitMethod.class));
+    }
+    
+    @Test
     public void testSignalClientWithAttachment() throws Exception {
         fail("Not Test");
+        final HttpTestServer server = createTestServerWith(false, TEST_ADDR,
+                new Func0<ChannelInboundHandler> () {
+            @Override
+            public ChannelInboundHandler call() {
+                return new HttpTestServerHandler() {
+                    @Override
+                    protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
+                            throws Exception {
+                        if (msg instanceof HttpRequest) {
+                            final FullHttpResponse response = new DefaultFullHttpResponse(
+                                    HttpVersion.HTTP_1_1, OK, 
+                                    Unpooled.wrappedBuffer(CONTENT));
+                            response.headers().set(CONTENT_TYPE, "application/json");
+                            response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
+                            ctx.writeAndFlush(response);
+                        }
+                    }
+                };
+            }});
     }
 }
