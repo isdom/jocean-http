@@ -235,21 +235,21 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }
             
             // finalize request
-            final HttpRequest toSend = postRequestEncoder.finalizeRequest();
+            final HttpRequest request4send = postRequestEncoder.finalizeRequest();
 
             doOnUnsubscribe.call(Subscriptions.create(
                     new Action0() {
                         @Override
                         public void call() {
-                            ReferenceCountUtil.release(toSend);
+                            ReferenceCountUtil.release(request4send);
                             RxNettys.releaseObjects(postRequestEncoder.getBodyListAttributes());
                         }}));
             
             // test if request was chunked and if so, finish the write
             if (postRequestEncoder.isChunked()) {
-                return new Outgoing(Observable.<Object>just(toSend, postRequestEncoder), total);
+                return new Outgoing(Observable.<Object>just(request4send, postRequestEncoder), total);
             } else {
-                return new Outgoing(Observable.<Object>just(toSend), total);
+                return new Outgoing(Observable.<Object>just(request4send), total);
             }
         }
     }
