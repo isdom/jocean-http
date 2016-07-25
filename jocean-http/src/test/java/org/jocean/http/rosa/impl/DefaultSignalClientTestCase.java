@@ -11,6 +11,7 @@ import java.net.SocketAddress;
 import java.net.URI;
 
 import javax.net.ssl.SSLException;
+import javax.ws.rs.GET;
 import javax.ws.rs.OPTIONS;
 import javax.ws.rs.POST;
 
@@ -159,6 +160,11 @@ public class DefaultSignalClientTestCase {
         class Req4Post {}
         
         assertEquals(HttpMethod.POST, DefaultSignalClient.methodOf(Req4Post.class));
+        
+        @AnnotationWrapper(GET.class)
+        class Req4GET {}
+        
+        assertEquals(HttpMethod.GET, DefaultSignalClient.methodOf(Req4GET.class));
         
         class ReqWithoutExplicitMethod {}
         
