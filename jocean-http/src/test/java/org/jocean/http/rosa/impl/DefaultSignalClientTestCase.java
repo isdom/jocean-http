@@ -11,9 +11,12 @@ import java.net.SocketAddress;
 import java.net.URI;
 
 import javax.net.ssl.SSLException;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
+import javax.ws.rs.HEAD;
 import javax.ws.rs.OPTIONS;
 import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.impl.DefaultHttpClient;
@@ -169,6 +172,21 @@ public class DefaultSignalClientTestCase {
         class ReqWithoutExplicitMethod {}
         
         assertEquals(HttpMethod.GET, DefaultSignalClient.methodOf(ReqWithoutExplicitMethod.class));
+        
+        @AnnotationWrapper(HEAD.class)
+        class Req4Head {}
+        
+        assertEquals(HttpMethod.HEAD, DefaultSignalClient.methodOf(Req4Head.class));
+
+        @AnnotationWrapper(PUT.class)
+        class Req4Put {}
+        
+        assertEquals(HttpMethod.PUT, DefaultSignalClient.methodOf(Req4Put.class));
+        
+        @AnnotationWrapper(DELETE.class)
+        class Req4Delete {}
+        
+        assertEquals(HttpMethod.DELETE, DefaultSignalClient.methodOf(Req4Delete.class));
     }
     
     @Test
