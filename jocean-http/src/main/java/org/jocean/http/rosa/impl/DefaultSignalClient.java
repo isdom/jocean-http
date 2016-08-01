@@ -1,6 +1,5 @@
 package org.jocean.http.rosa.impl;
 
-import java.io.File;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.URI;
@@ -26,7 +25,6 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.SimpleCache;
-import org.jocean.idiom.io.FilenameUtils;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,7 +40,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
-import io.netty.handler.codec.http.multipart.DiskFileUpload;
+import io.netty.handler.codec.http.multipart.HttpData;
 import io.netty.handler.codec.http.multipart.HttpDataFactory;
 import io.netty.handler.codec.http.multipart.HttpPostRequestEncoder;
 import io.netty.handler.codec.http.multipart.MemoryFileUpload;
@@ -62,6 +60,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     public DefaultSignalClient(final HttpClient httpClient) {
         this._httpClient = httpClient;
+        this._attachmentBuilder = new DefaultAttachmentBuilder();
     }
     
     @Override
@@ -220,18 +219,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }
             
             for (Attachment attachment : attachments) {
-                final File file = new File(attachment.filename);
-                final DiskFileUpload filePayload = 
-                        new DiskFileUpload(FilenameUtils.getBaseName(attachment.filename), 
-                            attachment.filename, attachment.contentType, null, null, file.length()) {
-                    @Override
-                    public Charset getCharset() {
-                        return null;
-                    }
-                };
-                filePayload.setContent(file);
-                total += file.length();
-                postRequestEncoder.addBodyHttpData(filePayload);
+                final HttpData httpData = _attachmentBuilder.call(attachment);
+                total += httpData.length();
+                postRequestEncoder.addBodyHttpData(httpData);
             }
             
             // finalize request
@@ -431,5 +421,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     
     final private HttpClient _httpClient;
+    final private AttachmentBuilder _attachmentBuilder;
     private BeanHolder _beanHolder;
 }
