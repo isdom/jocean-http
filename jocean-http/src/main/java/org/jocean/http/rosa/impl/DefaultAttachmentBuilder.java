@@ -5,12 +5,18 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 
 import org.jocean.http.rosa.SignalClient.Attachment;
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.io.FilenameUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.netty.handler.codec.http.multipart.DiskFileUpload;
 import io.netty.handler.codec.http.multipart.HttpData;
 
 public class DefaultAttachmentBuilder implements AttachmentBuilder {
+    
+    private static final Logger LOG =
+            LoggerFactory.getLogger(DefaultAttachmentBuilder.class);
 
     @Override
     public HttpData call(final Attachment attachment) {
@@ -26,8 +32,8 @@ public class DefaultAttachmentBuilder implements AttachmentBuilder {
         try {
             filePayload.setContent(file);
         } catch (IOException e) {
-            // TODO Auto-generated catch block, log
-            e.printStackTrace();
+            LOG.warn("exception when filePayload.setContent, detail: {}",
+                    ExceptionUtils.exception2detail(e));
         }
         return filePayload;
     }
