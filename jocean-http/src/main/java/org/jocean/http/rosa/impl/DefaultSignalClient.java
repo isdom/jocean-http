@@ -59,8 +59,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             LoggerFactory.getLogger(DefaultSignalClient.class);
 
     public DefaultSignalClient(final HttpClient httpClient) {
+        this(httpClient, new DefaultAttachmentBuilder());
+    }
+    
+    public DefaultSignalClient(final HttpClient httpClient, final AttachmentBuilder attachmentBuilder) {
         this._httpClient = httpClient;
-        this._attachmentBuilder = new DefaultAttachmentBuilder();
+        this._attachmentBuilder = attachmentBuilder;
     }
     
     @Override
