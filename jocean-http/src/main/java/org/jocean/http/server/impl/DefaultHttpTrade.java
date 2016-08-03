@@ -218,8 +218,9 @@ class DefaultHttpTrade implements HttpTrade {
     private final AtomicInteger _responseIdx = new AtomicInteger(0);
     
     private final Action0 actionResponseOnCompleted(final int responseIdx) {
-        return RxActions.bindParameter(responseIdx, RxActions.<Integer>toAction1(
-            this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnCompleted"))));
+        return RxActions.bindParameter(RxActions.<Integer>toAction1(
+            this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnCompleted"))),
+            responseIdx);
     }
 
     @SuppressWarnings("unused")
@@ -240,9 +241,10 @@ class DefaultHttpTrade implements HttpTrade {
     }
 
     private final Action1<HttpObject> actionResponseOnNext(final int responseIdx) {
-        return RxActions.bindParameter(responseIdx,
+        return RxActions.bindParameter(
                 RxActions.<Integer, HttpObject>toAction2(
-                    this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnNext"))));
+                    this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnNext"))),
+                responseIdx );
     }
     
     @SuppressWarnings("unused")
@@ -272,9 +274,10 @@ class DefaultHttpTrade implements HttpTrade {
     }
     
     private final Action1<Throwable> actionResponseOnError(final int responseIdx) {
-        return RxActions.bindParameter(responseIdx,
+        return RxActions.bindParameter(
                 RxActions.<Integer, Throwable>toAction2(
-                    this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnError"))));
+                    this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnError"))),
+                responseIdx);
     }
     
     @SuppressWarnings("unused")

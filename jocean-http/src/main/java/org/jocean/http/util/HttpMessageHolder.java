@@ -27,7 +27,7 @@ import rx.functions.Func0;
 import rx.functions.Func1;
 
 public class HttpMessageHolder {
-    private static final HttpObject[] ZERO_HTTPOBJS = new HttpObject[0];
+    private static final HttpObject[] __ZERO_HTTPOBJS = new HttpObject[0];
 
     private static int _block_size = 128 * 1024; // 128KB
     static {
@@ -80,7 +80,7 @@ public class HttpMessageHolder {
     @SuppressWarnings("unused")
     private Object doVisitHttpObjects(final Func1<HttpObject[], Object> visitor) {
         try {
-            return visitor.call(this._cachedHttpObjects.toArray(ZERO_HTTPOBJS));
+            return visitor.call(this._cachedHttpObjects.toArray(__ZERO_HTTPOBJS));
         } catch (Exception e) {
             LOG.warn("exception when invoke visitor({}), detail: {}",
                     visitor, ExceptionUtils.exception2detail(e));
