@@ -1,4 +1,4 @@
-package org.jocean.http.rosa;
+package org.jocean.http.rosa.impl;
 
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;

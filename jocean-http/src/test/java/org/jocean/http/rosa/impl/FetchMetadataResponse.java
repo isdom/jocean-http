@@ -1,4 +1,4 @@
-package org.jocean.http.rosa;
+package org.jocean.http.rosa.impl;
 
 import java.util.Arrays;
 
