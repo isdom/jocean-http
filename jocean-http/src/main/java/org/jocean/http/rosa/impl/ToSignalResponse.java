@@ -64,8 +64,8 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
                 if (null!=fullresp) {
                     try {
                         final byte[] bytes = Nettys.dumpByteBufAsBytes(fullresp.content());
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("receive signal response: {}",
+                        if (LOG.isTraceEnabled()) {
+                            LOG.trace("receive signal response: {}",
                                     new String(bytes, CharsetUtil.UTF_8));
                         }
                         final Object resp = JSON.parseObject(bytes, _respCls);

@@ -9,7 +9,10 @@ import static org.junit.Assert.assertTrue;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLException;
 import javax.ws.rs.DELETE;
@@ -244,19 +247,15 @@ public class DefaultSignalClientTestCase {
         server.stop();
     }
     
-    private static String name2content(final String[] names, final String[] contents, final String name) {
-        for (int idx = 0; idx < names.length; idx++) {
-            if (name.equals(names[idx])) {
-                return contents[idx];
-            }
-        }
-        return null;
-    }
-    
     @Test
     public void testSignalClientWithAttachment() throws Exception {
-        final String[] files = new String[] { "1", "2", "3"};
-        final String[] uploads = new String[] { "11111111111111", "22222222222222222", "333333333333333"};
+        final AttachmentInMemory[] attachs = new AttachmentInMemory[]{
+                new AttachmentInMemory("1", "text/plain", "11111111111111".getBytes(Charsets.UTF_8)),
+                new AttachmentInMemory("2", "text/plain", "22222222222222222".getBytes(Charsets.UTF_8)),
+                new AttachmentInMemory("3", "text/plain", "333333333333333".getBytes(Charsets.UTF_8)),
+        };
+        
+        final List<FileUpload> uploads = new ArrayList<>();
         
         final HttpDataFactory HTTP_DATA_FACTORY =
                 new DefaultHttpDataFactory(false);
@@ -270,18 +269,13 @@ public class DefaultSignalClientTestCase {
                     boolean isfirst = true;
                     while (decoder.hasNext()) {
                         final InterfaceHttpData data = decoder.next();
-                        assertEquals(InterfaceHttpData.HttpDataType.FileUpload, 
-                                data.getHttpDataType());
-                        
                         if (!isfirst) {
-                            FileUpload upload = (FileUpload)data;
-                            final String content = name2content(files, uploads, upload.getFilename());
-                            assertTrue(Arrays.equals(upload.get(), content.getBytes(Charsets.UTF_8)));
+                            if (data instanceof FileUpload) {
+                                uploads.add((FileUpload)data);
+                            }
                         } else {
                             isfirst = false;
                         }
-                        
-                        LOG.debug("decode HttpData {}", data);
                     }
                     final FullHttpResponse response = new DefaultFullHttpResponse(
                             HttpVersion.HTTP_1_1, OK, 
@@ -289,9 +283,6 @@ public class DefaultSignalClientTestCase {
                     response.headers().set(CONTENT_TYPE, "application/json");
                     response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
                     trade.outboundResponse(Observable.just(response));
-                } catch (IOException e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
                 } finally {
                     req.release();
                 }
@@ -307,7 +298,7 @@ public class DefaultSignalClientTestCase {
         
         final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
         final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient, 
-                new MemoryAttachmentBuilder(files, uploads));
+                new AttachmentBuilder4InMemory());
         
         signalClient.registerRequestType(FetchMetadataRequest.class, OkResponse.class, 
                 null, 
@@ -317,12 +308,21 @@ public class DefaultSignalClientTestCase {
         final OkResponse resp = 
             ((SignalClient)signalClient).<OkResponse>defineInteraction(
                     new FetchMetadataRequest(), 
-                    new Attachment("1", "application/json"),
-                    new Attachment("2", "application/json"),
-                    new Attachment("3", "application/json")
+                    attachs
                     )
             .toBlocking().single();
         assertNotNull(resp);
+        
+        final FileUpload[] recvdattachs = uploads.toArray(new FileUpload[0]);
+        
+        assertEquals(attachs.length, recvdattachs.length);
+        for (int idx = 0; idx < attachs.length; idx++) {
+            final AttachmentInMemory inmemory = attachs[idx];
+            final FileUpload upload = recvdattachs[idx];
+            assertEquals(inmemory.filename, upload.getName());
+            assertEquals(inmemory.contentType, upload.getContentType());
+            assertTrue( Arrays.equals(inmemory.content(), upload.get()));
+        }
         
         pool.awaitRecycleChannels();
         
