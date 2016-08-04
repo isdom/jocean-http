@@ -18,6 +18,8 @@ import rx.functions.Func0;
  * @author isdom
  *
  */
+//  TODO, rename this interface to creator or sth. else
+//  it's !NOT! server BUT server generator
 public interface HttpServer extends Closeable {
     
     public Observable<? extends HttpTrade> defineServer(

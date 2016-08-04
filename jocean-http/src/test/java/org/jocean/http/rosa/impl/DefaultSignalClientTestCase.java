@@ -29,8 +29,6 @@ import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpServer.HttpTrade;
-import org.jocean.http.server.HttpTestServer;
-import org.jocean.http.server.HttpTestServerHandler;
 import org.jocean.http.server.impl.AbstractBootstrapCreator;
 import org.jocean.http.server.impl.DefaultHttpServer;
 import org.jocean.http.util.HttpMessageHolder;
@@ -47,8 +45,6 @@ import com.google.common.io.Resources;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalEventLoopGroup;
@@ -58,8 +54,6 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
 import io.netty.handler.codec.http.multipart.FileUpload;
@@ -94,51 +88,34 @@ public class DefaultSignalClientTestCase {
             return null;
         }
     }
+    
+    private final static HttpServer TEST_SERVER_BUILDER = new DefaultHttpServer(
+            new AbstractBootstrapCreator(
+            new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
+        @Override
+        protected void initializeBootstrap(final ServerBootstrap bootstrap) {
+            bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
+            bootstrap.channel(LocalServerChannel.class);
+        }});
 
-    private static HttpServer createTestServerWith(
+    private static Subscription createTestServerWith(
             final String acceptId,
             final Action2<Func0<FullHttpRequest>, HttpTrade> onCompleted,
             final Feature... features) {
-        final Action1<HttpTrade> onIncomingTrade = new Action1<HttpTrade>() {
-            @Override
-            public void call(final HttpTrade trade) {
-                final HttpMessageHolder holder = new HttpMessageHolder(0);
-                trade.inboundRequest()
-                    .compose(holder.assembleAndHold())
-                    .doOnCompleted(RxActions.bindParameter(onCompleted,
-                            holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST), trade))
-                    .doAfterTerminate(holder.release())
-                    .doOnUnsubscribe(holder.release())
-                    .subscribe();
-            }};
-            
-            final HttpServer server = new DefaultHttpServer(
-                    new AbstractBootstrapCreator(
-                    new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
+        return TEST_SERVER_BUILDER.defineServer(new LocalAddress(acceptId), features)
+            .subscribe(new Action1<HttpTrade>() {
                 @Override
-                protected void initializeBootstrap(final ServerBootstrap bootstrap) {
-                    bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
-                    bootstrap.channel(LocalServerChannel.class);
+                public void call(final HttpTrade trade) {
+                    final HttpMessageHolder holder = new HttpMessageHolder(0);
+                    trade.inboundRequest()
+                        .compose(holder.assembleAndHold())
+                        .doOnCompleted(RxActions.bindParameter(onCompleted,
+                                holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST), 
+                                trade))
+                        .doAfterTerminate(holder.release())
+                        .doOnUnsubscribe(holder.release())
+                        .subscribe();
                 }});
-            @SuppressWarnings("unused")
-            final Subscription testServer = 
-                server.defineServer(new LocalAddress(acceptId), features)
-                .subscribe(onIncomingTrade);
-        return server;
-    }
-    
-    private HttpTestServer createTestServerWith(
-            final boolean enableSSL, 
-            final String acceptId,
-            final Func0<ChannelInboundHandler> newHandler) 
-            throws Exception {
-        return new HttpTestServer(
-                enableSSL, 
-                new LocalAddress(acceptId), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
-                LocalServerChannel.class,
-                newHandler);
     }
     
     public static byte[] CONTENT;
@@ -201,48 +178,41 @@ public class DefaultSignalClientTestCase {
         
     @Test
     public void testSignalClient1() throws Exception {
-        final HttpTestServer server = createTestServerWith(false, TEST_ADDR,
-                new Func0<ChannelInboundHandler> () {
+        final Action2<Func0<FullHttpRequest>, HttpTrade> onRequestCompleted = 
+            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
             @Override
-            public ChannelInboundHandler call() {
-                return new HttpTestServerHandler() {
-                    @Override
-                    protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-                            throws Exception {
-                        if (msg instanceof HttpRequest) {
-                            final FullHttpResponse response = new DefaultFullHttpResponse(
-                                    HttpVersion.HTTP_1_1, OK, 
-                                    Unpooled.wrappedBuffer(CONTENT));
-                            response.headers().set(CONTENT_TYPE, "application/json");
-                            response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
-                            ctx.writeAndFlush(response);
-                        }
-                    }
-                };
-            }});
-
+            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
+                final FullHttpResponse response = new DefaultFullHttpResponse(
+                        HttpVersion.HTTP_1_1, OK, 
+                        Unpooled.wrappedBuffer(OK_RESP));
+                response.headers().set(CONTENT_TYPE, "application/json");
+                response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
+                trade.outboundResponse(Observable.just(response));
+            }};
+        final Subscription server = createTestServerWith(TEST_ADDR, 
+                onRequestCompleted,
+                Feature.ENABLE_LOGGING,
+                Feature.ENABLE_COMPRESSOR );
+        
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         
         final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
-//            ,ENABLE_LOGGING);
         
         final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient);
         
-        signalClient.registerRequestType(FetchMetadataRequest.class, FetchMetadataResponse.class, 
+        signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
                 null, 
                 TO_TEST_ADDR,
                 Feature.EMPTY_FEATURES);
-        final FetchMetadataResponse resp = 
-            ((SignalClient)signalClient).<FetchMetadataResponse>defineInteraction(new FetchMetadataRequest())
+        final TestResponse resp = 
+            ((SignalClient)signalClient).<TestResponse>defineInteraction(new TestRequest())
             .toBlocking().single();
-        System.out.println(resp);
         assertNotNull(resp);
         
         pool.awaitRecycleChannels();
         
-//        Thread.sleep(1000000);
-        server.stop();
+        server.unsubscribe();
     }
     
     @Test
@@ -283,7 +253,7 @@ public class DefaultSignalClientTestCase {
             }};
             
         //  launch test server for attachment send
-        final HttpServer server = createTestServerWith(TEST_ADDR, 
+        final Subscription server = createTestServerWith(TEST_ADDR, 
                 onRequestCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
@@ -328,6 +298,6 @@ public class DefaultSignalClientTestCase {
         
         pool.awaitRecycleChannels();
         
-        server.close();
+        server.unsubscribe();
     }
 }
