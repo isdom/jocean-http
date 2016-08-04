@@ -9,7 +9,7 @@ import com.alibaba.fastjson.annotation.JSONField;
  * @author isdom
  *
  */
-public class OkResponse {
+public class TestResponse {
     
     @Override
     public String toString() {

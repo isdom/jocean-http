@@ -12,7 +12,6 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLException;
 import javax.ws.rs.DELETE;
@@ -28,7 +27,6 @@ import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.rosa.SignalClient;
-import org.jocean.http.rosa.SignalClient.Attachment;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.server.HttpTestServer;
@@ -249,23 +247,19 @@ public class DefaultSignalClientTestCase {
     
     @Test
     public void testSignalClientWithAttachment() throws Exception {
-        final AttachmentInMemory[] attachs = new AttachmentInMemory[]{
-                new AttachmentInMemory("1", "text/plain", "11111111111111".getBytes(Charsets.UTF_8)),
-                new AttachmentInMemory("2", "text/plain", "22222222222222222".getBytes(Charsets.UTF_8)),
-                new AttachmentInMemory("3", "text/plain", "333333333333333".getBytes(Charsets.UTF_8)),
-        };
         
         final List<FileUpload> uploads = new ArrayList<>();
         
         final HttpDataFactory HTTP_DATA_FACTORY =
                 new DefaultHttpDataFactory(false);
-        final Action2<Func0<FullHttpRequest>, HttpTrade> onCompleted = new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<Func0<FullHttpRequest>, HttpTrade> onRequestCompleted = new Action2<Func0<FullHttpRequest>, HttpTrade>() {
             @Override
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
                     HttpPostRequestDecoder decoder = new HttpPostRequestDecoder(
                             HTTP_DATA_FACTORY, req);
+                    //  first is signal
                     boolean isfirst = true;
                     while (decoder.hasNext()) {
                         final InterfaceHttpData data = decoder.next();
@@ -288,8 +282,9 @@ public class DefaultSignalClientTestCase {
                 }
             }};
             
+        //  launch test server for attachment send
         final HttpServer server = createTestServerWith(TEST_ADDR, 
-                onCompleted,
+                onRequestCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
         
@@ -300,25 +295,32 @@ public class DefaultSignalClientTestCase {
         final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient, 
                 new AttachmentBuilder4InMemory());
         
-        signalClient.registerRequestType(FetchMetadataRequest.class, OkResponse.class, 
+        signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
                 null, 
                 TO_TEST_ADDR,
                 Feature.ENABLE_LOGGING,
                 Outbound.ENABLE_MULTIPART);
-        final OkResponse resp = 
-            ((SignalClient)signalClient).<OkResponse>defineInteraction(
-                    new FetchMetadataRequest(), 
-                    attachs
+        
+        final AttachmentInMemory[] attachsToSend = new AttachmentInMemory[]{
+                new AttachmentInMemory("1", "text/plain", "11111111111111".getBytes(Charsets.UTF_8)),
+                new AttachmentInMemory("2", "text/plain", "22222222222222222".getBytes(Charsets.UTF_8)),
+                new AttachmentInMemory("3", "text/plain", "333333333333333".getBytes(Charsets.UTF_8)),
+        };
+        
+        final TestResponse resp = 
+            ((SignalClient)signalClient).<TestResponse>defineInteraction(
+                    new TestRequest(), 
+                    attachsToSend
                     )
             .toBlocking().single();
         assertNotNull(resp);
         
-        final FileUpload[] recvdattachs = uploads.toArray(new FileUpload[0]);
+        final FileUpload[] attachsReceived = uploads.toArray(new FileUpload[0]);
         
-        assertEquals(attachs.length, recvdattachs.length);
-        for (int idx = 0; idx < attachs.length; idx++) {
-            final AttachmentInMemory inmemory = attachs[idx];
-            final FileUpload upload = recvdattachs[idx];
+        assertEquals(attachsToSend.length, attachsReceived.length);
+        for (int idx = 0; idx < attachsToSend.length; idx++) {
+            final AttachmentInMemory inmemory = attachsToSend[idx];
+            final FileUpload upload = attachsReceived[idx];
             assertEquals(inmemory.filename, upload.getName());
             assertEquals(inmemory.contentType, upload.getContentType());
             assertTrue( Arrays.equals(inmemory.content(), upload.get()));
