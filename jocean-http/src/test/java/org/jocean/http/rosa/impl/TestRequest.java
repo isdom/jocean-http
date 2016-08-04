@@ -6,6 +6,6 @@ import javax.ws.rs.Path;
 import org.jocean.idiom.AnnotationWrapper;
 
 @AnnotationWrapper(POST.class)
-@Path("/yjy_common/fetchMetadata")
+@Path("/test/simpleRequest")
 public class TestRequest {
 }

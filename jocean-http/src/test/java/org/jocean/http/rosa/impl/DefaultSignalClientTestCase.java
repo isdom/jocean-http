@@ -3,10 +3,8 @@ package org.jocean.http.rosa.impl;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
@@ -34,14 +32,13 @@ import org.jocean.http.server.impl.DefaultHttpServer;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.AnnotationWrapper;
-import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.RxActions;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.alibaba.fastjson.JSON;
 import com.google.common.base.Charsets;
-import com.google.common.io.Resources;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
@@ -54,6 +51,7 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
 import io.netty.handler.codec.http.multipart.FileUpload;
@@ -62,6 +60,7 @@ import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder;
 import io.netty.handler.codec.http.multipart.InterfaceHttpData;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.util.CharsetUtil;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
@@ -71,8 +70,7 @@ import rx.functions.Func1;
 
 public class DefaultSignalClientTestCase {
 
-    private static final String TEST_ADDR = "test";
-
+    @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClientTestCase.class);
 
@@ -89,6 +87,10 @@ public class DefaultSignalClientTestCase {
         }
     }
     
+    private static final String TEST_ADDR = "test";
+    
+    public static byte[] OK_RESP = "{\"code\":\"0\"}".getBytes(CharsetUtil.UTF_8);
+    
     private final static HttpServer TEST_SERVER_BUILDER = new DefaultHttpServer(
             new AbstractBootstrapCreator(
             new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
@@ -98,9 +100,11 @@ public class DefaultSignalClientTestCase {
             bootstrap.channel(LocalServerChannel.class);
         }});
 
+    final HttpDataFactory HTTP_DATA_FACTORY = new DefaultHttpDataFactory(false);
+    
     private static Subscription createTestServerWith(
             final String acceptId,
-            final Action2<Func0<FullHttpRequest>, HttpTrade> onCompleted,
+            final Action2<Func0<FullHttpRequest>, HttpTrade> onRequestCompleted,
             final Feature... features) {
         return TEST_SERVER_BUILDER.defineServer(new LocalAddress(acceptId), features)
             .subscribe(new Action1<HttpTrade>() {
@@ -109,7 +113,7 @@ public class DefaultSignalClientTestCase {
                     final HttpMessageHolder holder = new HttpMessageHolder(0);
                     trade.inboundRequest()
                         .compose(holder.assembleAndHold())
-                        .doOnCompleted(RxActions.bindParameter(onCompleted,
+                        .doOnCompleted(RxActions.bindParameter(onRequestCompleted,
                                 holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST), 
                                 trade))
                         .doAfterTerminate(holder.release())
@@ -118,18 +122,14 @@ public class DefaultSignalClientTestCase {
                 }});
     }
     
-    public static byte[] CONTENT;
-    public static byte[] OK_RESP;
-    static {
-        try {
-            CONTENT = Resources.asByteSource(
-                    Resources.getResource(DefaultSignalClientTestCase.class, "fetchMetadataResp.json")).read();
-            OK_RESP = Resources.asByteSource(
-                    Resources.getResource(DefaultSignalClientTestCase.class, "okResponse.json")).read();
-        } catch (IOException e) {
-            LOG.warn("exception when Resources.asByteSource fetchMetadataResp.json/okResponse.json, detail:{}",
-                    ExceptionUtils.exception2detail(e));
-        }
+    private static Observable<HttpObject> buildResponse(final Object responseBean) {
+        final byte[] responseBytes = JSON.toJSONBytes(responseBean);
+        final FullHttpResponse response = new DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1, OK, 
+                Unpooled.wrappedBuffer(responseBytes));
+        response.headers().set(CONTENT_TYPE, "application/json");
+        response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
+        return  Observable.<HttpObject>just(response);
     }
     
     final Func1<URI, SocketAddress> TO_TEST_ADDR = new Func1<URI, SocketAddress>() {
@@ -177,17 +177,14 @@ public class DefaultSignalClientTestCase {
     }
         
     @Test
-    public void testSignalClient1() throws Exception {
+    public void testSignalClientOnlySignal() throws Exception {
+        final TestResponse respToSendback = new TestResponse("0", "OK");
+        
         final Action2<Func0<FullHttpRequest>, HttpTrade> onRequestCompleted = 
             new Action2<Func0<FullHttpRequest>, HttpTrade>() {
             @Override
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpResponse response = new DefaultFullHttpResponse(
-                        HttpVersion.HTTP_1_1, OK, 
-                        Unpooled.wrappedBuffer(OK_RESP));
-                response.headers().set(CONTENT_TYPE, "application/json");
-                response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
-                trade.outboundResponse(Observable.just(response));
+                trade.outboundResponse(buildResponse(respToSendback));
             }};
         final Subscription server = createTestServerWith(TEST_ADDR, 
                 onRequestCompleted,
@@ -204,11 +201,11 @@ public class DefaultSignalClientTestCase {
         signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
                 null, 
                 TO_TEST_ADDR,
-                Feature.EMPTY_FEATURES);
-        final TestResponse resp = 
+                Feature.ENABLE_LOGGING);
+        final TestResponse respReceived = 
             ((SignalClient)signalClient).<TestResponse>defineInteraction(new TestRequest())
             .toBlocking().single();
-        assertNotNull(resp);
+        assertEquals(respToSendback, respReceived);
         
         pool.awaitRecycleChannels();
         
@@ -218,10 +215,9 @@ public class DefaultSignalClientTestCase {
     @Test
     public void testSignalClientWithAttachment() throws Exception {
         
+        final TestResponse respToSendback = new TestResponse("0", "OK");
         final List<FileUpload> uploads = new ArrayList<>();
         
-        final HttpDataFactory HTTP_DATA_FACTORY =
-                new DefaultHttpDataFactory(false);
         final Action2<Func0<FullHttpRequest>, HttpTrade> onRequestCompleted = new Action2<Func0<FullHttpRequest>, HttpTrade>() {
             @Override
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
@@ -241,12 +237,7 @@ public class DefaultSignalClientTestCase {
                             isfirst = false;
                         }
                     }
-                    final FullHttpResponse response = new DefaultFullHttpResponse(
-                            HttpVersion.HTTP_1_1, OK, 
-                            Unpooled.wrappedBuffer(OK_RESP));
-                    response.headers().set(CONTENT_TYPE, "application/json");
-                    response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
-                    trade.outboundResponse(Observable.just(response));
+                    trade.outboundResponse(buildResponse(respToSendback));
                 } finally {
                     req.release();
                 }
@@ -277,13 +268,11 @@ public class DefaultSignalClientTestCase {
                 new AttachmentInMemory("3", "text/plain", "333333333333333".getBytes(Charsets.UTF_8)),
         };
         
-        final TestResponse resp = 
-            ((SignalClient)signalClient).<TestResponse>defineInteraction(
+        final TestResponse respReceived = ((SignalClient)signalClient).<TestResponse>defineInteraction(
                     new TestRequest(), 
-                    attachsToSend
-                    )
+                    attachsToSend)
             .toBlocking().single();
-        assertNotNull(resp);
+        assertEquals(respToSendback, respReceived);
         
         final FileUpload[] attachsReceived = uploads.toArray(new FileUpload[0]);
         
