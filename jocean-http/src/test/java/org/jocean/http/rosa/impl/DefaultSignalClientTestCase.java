@@ -20,6 +20,7 @@ import javax.net.ssl.SSLException;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.HEAD;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.OPTIONS;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
@@ -582,7 +583,7 @@ public class DefaultSignalClientTestCase {
     }
     
     @Test
-    public void testSignalClientOnlySignalForPostWithQueryString() throws Exception {
+    public void testSignalClientOnlySignalForPostWithQueryParam() throws Exception {
         final TestResponse respToSendback = new TestResponse("0", "OK");
         final AtomicReference<HttpMethod> reqMethodReceivedRef = new AtomicReference<>();
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
@@ -629,6 +630,139 @@ public class DefaultSignalClientTestCase {
                     Feature.ENABLE_LOGGING);
             
             final TestRequestByPostWithQueryParam reqToSend = new TestRequestByPostWithQueryParam("1", "test");
+            final TestResponse respReceived = 
+                ((SignalClient)signalClient).<TestResponse>defineInteraction(reqToSend)
+                .timeout(1, TimeUnit.SECONDS)
+                .toBlocking().single();
+            
+            assertEquals(HttpMethod.POST, reqMethodReceivedRef.get());
+            assertEquals("/test/simpleRequest", reqpathReceivedRef.get());
+            assertEquals(reqToSend, reqbeanReceivedRef.get());
+            assertEquals(respToSendback, respReceived);
+            
+            pool.awaitRecycleChannels();
+        } finally {
+            server.unsubscribe();
+        }
+    }
+    
+    @AnnotationWrapper(POST.class)
+    @Path("/test/simpleRequest")
+    public static class TestRequestByPostWithHeaderParam {
+        
+        public TestRequestByPostWithHeaderParam() {}
+        
+        public TestRequestByPostWithHeaderParam(final String id, final String p) {
+            this._id = id;
+            this._headerp = p;
+        }
+        
+        /* (non-Javadoc)
+         * @see java.lang.Object#hashCode()
+         */
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((_id == null) ? 0 : _id.hashCode());
+            result = prime * result
+                    + ((_headerp == null) ? 0 : _headerp.hashCode());
+            return result;
+        }
+
+        /* (non-Javadoc)
+         * @see java.lang.Object#equals(java.lang.Object)
+         */
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            TestRequestByPostWithHeaderParam other = (TestRequestByPostWithHeaderParam) obj;
+            if (_id == null) {
+                if (other._id != null)
+                    return false;
+            } else if (!_id.equals(other._id))
+                return false;
+            if (_headerp == null) {
+                if (other._headerp != null)
+                    return false;
+            } else if (!_headerp.equals(other._headerp))
+                return false;
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            return "[id=" + _id + "]";
+        }
+        
+        @JSONField(name="id")
+        public String getId() {
+            return this._id;
+        }
+
+        @JSONField(name="id")
+        public void setId(final String id) {
+            this._id = id;
+        }
+
+        protected String _id;
+        
+        @HeaderParam("X-P")
+        String _headerp;
+    }
+    
+    @Test
+    public void testSignalClientOnlySignalForPostWithHeaderParam() throws Exception {
+        final TestResponse respToSendback = new TestResponse("0", "OK");
+        final AtomicReference<HttpMethod> reqMethodReceivedRef = new AtomicReference<>();
+        final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
+        final AtomicReference<TestRequestByPostWithHeaderParam> reqbeanReceivedRef = new AtomicReference<>();
+        
+        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+            @Override
+            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
+                final FullHttpRequest req = genFullHttpRequest.call();
+                try {
+                    reqMethodReceivedRef.set(req.getMethod());
+                    reqpathReceivedRef.set(req.getUri());
+                    final TestRequestByPostWithHeaderParam reqbean = (TestRequestByPostWithHeaderParam) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
+                            TestRequestByPostWithHeaderParam.class);
+                    reqbean._headerp = req.headers().get("X-P");
+                    reqbeanReceivedRef.set(reqbean);
+                } catch (IOException e) {
+                    LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
+                            ExceptionUtils.exception2detail(e));
+                } finally {
+                    req.release();
+                }
+                trade.outboundResponse(buildResponse(respToSendback));
+            }};
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = createTestServerWith(testAddr, 
+                requestAndTradeAwareWhenCompleted,
+                Feature.ENABLE_LOGGING,
+                Feature.ENABLE_COMPRESSOR );
+        
+        try {
+            final TestChannelCreator creator = new TestChannelCreator();
+            final TestChannelPool pool = new TestChannelPool(1);
+            
+            final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
+            
+            final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient);
+            
+            signalClient.registerRequestType(TestRequestByPostWithHeaderParam.class, TestResponse.class, 
+                    null, 
+                    buildUri2Addr(testAddr),
+                    Feature.ENABLE_LOGGING);
+            
+            final TestRequestByPostWithHeaderParam reqToSend = new TestRequestByPostWithHeaderParam("1", "test");
             final TestResponse respReceived = 
                 ((SignalClient)signalClient).<TestResponse>defineInteraction(reqToSend)
                 .timeout(1, TimeUnit.SECONDS)
