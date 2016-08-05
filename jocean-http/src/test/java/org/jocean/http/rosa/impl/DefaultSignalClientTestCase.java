@@ -5,11 +5,16 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLException;
 import javax.ws.rs.DELETE;
@@ -18,6 +23,7 @@ import javax.ws.rs.HEAD;
 import javax.ws.rs.OPTIONS;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.Outbound;
@@ -30,14 +36,17 @@ import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.server.impl.AbstractBootstrapCreator;
 import org.jocean.http.server.impl.DefaultHttpServer;
 import org.jocean.http.util.HttpMessageHolder;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.AnnotationWrapper;
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.RxActions;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.annotation.JSONField;
 import com.google.common.base.Charsets;
 
 import io.netty.bootstrap.ServerBootstrap;
@@ -70,7 +79,6 @@ import rx.functions.Func1;
 
 public class DefaultSignalClientTestCase {
 
-    @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClientTestCase.class);
 
@@ -86,10 +94,6 @@ public class DefaultSignalClientTestCase {
             return null;
         }
     }
-    
-    private static final String TEST_ADDR = "test";
-    
-    public static byte[] OK_RESP = "{\"code\":\"0\"}".getBytes(CharsetUtil.UTF_8);
     
     private final static HttpServer TEST_SERVER_BUILDER = new DefaultHttpServer(
             new AbstractBootstrapCreator(
@@ -122,6 +126,20 @@ public class DefaultSignalClientTestCase {
                 }});
     }
     
+    private static Subscription createTestServerWith(
+            final String acceptId,
+            final Action1<HttpTrade> onRequestCompleted,
+            final Feature... features) {
+        return TEST_SERVER_BUILDER.defineServer(new LocalAddress(acceptId), features)
+            .subscribe(new Action1<HttpTrade>() {
+                @Override
+                public void call(final HttpTrade trade) {
+                    trade.inboundRequest()
+                        .doOnCompleted(RxActions.bindParameter(onRequestCompleted, trade))
+                        .subscribe();
+                }});
+    }
+    
     private static Observable<HttpObject> buildResponse(final Object responseBean) {
         final byte[] responseBytes = JSON.toJSONBytes(responseBean);
         final FullHttpResponse response = new DefaultFullHttpResponse(
@@ -132,11 +150,13 @@ public class DefaultSignalClientTestCase {
         return  Observable.<HttpObject>just(response);
     }
     
-    final Func1<URI, SocketAddress> TO_TEST_ADDR = new Func1<URI, SocketAddress>() {
-        @Override
-        public SocketAddress call(final URI uri) {
-            return new LocalAddress(TEST_ADDR);
-        }};
+    private static Func1<URI, SocketAddress> buildUri2Addr(final String addr) {
+        return new Func1<URI, SocketAddress>() {
+            @Override
+            public SocketAddress call(final URI uri) {
+                return new LocalAddress(addr);
+            }};
+    }
         
     @Test
     public void testSignalClientMethodOf() {
@@ -176,53 +196,218 @@ public class DefaultSignalClientTestCase {
         assertEquals(HttpMethod.DELETE, DefaultSignalClient.methodOf(Req4Delete.class));
     }
         
-    @Test
-    public void testSignalClientOnlySignal() throws Exception {
-        final TestResponse respToSendback = new TestResponse("0", "OK");
+    @AnnotationWrapper(POST.class)
+    @Path("/test/simpleRequest")
+    public static class TestRequest {
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> onRequestCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
-            @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                trade.outboundResponse(buildResponse(respToSendback));
-            }};
-        final Subscription server = createTestServerWith(TEST_ADDR, 
-                onRequestCompleted,
-                Feature.ENABLE_LOGGING,
-                Feature.ENABLE_COMPRESSOR );
+        public TestRequest() {}
         
-        final TestChannelCreator creator = new TestChannelCreator();
-        final TestChannelPool pool = new TestChannelPool(1);
+        public TestRequest(final String id) {
+            this._id = id;
+        }
         
-        final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
+        /* (non-Javadoc)
+         * @see java.lang.Object#hashCode()
+         */
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((_id == null) ? 0 : _id.hashCode());
+            return result;
+        }
+
+        /* (non-Javadoc)
+         * @see java.lang.Object#equals(java.lang.Object)
+         */
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            TestRequest other = (TestRequest) obj;
+            if (_id == null) {
+                if (other._id != null)
+                    return false;
+            } else if (!_id.equals(other._id))
+                return false;
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            return "[id=" + _id + "]";
+        }
         
-        final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient);
+        @JSONField(name="id")
+        public String getId() {
+            return this._id;
+        }
+
+        @JSONField(name="id")
+        public void setId(final String id) {
+            this._id = id;
+        }
+
+        protected String _id;
+    }
+    
+    public static class TestResponse {
         
-        signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
-                null, 
-                TO_TEST_ADDR,
-                Feature.ENABLE_LOGGING);
-        final TestResponse respReceived = 
-            ((SignalClient)signalClient).<TestResponse>defineInteraction(new TestRequest())
-            .toBlocking().single();
-        assertEquals(respToSendback, respReceived);
+        public TestResponse() {}
         
-        pool.awaitRecycleChannels();
+        public TestResponse(final String code, final String msg) {
+            this._code = code;
+            this._message = msg;
+        }
         
-        server.unsubscribe();
+        /* (non-Javadoc)
+         * @see java.lang.Object#hashCode()
+         */
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((_code == null) ? 0 : _code.hashCode());
+            result = prime * result
+                    + ((_message == null) ? 0 : _message.hashCode());
+            return result;
+        }
+
+        /* (non-Javadoc)
+         * @see java.lang.Object#equals(java.lang.Object)
+         */
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            TestResponse other = (TestResponse) obj;
+            if (_code == null) {
+                if (other._code != null)
+                    return false;
+            } else if (!_code.equals(other._code))
+                return false;
+            if (_message == null) {
+                if (other._message != null)
+                    return false;
+            } else if (!_message.equals(other._message))
+                return false;
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            return "[code=" + _code +  ",message=" + _message + "]";
+        }
+        
+        @JSONField(name="code")
+        public String getCode() {
+            return this._code;
+        }
+
+        @JSONField(name="code")
+        public void setCode(final String code) {
+            this._code = code;
+        }
+
+        @JSONField(name="message")
+        public String getMessage() {
+            return this._message;
+        }
+
+        @JSONField(name="message")
+        public void setMessage(final String msg) {
+            this._message = msg;
+        }
+
+        protected String _code;
+        
+        protected String _message;
     }
     
     @Test
-    public void testSignalClientWithAttachment() throws Exception {
-        
+    public void testSignalClientOnlySignal() throws Exception {
         final TestResponse respToSendback = new TestResponse("0", "OK");
-        final List<FileUpload> uploads = new ArrayList<>();
+        final AtomicReference<String> requriReceivedRef = new AtomicReference<>();
+        final AtomicReference<TestRequest> reqbeanReceivedRef = new AtomicReference<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> onRequestCompleted = new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
             @Override
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
+                    requriReceivedRef.set(req.getUri());
+                    reqbeanReceivedRef.set(
+                            (TestRequest) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
+                                    TestRequest.class));
+                } catch (IOException e) {
+                    LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
+                            ExceptionUtils.exception2detail(e));
+                } finally {
+                    req.release();
+                }
+                trade.outboundResponse(buildResponse(respToSendback));
+            }};
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = createTestServerWith(testAddr, 
+                requestAndTradeAwareWhenCompleted,
+                Feature.ENABLE_LOGGING,
+                Feature.ENABLE_COMPRESSOR );
+        
+        try {
+            final TestChannelCreator creator = new TestChannelCreator();
+            final TestChannelPool pool = new TestChannelPool(1);
+            
+            final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
+            
+            final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient);
+            
+            signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
+                    null, 
+                    buildUri2Addr(testAddr),
+                    Feature.ENABLE_LOGGING);
+            
+            final TestRequest reqToSend = new TestRequest("1");
+            final TestResponse respReceived = 
+                ((SignalClient)signalClient).<TestResponse>defineInteraction(reqToSend)
+                .timeout(1, TimeUnit.SECONDS)
+                .toBlocking().single();
+            
+            assertEquals(reqToSend, reqbeanReceivedRef.get());
+            
+            assertEquals("/test/simpleRequest", requriReceivedRef.get());
+            
+            assertEquals(respToSendback, respReceived);
+            
+            pool.awaitRecycleChannels();
+        } finally {
+            server.unsubscribe();
+        }
+    }
+    
+    @Test
+    public void testSignalClientWithAttachmentSuccess() throws Exception {
+        
+        final TestResponse respToSendback = new TestResponse("0", "OK");
+        final AtomicReference<String> requriReceivedRef = new AtomicReference<>();
+        final AtomicReference<TestRequest> reqbeanReceivedRef = new AtomicReference<>();
+        final List<FileUpload> uploads = new ArrayList<>();
+        
+        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+            @Override
+            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
+                final FullHttpRequest req = genFullHttpRequest.call();
+                try {
+                    requriReceivedRef.set(req.getUri());
                     HttpPostRequestDecoder decoder = new HttpPostRequestDecoder(
                             HTTP_DATA_FACTORY, req);
                     //  first is signal
@@ -235,6 +420,14 @@ public class DefaultSignalClientTestCase {
                             }
                         } else {
                             isfirst = false;
+                            try {
+                                reqbeanReceivedRef.set(
+                                        (TestRequest) JSON.parseObject(Nettys.dumpByteBufAsBytes(((FileUpload)data).content()), 
+                                                TestRequest.class));
+                            } catch (Exception e) {
+                                LOG.warn("exception when JSON.parseObject, detail: {}",
+                                        ExceptionUtils.exception2detail(e));
+                            }
                         }
                     }
                     trade.outboundResponse(buildResponse(respToSendback));
@@ -244,49 +437,99 @@ public class DefaultSignalClientTestCase {
             }};
             
         //  launch test server for attachment send
-        final Subscription server = createTestServerWith(TEST_ADDR, 
-                onRequestCompleted,
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = createTestServerWith(testAddr, 
+                requestAndTradeAwareWhenCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
         
-        final TestChannelCreator creator = new TestChannelCreator();
-        final TestChannelPool pool = new TestChannelPool(1);
-        
-        final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
-        final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient, 
-                new AttachmentBuilder4InMemory());
-        
-        signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
-                null, 
-                TO_TEST_ADDR,
-                Feature.ENABLE_LOGGING,
-                Outbound.ENABLE_MULTIPART);
-        
-        final AttachmentInMemory[] attachsToSend = new AttachmentInMemory[]{
+        try {
+            final TestChannelCreator creator = new TestChannelCreator();
+            final TestChannelPool pool = new TestChannelPool(1);
+            
+            final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
+            final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient, 
+                    new AttachmentBuilder4InMemory());
+            
+            signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
+                    null, 
+                    buildUri2Addr(testAddr),
+                    Feature.ENABLE_LOGGING,
+                    Outbound.ENABLE_MULTIPART);
+            
+            final AttachmentInMemory[] attachsToSend = new AttachmentInMemory[]{
+                    new AttachmentInMemory("1", "text/plain", "11111111111111".getBytes(Charsets.UTF_8)),
+                    new AttachmentInMemory("2", "text/plain", "22222222222222222".getBytes(Charsets.UTF_8)),
+                    new AttachmentInMemory("3", "text/plain", "333333333333333".getBytes(Charsets.UTF_8)),
+            };
+            
+            final TestRequest reqToSend = new TestRequest("1");
+            final TestResponse respReceived = ((SignalClient)signalClient).<TestResponse>defineInteraction(
+                    reqToSend, 
+                    attachsToSend)
+                .timeout(1, TimeUnit.SECONDS)
+                .toBlocking().single();
+            
+            assertEquals(reqToSend, reqbeanReceivedRef.get());
+            
+            assertEquals("/test/simpleRequest", requriReceivedRef.get());
+            
+            assertEquals(respToSendback, respReceived);
+            
+            final FileUpload[] attachsReceived = uploads.toArray(new FileUpload[0]);
+            
+            assertEquals(attachsToSend.length, attachsReceived.length);
+            for (int idx = 0; idx < attachsToSend.length; idx++) {
+                final AttachmentInMemory inmemory = attachsToSend[idx];
+                final FileUpload upload = attachsReceived[idx];
+                assertEquals(inmemory.filename, upload.getName());
+                assertEquals(inmemory.contentType, upload.getContentType());
+                assertTrue( Arrays.equals(inmemory.content(), upload.get()));
+            }
+            
+            pool.awaitRecycleChannels();
+        } finally {
+            server.unsubscribe();
+        }
+    }
+
+    @Test(expected = TimeoutException.class)
+    public void testSignalClientWithAttachmentMissingENABLE_MULTIPART() throws Throwable {
+        //  launch test server for attachment send
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = createTestServerWith(testAddr, 
+            new Action1<HttpTrade>() {
+                // NOT care http request, using trade for sendback response
+                @Override
+                public void call(final HttpTrade trade) {
+                    trade.outboundResponse(buildResponse(new TestResponse("0", "OK")));
+                }},
+            Feature.ENABLE_LOGGING,
+            Feature.ENABLE_COMPRESSOR );
+        try {
+            final TestChannelCreator creator = new TestChannelCreator();
+            final TestChannelPool pool = new TestChannelPool(1);
+            
+            final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
+            final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient, 
+                    new AttachmentBuilder4InMemory());
+            
+            signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
+                    null, 
+                    buildUri2Addr(testAddr),
+                    Feature.ENABLE_LOGGING);
+            
+            ((SignalClient)signalClient).<TestResponse>defineInteraction(
+                new TestRequest("1"), 
                 new AttachmentInMemory("1", "text/plain", "11111111111111".getBytes(Charsets.UTF_8)),
                 new AttachmentInMemory("2", "text/plain", "22222222222222222".getBytes(Charsets.UTF_8)),
-                new AttachmentInMemory("3", "text/plain", "333333333333333".getBytes(Charsets.UTF_8)),
-        };
-        
-        final TestResponse respReceived = ((SignalClient)signalClient).<TestResponse>defineInteraction(
-                    new TestRequest(), 
-                    attachsToSend)
+                new AttachmentInMemory("3", "text/plain", "333333333333333".getBytes(Charsets.UTF_8)))
+            .timeout(1, TimeUnit.SECONDS)
             .toBlocking().single();
-        assertEquals(respToSendback, respReceived);
-        
-        final FileUpload[] attachsReceived = uploads.toArray(new FileUpload[0]);
-        
-        assertEquals(attachsToSend.length, attachsReceived.length);
-        for (int idx = 0; idx < attachsToSend.length; idx++) {
-            final AttachmentInMemory inmemory = attachsToSend[idx];
-            final FileUpload upload = attachsReceived[idx];
-            assertEquals(inmemory.filename, upload.getName());
-            assertEquals(inmemory.contentType, upload.getContentType());
-            assertTrue( Arrays.equals(inmemory.content(), upload.get()));
+        } catch (RuntimeException e) {
+            throw e.getCause();
+        } finally {
+            server.unsubscribe();
         }
-        
-        pool.awaitRecycleChannels();
-        
-        server.unsubscribe();
     }
 }
