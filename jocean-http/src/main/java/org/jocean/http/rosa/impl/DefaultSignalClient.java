@@ -68,39 +68,39 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     
     @Override
-    public <RESP> Observable<? extends RESP> defineInteraction(final Object request) {
-        return defineInteraction(request, Feature.EMPTY_FEATURES, new Attachment[0]);
+    public <RESP> Observable<? extends RESP> defineInteraction(final Object signalBean) {
+        return defineInteraction(signalBean, Feature.EMPTY_FEATURES, new Attachment[0]);
     }
     
     @Override
-    public <RESP> Observable<? extends RESP> defineInteraction(final Object request, final Feature... features) {
-        return defineInteraction(request, features, new Attachment[0]);
+    public <RESP> Observable<? extends RESP> defineInteraction(final Object signalBean, final Feature... features) {
+        return defineInteraction(signalBean, features, new Attachment[0]);
     }
 
     @Override
-    public <RESP> Observable<? extends RESP> defineInteraction(final Object request, final Attachment... attachments) {
-        return defineInteraction(request, Feature.EMPTY_FEATURES, attachments);
+    public <RESP> Observable<? extends RESP> defineInteraction(final Object signalBean, final Attachment... attachments) {
+        return defineInteraction(signalBean, Feature.EMPTY_FEATURES, attachments);
     }
     
     @Override
     public <RESP> Observable<? extends RESP> defineInteraction(
-            final Object request, 
+            final Object signalBean, 
             final Feature[] features, 
             final Attachment[] attachments) {
         return Observable.create(new OnSubscribe<RESP>() {
             @Override
             public void call(final Subscriber<? super RESP> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
-                    final URI uri = req2uri(request);
-                    final SocketAddress remoteAddress = safeGetAddress(request, uri);
+                    final URI uri = req2uri(signalBean);
+                    final SocketAddress remoteAddress = safeGetAddress(signalBean, uri);
                     
                     _httpClient.defineInteraction(
                             remoteAddress, 
-                            requestProviderOf(uri, request, attachments, features),
+                            requestProviderOf(uri, signalBean, attachments, features),
                             JOArrays.addFirst(Feature[].class, 
-                                safeGetRequestFeatures(request), 
+                                safeGetRequestFeatures(signalBean), 
                                 features))
-                    .compose(new ToSignalResponse<RESP>(safeGetResponseClass(request)))
+                    .compose(new ToSignalResponse<RESP>(safeGetResponseClass(signalBean)))
                     .subscribe(subscriber);
                 }
             }
@@ -108,14 +108,14 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
 
     private Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProviderOf(
-            final URI uri, final Object request, final Attachment[] attachments, final Feature[] features) {
+            final URI uri, final Object signalBean, final Attachment[] attachments, final Feature[] features) {
         return new Func1<DoOnUnsubscribe, Observable<? extends Object>>() {
 
             @Override
             public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
                 try {
-                    final Outgoing outgoing = buildHttpRequest(doOnUnsubscribe, uri, request, attachments);
-                    hookPayloadCounter(outgoing.bytes(), features);
+                    final Outgoing outgoing = buildHttpRequest(doOnUnsubscribe, uri, signalBean, attachments);
+                    hookPayloadCounter(outgoing.requestSizeInBytes(), features);
                     return outgoing.request();
                 } catch (Exception e) {
                     return Observable.error(e);
@@ -152,19 +152,19 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     final static class Outgoing {
         
         final Observable<Object> _requestObservable;
-        final long _bytes;
+        final long _requestSizeInBytes;
         
-        Outgoing(Observable<Object> request, long bytes) {
+        Outgoing(final Observable<Object> request, final long size) {
             this._requestObservable = request;
-            this._bytes = bytes;
+            this._requestSizeInBytes = size;
         }
         
         Observable<Object> request() {
             return this._requestObservable;
         }
         
-        long bytes() {
-            return this._bytes;
+        long requestSizeInBytes() {
+            return this._requestSizeInBytes;
         }
     }
     
@@ -252,28 +252,28 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final Object signalBean,
             final HttpRequest request) {
         if ( request.getMethod().equals(HttpMethod.POST)) {
-            final byte[] json = JSON.toJSONBytes(signalBean);
-            HttpHeaders.setContentLength(request, json.length);
+            final byte[] jsonBytes = JSON.toJSONBytes(signalBean);
+            HttpHeaders.setContentLength(request, jsonBytes.length);
             HttpHeaders.setHeader(request, HttpHeaders.Names.CONTENT_TYPE, "application/json; charset=UTF-8");
             final LastHttpContent lastContent = new DefaultLastHttpContent();
-            Nettys.fillByteBufHolderUsingBytes(lastContent, json);
+            Nettys.fillByteBufHolderUsingBytes(lastContent, jsonBytes);
             return lastContent;
         } else {
             return LastHttpContent.EMPTY_LAST_CONTENT;
         }
     }
 
-    static HttpMethod methodOf(final Class<?> reqCls) {
+    static HttpMethod methodOf(final Class<?> signalType) {
         final AnnotationWrapper wrapper = 
-                reqCls.getAnnotation(AnnotationWrapper.class);
+                signalType.getAnnotation(AnnotationWrapper.class);
         final HttpMethod method = null != wrapper ? HttpUtil.fromJSR331Type(wrapper.value()) : null;
         return null != method ? method : HttpMethod.GET;
     }
     
-    public Action0 registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
+    public Action0 registerRequestType(final Class<?> reqType, final Class<?> respType, final String pathPrefix, 
             final Func1<URI, SocketAddress> uri2address,
             final Feature... features) {
-        return registerRequestType(reqCls, respCls, pathPrefix, 
+        return registerRequestType(reqType, respType, pathPrefix, 
                 new Func0<Feature[]>() {
                     @Override
                     public Feature[] call() {
@@ -282,18 +282,18 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 uri2address);
     }
     
-    public Action0 registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
+    public Action0 registerRequestType(final Class<?> reqType, final Class<?> respType, final String pathPrefix, 
             final Feature... features) {
-        return registerRequestType(reqCls, respCls, pathPrefix, new Func0<Feature[]>() {
+        return registerRequestType(reqType, respType, pathPrefix, new Func0<Feature[]>() {
             @Override
             public Feature[] call() {
                 return features;
             }});
     }
     
-    public Action0 registerRequestType(final Class<?> reqCls, final Class<?> respCls, final String pathPrefix, 
+    public Action0 registerRequestType(final Class<?> reqType, final Class<?> respType, final String pathPrefix, 
             final String featuresName) {
-        return registerRequestType(reqCls, respCls, pathPrefix, new Func0<Feature[]>() {
+        return registerRequestType(reqType, respType, pathPrefix, new Func0<Feature[]>() {
             @Override
             public String toString() {
                 return "Features Config named(" + featuresName + ")";
@@ -310,26 +310,26 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }});
     }
     
-    public Action0 registerRequestType(final Class<?> reqCls, 
-            final Class<?> respCls, 
+    public Action0 registerRequestType(final Class<?> reqType, 
+            final Class<?> respType, 
             final String pathPrefix, 
             final Func0<Feature[]> featuresBuilder) {
-        return registerRequestType(reqCls, respCls, pathPrefix, featuresBuilder, _DEFAULT_URI2ADDR);
+        return registerRequestType(reqType, respType, pathPrefix, featuresBuilder, _DEFAULT_URI2ADDR);
     }
 
-    public Action0 registerRequestType(final Class<?> reqCls, 
-            final Class<?> respCls, 
+    public Action0 registerRequestType(final Class<?> reqType, 
+            final Class<?> respType, 
             final String pathPrefix, 
             final Func0<Feature[]> featuresBuilder,
             final Func1<URI, SocketAddress> uri2address) {
-        this._req2profile.put(reqCls, new RequestProfile(respCls, pathPrefix, featuresBuilder, uri2address));
+        this._signal2profile.put(reqType, new RequestProfile(respType, pathPrefix, featuresBuilder, uri2address));
         LOG.info("register request type {} with resp type {}/path {}/features builder {}",
-                reqCls, respCls, pathPrefix, featuresBuilder);
+                reqType, respType, pathPrefix, featuresBuilder);
         return new Action0() {
             @Override
             public void call() {
-                _req2profile.remove(reqCls);
-                LOG.info("unregister request type {}", reqCls);
+                _signal2profile.remove(reqType);
+                LOG.info("unregister request type {}", reqType);
             }};
     }
     
@@ -342,10 +342,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     };
     
     
-    public String[] getRegisteredRequests() {
+    public String[] getRegisteredSignal() {
         final List<String> ret = new ArrayList<>();
         for ( Map.Entry<Class<?>, RequestProfile> entry 
-                : _req2profile.entrySet()) {
+                : _signal2profile.entrySet()) {
             final StringBuilder sb = new StringBuilder();
             sb.append(entry.getKey());
             sb.append("-->");
@@ -358,7 +358,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return ret.toArray(new String[0]);
     }
     
-    public String[] getEmittedRequests() {
+    public String[] getEmittedSignal() {
         final List<String> ret = new ArrayList<>();
         for (Map.Entry<Class<?>, RequestProcessor> entry 
                 : this._processorCache.snapshot().entrySet()) {
@@ -375,7 +375,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return ret.toArray(new String[0]);
     }
     
-    private final Map<Class<?>, RequestProfile> _req2profile = 
+    private final Map<Class<?>, RequestProfile> _signal2profile = 
             new ConcurrentHashMap<>();
     
     private URI req2uri(final Object request) {
@@ -391,23 +391,23 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
 
-    private SocketAddress safeGetAddress(final Object request, final URI uri) {
-        final RequestProfile profile = this._req2profile.get(request.getClass());
+    private SocketAddress safeGetAddress(final Object signalBean, final URI uri) {
+        final RequestProfile profile = this._signal2profile.get(signalBean.getClass());
         return (null != profile ? profile.buildAddress(uri) : null);
     }
 
-    private String safeGetPathPrefix(final Class<?> reqCls) {
-        final RequestProfile profile = this._req2profile.get(reqCls);
+    private String safeGetPathPrefix(final Class<?> reqType) {
+        final RequestProfile profile = this._signal2profile.get(reqType);
         return (null != profile ? profile.pathPrefix() : null);
     }
     
-    private Feature[] safeGetRequestFeatures(final Object request) {
-        final RequestProfile profile = _req2profile.get(request.getClass());
+    private Feature[] safeGetRequestFeatures(final Object signalBean) {
+        final RequestProfile profile = _signal2profile.get(signalBean.getClass());
         return (null != profile ? profile.features() : Feature.EMPTY_FEATURES);
     }
     
-    private Class<?> safeGetResponseClass(final Object request) {
-        final RequestProfile profile = this._req2profile.get(request.getClass());
+    private Class<?> safeGetResponseClass(final Object signalBean) {
+        final RequestProfile profile = this._signal2profile.get(signalBean.getClass());
         return (null != profile ? profile.responseType() : null);
     }
 
@@ -415,8 +415,8 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         new SimpleCache<Class<?>, RequestProcessor>(
             new Func1<Class<?>, RequestProcessor>() {
                 @Override
-                public RequestProcessor call(final Class<?> reqCls) {
-                    return new RequestProcessor(reqCls);
+                public RequestProcessor call(final Class<?> signalType) {
+                    return new RequestProcessor(signalType);
                 }});
     
     @Override
@@ -424,7 +424,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         this._beanHolder = beanHolder;
     }
     
+    private BeanHolder _beanHolder;
     final private HttpClient _httpClient;
     final private AttachmentBuilder _attachmentBuilder;
-    private BeanHolder _beanHolder;
 }
