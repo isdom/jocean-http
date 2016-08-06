@@ -13,10 +13,14 @@ import rx.functions.Func2;
  * @author isdom
  *
  */
-public interface Feature extends Func2<Feature.HandlerBuilder, ChannelPipeline, ChannelHandler> {
+public interface Feature {
+    public interface FeatureOverChannelHandler extends Feature, Func2<Feature.HandlerBuilder, ChannelPipeline, ChannelHandler> {
+    }
+    
     public interface HandlerBuilder {
         public ChannelHandler build(final Feature feature, final ChannelPipeline pipeline, final Object... args);
     }
+    
     public static final Feature[] EMPTY_FEATURES = new Feature[0];
 
     public static final Func0<Feature[]> FEATURESBUILDER_FOR_EMPTY = new Func0<Feature[]>() {
@@ -26,7 +30,7 @@ public interface Feature extends Func2<Feature.HandlerBuilder, ChannelPipeline, 
         }
     };
     
-    public static abstract class AbstractFeature0 implements Feature {
+    public static abstract class AbstractFeature0 implements FeatureOverChannelHandler {
         @Override
         public ChannelHandler call(final HandlerBuilder builder, final ChannelPipeline pipeline) {
             return builder.build(this, pipeline);
@@ -54,7 +58,7 @@ public interface Feature extends Func2<Feature.HandlerBuilder, ChannelPipeline, 
         }
     };
     
-    public static final class ENABLE_CLOSE_ON_IDLE implements Feature {
+    public static final class ENABLE_CLOSE_ON_IDLE implements FeatureOverChannelHandler {
         public ENABLE_CLOSE_ON_IDLE(final int allIdleTimeout) {
             this._allIdleTimeout = allIdleTimeout;
         }
@@ -72,7 +76,7 @@ public interface Feature extends Func2<Feature.HandlerBuilder, ChannelPipeline, 
         private final int _allIdleTimeout;
     }
     
-    public static final class ENABLE_SSL implements Feature {
+    public static final class ENABLE_SSL implements FeatureOverChannelHandler {
         public ENABLE_SSL(final SslContext sslCtx) {
             this._sslCtx = sslCtx;
         }

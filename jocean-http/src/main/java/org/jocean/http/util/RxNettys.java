@@ -8,6 +8,7 @@ import java.util.Iterator;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
+import org.jocean.http.Feature.FeatureOverChannelHandler;
 import org.jocean.http.util.Nettys.ServerChannelAware;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ProxyBuilder;
@@ -95,11 +96,13 @@ public class RxNettys {
             final Feature[] features,
             final DoOnUnsubscribe doOnUnsubscribe) {
         for (Feature feature : features) {
-            final ChannelHandler handler = feature.call(builder, channel.pipeline());
-            if (null != handler && null!=doOnUnsubscribe) {
-                doOnUnsubscribe.call(
-                    Subscriptions.create(
-                        RxNettys.actionToRemoveHandler(channel, handler)));
+            if (feature instanceof FeatureOverChannelHandler) {
+                final ChannelHandler handler = ((FeatureOverChannelHandler)feature).call(builder, channel.pipeline());
+                if (null != handler && null!=doOnUnsubscribe) {
+                    doOnUnsubscribe.call(
+                        Subscriptions.create(
+                            RxNettys.actionToRemoveHandler(channel, handler)));
+                }
             }
         }
     }

@@ -3,13 +3,14 @@ package org.jocean.http.util;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
+import org.jocean.http.Feature.FeatureOverChannelHandler;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.TrafficCounter;
 
 import io.netty.handler.codec.http.HttpMethod;
 
 public class HttpUtil {
-    public interface TrafficCounterFeature extends  Feature, TrafficCounter {
+    public interface TrafficCounterFeature extends  FeatureOverChannelHandler, TrafficCounter {
     }
     
     public interface PayloadCounterFeature extends  Feature, PayloadCounter {
@@ -55,8 +56,7 @@ public class HttpUtil {
                 new AtomicReference<TrafficCounter>();
     }
 
-    static class PayloadCounterProxy extends Feature.AbstractFeature0 
-        implements PayloadCounterFeature, PayloadCounterAware {
+    static class PayloadCounterProxy implements PayloadCounterFeature, PayloadCounterAware {
     
         @Override
         public String toString() {

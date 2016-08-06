@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.jocean.http.Feature;
+import org.jocean.http.Feature.FeatureOverChannelHandler;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Class2ApplyBuilder;
@@ -97,9 +98,11 @@ public class DefaultHttpServer implements HttpServer {
                             final Feature[] applyFeatures = 
                                     (null != actualFeatures && actualFeatures.length > 0 ) ? actualFeatures : _defaultFeatures;
                             for (Feature feature : applyFeatures) {
-                                feature.call(_APPLY_BUILDER, channel.pipeline());
-                                if (LOG.isDebugEnabled()) {
-                                    LOG.debug("initChannel with feature:{}", feature);
+                                if (feature instanceof FeatureOverChannelHandler) {
+                                    ((FeatureOverChannelHandler)feature).call(_APPLY_BUILDER, channel.pipeline());
+                                    if (LOG.isDebugEnabled()) {
+                                        LOG.debug("initChannel with feature:{}", feature);
+                                    }
                                 }
                             }
                             APPLY.HTTPSERVER.applyTo(channel.pipeline());
