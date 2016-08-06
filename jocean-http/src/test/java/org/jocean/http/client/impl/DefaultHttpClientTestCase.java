@@ -530,7 +530,7 @@ public class DefaultHttpClientTestCase {
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
-            final Feature.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
+            final HttpUtil.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
             
             client.defineInteraction(new LocalAddress("test"), 
                 Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor),
@@ -559,7 +559,7 @@ public class DefaultHttpClientTestCase {
     public void testTrafficCounterWhenHttpHappyPathOnce() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
-        final Feature.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
+        final HttpUtil.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
                 ENABLE_LOGGING,
                 counter);

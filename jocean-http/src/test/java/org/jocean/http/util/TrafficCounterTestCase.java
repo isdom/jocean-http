@@ -3,7 +3,7 @@ package org.jocean.http.util;
 import static org.junit.Assert.*;
 
 import org.jocean.http.TrafficCounter;
-import org.jocean.http.util.TrafficCounterProxy;
+import static org.jocean.http.util.HttpUtil.TrafficCounterProxy;
 import org.junit.Test;
 
 public class TrafficCounterTestCase {

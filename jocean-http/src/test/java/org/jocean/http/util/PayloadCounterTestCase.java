@@ -3,7 +3,7 @@ package org.jocean.http.util;
 import static org.junit.Assert.*;
 
 import org.jocean.http.PayloadCounter;
-import org.jocean.http.util.PayloadCounterProxy;
+import static org.jocean.http.util.HttpUtil.PayloadCounterProxy;
 import org.junit.Test;
 
 public class PayloadCounterTestCase {

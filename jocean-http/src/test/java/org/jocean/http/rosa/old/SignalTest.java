@@ -7,8 +7,6 @@ import static org.jocean.http.Feature.ENABLE_COMPRESSOR;
 import static org.jocean.http.Feature.ENABLE_LOGGING;
 
 import org.jocean.http.Feature;
-import org.jocean.http.Feature.PayloadCounterFeature;
-import org.jocean.http.Feature.TrafficCounterFeature;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.client.impl.AbstractChannelCreator;
@@ -130,8 +128,8 @@ public class SignalTest {
         */
         {
             
-            final Feature.TrafficCounterFeature trafficCounter = HttpUtil.buildTrafficCounterFeature();
-            final Feature.PayloadCounterFeature payloadCounter = HttpUtil.buildPayloadCounterFeature();
+            final HttpUtil.TrafficCounterFeature trafficCounter = HttpUtil.buildTrafficCounterFeature();
+            final HttpUtil.PayloadCounterFeature payloadCounter = HttpUtil.buildPayloadCounterFeature();
             
             final AddMultiMediasToJourneyRequest req = new AddMultiMediasToJourneyRequest();
             req.setCaseId("120");
