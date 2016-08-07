@@ -1,10 +1,12 @@
 package org.jocean.http.rosa.impl;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,25 +15,21 @@ import org.jocean.http.Feature;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.rosa.SignalClient;
+import org.jocean.http.rosa.impl.preprocessor.RosaFeatures;
 import org.jocean.http.util.FeaturesBuilder;
-import org.jocean.http.util.HttpUtil;
-import org.jocean.http.util.Nettys;
 import org.jocean.http.util.PayloadCounterAware;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.BeanHolder;
 import org.jocean.idiom.BeanHolderAware;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
+import org.jocean.idiom.Ordered;
 import org.jocean.idiom.SimpleCache;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.alibaba.fastjson.JSON;
-
-import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -43,6 +41,7 @@ import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
 import io.netty.handler.codec.http.multipart.HttpData;
 import io.netty.handler.codec.http.multipart.HttpDataFactory;
 import io.netty.handler.codec.http.multipart.HttpPostRequestEncoder;
+import io.netty.handler.codec.http.multipart.HttpPostRequestEncoder.ErrorDataEncoderException;
 import io.netty.handler.codec.http.multipart.MemoryFileUpload;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
@@ -57,6 +56,14 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClient.class);
+    
+    private static Feature[] _DEFAULT_PROFILE = new Feature[]{
+            RosaFeatures.ENABLE_SETMETHOD,
+            RosaFeatures.ENABLE_SETURI,
+            RosaFeatures.ENABLE_QUERYPARAM,
+            RosaFeatures.ENABLE_HEADERPARAM,
+            RosaFeatures.ENABLE_DEFAULTBODY,
+    };
 
     public DefaultSignalClient(final HttpClient httpClient) {
         this(httpClient, new DefaultAttachmentBuilder());
@@ -69,7 +76,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     
     @Override
     public <RESP> Observable<? extends RESP> defineInteraction(final Object signalBean) {
-        return defineInteraction(signalBean, Feature.EMPTY_FEATURES, new Attachment[0]);
+        return defineInteraction(signalBean, _DEFAULT_PROFILE, new Attachment[0]);
     }
     
     @Override
@@ -79,7 +86,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     @Override
     public <RESP> Observable<? extends RESP> defineInteraction(final Object signalBean, final Attachment... attachments) {
-        return defineInteraction(signalBean, Feature.EMPTY_FEATURES, attachments);
+        return defineInteraction(signalBean, _DEFAULT_PROFILE, attachments);
     }
     
     @Override
@@ -108,13 +115,20 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
 
     private Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProviderOf(
-            final URI uri, final Object signalBean, final Attachment[] attachments, final Feature[] features) {
+            final URI uri, 
+            final Object signalBean, 
+            final Attachment[] attachments, 
+            final Feature[] features) {
         return new Func1<DoOnUnsubscribe, Observable<? extends Object>>() {
 
             @Override
             public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
                 try {
-                    final Outgoing outgoing = buildHttpRequest(doOnUnsubscribe, uri, signalBean, attachments);
+                    final Outgoing outgoing = buildHttpRequest(doOnUnsubscribe, 
+                            uri, 
+                            signalBean, 
+                            attachments,
+                            features);
                     hookPayloadCounter(outgoing.requestSizeInBytes(), features);
                     return outgoing.request();
                 } catch (Exception e) {
@@ -172,104 +186,192 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final DoOnUnsubscribe doOnUnsubscribe, 
             final URI uri,
             final Object signalBean, 
-            final Attachment[] attachments) throws Exception {
+            final Attachment[] attachments, 
+            final Feature[] features) throws Exception {
         
         final HttpRequest request = new DefaultHttpRequest(
-                HttpVersion.HTTP_1_1, 
-                methodOf(signalBean.getClass()), 
-                uri.getRawPath());
+                HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
         
         if (null != uri.getHost()) {
             request.headers().set(HttpHeaders.Names.HOST, uri.getHost());
         }
-        this._processorCache.get(signalBean.getClass())
-            .applyParamsToRequest(signalBean, request);
         
-        if (0 == attachments.length) {
-            final LastHttpContent lastContent = buildLastContent(signalBean, request);
-            
-            doOnUnsubscribe.call(Subscriptions.create(
-                    new Action0() {
-                        @Override
-                        public void call() {
-                            ReferenceCountUtil.release(request);
-                            ReferenceCountUtil.release(lastContent);
-                        }}));
-            
-            return new Outgoing(Observable.<Object>just(request, lastContent), -1L);
-        } else {
-            // multipart
-            final HttpDataFactory factory = new DefaultHttpDataFactory(false);
-            
-            long total = 0;
-            // Use the PostBody encoder
-            final HttpPostRequestEncoder postRequestEncoder =
-                    new HttpPostRequestEncoder(factory, request, true); // true => multipart
-
-            {
-                final byte[] json = JSON.toJSONBytes(signalBean);
-                final MemoryFileUpload jsonPayload = 
-                        new MemoryFileUpload("json", "json", "application/json", null, null, json.length) {
-                            @Override
-                            public Charset getCharset() {
-                                return null;
-                            }
-                };
+        applyRequestPreprocessors(features, signalBean, request);
+        
+        final BodyForm body = buildBody(features, signalBean, request);
+        
+//        this._processorCache.get(signalBean.getClass())
+//            .applyParamsToRequest(signalBean, request);
+        
+        try {
+            if (0 == attachments.length) {
+                final LastHttpContent lastContent = buildLastContent(request, body);
                 
-                jsonPayload.setContent(Unpooled.wrappedBuffer(json));
-                    
-                total += json.length;
-                postRequestEncoder.addBodyHttpData(jsonPayload);
-            }
-            
-            for (Attachment attachment : attachments) {
-                final HttpData httpData = _attachmentBuilder.call(attachment);
-                total += httpData.length();
-                postRequestEncoder.addBodyHttpData(httpData);
-            }
-            
-            // finalize request
-            final HttpRequest request4send = postRequestEncoder.finalizeRequest();
-
-            doOnUnsubscribe.call(Subscriptions.create(
-                    new Action0() {
-                        @Override
-                        public void call() {
-                            ReferenceCountUtil.release(request4send);
-                            RxNettys.releaseObjects(postRequestEncoder.getBodyListAttributes());
-                        }}));
-            
-            // test if request was chunked and if so, finish the write
-            if (postRequestEncoder.isChunked()) {
-                return new Outgoing(Observable.<Object>just(request4send, postRequestEncoder), total);
+                doOnUnsubscribe.call(Subscriptions.create(
+                        new Action0() {
+                            @Override
+                            public void call() {
+                                ReferenceCountUtil.release(request);
+                                ReferenceCountUtil.release(lastContent);
+                            }}));
+                
+                return new Outgoing(Observable.<Object>just(request, lastContent), 
+                        lastContent.content().readableBytes());
             } else {
-                return new Outgoing(Observable.<Object>just(request4send), total);
+                return fillBodyWithAttachments(doOnUnsubscribe, request, body,
+                        attachments);
+            }
+        } finally {
+            ReferenceCountUtil.release(body);
+        }
+    }
+
+    private Outgoing fillBodyWithAttachments(
+            final DoOnUnsubscribe doOnUnsubscribe,
+            final HttpRequest request,
+            final BodyForm body, 
+            final Attachment[] attachments)
+        throws ErrorDataEncoderException, IOException {
+        // multipart
+        final HttpDataFactory factory = new DefaultHttpDataFactory(false);
+        
+        // Use the PostBody encoder
+        final HttpPostRequestEncoder postRequestEncoder =
+                new HttpPostRequestEncoder(factory, request, true); // true => multipart
+        
+        final long signalSize = addSignalToMultipart(postRequestEncoder, body);
+        final long attachmentSize = addAttachmentsToMultipart(postRequestEncoder, attachments);
+        final long total = signalSize + attachmentSize;
+        
+        // finalize request
+        final HttpRequest request4send = postRequestEncoder.finalizeRequest();
+
+        doOnUnsubscribe.call(Subscriptions.create(
+                new Action0() {
+                    @Override
+                    public void call() {
+                        ReferenceCountUtil.release(request4send);
+                        RxNettys.releaseObjects(postRequestEncoder.getBodyListAttributes());
+                    }}));
+        
+        // test if request was chunked and if so, finish the write
+        if (postRequestEncoder.isChunked()) {
+            return new Outgoing(Observable.<Object>just(request4send, postRequestEncoder), total);
+        } else {
+            return new Outgoing(Observable.<Object>just(request4send), total);
+        }
+    }
+
+    private long addAttachmentsToMultipart(
+            final HttpPostRequestEncoder postRequestEncoder,
+            final Attachment[] attachments) {
+        long size = 0;
+        for (Attachment attachment : attachments) {
+            try {
+                final HttpData httpData = this._attachmentBuilder.call(attachment);
+                size += httpData.length();
+                postRequestEncoder.addBodyHttpData(httpData);
+            } catch (Exception e) {
+                LOG.warn("exception when invoke AttachmentBuilder({}).call, detail: {}",
+                        this._attachmentBuilder, ExceptionUtils.exception2detail(e));
+            }
+        }
+        return size;
+    }
+
+    private long addSignalToMultipart(
+            final HttpPostRequestEncoder postRequestEncoder,
+            final BodyForm body)
+            throws IOException, ErrorDataEncoderException {
+        if (null != body) {
+            final MemoryFileUpload signalPayload = 
+                    new MemoryFileUpload("__signal", "__signal", body.contentType(), 
+                            null, null, body.length()) {
+                        @Override
+                        public Charset getCharset() {
+                            return null;
+                        }
+            };
+            
+            signalPayload.setContent(body.content().retain());
+                
+            postRequestEncoder.addBodyHttpData(signalPayload);
+            return body.length();
+        } else {
+            //  TODO ?
+            return 0;
+        }
+    }
+
+    private BodyForm buildBody(final Feature[] features, 
+            final Object signalBean,
+            final HttpRequest request) {
+        final BodyPreprocessor[] bodyPreprocessors = 
+                InterfaceUtils.selectIncludeType(BodyPreprocessor.class, (Object[])features);
+        if (null != bodyPreprocessors) {
+            for (BodyPreprocessor bodyPreprocessor : bodyPreprocessors) {
+                try {
+                    final BodyBuilder builder = bodyPreprocessor.call(signalBean, request);
+                    if (null != builder) {
+                        final BodyForm body = builder.call();
+                        if (null != body) {
+                            return body;
+                        }
+                    }
+                } catch (Exception e) {
+                    LOG.warn("exception when BodyPreprocessor({}).call, detail: {}",
+                            bodyPreprocessor, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }
+        return null;
+    }
+
+    private void applyRequestPreprocessors(final Feature[] features,
+            final Object signalBean, 
+            final HttpRequest request) {
+        final RequestPreprocessor[] requestPreprocessors = 
+                InterfaceUtils.selectIncludeType(RequestPreprocessor.class, (Object[])features);
+        if (null != requestPreprocessors) {
+            //  TODO: refactor by RxJava's stream api
+            final List<RequestChanger> changers = new ArrayList<>();
+            for (RequestPreprocessor preprocessor : requestPreprocessors) {
+                try {
+                    final RequestChanger changer = preprocessor.call(signalBean);
+                    if (null != changer) {
+                        changers.add(changer);
+                    }
+                } catch (Exception e) {
+                    LOG.warn("exception when RequestPreprocessor({}).call, detail: {}",
+                            preprocessor, ExceptionUtils.exception2detail(e));
+                }
+            }
+            if (!changers.isEmpty()) {
+                Collections.sort(changers, Ordered.ASC);
+                for (RequestChanger changer : changers) {
+                    try {
+                        changer.call(request);
+                    } catch (Exception e) {
+                        LOG.warn("exception when RequestChanger({}).call, detail: {}",
+                                changer, ExceptionUtils.exception2detail(e));
+                    }
+                }
             }
         }
     }
 
     private LastHttpContent buildLastContent(
-            final Object signalBean,
-            final HttpRequest request) {
-        if ( request.getMethod().equals(HttpMethod.POST)) {
-            final byte[] jsonBytes = JSON.toJSONBytes(signalBean);
-            HttpHeaders.setContentLength(request, jsonBytes.length);
-            HttpHeaders.setHeader(request, HttpHeaders.Names.CONTENT_TYPE, "application/json; charset=UTF-8");
-            final LastHttpContent lastContent = new DefaultLastHttpContent();
-            Nettys.fillByteBufHolderUsingBytes(lastContent, jsonBytes);
-            return lastContent;
+            final HttpRequest request,
+            final BodyForm body) {
+        if (null != body) {
+            HttpHeaders.setContentLength(request, body.length());
+            HttpHeaders.setHeader(request, HttpHeaders.Names.CONTENT_TYPE, body.contentType());
+            return new DefaultLastHttpContent(body.content().retain());
         } else {
             return LastHttpContent.EMPTY_LAST_CONTENT;
         }
     }
 
-    static HttpMethod methodOf(final Class<?> signalType) {
-        final AnnotationWrapper wrapper = 
-                signalType.getAnnotation(AnnotationWrapper.class);
-        final HttpMethod method = null != wrapper ? HttpUtil.fromJSR331Type(wrapper.value()) : null;
-        return null != method ? method : HttpMethod.GET;
-    }
-    
     public Action0 registerRequestType(final Class<?> reqType, final Class<?> respType, final String pathPrefix, 
             final Func1<URI, SocketAddress> uri2address,
             final Feature... features) {
