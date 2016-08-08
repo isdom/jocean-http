@@ -110,8 +110,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     _httpClient.defineInteraction(
                             remoteAddress, 
                             requestProviderOf(signalBean, 
-                                applyRequestPreprocessors(signalBean, initRequestOf(uri), 
-                                    InterfaceUtils.selectIncludeType(RequestPreprocessor.class, (Object[])features)), 
+                                applyRequestPreprocessors(
+                                    signalBean, 
+                                    initRequestOf(uri), 
+                                    RequestPreprocessor.Util.filter(features)), 
                                 attachments, 
                                 features),
                             JOArrays.addFirst(Feature[].class, 
@@ -141,8 +143,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return new Func1<DoOnUnsubscribe, Observable<? extends Object>>() {
             @Override
             public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
-                final BodyForm body = buildBody(signalBean, request, 
-                        InterfaceUtils.selectIncludeType(BodyPreprocessor.class, (Object[])features));
+                final BodyForm body = buildBody(
+                        signalBean, 
+                        request, 
+                        BodyPreprocessor.Util.filter(features));
                 try {
                     final Outgoing outgoing = assembleOutgoing(doOnUnsubscribe, 
                             request, 
