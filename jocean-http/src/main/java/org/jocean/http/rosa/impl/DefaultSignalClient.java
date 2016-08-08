@@ -88,7 +88,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     
     @Override
     public <RESP> Observable<? extends RESP> defineInteraction(final Object signalBean) {
-        return defineInteraction(signalBean, _DEFAULT_PROFILE, new Attachment[0]);
+        return defineInteraction(signalBean, Feature.EMPTY_FEATURES, new Attachment[0]);
     }
     
     @Override
@@ -98,7 +98,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     @Override
     public <RESP> Observable<? extends RESP> defineInteraction(final Object signalBean, final Attachment... attachments) {
-        return defineInteraction(signalBean, _DEFAULT_PROFILE, attachments);
+        return defineInteraction(signalBean, Feature.EMPTY_FEATURES, attachments);
     }
     
     @Override
