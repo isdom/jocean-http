@@ -10,18 +10,18 @@ import rx.functions.Func1;
 
 class RequestProfile {
 
-    RequestProfile(final Class<?> respCls,
+    RequestProfile(final Class<?> respType,
             final String prefix,
             final Func0<Feature[]> builder,
             final Func1<URI, SocketAddress> uri2address) {
-        this._respCls = respCls;
+        this._respType = respType;
         this._prefix = prefix;
         this._featuresBuilder = builder;
         this._uri2address = uri2address;
     }
     
     Class<?> responseType() {
-        return this._respCls;
+        return this._respType;
     }
     
     String pathPrefix() {
@@ -36,7 +36,7 @@ class RequestProfile {
         return this._uri2address.call(uri);
     }
     
-    private final Class<?> _respCls;
+    private final Class<?> _respType;
     private final String _prefix;
     private final Func0<Feature[]> _featuresBuilder;
     private final Func1<URI, SocketAddress> _uri2address;

@@ -188,7 +188,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final Object signalBean, 
             final Attachment[] attachments, 
             final Feature[] features) throws Exception {
-        
+        //  calc request outside this method
         final HttpRequest request = new DefaultHttpRequest(
                 HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
         
@@ -198,10 +198,8 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         
         applyRequestPreprocessors(features, signalBean, request);
         
+        // only body
         final BodyForm body = buildBody(features, signalBean, request);
-        
-//        this._processorCache.get(signalBean.getClass())
-//            .applyParamsToRequest(signalBean, request);
         
         try {
             if (0 == attachments.length) {
