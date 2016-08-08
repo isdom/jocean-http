@@ -38,16 +38,18 @@ class SetUriPreprocessor implements Feature, RequestPreprocessor {
 
             @Override
             public void call(final HttpRequest request) {
-                request.setUri(genUriAsString(signalBean, 
+                request.setUri(genUriAsString(request.getUri(),
+                        signalBean, 
                         pathparamResolver,
                         pathparamReplacer));
             }
 
             private String genUriAsString(
-                    final Object signalBean,
+                    final String prefix,
+                    final Object signalBean, 
                     final PlaceholderResolver pathparamResolver,
                     final PropertyPlaceholderHelper pathparamReplacer) {
-                final String fullPath = getPathValueOf(signalBean.getClass());
+                final String fullPath = prefix + getPathValueOf(signalBean.getClass());
                 if ( null != pathparamReplacer ) {
                     return pathparamReplacer.replacePlaceholders(
                             signalBean,

@@ -106,6 +106,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final Object signalBean, 
             final Feature[] features, 
             final Attachment[] attachments) {
+        final Feature[] fullfeatures = JOArrays.addFirst(Feature[].class, 
+                features, 
+                _DEFAULT_PROFILE);
         return Observable.create(new OnSubscribe<RESP>() {
             @Override
             public void call(final Subscriber<? super RESP> subscriber) {
@@ -116,10 +119,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             requestProviderOf(signalBean, 
                                 initRequestOf(uri), 
                                 attachments, 
-                                features),
+                                fullfeatures),
                             JOArrays.addFirst(Feature[].class, 
                                 safeGetRequestFeatures(signalBean), 
-                                features))
+                                fullfeatures))
                     .compose(new ToSignalResponse<RESP>(safeGetResponseClass(signalBean)))
                     .subscribe(subscriber);
                 }
@@ -129,7 +132,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     private HttpRequest initRequestOf(final URI uri) {
         final HttpRequest request = new DefaultHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+                HttpVersion.HTTP_1_1, HttpMethod.GET, null != uri.getRawPath() ? uri.getRawPath() : "");
         if (null != uri.getHost()) {
             request.headers().set(HttpHeaders.Names.HOST, uri.getHost());
         }
