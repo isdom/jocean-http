@@ -43,5 +43,10 @@ class JSONBodyBuilder implements BodyBuilder {
             }};
     }
 
+    @Override
+    public int ordinal() {
+        return 100;
+    }
+    
     private final Object _signalBean;
 }

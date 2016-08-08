@@ -69,6 +69,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         this(null, httpClient, new DefaultAttachmentBuilder());
     }
     
+    public DefaultSignalClient(final String defaultUri, final HttpClient httpClient) {
+        this(defaultUri, httpClient, new DefaultAttachmentBuilder());
+    }
+    
     public DefaultSignalClient(final HttpClient httpClient, 
             final AttachmentBuilder attachmentBuilder) {
         this(null, httpClient, attachmentBuilder);
@@ -299,28 +303,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return size;
     }
 
-    private BodyForm buildBody(final Object signalBean, 
-            final HttpRequest request,
-            final BodyPreprocessor[] bodyPreprocessors) {
-        if (null != bodyPreprocessors) {
-            for (BodyPreprocessor bodyPreprocessor : bodyPreprocessors) {
-                try {
-                    final BodyBuilder builder = bodyPreprocessor.call(signalBean, request);
-                    if (null != builder) {
-                        final BodyForm body = builder.call();
-                        if (null != body) {
-                            return body;
-                        }
-                    }
-                } catch (Exception e) {
-                    LOG.warn("exception when BodyPreprocessor({}).call, detail: {}",
-                            bodyPreprocessor, ExceptionUtils.exception2detail(e));
-                }
-            }
-        }
-        return null;
-    }
-
     private HttpRequest applyRequestPreprocessors(final Object signalBean,
             final HttpRequest request, 
             final RequestPreprocessor[] requestPreprocessors) {
@@ -351,6 +333,40 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }
         }
         return request;
+    }
+
+    private BodyForm buildBody(final Object signalBean, 
+            final HttpRequest request,
+            final BodyPreprocessor[] bodyPreprocessors) {
+        if (null != bodyPreprocessors) {
+            final List<BodyBuilder> builders = new ArrayList<>();
+            for (BodyPreprocessor bodyPreprocessor : bodyPreprocessors) {
+                try {
+                    final BodyBuilder builder = bodyPreprocessor.call(signalBean, request);
+                    if (null != builder) {
+                        builders.add(builder);
+                    }
+                } catch (Exception e) {
+                    LOG.warn("exception when BodyPreprocessor({}).call, detail: {}",
+                            bodyPreprocessor, ExceptionUtils.exception2detail(e));
+                }
+                if (!builders.isEmpty()) {
+                    Collections.sort(builders, Ordered.ASC);
+                    for (BodyBuilder builder : builders) {
+                        try {
+                            final BodyForm body = builder.call();
+                            if (null != body) {
+                                return body;
+                            }
+                        } catch (Exception e) {
+                            LOG.warn("exception when BodyBuilder({}).call, detail: {}",
+                                    builder, ExceptionUtils.exception2detail(e));
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private LastHttpContent buildLastContent(

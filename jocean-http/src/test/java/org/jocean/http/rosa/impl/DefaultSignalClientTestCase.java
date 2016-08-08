@@ -427,7 +427,7 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient);
+            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
             
             signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
                     null, 
@@ -489,7 +489,7 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient);
+            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
             
             signalClient.registerRequestType(TestRequestByPost.class, TestResponse.class, 
                     null, 
@@ -624,7 +624,7 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient);
+            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
             
             signalClient.registerRequestType(TestRequestByPostWithQueryParam.class, TestResponse.class, 
                     null, 
@@ -757,7 +757,7 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient);
+            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
             
             signalClient.registerRequestType(TestRequestByPostWithHeaderParam.class, TestResponse.class, 
                     null, 
@@ -838,7 +838,7 @@ public class DefaultSignalClientTestCase {
             final TestChannelPool pool = new TestChannelPool(1);
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
-            final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient, 
+            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient, 
                     new AttachmentBuilder4InMemory());
             
             signalClient.registerRequestType(TestRequestByPost.class, TestResponse.class, 
@@ -900,7 +900,7 @@ public class DefaultSignalClientTestCase {
             final TestChannelPool pool = new TestChannelPool(1);
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
-            final DefaultSignalClient signalClient = new DefaultSignalClient(httpclient, 
+            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient, 
                     new AttachmentBuilder4InMemory());
             
             signalClient.registerRequestType(TestRequestByPost.class, TestResponse.class, 
