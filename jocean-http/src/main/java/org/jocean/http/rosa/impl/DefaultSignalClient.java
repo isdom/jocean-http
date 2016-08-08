@@ -46,6 +46,7 @@ import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
+import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Func0;
 import rx.functions.Func1;
@@ -106,14 +107,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             public void call(final Subscriber<? super RESP> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final URI uri = req2uri(signalBean);
-                    final SocketAddress remoteAddress = safeGetAddress(signalBean, uri);
                     _httpClient.defineInteraction(
-                            remoteAddress, 
+                            safeGetAddress(signalBean, uri), 
                             requestProviderOf(signalBean, 
-                                applyRequestPreprocessors(
-                                    signalBean, 
-                                    initRequestOf(uri), 
-                                    RequestPreprocessor.Util.filter(features)), 
+                                initRequestOf(uri), 
                                 attachments, 
                                 features),
                             JOArrays.addFirst(Feature[].class, 
@@ -143,16 +140,23 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return new Func1<DoOnUnsubscribe, Observable<? extends Object>>() {
             @Override
             public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
+                //  first, apply to request
+                applyRequestPreprocessors(
+                        signalBean, 
+                        request, 
+                        RequestPreprocessor.Util.filter(features));
+                
+                //  second, build body
                 final BodyForm body = buildBody(
                         signalBean, 
                         request, 
                         BodyPreprocessor.Util.filter(features));
                 try {
-                    final Outgoing outgoing = assembleOutgoing(doOnUnsubscribe, 
+                    final Outgoing outgoing = assembleOutgoing(
                             request, 
                             body,
-                            attachments,
-                            features);
+                            attachments);
+                    doOnUnsubscribe.call(outgoing.toRelease());
                     hookPayloadCounter(outgoing.requestSizeInBytes(), features);
                     return outgoing.request();
                 } catch (Exception e) {
@@ -193,10 +197,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         
         final Observable<Object> _requestObservable;
         final long _requestSizeInBytes;
+        final Subscription _subscription;
         
-        Outgoing(final Observable<Object> request, final long size) {
+        Outgoing(final Observable<Object> request, final long size, final Subscription subscription) {
             this._requestObservable = request;
             this._requestSizeInBytes = size;
+            this._subscription = subscription;
         }
         
         Observable<Object> request() {
@@ -206,62 +212,50 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         long requestSizeInBytes() {
             return this._requestSizeInBytes;
         }
+        
+        Subscription toRelease() {
+            return this._subscription;
+        }
     }
     
     private Outgoing assembleOutgoing(
-            final DoOnUnsubscribe doOnUnsubscribe, 
             final HttpRequest request, 
             final BodyForm body,
-            final Attachment[] attachments, 
-            final Feature[] features) throws Exception {
+            final Attachment[] attachments) throws Exception {
         if (0 == attachments.length) {
             final LastHttpContent lastContent = buildLastContent(request, body);
-            doOnUnsubscribe.call(Subscriptions.create(
+            return new Outgoing(Observable.<Object>just(request, lastContent), 
+                    lastContent.content().readableBytes(), 
+                    Subscriptions.create(new Action0() {
+                                @Override
+                                public void call() {
+                                    ReferenceCountUtil.release(request);
+                                    ReferenceCountUtil.release(lastContent);
+                                }}));
+        } else {
+            // Use the PostBody encoder
+            final HttpPostRequestEncoder postRequestEncoder =
+                    new HttpPostRequestEncoder(_DATA_FACTORY, request, true); // true => multipart
+            
+            final long signalSize = addSignalToMultipart(postRequestEncoder, body);
+            final long attachmentSize = addAttachmentsToMultipart(postRequestEncoder, attachments);
+            final long total = signalSize + attachmentSize;
+            
+            // finalize request
+            final HttpRequest request4send = postRequestEncoder.finalizeRequest();
+
+            final Subscription toRelease = Subscriptions.create(
                     new Action0() {
                         @Override
                         public void call() {
-                            ReferenceCountUtil.release(request);
-                            ReferenceCountUtil.release(lastContent);
-                        }}));
-            return new Outgoing(Observable.<Object>just(request, lastContent), 
-                    lastContent.content().readableBytes());
-        } else {
-            return fillBodyWithAttachments(doOnUnsubscribe, request, body,
-                    attachments);
+                            ReferenceCountUtil.release(request4send);
+                            RxNettys.releaseObjects(postRequestEncoder.getBodyListAttributes());
+                        }});
+            
+            return postRequestEncoder.isChunked() 
+                ? new Outgoing(Observable.<Object>just(request4send, postRequestEncoder), total, toRelease)
+                : new Outgoing(Observable.<Object>just(request4send), total, toRelease);
         }
-    }
-
-    private Outgoing fillBodyWithAttachments(
-            final DoOnUnsubscribe doOnUnsubscribe,
-            final HttpRequest request,
-            final BodyForm body, 
-            final Attachment[] attachments)
-        throws ErrorDataEncoderException, IOException {
-        // multipart
-        final HttpDataFactory factory = new DefaultHttpDataFactory(false);
-        
-        // Use the PostBody encoder
-        final HttpPostRequestEncoder postRequestEncoder =
-                new HttpPostRequestEncoder(factory, request, true); // true => multipart
-        
-        final long signalSize = addSignalToMultipart(postRequestEncoder, body);
-        final long attachmentSize = addAttachmentsToMultipart(postRequestEncoder, attachments);
-        final long total = signalSize + attachmentSize;
-        
-        // finalize request
-        final HttpRequest request4send = postRequestEncoder.finalizeRequest();
-
-        doOnUnsubscribe.call(Subscriptions.create(
-                new Action0() {
-                    @Override
-                    public void call() {
-                        ReferenceCountUtil.release(request4send);
-                        RxNettys.releaseObjects(postRequestEncoder.getBodyListAttributes());
-                    }}));
-        
-        return postRequestEncoder.isChunked() 
-            ? new Outgoing(Observable.<Object>just(request4send, postRequestEncoder), total)
-            : new Outgoing(Observable.<Object>just(request4send), total);
     }
 
     private long addSignalToMultipart(
@@ -529,4 +523,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     private final HttpClient _httpClient;
     private final AttachmentBuilder _attachmentBuilder;
     private final String _defaultUri;
+    
+    private final static HttpDataFactory _DATA_FACTORY = new DefaultHttpDataFactory(false);
 }
