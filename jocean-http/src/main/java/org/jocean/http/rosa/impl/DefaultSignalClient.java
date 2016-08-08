@@ -25,7 +25,6 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
-import org.jocean.idiom.SimpleCache;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,10 +65,18 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     };
 
     public DefaultSignalClient(final HttpClient httpClient) {
-        this(httpClient, new DefaultAttachmentBuilder());
+        this(null, httpClient, new DefaultAttachmentBuilder());
     }
     
-    public DefaultSignalClient(final HttpClient httpClient, final AttachmentBuilder attachmentBuilder) {
+    public DefaultSignalClient(final HttpClient httpClient, 
+            final AttachmentBuilder attachmentBuilder) {
+        this(null, httpClient, attachmentBuilder);
+    }
+    
+    public DefaultSignalClient(final String defaultUri, 
+            final HttpClient httpClient, 
+            final AttachmentBuilder attachmentBuilder) {
+        this._defaultUri = defaultUri;
         this._httpClient = httpClient;
         this._attachmentBuilder = attachmentBuilder;
     }
@@ -100,10 +107,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 if (!subscriber.isUnsubscribed()) {
                     final URI uri = req2uri(signalBean);
                     final SocketAddress remoteAddress = safeGetAddress(signalBean, uri);
+                    //  calc request outside this method
+                    final HttpRequest request = buildRequest(uri, signalBean, features);
                     
                     _httpClient.defineInteraction(
                             remoteAddress, 
-                            requestProviderOf(uri, signalBean, attachments, features),
+                            requestProviderOf(signalBean, request, attachments, features),
                             JOArrays.addFirst(Feature[].class, 
                                 safeGetRequestFeatures(signalBean), 
                                 features))
@@ -114,19 +123,33 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         });
     }
 
+    private HttpRequest buildRequest(final URI uri, 
+            final Object signalBean,
+            final Feature[] features) {
+        final HttpRequest request = new DefaultHttpRequest(
+                HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+        
+        if (null != uri.getHost()) {
+            request.headers().set(HttpHeaders.Names.HOST, uri.getHost());
+        }
+
+        applyRequestPreprocessors(request, signalBean, 
+                InterfaceUtils.selectIncludeType(RequestPreprocessor.class, (Object[])features));
+        return request;
+    }
+
     private Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProviderOf(
-            final URI uri, 
             final Object signalBean, 
+            final HttpRequest request, 
             final Attachment[] attachments, 
             final Feature[] features) {
         return new Func1<DoOnUnsubscribe, Observable<? extends Object>>() {
-
             @Override
             public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
                 try {
-                    final Outgoing outgoing = buildHttpRequest(doOnUnsubscribe, 
-                            uri, 
+                    final Outgoing outgoing = assembleOutgoing(doOnUnsubscribe, 
                             signalBean, 
+                            request,
                             attachments,
                             features);
                     hookPayloadCounter(outgoing.requestSizeInBytes(), features);
@@ -182,24 +205,15 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
     
-    private Outgoing buildHttpRequest(
+    private Outgoing assembleOutgoing(
             final DoOnUnsubscribe doOnUnsubscribe, 
-            final URI uri,
             final Object signalBean, 
+            final HttpRequest request,
             final Attachment[] attachments, 
             final Feature[] features) throws Exception {
-        //  calc request outside this method
-        final HttpRequest request = new DefaultHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
-        
-        if (null != uri.getHost()) {
-            request.headers().set(HttpHeaders.Names.HOST, uri.getHost());
-        }
-        
-        applyRequestPreprocessors(features, signalBean, request);
-        
         // only body
-        final BodyForm body = buildBody(features, signalBean, request);
+        final BodyForm body = buildBody(request, signalBean, 
+                InterfaceUtils.selectIncludeType(BodyPreprocessor.class, (Object[])features));
         
         try {
             if (0 == attachments.length) {
@@ -301,11 +315,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
 
-    private BodyForm buildBody(final Feature[] features, 
+    private BodyForm buildBody(final HttpRequest request, 
             final Object signalBean,
-            final HttpRequest request) {
-        final BodyPreprocessor[] bodyPreprocessors = 
-                InterfaceUtils.selectIncludeType(BodyPreprocessor.class, (Object[])features);
+            final BodyPreprocessor[] bodyPreprocessors) {
         if (null != bodyPreprocessors) {
             for (BodyPreprocessor bodyPreprocessor : bodyPreprocessors) {
                 try {
@@ -325,11 +337,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return null;
     }
 
-    private void applyRequestPreprocessors(final Feature[] features,
+    private void applyRequestPreprocessors(final HttpRequest request,
             final Object signalBean, 
-            final HttpRequest request) {
-        final RequestPreprocessor[] requestPreprocessors = 
-                InterfaceUtils.selectIncludeType(RequestPreprocessor.class, (Object[])features);
+            final RequestPreprocessor[] requestPreprocessors) {
         if (null != requestPreprocessors) {
             //  TODO: refactor by RxJava's stream api
             final List<RequestChanger> changers = new ArrayList<>();
@@ -370,10 +380,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
 
-    public Action0 registerRequestType(final Class<?> reqType, final Class<?> respType, final String pathPrefix, 
+    public Action0 registerRequestType(final Class<?> reqType, 
+            final Class<?> respType, 
+            final String uri, 
             final Func1<URI, SocketAddress> uri2address,
             final Feature... features) {
-        return registerRequestType(reqType, respType, pathPrefix, 
+        return registerRequestType(reqType, respType, uri, 
                 new Func0<Feature[]>() {
                     @Override
                     public Feature[] call() {
@@ -382,18 +394,22 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 uri2address);
     }
     
-    public Action0 registerRequestType(final Class<?> reqType, final Class<?> respType, final String pathPrefix, 
+    public Action0 registerRequestType(final Class<?> reqType, 
+            final Class<?> respType, 
+            final String uri, 
             final Feature... features) {
-        return registerRequestType(reqType, respType, pathPrefix, new Func0<Feature[]>() {
+        return registerRequestType(reqType, respType, uri, new Func0<Feature[]>() {
             @Override
             public Feature[] call() {
                 return features;
             }});
     }
     
-    public Action0 registerRequestType(final Class<?> reqType, final Class<?> respType, final String pathPrefix, 
+    public Action0 registerRequestType(final Class<?> reqType, 
+            final Class<?> respType, 
+            final String uri, 
             final String featuresName) {
-        return registerRequestType(reqType, respType, pathPrefix, new Func0<Feature[]>() {
+        return registerRequestType(reqType, respType, uri, new Func0<Feature[]>() {
             @Override
             public String toString() {
                 return "Features Config named(" + featuresName + ")";
@@ -412,19 +428,19 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     
     public Action0 registerRequestType(final Class<?> reqType, 
             final Class<?> respType, 
-            final String pathPrefix, 
+            final String uri, 
             final Func0<Feature[]> featuresBuilder) {
-        return registerRequestType(reqType, respType, pathPrefix, featuresBuilder, _DEFAULT_URI2ADDR);
+        return registerRequestType(reqType, respType, uri, featuresBuilder, _DEFAULT_URI2ADDR);
     }
 
     public Action0 registerRequestType(final Class<?> reqType, 
             final Class<?> respType, 
-            final String pathPrefix, 
+            final String uri, 
             final Func0<Feature[]> featuresBuilder,
             final Func1<URI, SocketAddress> uri2address) {
-        this._signal2profile.put(reqType, new RequestProfile(respType, pathPrefix, featuresBuilder, uri2address));
-        LOG.info("register request type {} with resp type {}/path {}/features builder {}",
-                reqType, respType, pathPrefix, featuresBuilder);
+        this._signal2profile.put(reqType, new RequestProfile(respType, uri, featuresBuilder, uri2address));
+        LOG.info("register request type {} with resp type {}/uri {}/features builder {}",
+                reqType, respType, uri, featuresBuilder);
         return new Action0() {
             @Override
             public void call() {
@@ -449,7 +465,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final StringBuilder sb = new StringBuilder();
             sb.append(entry.getKey());
             sb.append("-->");
-            sb.append(entry.getValue().pathPrefix());
+            sb.append(entry.getValue().uri());
             sb.append("/");
             sb.append(entry.getValue().responseType());
             ret.add(sb.toString());
@@ -458,6 +474,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return ret.toArray(new String[0]);
     }
     
+    /*
     public String[] getEmittedSignal() {
         final List<String> ret = new ArrayList<>();
         for (Map.Entry<Class<?>, RequestProcessor> entry 
@@ -465,7 +482,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final StringBuilder sb = new StringBuilder();
             sb.append(entry.getKey());
             sb.append("-->");
-            sb.append(safeGetPathPrefix(entry.getKey()));
+            sb.append(safeUriOf(entry.getKey()));
             sb.append(entry.getValue().pathSuffix());
             sb.append("/");
             sb.append(entry.getValue());
@@ -474,19 +491,19 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         
         return ret.toArray(new String[0]);
     }
+    */
     
     private final Map<Class<?>, RequestProfile> _signal2profile = 
             new ConcurrentHashMap<>();
     
-    private URI req2uri(final Object request) {
-        final String uri = this._processorCache.get(request.getClass())
-            .req2path(request, safeGetPathPrefix(request.getClass()));
+    private URI req2uri(final Object signalBean) {
+        final String uri = safeUriOf(signalBean.getClass());
         
         try {
             return ( null != uri ? new URI(uri) : null);
         } catch (Exception e) {
             LOG.error("exception when generate URI for request({}), detail:{}",
-                    request, ExceptionUtils.exception2detail(e));
+                    signalBean, ExceptionUtils.exception2detail(e));
             return null;
         }
     }
@@ -496,9 +513,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return (null != profile ? profile.buildAddress(uri) : null);
     }
 
-    private String safeGetPathPrefix(final Class<?> reqType) {
+    private String safeUriOf(final Class<?> reqType) {
         final RequestProfile profile = this._signal2profile.get(reqType);
-        return (null != profile ? profile.pathPrefix() : null);
+        final String signalUri = (null != profile ? profile.uri() : null);
+        return null != signalUri ? signalUri : this._defaultUri;
     }
     
     private Feature[] safeGetRequestFeatures(final Object signalBean) {
@@ -511,6 +529,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return (null != profile ? profile.responseType() : null);
     }
 
+    /*
     private final SimpleCache<Class<?>, RequestProcessor> _processorCache = 
         new SimpleCache<Class<?>, RequestProcessor>(
             new Func1<Class<?>, RequestProcessor>() {
@@ -518,6 +537,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 public RequestProcessor call(final Class<?> signalType) {
                     return new RequestProcessor(signalType);
                 }});
+    */
     
     @Override
     public void setBeanHolder(final BeanHolder beanHolder) {
@@ -525,6 +545,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     
     private BeanHolder _beanHolder;
-    final private HttpClient _httpClient;
-    final private AttachmentBuilder _attachmentBuilder;
+    private final HttpClient _httpClient;
+    private final AttachmentBuilder _attachmentBuilder;
+    private final String _defaultUri;
 }

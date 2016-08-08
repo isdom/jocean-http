@@ -159,14 +159,4 @@ class SetUriPreprocessor implements Feature, RequestPreprocessor {
             return null;
         }
     }
-    
-    private static String safeConcatPath(final String pathPrefix, final String pathSuffix) {
-        if ( null == pathSuffix ) {
-            return pathPrefix;
-        }
-        if ( null == pathPrefix ) {
-            return pathSuffix;
-        }
-        return pathPrefix + pathSuffix;
-    }
 }
