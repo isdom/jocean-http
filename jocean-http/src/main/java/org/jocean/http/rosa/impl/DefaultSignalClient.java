@@ -107,12 +107,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 if (!subscriber.isUnsubscribed()) {
                     final URI uri = req2uri(signalBean);
                     final SocketAddress remoteAddress = safeGetAddress(signalBean, uri);
-                    //  calc request outside this method
-                    final HttpRequest request = buildRequest(uri, signalBean, features);
-                    
                     _httpClient.defineInteraction(
                             remoteAddress, 
-                            requestProviderOf(signalBean, request, attachments, features),
+                            requestProviderOf(signalBean, 
+                                applyRequestPreprocessors(signalBean, initRequestOf(uri), 
+                                    InterfaceUtils.selectIncludeType(RequestPreprocessor.class, (Object[])features)), 
+                                attachments, 
+                                features),
                             JOArrays.addFirst(Feature[].class, 
                                 safeGetRequestFeatures(signalBean), 
                                 features))
@@ -123,18 +124,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         });
     }
 
-    private HttpRequest buildRequest(final URI uri, 
-            final Object signalBean,
-            final Feature[] features) {
+    private HttpRequest initRequestOf(final URI uri) {
         final HttpRequest request = new DefaultHttpRequest(
                 HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
-        
         if (null != uri.getHost()) {
             request.headers().set(HttpHeaders.Names.HOST, uri.getHost());
         }
-
-        applyRequestPreprocessors(request, signalBean, 
-                InterfaceUtils.selectIncludeType(RequestPreprocessor.class, (Object[])features));
         return request;
     }
 
@@ -146,16 +141,20 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return new Func1<DoOnUnsubscribe, Observable<? extends Object>>() {
             @Override
             public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
+                final BodyForm body = buildBody(signalBean, request, 
+                        InterfaceUtils.selectIncludeType(BodyPreprocessor.class, (Object[])features));
                 try {
                     final Outgoing outgoing = assembleOutgoing(doOnUnsubscribe, 
-                            signalBean, 
-                            request,
+                            request, 
+                            body,
                             attachments,
                             features);
                     hookPayloadCounter(outgoing.requestSizeInBytes(), features);
                     return outgoing.request();
                 } catch (Exception e) {
                     return Observable.error(e);
+                } finally {
+                    ReferenceCountUtil.release(body);
                 }
             }};
     }
@@ -207,34 +206,24 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     
     private Outgoing assembleOutgoing(
             final DoOnUnsubscribe doOnUnsubscribe, 
-            final Object signalBean, 
-            final HttpRequest request,
+            final HttpRequest request, 
+            final BodyForm body,
             final Attachment[] attachments, 
             final Feature[] features) throws Exception {
-        // only body
-        final BodyForm body = buildBody(request, signalBean, 
-                InterfaceUtils.selectIncludeType(BodyPreprocessor.class, (Object[])features));
-        
-        try {
-            if (0 == attachments.length) {
-                final LastHttpContent lastContent = buildLastContent(request, body);
-                
-                doOnUnsubscribe.call(Subscriptions.create(
-                        new Action0() {
-                            @Override
-                            public void call() {
-                                ReferenceCountUtil.release(request);
-                                ReferenceCountUtil.release(lastContent);
-                            }}));
-                
-                return new Outgoing(Observable.<Object>just(request, lastContent), 
-                        lastContent.content().readableBytes());
-            } else {
-                return fillBodyWithAttachments(doOnUnsubscribe, request, body,
-                        attachments);
-            }
-        } finally {
-            ReferenceCountUtil.release(body);
+        if (0 == attachments.length) {
+            final LastHttpContent lastContent = buildLastContent(request, body);
+            doOnUnsubscribe.call(Subscriptions.create(
+                    new Action0() {
+                        @Override
+                        public void call() {
+                            ReferenceCountUtil.release(request);
+                            ReferenceCountUtil.release(lastContent);
+                        }}));
+            return new Outgoing(Observable.<Object>just(request, lastContent), 
+                    lastContent.content().readableBytes());
+        } else {
+            return fillBodyWithAttachments(doOnUnsubscribe, request, body,
+                    attachments);
         }
     }
 
@@ -266,29 +255,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                         RxNettys.releaseObjects(postRequestEncoder.getBodyListAttributes());
                     }}));
         
-        // test if request was chunked and if so, finish the write
-        if (postRequestEncoder.isChunked()) {
-            return new Outgoing(Observable.<Object>just(request4send, postRequestEncoder), total);
-        } else {
-            return new Outgoing(Observable.<Object>just(request4send), total);
-        }
-    }
-
-    private long addAttachmentsToMultipart(
-            final HttpPostRequestEncoder postRequestEncoder,
-            final Attachment[] attachments) {
-        long size = 0;
-        for (Attachment attachment : attachments) {
-            try {
-                final HttpData httpData = this._attachmentBuilder.call(attachment);
-                size += httpData.length();
-                postRequestEncoder.addBodyHttpData(httpData);
-            } catch (Exception e) {
-                LOG.warn("exception when invoke AttachmentBuilder({}).call, detail: {}",
-                        this._attachmentBuilder, ExceptionUtils.exception2detail(e));
-            }
-        }
-        return size;
+        return postRequestEncoder.isChunked() 
+            ? new Outgoing(Observable.<Object>just(request4send, postRequestEncoder), total)
+            : new Outgoing(Observable.<Object>just(request4send), total);
     }
 
     private long addSignalToMultipart(
@@ -315,8 +284,25 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
 
-    private BodyForm buildBody(final HttpRequest request, 
-            final Object signalBean,
+    private long addAttachmentsToMultipart(
+            final HttpPostRequestEncoder postRequestEncoder,
+            final Attachment[] attachments) {
+        long size = 0;
+        for (Attachment attachment : attachments) {
+            try {
+                final HttpData httpData = this._attachmentBuilder.call(attachment);
+                size += httpData.length();
+                postRequestEncoder.addBodyHttpData(httpData);
+            } catch (Exception e) {
+                LOG.warn("exception when invoke AttachmentBuilder({}).call, detail: {}",
+                        this._attachmentBuilder, ExceptionUtils.exception2detail(e));
+            }
+        }
+        return size;
+    }
+
+    private BodyForm buildBody(final Object signalBean, 
+            final HttpRequest request,
             final BodyPreprocessor[] bodyPreprocessors) {
         if (null != bodyPreprocessors) {
             for (BodyPreprocessor bodyPreprocessor : bodyPreprocessors) {
@@ -337,8 +323,8 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return null;
     }
 
-    private void applyRequestPreprocessors(final HttpRequest request,
-            final Object signalBean, 
+    private HttpRequest applyRequestPreprocessors(final Object signalBean,
+            final HttpRequest request, 
             final RequestPreprocessor[] requestPreprocessors) {
         if (null != requestPreprocessors) {
             //  TODO: refactor by RxJava's stream api
@@ -366,6 +352,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 }
             }
         }
+        return request;
     }
 
     private LastHttpContent buildLastContent(
@@ -529,16 +516,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return (null != profile ? profile.responseType() : null);
     }
 
-    /*
-    private final SimpleCache<Class<?>, RequestProcessor> _processorCache = 
-        new SimpleCache<Class<?>, RequestProcessor>(
-            new Func1<Class<?>, RequestProcessor>() {
-                @Override
-                public RequestProcessor call(final Class<?> signalType) {
-                    return new RequestProcessor(signalType);
-                }});
-    */
-    
     @Override
     public void setBeanHolder(final BeanHolder beanHolder) {
         this._beanHolder = beanHolder;
