@@ -122,7 +122,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                                 fullfeatures),
                             JOArrays.addFirst(Feature[].class, 
                                 safeGetRequestFeatures(signalBean), 
-                                fullfeatures))
+                                features))
                     .compose(new ToSignalResponse<RESP>(safeGetResponseClass(signalBean)))
                     .subscribe(subscriber);
                 }
