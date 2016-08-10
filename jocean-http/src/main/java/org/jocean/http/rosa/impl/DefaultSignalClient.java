@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.jocean.http.Feature;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.Outbound;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.impl.preprocessor.RosaFeatures;
 import org.jocean.http.util.FeaturesBuilder;
@@ -101,9 +102,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             requestProviderOf(signalBean, 
                                 initRequestOf(uri), 
                                 fullfeatures),
-                            JOArrays.addFirst(Feature[].class, 
-                                safeGetRequestFeatures(signalBean), 
-                                features))
+                            genFeatures4HttpClient(signalBean, features))
                     .compose(new ToSignalResponse<RESP>(safeGetResponseClass(signalBean)))
                     .subscribe(subscriber);
                 }
@@ -111,6 +110,21 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         });
     }
 
+    private Feature[] genFeatures4HttpClient(final Object signalBean,
+            final Feature... features) {
+        Feature[] ret = JOArrays.addFirst(Feature[].class, 
+            safeGetRequestFeatures(signalBean), 
+            features);
+        if (hasAttachments(features)) {
+            ret = JOArrays.addFirst(Feature[].class, ret, Outbound.ENABLE_MULTIPART);
+        }
+        return ret;
+    }
+
+    private static boolean hasAttachments(final Feature[] features) {
+        return filterAttachments(features).length > 0;
+    }
+    
     private HttpRequest initRequestOf(final URI uri) {
         final HttpRequest request = new DefaultHttpRequest(
                 HttpVersion.HTTP_1_1, HttpMethod.GET, null != uri.getRawPath() ? uri.getRawPath() : "");

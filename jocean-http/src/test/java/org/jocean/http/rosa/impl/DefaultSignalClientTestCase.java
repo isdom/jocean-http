@@ -13,22 +13,15 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLException;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.HEAD;
 import javax.ws.rs.HeaderParam;
-import javax.ws.rs.OPTIONS;
 import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
 
 import org.jocean.http.Feature;
-import org.jocean.http.client.Outbound;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.client.impl.TestChannelPool;
@@ -844,8 +837,7 @@ public class DefaultSignalClientTestCase {
             signalClient.registerRequestType(TestRequestByPost.class, TestResponse.class, 
                     null, 
                     buildUri2Addr(testAddr),
-                    Feature.ENABLE_LOGGING,
-                    Outbound.ENABLE_MULTIPART);
+                    Feature.ENABLE_LOGGING);
             
             final AttachmentInMemory[] attachsToSend = new AttachmentInMemory[]{
                     new AttachmentInMemory("1", "text/plain", "11111111111111".getBytes(Charsets.UTF_8)),
@@ -882,45 +874,5 @@ public class DefaultSignalClientTestCase {
         }
     }
 
-    @Test(expected = TimeoutException.class)
-    public void testSignalClientWithAttachmentMissingENABLE_MULTIPART() throws Throwable {
-        //  launch test server for attachment send
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = createTestServerWith(testAddr, 
-            new Action1<HttpTrade>() {
-                // NOT care http request, using trade for sendback response
-                @Override
-                public void call(final HttpTrade trade) {
-                    trade.outboundResponse(buildResponse(new TestResponse("0", "OK")));
-                }},
-            Feature.ENABLE_LOGGING,
-            Feature.ENABLE_COMPRESSOR );
-        try {
-            final TestChannelCreator creator = new TestChannelCreator();
-            final TestChannelPool pool = new TestChannelPool(1);
-            
-            final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
-            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient, 
-                    new AttachmentBuilder4InMemory());
-            
-            signalClient.registerRequestType(TestRequestByPost.class, TestResponse.class, 
-                    null, 
-                    buildUri2Addr(testAddr),
-                    Feature.ENABLE_LOGGING);
-            
-            ((SignalClient)signalClient).<TestResponse>defineInteraction(
-                new TestRequestByPost("1"), 
-                new AttachmentInMemory("1", "text/plain", "11111111111111".getBytes(Charsets.UTF_8)),
-                new AttachmentInMemory("2", "text/plain", "22222222222222222".getBytes(Charsets.UTF_8)),
-                new AttachmentInMemory("3", "text/plain", "333333333333333".getBytes(Charsets.UTF_8)))
-            .timeout(1, TimeUnit.SECONDS)
-            .toBlocking().single();
-        } catch (RuntimeException e) {
-            throw e.getCause();
-        } finally {
-            server.unsubscribe();
-        }
-    }
-    
     //  TODO: add Path annotation with placeholder's testcase
 }
