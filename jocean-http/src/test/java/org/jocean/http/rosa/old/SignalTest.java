@@ -138,8 +138,8 @@ public class SignalTest {
             final Subscription subscription = 
             client.<AddMultiMediasToJourneyResponse>defineInteraction(req, 
 //                    new Attachment("/Users/isdom/Desktop/997df3df73797e91dea4853c228fcbdee36ceb8a38cc8-1vxyhE_fw236.jpeg", "image/jpeg"))
-                    new Feature[]{ENABLE_LOGGING, trafficCounter, payloadCounter},
-                    new Attachment[]{new Attachment("/Users/isdom/Pictures/IMG_3492.JPG", "image/jpeg")}                    )
+                    ENABLE_LOGGING, trafficCounter, payloadCounter,
+                    new Attachment("/Users/isdom/Pictures/IMG_3492.JPG", "image/jpeg"))
                 .subscribe(new Subscriber<AddMultiMediasToJourneyResponse>() {
     
                 @Override

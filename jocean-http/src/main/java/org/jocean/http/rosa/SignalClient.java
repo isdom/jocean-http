@@ -6,7 +6,7 @@ import rx.Observable;
 
 public interface SignalClient {
     
-    public class Attachment {
+    public class Attachment implements Feature {
         public Attachment(final String filename, final String contentType) {
             this.filename = filename;
             this.contentType = contentType;
@@ -17,14 +17,6 @@ public interface SignalClient {
         //  add direct content for test
     }
     
-    public <RESP> Observable<? extends RESP> defineInteraction(final Object request);
-    
     public <RESP> Observable<? extends RESP> defineInteraction(
             final Object request, final Feature... features);
-    
-    public <RESP> Observable<? extends RESP> defineInteraction(
-            final Object request, final Attachment... attachments);
-    
-    public <RESP> Observable<? extends RESP> defineInteraction(
-            final Object request, final Feature[] features, final Attachment[] attachments);
 }

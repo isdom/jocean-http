@@ -87,25 +87,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     
     @Override
-    public <RESP> Observable<? extends RESP> defineInteraction(final Object signalBean) {
-        return defineInteraction(signalBean, Feature.EMPTY_FEATURES, new Attachment[0]);
-    }
-    
-    @Override
     public <RESP> Observable<? extends RESP> defineInteraction(final Object signalBean, final Feature... features) {
-        return defineInteraction(signalBean, features, new Attachment[0]);
-    }
-
-    @Override
-    public <RESP> Observable<? extends RESP> defineInteraction(final Object signalBean, final Attachment... attachments) {
-        return defineInteraction(signalBean, Feature.EMPTY_FEATURES, attachments);
-    }
-    
-    @Override
-    public <RESP> Observable<? extends RESP> defineInteraction(
-            final Object signalBean, 
-            final Feature[] features, 
-            final Attachment[] attachments) {
         final Feature[] fullfeatures = JOArrays.addFirst(Feature[].class, 
                 features, 
                 _DEFAULT_PROFILE);
@@ -118,7 +100,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             safeGetAddress(signalBean, uri), 
                             requestProviderOf(signalBean, 
                                 initRequestOf(uri), 
-                                attachments, 
                                 fullfeatures),
                             JOArrays.addFirst(Feature[].class, 
                                 safeGetRequestFeatures(signalBean), 
@@ -142,7 +123,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     private Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProviderOf(
             final Object signalBean, 
             final HttpRequest request, 
-            final Attachment[] attachments, 
             final Feature[] features) {
         return new Func1<DoOnUnsubscribe, Observable<? extends Object>>() {
             @Override
@@ -162,7 +142,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     final Outgoing outgoing = assembleOutgoing(
                             request, 
                             body,
-                            attachments);
+                            filterAttachments(features));
                     doOnUnsubscribe.call(outgoing.toRelease());
                     hookPayloadCounter(outgoing.requestSizeInBytes(), features);
                     return outgoing.request();
@@ -172,6 +152,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     ReferenceCountUtil.release(body);
                 }
             }};
+    }
+
+    private static Attachment[] filterAttachments(final Feature[] features) {
+        final Attachment[] attachments = 
+                InterfaceUtils.selectIncludeType(Attachment.class, (Object[])features);
+        return null != attachments ? attachments : new Attachment[0];
     }
 
     private void hookPayloadCounter(final long uploadTotal, final Feature[] features) {
