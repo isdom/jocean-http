@@ -29,7 +29,6 @@ import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.impl.AttachmentBuilder4InMemory;
 import org.jocean.http.rosa.impl.AttachmentInMemory;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
-import org.jocean.http.rosa.impl.internal.RosaProfiles;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.server.impl.AbstractBootstrapCreator;
@@ -145,6 +144,15 @@ public class DefaultSignalClientTestCase {
         final FullHttpResponse response = new DefaultFullHttpResponse(
                 HttpVersion.HTTP_1_1, OK, 
                 Unpooled.wrappedBuffer(responseBytes));
+        response.headers().set(CONTENT_TYPE, "application/json");
+        response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
+        return  Observable.<HttpObject>just(response);
+    }
+    
+    private static Observable<HttpObject> buildBytesResponse(final byte[] bodyAsBytes) {
+        final FullHttpResponse response = new DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1, OK, 
+                Unpooled.wrappedBuffer(bodyAsBytes));
         response.headers().set(CONTENT_TYPE, "application/json");
         response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
         return  Observable.<HttpObject>just(response);
@@ -442,6 +450,64 @@ public class DefaultSignalClientTestCase {
             assertEquals("/test/simpleRequest", reqpathReceivedRef.get());
             assertEquals(reqToSend.getId(), reqbeanReceivedRef.get());
             assertEquals(respToSendback, respReceived);
+            
+            pool.awaitRecycleChannels();
+        } finally {
+            server.unsubscribe();
+        }
+    }
+    
+    @Test
+    public void testSignalClientOnlySignalForGetAndRegisterRespTypeIsNull() throws Exception {
+        final byte[] respToSendback = new byte[]{12, 13,14,15};
+        final AtomicReference<HttpMethod> reqMethodReceivedRef = new AtomicReference<>();
+        final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
+        final AtomicReference<String> reqbeanReceivedRef = new AtomicReference<>();
+        
+        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+            @Override
+            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
+                final FullHttpRequest req = genFullHttpRequest.call();
+                try {
+                    reqMethodReceivedRef.set(req.getMethod());
+                    final QueryStringDecoder decoder = new QueryStringDecoder(req.getUri());
+                    reqpathReceivedRef.set(decoder.path());
+                    reqbeanReceivedRef.set(decoder.parameters().get("id").get(0));
+                } finally {
+                    req.release();
+                }
+                trade.outboundResponse(buildBytesResponse(respToSendback));
+            }};
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = createTestServerWith(testAddr, 
+                requestAndTradeAwareWhenCompleted,
+                Feature.ENABLE_LOGGING,
+                Feature.ENABLE_COMPRESSOR );
+        
+        try {
+            final TestChannelCreator creator = new TestChannelCreator();
+            final TestChannelPool pool = new TestChannelPool(1);
+            
+            final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool, Feature.ENABLE_LOGGING);
+            
+            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
+            
+            signalClient.registerRequestType(TestRequest.class, 
+                    null, 
+                    null, 
+                    buildUri2Addr(testAddr));
+            
+            final TestRequest reqToSend = new TestRequest("1");
+            final byte[] bytesReceived = 
+                ((SignalClient)signalClient).<byte[]>defineInteraction(reqToSend)
+                .timeout(1, TimeUnit.SECONDS)
+                .toBlocking().single();
+            
+            assertEquals(HttpMethod.GET, reqMethodReceivedRef.get());
+            assertEquals("/test/simpleRequest", reqpathReceivedRef.get());
+            assertEquals(reqToSend.getId(), reqbeanReceivedRef.get());
+            assertTrue(Arrays.equals(respToSendback, bytesReceived));
             
             pool.awaitRecycleChannels();
         } finally {

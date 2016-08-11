@@ -505,7 +505,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     private SocketAddress safeGetAddress(final Object signalBean, final URI uri) {
         final RequestProfile profile = this._signal2profile.get(signalBean.getClass());
-        return (null != profile ? profile.buildAddress(uri) : null);
+        return (null != profile ? profile.buildAddress(uri) : _DEFAULT_URI2ADDR.call(uri));
     }
 
     private String safeUriOf(final Class<?> reqType) {

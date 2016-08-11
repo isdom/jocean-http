@@ -38,8 +38,8 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
             }};
     }
 
-    ToSignalResponse(final Class<?> respCls) {
-        this._respCls = respCls;
+    ToSignalResponse(final Class<?> respType) {
+        this._respType = respType;
     }
     
     @Override
@@ -65,11 +65,19 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
                     try {
                         final byte[] bytes = Nettys.dumpByteBufAsBytes(fullresp.content());
                         if (LOG.isTraceEnabled()) {
-                            LOG.trace("receive signal response: {}",
-                                    new String(bytes, CharsetUtil.UTF_8));
+                            try {
+                                LOG.trace("receive signal response: {}",
+                                        new String(bytes, CharsetUtil.UTF_8));
+                            } catch (Exception e) 
+                            { // decode bytes as UTF-8 error, just ignore 
+                            }
                         }
-                        final Object resp = JSON.parseObject(bytes, _respCls);
-                        return Observable.just((RESP)resp);
+                        if (null != _respType) {
+                            final Object resp = JSON.parseObject(bytes, _respType);
+                            return Observable.just((RESP)resp);
+                        } else {
+                            return Observable.just((RESP)bytes);
+                        }
                     } catch (Exception e) {
                         LOG.warn("exception when parse response {}, detail:{}",
                                 fullresp, ExceptionUtils.exception2detail(e));
@@ -82,5 +90,5 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
             }};
     }
 
-    private final Class<?> _respCls;
+    private final Class<?> _respType;
 }
