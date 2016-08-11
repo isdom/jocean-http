@@ -3,10 +3,10 @@
  */
 package org.jocean.http;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
 
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
@@ -21,13 +21,15 @@ import rx.functions.Func2;
 public interface Feature {
     public static class Util {
         public static Feature[] union(final Feature[] features1, final Feature... features2) {
-            final Set<Feature> unioned = new HashSet<>(
+            final List<Feature> unioned = new ArrayList<>(
                     null != features1 
                     ? Arrays.asList(features1) 
                     : Collections.<Feature>emptyList());
             if (null != features2) {
                 for (Feature toadd : features2) {
-                    unioned.add(toadd);
+                    if (!unioned.contains(toadd)) {
+                        unioned.add(toadd);
+                    }
                 }
             }
             return unioned.toArray(Feature.EMPTY_FEATURES);
