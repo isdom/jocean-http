@@ -93,13 +93,13 @@ public class HttpUtil {
         return new PayloadCounterProxy();
     }
     
-    public static HttpMethod fromJSR331Type(final Class<?> httpMethodType) {
+    public static HttpMethod fromJSR331Type(final Class<?> httpMethodType, final HttpMethod defaultMethod) {
         final javax.ws.rs.HttpMethod rsHttpMethod = 
                 httpMethodType.getAnnotation(javax.ws.rs.HttpMethod.class);
         if (null != rsHttpMethod) {
             return HttpMethod.valueOf(rsHttpMethod.value());
         } else {
-            return null;
+            return defaultMethod;
         }
     }
 }

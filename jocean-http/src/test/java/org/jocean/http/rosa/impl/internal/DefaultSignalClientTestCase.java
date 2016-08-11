@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLException;
+import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -555,7 +556,8 @@ public class DefaultSignalClientTestCase {
             final CommonRequest reqToSend = new CommonRequest("1");
             final byte[] bytesReceived = 
                 ((SignalClient)signalClient).<byte[]>defineInteraction(reqToSend, 
-                    new SignalClient.UsingPath("/test/simpleRequest"))
+                    new SignalClient.UsingPath("/test/simpleRequest"),
+                    new SignalClient.UsingMethod(GET.class))
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             

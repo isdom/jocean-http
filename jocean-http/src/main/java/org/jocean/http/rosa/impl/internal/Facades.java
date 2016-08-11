@@ -1,11 +1,11 @@
 package org.jocean.http.rosa.impl.internal;
 
-import javax.ws.rs.HttpMethod;
+import java.lang.annotation.Annotation;
 
 public class Facades {
     
     public interface MethodSource {
-        public HttpMethod method();
+        public Class<? extends Annotation> method();
     }
 
     public interface PathSource {

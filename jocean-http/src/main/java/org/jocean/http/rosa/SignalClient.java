@@ -1,6 +1,6 @@
 package org.jocean.http.rosa;
 
-import javax.ws.rs.HttpMethod;
+import java.lang.annotation.Annotation;
 
 import org.jocean.http.Feature;
 import org.jocean.http.rosa.impl.internal.Facades.MethodSource;
@@ -34,15 +34,15 @@ public interface SignalClient {
     }
     
     public class UsingMethod implements Feature, MethodSource {
-        public UsingMethod(final HttpMethod method) {
+        public UsingMethod(final Class<? extends Annotation> method) {
             this._method = method;
         }
         
-        public HttpMethod method() {
+        public Class<? extends Annotation> method() {
             return this._method;
         }
         
-        private final HttpMethod _method;
+        private final Class<? extends Annotation> _method;
     }
     
     public <RESP> Observable<? extends RESP> defineInteraction(
