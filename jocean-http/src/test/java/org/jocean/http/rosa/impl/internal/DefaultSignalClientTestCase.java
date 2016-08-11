@@ -458,7 +458,7 @@ public class DefaultSignalClientTestCase {
     }
     
     @Test
-    public void testSignalClientOnlySignalForGetAndRegisterRespTypeIsNull() throws Exception {
+    public void testSignalClientOnlySignalForGetWithoutRegisterRespType() throws Exception {
         final byte[] respToSendback = new byte[]{12, 13,14,15};
         final AtomicReference<HttpMethod> reqMethodReceivedRef = new AtomicReference<>();
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
@@ -491,12 +491,10 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool, Feature.ENABLE_LOGGING);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
-            
-            signalClient.registerRequestType(TestRequest.class, 
-                    null, 
-                    null, 
-                    buildUri2Addr(testAddr));
+            final DefaultSignalClient signalClient = new DefaultSignalClient(
+                    "http://test", 
+                    buildUri2Addr(testAddr), 
+                    httpclient);
             
             final TestRequest reqToSend = new TestRequest("1");
             final byte[] bytesReceived = 

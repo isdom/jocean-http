@@ -66,22 +66,36 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     };
     
     public DefaultSignalClient(final HttpClient httpClient) {
-        this(null, httpClient, new DefaultAttachmentBuilder());
+        this(null, _DEFAULT_URI2ADDR, httpClient, new DefaultAttachmentBuilder());
     }
     
     public DefaultSignalClient(final String defaultUri, final HttpClient httpClient) {
-        this(defaultUri, httpClient, new DefaultAttachmentBuilder());
+        this(defaultUri, _DEFAULT_URI2ADDR, httpClient, new DefaultAttachmentBuilder());
     }
     
     public DefaultSignalClient(final HttpClient httpClient, 
             final AttachmentBuilder attachmentBuilder) {
-        this(null, httpClient, attachmentBuilder);
+        this(null, _DEFAULT_URI2ADDR, httpClient, attachmentBuilder);
+    }
+    
+    public DefaultSignalClient(final String defaultUri, 
+            final Func1<URI, SocketAddress> defaultBuildAddress,
+            final HttpClient httpClient) {
+        this(defaultUri, defaultBuildAddress, httpClient, new DefaultAttachmentBuilder());
     }
     
     public DefaultSignalClient(final String defaultUri, 
             final HttpClient httpClient, 
             final AttachmentBuilder attachmentBuilder) {
+        this(defaultUri, _DEFAULT_URI2ADDR, httpClient, attachmentBuilder);
+    }
+    
+    public DefaultSignalClient(final String defaultUri, 
+            final Func1<URI, SocketAddress> defaultBuildAddress,
+            final HttpClient httpClient, 
+            final AttachmentBuilder attachmentBuilder) {
         this._defaultUri = defaultUri;
+        this._defaultBuildAddress = defaultBuildAddress;
         this._httpClient = httpClient;
         this._attachmentBuilder = attachmentBuilder;
     }
@@ -505,7 +519,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     private SocketAddress safeGetAddress(final Object signalBean, final URI uri) {
         final RequestProfile profile = this._signal2profile.get(signalBean.getClass());
-        return (null != profile ? profile.buildAddress(uri) : _DEFAULT_URI2ADDR.call(uri));
+        return (null != profile ? profile.buildAddress(uri) : this._defaultBuildAddress.call(uri));
     }
 
     private String safeUriOf(final Class<?> reqType) {
@@ -533,6 +547,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     private final HttpClient _httpClient;
     private final AttachmentBuilder _attachmentBuilder;
     private final String _defaultUri;
+    private final Func1<URI, SocketAddress> _defaultBuildAddress;
     
     private final static HttpDataFactory _DATA_FACTORY = new DefaultHttpDataFactory(false);
 }
