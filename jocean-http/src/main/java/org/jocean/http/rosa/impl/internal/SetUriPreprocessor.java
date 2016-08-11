@@ -12,7 +12,9 @@ import javax.ws.rs.PathParam;
 import org.jocean.http.Feature;
 import org.jocean.http.rosa.impl.RequestChanger;
 import org.jocean.http.rosa.impl.RequestPreprocessor;
+import org.jocean.http.rosa.impl.internal.Facades.PathSource;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.PropertyPlaceholderHelper;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
@@ -22,6 +24,71 @@ import org.slf4j.LoggerFactory;
 import io.netty.handler.codec.http.HttpRequest;
 
 class SetUriPreprocessor implements Feature, RequestPreprocessor {
+
+    private static final class UriSetter implements RequestChanger, FeaturesAware {
+        private final Object _signalBean;
+        private final PlaceholderResolver _pathparamResolver;
+        private final PropertyPlaceholderHelper _pathparamReplacer;
+        
+        private String _path = null;
+
+        private UriSetter(Object signalBean,
+                PlaceholderResolver pathparamResolver,
+                PropertyPlaceholderHelper pathparamReplacer) {
+            this._signalBean = signalBean;
+            this._pathparamResolver = pathparamResolver;
+            this._pathparamReplacer = pathparamReplacer;
+        }
+
+        @Override
+        public void setFeatures(final Feature[] features) {
+            final PathSource[] paths = InterfaceUtils.selectIncludeType(
+                    PathSource.class, (Object[])features);
+            if ( null!=paths && paths.length > 0) {
+                this._path = paths[0].path();
+            }
+        }
+        
+        @Override
+        public void call(final HttpRequest request) {
+            request.setUri(genUriAsString(request.getUri(),
+                    _signalBean, 
+                    _pathparamResolver,
+                    _pathparamReplacer));
+        }
+
+        private String genUriAsString(
+                final String prefix,
+                final Object signalBean, 
+                final PlaceholderResolver pathparamResolver,
+                final PropertyPlaceholderHelper pathparamReplacer) {
+            final String fullPath = prefix + getPath(signalBean.getClass());
+            if ( null != pathparamReplacer ) {
+                return pathparamReplacer.replacePlaceholders(
+                        signalBean,
+                        fullPath, 
+                        pathparamResolver, 
+                        null);
+            }
+            else {
+                return fullPath;
+            }
+        }
+
+        private String getPath(final Class<?> type) {
+            if (null != this._path) {
+                return this._path;
+            } else {
+                final Path path = type.getAnnotation(Path.class);
+                return (null != path ? path.value() : null);
+            }
+        }
+        
+        @Override
+        public int ordinal() {
+            return 10;
+        }
+    }
 
     private static final Logger LOG =
             LoggerFactory.getLogger(SetUriPreprocessor.class);
@@ -34,45 +101,9 @@ class SetUriPreprocessor implements Feature, RequestPreprocessor {
         final PropertyPlaceholderHelper pathparamReplacer = 
                 ( null != pathparamResolver ? new PropertyPlaceholderHelper("{", "}") : null);
         
-        return new RequestChanger() {
-
-            @Override
-            public void call(final HttpRequest request) {
-                request.setUri(genUriAsString(request.getUri(),
-                        signalBean, 
-                        pathparamResolver,
-                        pathparamReplacer));
-            }
-
-            private String genUriAsString(
-                    final String prefix,
-                    final Object signalBean, 
-                    final PlaceholderResolver pathparamResolver,
-                    final PropertyPlaceholderHelper pathparamReplacer) {
-                final String fullPath = prefix + getPathValueOf(signalBean.getClass());
-                if ( null != pathparamReplacer ) {
-                    return pathparamReplacer.replacePlaceholders(
-                            signalBean,
-                            fullPath, 
-                            pathparamResolver, 
-                            null);
-                }
-                else {
-                    return fullPath;
-                }
-            }
-
-            @Override
-            public int ordinal() {
-                return 10;
-            }};
+        return new UriSetter(signalBean, pathparamResolver, pathparamReplacer);
     }
 
-    private static String getPathValueOf(final Class<?> type) {
-        final Path path = type.getAnnotation(Path.class);
-        return (null != path ? path.value() : null);
-    }
-    
     private static PlaceholderResolver genPlaceholderResolverOf(
             final Class<?> cls, 
             final Class<? extends Annotation> annotationCls) {

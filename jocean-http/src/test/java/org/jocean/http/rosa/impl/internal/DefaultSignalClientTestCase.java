@@ -457,6 +457,62 @@ public class DefaultSignalClientTestCase {
         }
     }
     
+    public static class CommonRequest {
+        
+        public CommonRequest() {}
+        
+        public CommonRequest(final String id) {
+            this._id = id;
+        }
+        
+        /* (non-Javadoc)
+         * @see java.lang.Object#hashCode()
+         */
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((_id == null) ? 0 : _id.hashCode());
+            return result;
+        }
+
+        /* (non-Javadoc)
+         * @see java.lang.Object#equals(java.lang.Object)
+         */
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            TestRequest other = (TestRequest) obj;
+            if (_id == null) {
+                if (other._id != null)
+                    return false;
+            } else if (!_id.equals(other._id))
+                return false;
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            return "[id=" + _id + "]";
+        }
+        
+        public String getId() {
+            return this._id;
+        }
+
+        public void setId(final String id) {
+            this._id = id;
+        }
+
+        @QueryParam("id")
+        protected String _id;
+    }
+    
     @Test
     public void testSignalClientOnlySignalForGetWithoutRegisterRespType() throws Exception {
         final byte[] respToSendback = new byte[]{12, 13,14,15};
@@ -496,9 +552,10 @@ public class DefaultSignalClientTestCase {
                     buildUri2Addr(testAddr), 
                     httpclient);
             
-            final TestRequest reqToSend = new TestRequest("1");
+            final CommonRequest reqToSend = new CommonRequest("1");
             final byte[] bytesReceived = 
-                ((SignalClient)signalClient).<byte[]>defineInteraction(reqToSend)
+                ((SignalClient)signalClient).<byte[]>defineInteraction(reqToSend, 
+                    new SignalClient.UsingPath("/test/simpleRequest"))
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             

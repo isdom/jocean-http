@@ -36,6 +36,10 @@ public interface Feature {
         }
     }
     
+    public interface FeaturesAware {
+        public void setFeatures(final Feature[] features);
+    }
+    
     public interface FeatureOverChannelHandler extends Feature, Func2<Feature.HandlerBuilder, ChannelPipeline, ChannelHandler> {
     }
     

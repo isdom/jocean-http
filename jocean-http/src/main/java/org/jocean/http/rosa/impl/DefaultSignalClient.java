@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.jocean.http.Feature;
+import org.jocean.http.Feature.FeaturesAware;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
@@ -263,13 +264,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 applyRequestPreprocessors(
                         signalBean, 
                         request, 
-                        RequestPreprocessor.Util.filter(features));
+                        features);
                 
                 //  second, build body
                 final BodyForm body = buildBody(
                         signalBean, 
                         request, 
-                        BodyPreprocessor.Util.filter(features));
+                        features);
                 try {
                     final Outgoing outgoing = assembleOutgoing(
                             request, 
@@ -426,7 +427,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     private HttpRequest applyRequestPreprocessors(final Object signalBean,
             final HttpRequest request, 
-            final RequestPreprocessor[] requestPreprocessors) {
+            final Feature[] features) {
+        final RequestPreprocessor[] requestPreprocessors = 
+                RequestPreprocessor.Util.filter(features);
         if (null != requestPreprocessors) {
             //  TODO: refactor by RxJava's stream api
             final List<RequestChanger> changers = new ArrayList<>();
@@ -445,6 +448,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 Collections.sort(changers, Ordered.ASC);
                 for (RequestChanger changer : changers) {
                     try {
+                        if (changer instanceof FeaturesAware) {
+                            ((FeaturesAware)changer).setFeatures(features);
+                        }
                         changer.call(request);
                     } catch (Exception e) {
                         LOG.warn("exception when RequestChanger({}).call, detail: {}",
@@ -458,7 +464,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     private BodyForm buildBody(final Object signalBean, 
             final HttpRequest request,
-            final BodyPreprocessor[] bodyPreprocessors) {
+            final Feature[] features) {
+        final BodyPreprocessor[] bodyPreprocessors = 
+            BodyPreprocessor.Util.filter(features);
         if (null != bodyPreprocessors) {
             final List<BodyBuilder> builders = new ArrayList<>();
             for (BodyPreprocessor bodyPreprocessor : bodyPreprocessors) {
@@ -475,6 +483,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     Collections.sort(builders, Ordered.ASC);
                     for (BodyBuilder builder : builders) {
                         try {
+                            if (builder instanceof FeaturesAware) {
+                                ((FeaturesAware)builder).setFeatures(features);
+                            }
                             final BodyForm body = builder.call();
                             if (null != body) {
                                 return body;
