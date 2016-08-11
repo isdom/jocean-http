@@ -18,7 +18,6 @@ import org.jocean.http.util.TrafficCounterAware;
 import org.jocean.http.util.TrafficCounterHandler;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
-import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
@@ -62,9 +61,8 @@ public class DefaultHttpClient implements HttpClient {
             final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
             final Feature... features) {
         final Feature[] fullFeatures = 
-                JOArrays.addFirst(Feature[].class, 
-                        cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
-                        HttpClientConstants.APPLY_HTTPCLIENT);
+            Feature.Util.union(cloneFeatures(Feature.Util.union(this._defaultFeatures, features)),
+                HttpClientConstants.APPLY_HTTPCLIENT);
         return this._channelPool.retainChannel(remoteAddress)
             .doOnNext(RxNettys.actionUndoableApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
@@ -79,17 +77,11 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress,
             final Observable<? extends Object> request,
             final Feature... features) {
-        final Feature[] fullFeatures = 
-                JOArrays.addFirst(Feature[].class, 
-                        cloneFeatures(features.length > 0 ? features : _defaultFeatures), 
-                        HttpClientConstants.APPLY_HTTPCLIENT);
-        return this._channelPool.retainChannel(remoteAddress)
-            .doOnNext(RxNettys.actionUndoableApplyFeatures(
-                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
-            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
-            .doOnNext(hookFeatures(fullFeatures))
-            .flatMap(sendRequestThenPushChannel(request, fullFeatures))
-            .flatMap(waitforResponse());
+        return defineInteraction(remoteAddress, new Func1<DoOnUnsubscribe, Observable<? extends Object>>() {
+            @Override
+            public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
+                return request;
+            }}, features);
     }
 
     protected Action1<? super Channel> hookFeatures(final Feature[] features) {

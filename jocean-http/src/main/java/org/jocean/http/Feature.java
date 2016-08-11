@@ -3,6 +3,11 @@
  */
 package org.jocean.http;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.ssl.SslContext;
@@ -14,6 +19,21 @@ import rx.functions.Func2;
  *
  */
 public interface Feature {
+    public static class Util {
+        public static Feature[] union(final Feature[] features1, final Feature... features2) {
+            final Set<Feature> unioned = new HashSet<>(
+                    null != features1 
+                    ? Arrays.asList(features1) 
+                    : Collections.<Feature>emptyList());
+            if (null != features2) {
+                for (Feature toadd : features2) {
+                    unioned.add(toadd);
+                }
+            }
+            return unioned.toArray(Feature.EMPTY_FEATURES);
+        }
+    }
+    
     public interface FeatureOverChannelHandler extends Feature, Func2<Feature.HandlerBuilder, ChannelPipeline, ChannelHandler> {
     }
     

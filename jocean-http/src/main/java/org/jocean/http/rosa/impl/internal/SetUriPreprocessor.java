@@ -1,4 +1,4 @@
-package org.jocean.http.rosa.impl.preprocessor;
+package org.jocean.http.rosa.impl.internal;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;

@@ -16,7 +16,7 @@ import org.jocean.http.PayloadCounter;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.rosa.SignalClient;
-import org.jocean.http.rosa.impl.preprocessor.RosaFeatures;
+import org.jocean.http.rosa.impl.internal.RosaFeatures;
 import org.jocean.http.util.FeaturesBuilder;
 import org.jocean.http.util.PayloadCounterAware;
 import org.jocean.http.util.RxNettys;
@@ -24,7 +24,6 @@ import org.jocean.idiom.BeanHolder;
 import org.jocean.idiom.BeanHolderAware;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
-import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
@@ -66,6 +65,14 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             RosaFeatures.ENABLE_DEFAULTBODY,
     };
 
+    private static final Func1<URI, SocketAddress> _DEFAULT_URI2ADDR = new Func1<URI, SocketAddress>() {
+        @Override
+        public SocketAddress call(final URI uri) {
+            final int port = -1 == uri.getPort() ? ( "https".equals(uri.getScheme()) ? 443 : 80 ) : uri.getPort();
+            return new InetSocketAddress(uri.getHost(), port);
+        }
+    };
+    
     public DefaultSignalClient(final HttpClient httpClient) {
         this(null, httpClient, new DefaultAttachmentBuilder());
     }
@@ -87,11 +94,115 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         this._attachmentBuilder = attachmentBuilder;
     }
     
+    public Action0 registerRequestType(final Class<?> reqType, 
+            final Class<?> respType, 
+            final String uri, 
+            final Func1<URI, SocketAddress> uri2address,
+            final Feature... features) {
+        return registerRequestType(reqType, respType, uri, 
+                new Func0<Feature[]>() {
+                    @Override
+                    public Feature[] call() {
+                        return features;
+                    }},
+                uri2address);
+    }
+    
+    public Action0 registerRequestType(final Class<?> reqType, 
+            final Class<?> respType, 
+            final String uri, 
+            final Feature... features) {
+        return registerRequestType(reqType, respType, uri, new Func0<Feature[]>() {
+            @Override
+            public Feature[] call() {
+                return features;
+            }});
+    }
+    
+    public Action0 registerRequestType(final Class<?> reqType, 
+            final Class<?> respType, 
+            final String uri, 
+            final String featuresName) {
+        return registerRequestType(reqType, respType, uri, new Func0<Feature[]>() {
+            @Override
+            public String toString() {
+                return "Features Config named(" + featuresName + ")";
+            }
+            
+            @Override
+            public Feature[] call() {
+                final FeaturesBuilder builder = _beanHolder.getBean(featuresName, FeaturesBuilder.class);
+                if (null==builder) {
+                    LOG.warn("signal client {} require FeaturesBuilder named({}) not exist! please check application config!",
+                            DefaultSignalClient.this, featuresName);
+                }
+                return null!=builder ? builder.call() : Feature.EMPTY_FEATURES;
+            }});
+    }
+    
+    public Action0 registerRequestType(final Class<?> reqType, 
+            final Class<?> respType, 
+            final String uri, 
+            final Func0<Feature[]> featuresBuilder) {
+        return registerRequestType(reqType, respType, uri, featuresBuilder, _DEFAULT_URI2ADDR);
+    }
+
+    public Action0 registerRequestType(final Class<?> reqType, 
+            final Class<?> respType, 
+            final String uri, 
+            final Func0<Feature[]> featuresBuilder,
+            final Func1<URI, SocketAddress> uri2address) {
+        this._signal2profile.put(reqType, new RequestProfile(respType, uri, featuresBuilder, uri2address));
+        LOG.info("register request type {} with resp type {}/uri {}/features builder {}",
+                reqType, respType, uri, featuresBuilder);
+        return new Action0() {
+            @Override
+            public void call() {
+                _signal2profile.remove(reqType);
+                LOG.info("unregister request type {}", reqType);
+            }};
+    }
+    
+    public String[] getRegisteredSignal() {
+        final List<String> ret = new ArrayList<>();
+        for ( Map.Entry<Class<?>, RequestProfile> entry 
+                : _signal2profile.entrySet()) {
+            final StringBuilder sb = new StringBuilder();
+            sb.append(entry.getKey());
+            sb.append("-->");
+            sb.append(entry.getValue().uri());
+            sb.append("/");
+            sb.append(entry.getValue().responseType());
+            ret.add(sb.toString());
+        }
+        
+        return ret.toArray(new String[0]);
+    }
+    
+    /*
+    public String[] getEmittedSignal() {
+        final List<String> ret = new ArrayList<>();
+        for (Map.Entry<Class<?>, RequestProcessor> entry 
+                : this._processorCache.snapshot().entrySet()) {
+            final StringBuilder sb = new StringBuilder();
+            sb.append(entry.getKey());
+            sb.append("-->");
+            sb.append(safeUriOf(entry.getKey()));
+            sb.append(entry.getValue().pathSuffix());
+            sb.append("/");
+            sb.append(entry.getValue());
+            ret.add(sb.toString());
+        }
+        
+        return ret.toArray(new String[0]);
+    }
+    */
+    
     @Override
-    public <RESP> Observable<? extends RESP> defineInteraction(final Object signalBean, final Feature... features) {
-        final Feature[] fullfeatures = JOArrays.addFirst(Feature[].class, 
-                features, 
-                _DEFAULT_PROFILE);
+    public <RESP> Observable<? extends RESP> defineInteraction(
+            final Object signalBean, 
+            final Feature... features) {
+        final Feature[] fullfeatures = Feature.Util.union(_DEFAULT_PROFILE, features);
         return Observable.create(new OnSubscribe<RESP>() {
             @Override
             public void call(final Subscriber<? super RESP> subscriber) {
@@ -102,7 +213,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             requestProviderOf(signalBean, 
                                 initRequestOf(uri), 
                                 fullfeatures),
-                            genFeatures4HttpClient(signalBean, features))
+                            genFeatures4HttpClient(signalBean, fullfeatures))
                     .compose(new ToSignalResponse<RESP>(safeGetResponseClass(signalBean)))
                     .subscribe(subscriber);
                 }
@@ -112,13 +223,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     private Feature[] genFeatures4HttpClient(final Object signalBean,
             final Feature... features) {
-        Feature[] ret = JOArrays.addFirst(Feature[].class, 
+        final Feature[] addSignalFeatures = Feature.Util.union( 
             safeGetRequestFeatures(signalBean), 
             features);
-        if (hasAttachments(features)) {
-            ret = JOArrays.addFirst(Feature[].class, ret, Outbound.ENABLE_MULTIPART);
-        }
-        return ret;
+        return (hasAttachments(features))
+            ? Feature.Util.union(addSignalFeatures, Outbound.ENABLE_MULTIPART)
+            : addSignalFeatures;
     }
 
     private static boolean hasAttachments(final Feature[] features) {
@@ -127,7 +237,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     
     private HttpRequest initRequestOf(final URI uri) {
         final HttpRequest request = new DefaultHttpRequest(
-                HttpVersion.HTTP_1_1, HttpMethod.GET, null != uri.getRawPath() ? uri.getRawPath() : "");
+                HttpVersion.HTTP_1_1, 
+                HttpMethod.GET, 
+                null != uri.getRawPath() ? uri.getRawPath() : "");
         if (null != uri.getHost()) {
             request.headers().set(HttpHeaders.Names.HOST, uri.getHost());
         }
@@ -383,119 +495,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             return LastHttpContent.EMPTY_LAST_CONTENT;
         }
     }
-
-    public Action0 registerRequestType(final Class<?> reqType, 
-            final Class<?> respType, 
-            final String uri, 
-            final Func1<URI, SocketAddress> uri2address,
-            final Feature... features) {
-        return registerRequestType(reqType, respType, uri, 
-                new Func0<Feature[]>() {
-                    @Override
-                    public Feature[] call() {
-                        return features;
-                    }},
-                uri2address);
-    }
-    
-    public Action0 registerRequestType(final Class<?> reqType, 
-            final Class<?> respType, 
-            final String uri, 
-            final Feature... features) {
-        return registerRequestType(reqType, respType, uri, new Func0<Feature[]>() {
-            @Override
-            public Feature[] call() {
-                return features;
-            }});
-    }
-    
-    public Action0 registerRequestType(final Class<?> reqType, 
-            final Class<?> respType, 
-            final String uri, 
-            final String featuresName) {
-        return registerRequestType(reqType, respType, uri, new Func0<Feature[]>() {
-            @Override
-            public String toString() {
-                return "Features Config named(" + featuresName + ")";
-            }
-            
-            @Override
-            public Feature[] call() {
-                final FeaturesBuilder builder = _beanHolder.getBean(featuresName, FeaturesBuilder.class);
-                if (null==builder) {
-                    LOG.warn("signal client {} require FeaturesBuilder named({}) not exist! please check application config!",
-                            DefaultSignalClient.this, featuresName);
-                }
-                return null!=builder ? builder.call() : Feature.EMPTY_FEATURES;
-            }});
-    }
-    
-    public Action0 registerRequestType(final Class<?> reqType, 
-            final Class<?> respType, 
-            final String uri, 
-            final Func0<Feature[]> featuresBuilder) {
-        return registerRequestType(reqType, respType, uri, featuresBuilder, _DEFAULT_URI2ADDR);
-    }
-
-    public Action0 registerRequestType(final Class<?> reqType, 
-            final Class<?> respType, 
-            final String uri, 
-            final Func0<Feature[]> featuresBuilder,
-            final Func1<URI, SocketAddress> uri2address) {
-        this._signal2profile.put(reqType, new RequestProfile(respType, uri, featuresBuilder, uri2address));
-        LOG.info("register request type {} with resp type {}/uri {}/features builder {}",
-                reqType, respType, uri, featuresBuilder);
-        return new Action0() {
-            @Override
-            public void call() {
-                _signal2profile.remove(reqType);
-                LOG.info("unregister request type {}", reqType);
-            }};
-    }
-    
-    private static final Func1<URI, SocketAddress> _DEFAULT_URI2ADDR = new Func1<URI, SocketAddress>() {
-        @Override
-        public SocketAddress call(final URI uri) {
-            final int port = -1 == uri.getPort() ? ( "https".equals(uri.getScheme()) ? 443 : 80 ) : uri.getPort();
-            return new InetSocketAddress(uri.getHost(), port);
-        }
-    };
-    
-    
-    public String[] getRegisteredSignal() {
-        final List<String> ret = new ArrayList<>();
-        for ( Map.Entry<Class<?>, RequestProfile> entry 
-                : _signal2profile.entrySet()) {
-            final StringBuilder sb = new StringBuilder();
-            sb.append(entry.getKey());
-            sb.append("-->");
-            sb.append(entry.getValue().uri());
-            sb.append("/");
-            sb.append(entry.getValue().responseType());
-            ret.add(sb.toString());
-        }
-        
-        return ret.toArray(new String[0]);
-    }
-    
-    /*
-    public String[] getEmittedSignal() {
-        final List<String> ret = new ArrayList<>();
-        for (Map.Entry<Class<?>, RequestProcessor> entry 
-                : this._processorCache.snapshot().entrySet()) {
-            final StringBuilder sb = new StringBuilder();
-            sb.append(entry.getKey());
-            sb.append("-->");
-            sb.append(safeUriOf(entry.getKey()));
-            sb.append(entry.getValue().pathSuffix());
-            sb.append("/");
-            sb.append(entry.getValue());
-            ret.add(sb.toString());
-        }
-        
-        return ret.toArray(new String[0]);
-    }
-    */
     
     private final Map<Class<?>, RequestProfile> _signal2profile = 
             new ConcurrentHashMap<>();

@@ -1,4 +1,4 @@
-package org.jocean.http.rosa.impl.preprocessor;
+package org.jocean.http.rosa.impl.internal;
 
 import org.jocean.http.Feature;
 
