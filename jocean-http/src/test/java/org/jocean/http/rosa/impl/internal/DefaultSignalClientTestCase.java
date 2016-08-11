@@ -1,4 +1,4 @@
-package org.jocean.http.rosa.impl;
+package org.jocean.http.rosa.impl.internal;
 
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
@@ -26,6 +26,10 @@ import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.rosa.SignalClient;
+import org.jocean.http.rosa.impl.AttachmentBuilder4InMemory;
+import org.jocean.http.rosa.impl.AttachmentInMemory;
+import org.jocean.http.rosa.impl.DefaultSignalClient;
+import org.jocean.http.rosa.impl.internal.RosaProfiles;
 import org.jocean.http.server.HttpServer;
 import org.jocean.http.server.HttpServer.HttpTrade;
 import org.jocean.http.server.impl.AbstractBootstrapCreator;
@@ -121,6 +125,7 @@ public class DefaultSignalClientTestCase {
                 }});
     }
     
+    @SuppressWarnings("unused")
     private static Subscription createTestServerWith(
             final String acceptId,
             final Action1<HttpTrade> onRequestCompleted,
@@ -425,6 +430,65 @@ public class DefaultSignalClientTestCase {
             signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
                     null, 
                     buildUri2Addr(testAddr),
+                    Feature.ENABLE_LOGGING);
+            
+            final TestRequest reqToSend = new TestRequest("1");
+            final TestResponse respReceived = 
+                ((SignalClient)signalClient).<TestResponse>defineInteraction(reqToSend)
+                .timeout(1, TimeUnit.SECONDS)
+                .toBlocking().single();
+            
+            assertEquals(HttpMethod.GET, reqMethodReceivedRef.get());
+            assertEquals("/test/simpleRequest", reqpathReceivedRef.get());
+            assertEquals(reqToSend.getId(), reqbeanReceivedRef.get());
+            assertEquals(respToSendback, respReceived);
+            
+            pool.awaitRecycleChannels();
+        } finally {
+            server.unsubscribe();
+        }
+    }
+    
+    @Test
+    public void testSignalClientOnlySignalForGetDuplicateFeatures() throws Exception {
+        final TestResponse respToSendback = new TestResponse("0", "OK");
+        final AtomicReference<HttpMethod> reqMethodReceivedRef = new AtomicReference<>();
+        final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
+        final AtomicReference<String> reqbeanReceivedRef = new AtomicReference<>();
+        
+        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+            @Override
+            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
+                final FullHttpRequest req = genFullHttpRequest.call();
+                try {
+                    reqMethodReceivedRef.set(req.getMethod());
+                    final QueryStringDecoder decoder = new QueryStringDecoder(req.getUri());
+                    reqpathReceivedRef.set(decoder.path());
+                    reqbeanReceivedRef.set(decoder.parameters().get("id").get(0));
+                } finally {
+                    req.release();
+                }
+                trade.outboundResponse(buildResponse(respToSendback));
+            }};
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = createTestServerWith(testAddr, 
+                requestAndTradeAwareWhenCompleted,
+                Feature.ENABLE_LOGGING,
+                Feature.ENABLE_COMPRESSOR );
+        
+        try {
+            final TestChannelCreator creator = new TestChannelCreator();
+            final TestChannelPool pool = new TestChannelPool(1);
+            
+            final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
+            
+            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
+            
+            signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
+                    null, 
+                    buildUri2Addr(testAddr),
+                    RosaProfiles.ENABLE_SETURI, // duplicate ENABLE_SETURI
                     Feature.ENABLE_LOGGING);
             
             final TestRequest reqToSend = new TestRequest("1");

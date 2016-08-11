@@ -16,7 +16,7 @@ import org.jocean.http.PayloadCounter;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.rosa.SignalClient;
-import org.jocean.http.rosa.impl.internal.RosaFeatures;
+import org.jocean.http.rosa.impl.internal.RosaProfiles;
 import org.jocean.http.util.FeaturesBuilder;
 import org.jocean.http.util.PayloadCounterAware;
 import org.jocean.http.util.RxNettys;
@@ -57,14 +57,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClient.class);
     
-    private static Feature[] _DEFAULT_PROFILE = new Feature[]{
-            RosaFeatures.ENABLE_SETMETHOD,
-            RosaFeatures.ENABLE_SETURI,
-            RosaFeatures.ENABLE_QUERYPARAM,
-            RosaFeatures.ENABLE_HEADERPARAM,
-            RosaFeatures.ENABLE_DEFAULTBODY,
-    };
-
     private static final Func1<URI, SocketAddress> _DEFAULT_URI2ADDR = new Func1<URI, SocketAddress>() {
         @Override
         public SocketAddress call(final URI uri) {
@@ -202,7 +194,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     public <RESP> Observable<? extends RESP> defineInteraction(
             final Object signalBean, 
             final Feature... features) {
-        final Feature[] fullfeatures = Feature.Util.union(_DEFAULT_PROFILE, features);
+        final Feature[] fullfeatures = Feature.Util.union(RosaProfiles._DEFAULT_PROFILE, features);
         return Observable.create(new OnSubscribe<RESP>() {
             @Override
             public void call(final Subscriber<? super RESP> subscriber) {
