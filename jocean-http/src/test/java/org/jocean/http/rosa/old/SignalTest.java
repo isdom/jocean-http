@@ -6,9 +6,9 @@ package org.jocean.http.rosa.old;
 import static org.jocean.http.Feature.ENABLE_COMPRESSOR;
 import static org.jocean.http.Feature.ENABLE_LOGGING;
 
-import org.jocean.http.Feature;
+import java.net.URI;
+
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.Outbound;
 import org.jocean.http.client.impl.AbstractChannelCreator;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelPool;
@@ -57,19 +57,18 @@ public class SignalTest {
         client.registerRequestType(
                 FetchPatientsRequest.class, 
                 FetchPatientsResponse.class,
-                "http://jumpbox.medtap.cn:8888");
+                new URI("http://jumpbox.medtap.cn:8888"));
         
         client.registerRequestType(
                 QueryMyPatientsForDoctorRequest.class, 
                 QueryMyPatientsForDoctorResponse.class,
-                "http://api.iplusmed.com");
+                new URI("http://api.iplusmed.com"));
         
         client.registerRequestType(
                 AddMultiMediasToJourneyRequest.class, 
                 AddMultiMediasToJourneyResponse.class,
-                "http://jumpbox.medtap.cn:8888",
+                new URI("http://jumpbox.medtap.cn:8888")
 //                "http://127.0.0.1:9090",
-                Outbound.ENABLE_MULTIPART
                 );
         
         {

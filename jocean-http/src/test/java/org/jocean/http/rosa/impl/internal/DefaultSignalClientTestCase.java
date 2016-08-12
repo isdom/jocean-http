@@ -458,7 +458,8 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
+            final DefaultSignalClient signalClient = new DefaultSignalClient(new URI("http://test"), 
+                    httpclient);
             
             signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
                     null, 
@@ -573,7 +574,7 @@ public class DefaultSignalClientTestCase {
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool, Feature.ENABLE_LOGGING);
             
             final DefaultSignalClient signalClient = new DefaultSignalClient(
-                    "http://test", 
+                    new URI("http://test"), 
                     buildUri2Addr(testAddr), 
                     httpclient);
             
@@ -630,12 +631,13 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
+            final DefaultSignalClient signalClient = new DefaultSignalClient(new URI("http://test"), 
+                    httpclient);
             
             signalClient.registerRequestType(TestRequest.class, TestResponse.class, 
                     null, 
                     buildUri2Addr(testAddr),
-                    RosaProfiles.ENABLE_SETURI, // duplicate ENABLE_SETURI
+                    RosaProfiles.ENABLE_SETPATH, // duplicate ENABLE_SETURI
                     Feature.ENABLE_LOGGING);
             
             final TestRequest reqToSend = new TestRequest("1");
@@ -693,7 +695,8 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
+            final DefaultSignalClient signalClient = new DefaultSignalClient(new URI("http://test"), 
+                    httpclient);
             
             signalClient.registerRequestType(TestRequestByPost.class, TestResponse.class, 
                     null, 
@@ -755,7 +758,7 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool, Feature.ENABLE_LOGGING);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", 
+            final DefaultSignalClient signalClient = new DefaultSignalClient(new URI("http://test"), 
                     buildUri2Addr(testAddr), httpclient);
             
             final TestRequestByPost reqToSend = new TestRequestByPost("1", null);
@@ -819,11 +822,71 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool, Feature.ENABLE_LOGGING);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", 
+            final DefaultSignalClient signalClient = new DefaultSignalClient(new URI("http://test"), 
                     buildUri2Addr(testAddr), httpclient);
             
             final byte[] bytesReceived = 
                 ((SignalClient)signalClient).<byte[]>rawDefineInteraction( 
+                        new SignalClient.UsingPath("/test/raw"),
+                        new SignalClient.UsingMethod(POST.class),
+                        new SignalClient.JSONContent("{\"code\": \"added\"}"))
+                .timeout(1, TimeUnit.SECONDS)
+                .toBlocking().single();
+            
+            assertEquals(HttpMethod.POST, reqMethodReceivedRef.get());
+            assertEquals("/test/raw", reqpathReceivedRef.get());
+            assertEquals(new TestRequestByPost(null, "added"), reqbeanReceivedRef.get());
+            assertTrue(Arrays.equals(respToSendback, bytesReceived));
+            
+            pool.awaitRecycleChannels();
+        } finally {
+            server.unsubscribe();
+        }
+    }
+    
+    @Test
+    public void testSignalClientWithoutSignalBeanForPostWithJSONContentAndUsingUri() throws Exception {
+        final byte[] respToSendback = new byte[]{12, 13,14,15};
+        final AtomicReference<HttpMethod> reqMethodReceivedRef = new AtomicReference<>();
+        final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
+        final AtomicReference<TestRequestByPost> reqbeanReceivedRef = new AtomicReference<>();
+        
+        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+            @Override
+            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
+                final FullHttpRequest req = genFullHttpRequest.call();
+                try {
+                    reqMethodReceivedRef.set(req.getMethod());
+                    reqpathReceivedRef.set(req.getUri());
+                    reqbeanReceivedRef.set(
+                            (TestRequestByPost) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
+                                    TestRequestByPost.class));
+                } catch (IOException e) {
+                    LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
+                            ExceptionUtils.exception2detail(e));
+                } finally {
+                    req.release();
+                }
+                trade.outboundResponse(buildBytesResponse(respToSendback));
+            }};
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = createTestServerWith(testAddr, 
+                requestAndTradeAwareWhenCompleted,
+                Feature.ENABLE_LOGGING,
+                Feature.ENABLE_COMPRESSOR );
+        
+        try {
+            final TestChannelCreator creator = new TestChannelCreator();
+            final TestChannelPool pool = new TestChannelPool(1);
+            
+            final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool, Feature.ENABLE_LOGGING);
+            
+            final DefaultSignalClient signalClient = new DefaultSignalClient(buildUri2Addr(testAddr), httpclient);
+            
+            final byte[] bytesReceived = 
+                ((SignalClient)signalClient).<byte[]>rawDefineInteraction( 
+                        new SignalClient.UsingUri(new URI("http://test")),
                         new SignalClient.UsingPath("/test/raw"),
                         new SignalClient.UsingMethod(POST.class),
                         new SignalClient.JSONContent("{\"code\": \"added\"}"))
@@ -952,7 +1015,8 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
+            final DefaultSignalClient signalClient = new DefaultSignalClient(new URI("http://test"), 
+                    httpclient);
             
             signalClient.registerRequestType(TestRequestByPostWithQueryParam.class, TestResponse.class, 
                     null, 
@@ -1085,7 +1149,8 @@ public class DefaultSignalClientTestCase {
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
             
-            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient);
+            final DefaultSignalClient signalClient = new DefaultSignalClient(new URI("http://test"), 
+                    httpclient);
             
             signalClient.registerRequestType(TestRequestByPostWithHeaderParam.class, TestResponse.class, 
                     null, 
@@ -1166,7 +1231,8 @@ public class DefaultSignalClientTestCase {
             final TestChannelPool pool = new TestChannelPool(1);
             
             final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool);
-            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", httpclient, 
+            final DefaultSignalClient signalClient = new DefaultSignalClient(new URI("http://test"), 
+                    httpclient, 
                     new AttachmentBuilder4InMemory());
             
             signalClient.registerRequestType(TestRequestByPost.class, TestResponse.class, 

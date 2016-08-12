@@ -1,11 +1,13 @@
 package org.jocean.http.rosa;
 
 import java.lang.annotation.Annotation;
+import java.net.URI;
 
 import org.jocean.http.Feature;
 import org.jocean.http.rosa.impl.internal.Facades.JSONSource;
 import org.jocean.http.rosa.impl.internal.Facades.MethodSource;
 import org.jocean.http.rosa.impl.internal.Facades.PathSource;
+import org.jocean.http.rosa.impl.internal.Facades.UriSource;
 
 import io.netty.util.CharsetUtil;
 import rx.Observable;
@@ -21,6 +23,18 @@ public interface SignalClient {
         public final String filename;
         public final String contentType;
         //  add direct content for test
+    }
+    
+    public class UsingUri implements Feature, UriSource {
+        public UsingUri(final URI uri) {
+            this._uri = uri;
+        }
+        
+        public URI uri() {
+            return this._uri;
+        }
+        
+        private final URI _uri;
     }
     
     public class UsingPath implements Feature, PathSource {

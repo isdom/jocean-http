@@ -1,6 +1,7 @@
 package org.jocean.http.rosa.impl.internal;
 
 import java.lang.annotation.Annotation;
+import java.net.URI;
 
 public class Facades {
     
@@ -8,6 +9,10 @@ public class Facades {
         public Class<? extends Annotation> method();
     }
 
+    public interface UriSource {
+        public URI uri();
+    }
+    
     public interface PathSource {
         public String path();
     }

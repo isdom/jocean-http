@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.handler.codec.http.HttpRequest;
 
-class SetUriPreprocessor implements Feature, RequestPreprocessor {
+class SetPathPreprocessor implements Feature, RequestPreprocessor {
 
     private static final class UriSetter implements RequestChanger, FeaturesAware {
         private final Object _signalBean;
@@ -32,9 +32,9 @@ class SetUriPreprocessor implements Feature, RequestPreprocessor {
         
         private String _path = null;
 
-        private UriSetter(Object signalBean,
-                PlaceholderResolver pathparamResolver,
-                PropertyPlaceholderHelper pathparamReplacer) {
+        private UriSetter(final Object signalBean,
+                final PlaceholderResolver pathparamResolver,
+                final PropertyPlaceholderHelper pathparamReplacer) {
             this._signalBean = signalBean;
             this._pathparamResolver = pathparamResolver;
             this._pathparamReplacer = pathparamReplacer;
@@ -91,7 +91,7 @@ class SetUriPreprocessor implements Feature, RequestPreprocessor {
     }
 
     private static final Logger LOG =
-            LoggerFactory.getLogger(SetUriPreprocessor.class);
+            LoggerFactory.getLogger(SetPathPreprocessor.class);
     
     @Override
     public RequestChanger call(final Object signalBean) {

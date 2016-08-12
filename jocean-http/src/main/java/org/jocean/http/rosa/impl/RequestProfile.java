@@ -11,7 +11,7 @@ import rx.functions.Func1;
 class RequestProfile {
 
     RequestProfile(final Class<?> respType,
-            final String uri,
+            final URI uri,
             final Func0<Feature[]> builder,
             final Func1<URI, SocketAddress> uri2address) {
         this._respType = respType;
@@ -24,7 +24,7 @@ class RequestProfile {
         return this._respType;
     }
     
-    String uri() {
+    URI uri() {
         return this._uri;
     }
     
@@ -37,7 +37,7 @@ class RequestProfile {
     }
     
     private final Class<?> _respType;
-    private final String _uri;
+    private final URI _uri;
     private final Func0<Feature[]> _featuresBuilder;
     private final Func1<URI, SocketAddress> _uri2address;
 }

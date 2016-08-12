@@ -17,6 +17,7 @@ import org.jocean.http.PayloadCounter;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.rosa.SignalClient;
+import org.jocean.http.rosa.impl.internal.Facades.UriSource;
 import org.jocean.http.rosa.impl.internal.RosaProfiles;
 import org.jocean.http.util.FeaturesBuilder;
 import org.jocean.http.util.PayloadCounterAware;
@@ -70,8 +71,14 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         this(null, _DEFAULT_URI2ADDR, httpClient, new DefaultAttachmentBuilder());
     }
     
-    public DefaultSignalClient(final String defaultUri, final HttpClient httpClient) {
+    public DefaultSignalClient(final URI defaultUri, final HttpClient httpClient) {
         this(defaultUri, _DEFAULT_URI2ADDR, httpClient, new DefaultAttachmentBuilder());
+    }
+    
+    public DefaultSignalClient(
+            final Func1<URI, SocketAddress> defaultBuildAddress,
+            final HttpClient httpClient) {
+        this(null, defaultBuildAddress, httpClient, new DefaultAttachmentBuilder());
     }
     
     public DefaultSignalClient(final HttpClient httpClient, 
@@ -79,19 +86,19 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         this(null, _DEFAULT_URI2ADDR, httpClient, attachmentBuilder);
     }
     
-    public DefaultSignalClient(final String defaultUri, 
+    public DefaultSignalClient(final URI defaultUri, 
             final Func1<URI, SocketAddress> defaultBuildAddress,
             final HttpClient httpClient) {
         this(defaultUri, defaultBuildAddress, httpClient, new DefaultAttachmentBuilder());
     }
     
-    public DefaultSignalClient(final String defaultUri, 
+    public DefaultSignalClient(final URI defaultUri, 
             final HttpClient httpClient, 
             final AttachmentBuilder attachmentBuilder) {
         this(defaultUri, _DEFAULT_URI2ADDR, httpClient, attachmentBuilder);
     }
     
-    public DefaultSignalClient(final String defaultUri, 
+    public DefaultSignalClient(final URI defaultUri, 
             final Func1<URI, SocketAddress> defaultBuildAddress,
             final HttpClient httpClient, 
             final AttachmentBuilder attachmentBuilder) {
@@ -103,7 +110,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     
     public Action0 registerRequestType(final Class<?> reqType, 
             final Class<?> respType, 
-            final String uri, 
+            final URI uri, 
             final Func1<URI, SocketAddress> uri2address,
             final Feature... features) {
         return registerRequestType(reqType, respType, uri, 
@@ -117,7 +124,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     
     public Action0 registerRequestType(final Class<?> reqType, 
             final Class<?> respType, 
-            final String uri, 
+            final URI uri, 
             final Feature... features) {
         return registerRequestType(reqType, respType, uri, new Func0<Feature[]>() {
             @Override
@@ -128,7 +135,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     
     public Action0 registerRequestType(final Class<?> reqType, 
             final Class<?> respType, 
-            final String uri, 
+            final URI uri, 
             final String featuresName) {
         return registerRequestType(reqType, respType, uri, new Func0<Feature[]>() {
             @Override
@@ -149,14 +156,14 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     
     public Action0 registerRequestType(final Class<?> reqType, 
             final Class<?> respType, 
-            final String uri, 
+            final URI uri, 
             final Func0<Feature[]> featuresBuilder) {
         return registerRequestType(reqType, respType, uri, featuresBuilder, _DEFAULT_URI2ADDR);
     }
 
     public Action0 registerRequestType(final Class<?> reqType, 
             final Class<?> respType, 
-            final String uri, 
+            final URI uri, 
             final Func0<Feature[]> featuresBuilder,
             final Func1<URI, SocketAddress> uri2address) {
         this._signal2profile.put(reqType, new RequestProfile(respType, uri, featuresBuilder, uri2address));
@@ -219,7 +226,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             @Override
             public void call(final Subscriber<? super RESP> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
-                    final URI uri = req2uri(signalBean);
+                    final URI uri = req2uri(signalBean, fullfeatures);
                     _httpClient.defineInteraction(
                             safeGetAddress(signalBean, uri), 
                             requestProviderOf(checkAndWrapSignalIfNeed(signalBean), 
@@ -525,15 +532,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     private final Map<Class<?>, RequestProfile> _signal2profile = 
             new ConcurrentHashMap<>();
     
-    private URI req2uri(final Object signalBean) {
-        final String uri = safeUriOf(signalBean);
-        
-        try {
-            return ( null != uri ? new URI(uri) : null);
-        } catch (Exception e) {
-            LOG.error("exception when generate URI for request({}), detail:{}",
-                    signalBean, ExceptionUtils.exception2detail(e));
-            return null;
+    private URI req2uri(final Object signalBean, final Feature[] features) {
+        final UriSource[] uris = InterfaceUtils.selectIncludeType(
+                UriSource.class, (Object[])features);
+        if ( null!=uris && uris.length > 0) {
+            return uris[0].uri();
+        } else {
+            return safeUriOf(signalBean);
         }
     }
 
@@ -548,9 +553,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return (null != profile ? profile.buildAddress(uri) : this._defaultBuildAddress.call(uri));
     }
 
-    private String safeUriOf(final Object signalBean) {
+    private URI safeUriOf(final Object signalBean) {
         final RequestProfile profile = signal2Profile(signalBean);
-        final String signalUri = (null != profile ? profile.uri() : null);
+        final URI signalUri = (null != profile ? profile.uri() : null);
         return null != signalUri ? signalUri : this._defaultUri;
     }
     
@@ -572,7 +577,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     private BeanHolder _beanHolder;
     private final HttpClient _httpClient;
     private final AttachmentBuilder _attachmentBuilder;
-    private final String _defaultUri;
+    private final URI _defaultUri;
     private final Func1<URI, SocketAddress> _defaultBuildAddress;
     
     private final static HttpDataFactory _DATA_FACTORY = new DefaultHttpDataFactory(false);
