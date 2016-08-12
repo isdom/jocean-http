@@ -781,6 +781,66 @@ public class DefaultSignalClientTestCase {
         }
     }
     
+    @Test
+    public void testSignalClientWithoutSignalBeanForPostWithJSONContent() throws Exception {
+        final byte[] respToSendback = new byte[]{12, 13,14,15};
+        final AtomicReference<HttpMethod> reqMethodReceivedRef = new AtomicReference<>();
+        final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
+        final AtomicReference<TestRequestByPost> reqbeanReceivedRef = new AtomicReference<>();
+        
+        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+            @Override
+            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
+                final FullHttpRequest req = genFullHttpRequest.call();
+                try {
+                    reqMethodReceivedRef.set(req.getMethod());
+                    reqpathReceivedRef.set(req.getUri());
+                    reqbeanReceivedRef.set(
+                            (TestRequestByPost) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
+                                    TestRequestByPost.class));
+                } catch (IOException e) {
+                    LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
+                            ExceptionUtils.exception2detail(e));
+                } finally {
+                    req.release();
+                }
+                trade.outboundResponse(buildBytesResponse(respToSendback));
+            }};
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = createTestServerWith(testAddr, 
+                requestAndTradeAwareWhenCompleted,
+                Feature.ENABLE_LOGGING,
+                Feature.ENABLE_COMPRESSOR );
+        
+        try {
+            final TestChannelCreator creator = new TestChannelCreator();
+            final TestChannelPool pool = new TestChannelPool(1);
+            
+            final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool, Feature.ENABLE_LOGGING);
+            
+            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", 
+                    buildUri2Addr(testAddr), httpclient);
+            
+            final byte[] bytesReceived = 
+                ((SignalClient)signalClient).<byte[]>rawDefineInteraction( 
+                        new SignalClient.UsingPath("/test/raw"),
+                        new SignalClient.UsingMethod(POST.class),
+                        new SignalClient.JSONContent("{\"code\": \"added\"}"))
+                .timeout(1, TimeUnit.SECONDS)
+                .toBlocking().single();
+            
+            assertEquals(HttpMethod.POST, reqMethodReceivedRef.get());
+            assertEquals("/test/raw", reqpathReceivedRef.get());
+            assertEquals(new TestRequestByPost(null, "added"), reqbeanReceivedRef.get());
+            assertTrue(Arrays.equals(respToSendback, bytesReceived));
+            
+            pool.awaitRecycleChannels();
+        } finally {
+            server.unsubscribe();
+        }
+    }
+    
     @AnnotationWrapper(POST.class)
     @Path("/test/simpleRequest")
     public static class TestRequestByPostWithQueryParam {

@@ -59,6 +59,8 @@ public interface SignalClient {
         private final byte[] _content;
     }
     
+    public <RESP> Observable<? extends RESP> rawDefineInteraction(final Feature... features);
+    
     public <RESP> Observable<? extends RESP> defineInteraction(
             final Object request, final Feature... features);
 }

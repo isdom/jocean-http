@@ -206,6 +206,11 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     */
     
     @Override
+    public <RESP> Observable<? extends RESP> rawDefineInteraction(final Feature... features) {
+        return defineInteraction(null, features);
+    }
+    
+    @Override
     public <RESP> Observable<? extends RESP> defineInteraction(
             final Object signalBean, 
             final Feature... features) {
@@ -217,7 +222,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     final URI uri = req2uri(signalBean);
                     _httpClient.defineInteraction(
                             safeGetAddress(signalBean, uri), 
-                            requestProviderOf(signalBean, 
+                            requestProviderOf(checkAndWrapSignalIfNeed(signalBean), 
                                 initRequestOf(uri), 
                                 fullfeatures),
                             genFeatures4HttpClient(signalBean, fullfeatures))
@@ -226,6 +231,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 }
             }
         });
+    }
+
+    private Object checkAndWrapSignalIfNeed(final Object signalBean) {
+        return null != signalBean ? signalBean : new Object();
     }
 
     private Feature[] genFeatures4HttpClient(final Object signalBean,
@@ -517,7 +526,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             new ConcurrentHashMap<>();
     
     private URI req2uri(final Object signalBean) {
-        final String uri = safeUriOf(signalBean.getClass());
+        final String uri = safeUriOf(signalBean);
         
         try {
             return ( null != uri ? new URI(uri) : null);
@@ -528,24 +537,30 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
     }
 
+    private RequestProfile signal2Profile(final Object signalBean) {
+        return null != signalBean 
+                ? this._signal2profile.get(signalBean.getClass()) 
+                : null;
+    }
+
     private SocketAddress safeGetAddress(final Object signalBean, final URI uri) {
-        final RequestProfile profile = this._signal2profile.get(signalBean.getClass());
+        final RequestProfile profile = signal2Profile(signalBean);
         return (null != profile ? profile.buildAddress(uri) : this._defaultBuildAddress.call(uri));
     }
 
-    private String safeUriOf(final Class<?> reqType) {
-        final RequestProfile profile = this._signal2profile.get(reqType);
+    private String safeUriOf(final Object signalBean) {
+        final RequestProfile profile = signal2Profile(signalBean);
         final String signalUri = (null != profile ? profile.uri() : null);
         return null != signalUri ? signalUri : this._defaultUri;
     }
     
     private Feature[] safeGetRequestFeatures(final Object signalBean) {
-        final RequestProfile profile = _signal2profile.get(signalBean.getClass());
+        final RequestProfile profile = signal2Profile(signalBean);
         return (null != profile ? profile.features() : Feature.EMPTY_FEATURES);
     }
     
     private Class<?> safeGetResponseClass(final Object signalBean) {
-        final RequestProfile profile = this._signal2profile.get(signalBean.getClass());
+        final RequestProfile profile = signal2Profile(signalBean);
         return (null != profile ? profile.responseType() : null);
     }
 
