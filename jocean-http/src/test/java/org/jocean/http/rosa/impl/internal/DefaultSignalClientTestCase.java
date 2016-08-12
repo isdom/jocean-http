@@ -764,7 +764,7 @@ public class DefaultSignalClientTestCase {
                         new SignalClient.UsingPath("/test/simpleRequest"),
                         new SignalClient.UsingMethod(POST.class),
                         new SignalClient.JSONContent("{\"code\": \"added\"}"))
-//                .timeout(1, TimeUnit.SECONDS)
+                .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             
             assertEquals(HttpMethod.POST, reqMethodReceivedRef.get());
