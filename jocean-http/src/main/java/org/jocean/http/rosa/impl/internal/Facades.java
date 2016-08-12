@@ -11,4 +11,11 @@ public class Facades {
     public interface PathSource {
         public String path();
     }
+
+    public interface ContentSource {
+        public byte[] content();
+    }
+    
+    public interface JSONSource extends ContentSource {
+    }
 }

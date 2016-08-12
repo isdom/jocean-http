@@ -3,9 +3,11 @@ package org.jocean.http.rosa;
 import java.lang.annotation.Annotation;
 
 import org.jocean.http.Feature;
+import org.jocean.http.rosa.impl.internal.Facades.JSONSource;
 import org.jocean.http.rosa.impl.internal.Facades.MethodSource;
 import org.jocean.http.rosa.impl.internal.Facades.PathSource;
 
+import io.netty.util.CharsetUtil;
 import rx.Observable;
 
 public interface SignalClient {
@@ -43,6 +45,18 @@ public interface SignalClient {
         }
         
         private final Class<? extends Annotation> _method;
+    }
+    
+    public class JSONContent implements Feature, JSONSource {
+        public JSONContent(final String jsonAsString) {
+            this._content = jsonAsString.getBytes(CharsetUtil.UTF_8);
+        }
+        
+        public byte[] content() {
+            return this._content;
+        }
+        
+        private final byte[] _content;
     }
     
     public <RESP> Observable<? extends RESP> defineInteraction(

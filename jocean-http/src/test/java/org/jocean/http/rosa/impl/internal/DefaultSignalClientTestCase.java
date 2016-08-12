@@ -270,10 +270,22 @@ public class DefaultSignalClientTestCase {
         
         public TestRequestByPost() {}
         
-        public TestRequestByPost(final String id) {
+        public TestRequestByPost(final String id, final String code) {
             this._id = id;
+            this._code = code;
         }
         
+        /* (non-Javadoc)
+         * @see java.lang.Object#toString()
+         */
+        @Override
+        public String toString() {
+            StringBuilder builder = new StringBuilder();
+            builder.append("[_id=").append(_id)
+                    .append(", _code=").append(_code).append("]");
+            return builder.toString();
+        }
+
         /* (non-Javadoc)
          * @see java.lang.Object#hashCode()
          */
@@ -281,6 +293,7 @@ public class DefaultSignalClientTestCase {
         public int hashCode() {
             final int prime = 31;
             int result = 1;
+            result = prime * result + ((_code == null) ? 0 : _code.hashCode());
             result = prime * result + ((_id == null) ? 0 : _id.hashCode());
             return result;
         }
@@ -297,6 +310,11 @@ public class DefaultSignalClientTestCase {
             if (getClass() != obj.getClass())
                 return false;
             TestRequestByPost other = (TestRequestByPost) obj;
+            if (_code == null) {
+                if (other._code != null)
+                    return false;
+            } else if (!_code.equals(other._code))
+                return false;
             if (_id == null) {
                 if (other._id != null)
                     return false;
@@ -305,11 +323,6 @@ public class DefaultSignalClientTestCase {
             return true;
         }
 
-        @Override
-        public String toString() {
-            return "[id=" + _id + "]";
-        }
-        
         @JSONField(name="id")
         public String getId() {
             return this._id;
@@ -320,7 +333,18 @@ public class DefaultSignalClientTestCase {
             this._id = id;
         }
 
+        @JSONField(name="code")
+        public String getCode() {
+            return this._code;
+        }
+
+        @JSONField(name="code")
+        public void setCode(final String code) {
+            this._code = code;
+        }
+        
         protected String _id;
+        protected String _code;
     }
     
     public static class TestResponse {
@@ -676,7 +700,7 @@ public class DefaultSignalClientTestCase {
                     buildUri2Addr(testAddr),
                     Feature.ENABLE_LOGGING);
             
-            final TestRequestByPost reqToSend = new TestRequestByPost("1");
+            final TestRequestByPost reqToSend = new TestRequestByPost("1", null);
             final TestResponse respReceived = 
                 ((SignalClient)signalClient).<TestResponse>defineInteraction(reqToSend)
                 .timeout(1, TimeUnit.SECONDS)
@@ -686,6 +710,70 @@ public class DefaultSignalClientTestCase {
             assertEquals("/test/simpleRequest", reqpathReceivedRef.get());
             assertEquals(reqToSend, reqbeanReceivedRef.get());
             assertEquals(respToSendback, respReceived);
+            
+            pool.awaitRecycleChannels();
+        } finally {
+            server.unsubscribe();
+        }
+    }
+    
+    @Test
+    public void testSignalClientOnlySignalForPostWithJSONContentWithoutRegisterRespType() throws Exception {
+        final byte[] respToSendback = new byte[]{12, 13,14,15};
+        final AtomicReference<HttpMethod> reqMethodReceivedRef = new AtomicReference<>();
+        final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
+        final AtomicReference<TestRequestByPost> reqbeanReceivedRef = new AtomicReference<>();
+        
+        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+            @Override
+            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
+                final FullHttpRequest req = genFullHttpRequest.call();
+                try {
+                    reqMethodReceivedRef.set(req.getMethod());
+                    reqpathReceivedRef.set(req.getUri());
+                    reqbeanReceivedRef.set(
+                            (TestRequestByPost) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
+                                    TestRequestByPost.class));
+                } catch (IOException e) {
+                    LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
+                            ExceptionUtils.exception2detail(e));
+                } finally {
+                    req.release();
+                }
+                trade.outboundResponse(buildBytesResponse(respToSendback));
+            }};
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = createTestServerWith(testAddr, 
+                requestAndTradeAwareWhenCompleted,
+                Feature.ENABLE_LOGGING,
+                Feature.ENABLE_COMPRESSOR );
+        
+        try {
+            final TestChannelCreator creator = new TestChannelCreator();
+            final TestChannelPool pool = new TestChannelPool(1);
+            
+            final DefaultHttpClient httpclient = new DefaultHttpClient(creator, pool, Feature.ENABLE_LOGGING);
+            
+            final DefaultSignalClient signalClient = new DefaultSignalClient("http://test", 
+                    buildUri2Addr(testAddr), httpclient);
+            
+            final TestRequestByPost reqToSend = new TestRequestByPost("1", null);
+            final byte[] bytesReceived = 
+                ((SignalClient)signalClient).<byte[]>defineInteraction(reqToSend, 
+                        new SignalClient.UsingPath("/test/simpleRequest"),
+                        new SignalClient.UsingMethod(POST.class),
+                        new SignalClient.JSONContent("{\"code\": \"added\"}"))
+//                .timeout(1, TimeUnit.SECONDS)
+                .toBlocking().single();
+            
+            assertEquals(HttpMethod.POST, reqMethodReceivedRef.get());
+            assertEquals("/test/simpleRequest", reqpathReceivedRef.get());
+            
+            reqToSend.setCode("added");
+            assertEquals(reqToSend, reqbeanReceivedRef.get());
+            
+            assertTrue(Arrays.equals(respToSendback, bytesReceived));
             
             pool.awaitRecycleChannels();
         } finally {
@@ -1032,7 +1120,7 @@ public class DefaultSignalClientTestCase {
                     new AttachmentInMemory("3", "text/plain", "333333333333333".getBytes(Charsets.UTF_8)),
             };
             
-            final TestRequestByPost reqToSend = new TestRequestByPost("1");
+            final TestRequestByPost reqToSend = new TestRequestByPost("1", null);
             final TestResponse respReceived = ((SignalClient)signalClient).<TestResponse>defineInteraction(
                     reqToSend, 
                     attachsToSend)
