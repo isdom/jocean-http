@@ -10,7 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
-import org.jocean.http.server.HttpServer;
+import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys.ServerChannelAware;
@@ -44,7 +44,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-public class DefaultHttpServer implements HttpServer {
+public class DefaultHttpServerBuilder implements HttpServerBuilder {
 
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
@@ -54,7 +54,7 @@ public class DefaultHttpServer implements HttpServer {
     }
     
     private static final Logger LOG =
-            LoggerFactory.getLogger(DefaultHttpServer.class);
+            LoggerFactory.getLogger(DefaultHttpServerBuilder.class);
     
     public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress, 
@@ -176,18 +176,18 @@ public class DefaultHttpServer implements HttpServer {
             }};
     }
     
-    public DefaultHttpServer() {
+    public DefaultHttpServerBuilder() {
         this(1, 0, Feature.EMPTY_FEATURES);
     }
     
-    public DefaultHttpServer(
+    public DefaultHttpServerBuilder(
             final int processThreadNumberForAccept, 
             final int processThreadNumberForWork
             ) {
         this(processThreadNumberForAccept, processThreadNumberForWork, Feature.EMPTY_FEATURES);
     }
     
-    public DefaultHttpServer(
+    public DefaultHttpServerBuilder(
             final int processThreadNumberForAccept, 
             final int processThreadNumberForWork,
             final Feature... defaultFeatures) {
@@ -201,7 +201,7 @@ public class DefaultHttpServer implements HttpServer {
             }}, defaultFeatures);
     }
     
-    public DefaultHttpServer(
+    public DefaultHttpServerBuilder(
             final BootstrapCreator creator,
             final Feature... defaultFeatures) {
         this._creator = creator;

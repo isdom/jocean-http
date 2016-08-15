@@ -7,8 +7,8 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 import java.net.InetSocketAddress;
 
-import org.jocean.http.server.HttpServer;
-import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.http.server.HttpServerBuilder;
+import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
@@ -36,7 +36,7 @@ public class HttpServerForCloopen {
     public static void main(final String[] args) throws Exception {
         
         @SuppressWarnings("resource")
-        final HttpServer server = new DefaultHttpServer();
+        final HttpServerBuilder server = new DefaultHttpServerBuilder();
         
         @SuppressWarnings("unused")
         final Subscription subscription = 

@@ -20,7 +20,7 @@ import rx.functions.Func0;
  */
 //  TODO, rename this interface to creator or sth. else
 //  it's !NOT! server BUT server generator
-public interface HttpServer extends Closeable {
+public interface HttpServerBuilder extends Closeable {
     
     public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress, 

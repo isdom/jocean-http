@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.Nettys4Test;
 import org.jocean.idiom.rx.SubscriberHolder;
 import org.junit.Test;

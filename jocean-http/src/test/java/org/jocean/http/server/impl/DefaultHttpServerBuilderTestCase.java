@@ -17,8 +17,8 @@ import org.jocean.http.Feature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.client.impl.TestChannelPool;
-import org.jocean.http.server.HttpServer;
-import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.http.server.HttpServerBuilder;
+import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.RxNettys;
@@ -47,7 +47,7 @@ import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 
-public class DefaultHttpServerTestCase {
+public class DefaultHttpServerBuilderTestCase {
     private Action1<HttpTrade> echoReactor(final AtomicReference<Object> transportRef) {
         return new Action1<HttpTrade>() {
             @Override
@@ -95,7 +95,7 @@ public class DefaultHttpServerTestCase {
     
     @Test
     public void testHttpHappyPathOnce() throws Exception {
-        final HttpServer server = new DefaultHttpServer(
+        final HttpServerBuilder server = new DefaultHttpServerBuilder(
                 new AbstractBootstrapCreator(
                 new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
             @Override
@@ -131,7 +131,7 @@ public class DefaultHttpServerTestCase {
 
     @Test
     public void testHttpHappyPathTwice() throws Exception {
-        final HttpServer server = new DefaultHttpServer(
+        final HttpServerBuilder server = new DefaultHttpServerBuilder(
                 new AbstractBootstrapCreator(
                 new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
             @Override

@@ -30,10 +30,10 @@ import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.impl.AttachmentBuilder4InMemory;
 import org.jocean.http.rosa.impl.AttachmentInMemory;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
-import org.jocean.http.server.HttpServer;
-import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.http.server.HttpServerBuilder;
+import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.impl.AbstractBootstrapCreator;
-import org.jocean.http.server.impl.DefaultHttpServer;
+import org.jocean.http.server.impl.DefaultHttpServerBuilder;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
@@ -94,7 +94,7 @@ public class DefaultSignalClientTestCase {
         }
     }
     
-    private final static HttpServer TEST_SERVER_BUILDER = new DefaultHttpServer(
+    private final static HttpServerBuilder TEST_SERVER_BUILDER = new DefaultHttpServerBuilder(
             new AbstractBootstrapCreator(
             new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
         @Override

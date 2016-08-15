@@ -1,6 +1,6 @@
 package org.jocean.http.util;
 
-import org.jocean.http.server.HttpServer.TransportException;
+import org.jocean.http.server.HttpServerBuilder.TransportException;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -13,8 +13,8 @@ import java.util.List;
 import org.jocean.http.Feature;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
-import org.jocean.http.server.HttpServer;
-import org.jocean.http.server.HttpServer.HttpTrade;
+import org.jocean.http.server.HttpServerBuilder;
+import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.slf4j.Logger;
@@ -58,7 +58,7 @@ public class HttpServerDemo {
 
         //  create for LocalChannel
         @SuppressWarnings("resource")
-        final HttpServer server = new DefaultHttpServer(
+        final HttpServerBuilder server = new DefaultHttpServerBuilder(
                 new AbstractBootstrapCreator(
                 new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
             @Override
