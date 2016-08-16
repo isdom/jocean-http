@@ -23,6 +23,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
 
 import org.jocean.http.Feature;
+import org.jocean.http.TestHttpUtil;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.client.impl.TestChannelPool;
@@ -30,16 +31,10 @@ import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.impl.AttachmentBuilder4InMemory;
 import org.jocean.http.rosa.impl.AttachmentInMemory;
 import org.jocean.http.rosa.impl.DefaultSignalClient;
-import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.http.server.impl.AbstractBootstrapCreator;
-import org.jocean.http.server.impl.DefaultHttpServerBuilder;
-import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.rx.RxActions;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,12 +43,8 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.annotation.JSONField;
 import com.google.common.base.Charsets;
 
-import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelOption;
 import io.netty.channel.local.LocalAddress;
-import io.netty.channel.local.LocalEventLoopGroup;
-import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
@@ -71,7 +62,6 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import rx.Observable;
 import rx.Subscription;
-import rx.functions.Action1;
 import rx.functions.Action2;
 import rx.functions.Func0;
 import rx.functions.Func1;
@@ -94,51 +84,7 @@ public class DefaultSignalClientTestCase {
         }
     }
     
-    private final static HttpServerBuilder TEST_SERVER_BUILDER = new DefaultHttpServerBuilder(
-            new AbstractBootstrapCreator(
-            new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
-        @Override
-        protected void initializeBootstrap(final ServerBootstrap bootstrap) {
-            bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
-            bootstrap.channel(LocalServerChannel.class);
-        }});
-
     final HttpDataFactory HTTP_DATA_FACTORY = new DefaultHttpDataFactory(false);
-    
-    private static Subscription createTestServerWith(
-            final String acceptId,
-            final Action2<Func0<FullHttpRequest>, HttpTrade> onRequestCompleted,
-            final Feature... features) {
-        return TEST_SERVER_BUILDER.defineServer(new LocalAddress(acceptId), features)
-            .subscribe(new Action1<HttpTrade>() {
-                @Override
-                public void call(final HttpTrade trade) {
-                    final HttpMessageHolder holder = new HttpMessageHolder(0);
-                    trade.inboundRequest()
-                        .compose(holder.assembleAndHold())
-                        .doOnCompleted(RxActions.bindParameter(onRequestCompleted,
-                                holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST), 
-                                trade))
-                        .doAfterTerminate(holder.release())
-                        .doOnUnsubscribe(holder.release())
-                        .subscribe();
-                }});
-    }
-    
-    @SuppressWarnings("unused")
-    private static Subscription createTestServerWith(
-            final String acceptId,
-            final Action1<HttpTrade> onRequestCompleted,
-            final Feature... features) {
-        return TEST_SERVER_BUILDER.defineServer(new LocalAddress(acceptId), features)
-            .subscribe(new Action1<HttpTrade>() {
-                @Override
-                public void call(final HttpTrade trade) {
-                    trade.inboundRequest()
-                        .doOnCompleted(RxActions.bindParameter(onRequestCompleted, trade))
-                        .subscribe();
-                }});
-    }
     
     private static Observable<HttpObject> buildResponse(final Object responseBean) {
         final byte[] responseBytes = JSON.toJSONBytes(responseBean);
@@ -447,7 +393,7 @@ public class DefaultSignalClientTestCase {
                 trade.outboundResponse(buildResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = createTestServerWith(testAddr, 
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 requestAndTradeAwareWhenCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
@@ -562,7 +508,7 @@ public class DefaultSignalClientTestCase {
                 trade.outboundResponse(buildBytesResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = createTestServerWith(testAddr, 
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 requestAndTradeAwareWhenCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
@@ -620,7 +566,7 @@ public class DefaultSignalClientTestCase {
                 trade.outboundResponse(buildResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = createTestServerWith(testAddr, 
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 requestAndTradeAwareWhenCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
@@ -684,7 +630,7 @@ public class DefaultSignalClientTestCase {
                 trade.outboundResponse(buildResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = createTestServerWith(testAddr, 
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 requestAndTradeAwareWhenCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
@@ -747,7 +693,7 @@ public class DefaultSignalClientTestCase {
                 trade.outboundResponse(buildBytesResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = createTestServerWith(testAddr, 
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 requestAndTradeAwareWhenCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
@@ -811,7 +757,7 @@ public class DefaultSignalClientTestCase {
                 trade.outboundResponse(buildBytesResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = createTestServerWith(testAddr, 
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 requestAndTradeAwareWhenCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
@@ -871,7 +817,7 @@ public class DefaultSignalClientTestCase {
                 trade.outboundResponse(buildBytesResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = createTestServerWith(testAddr, 
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 requestAndTradeAwareWhenCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
@@ -1004,7 +950,7 @@ public class DefaultSignalClientTestCase {
                 trade.outboundResponse(buildResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = createTestServerWith(testAddr, 
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 requestAndTradeAwareWhenCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
@@ -1138,7 +1084,7 @@ public class DefaultSignalClientTestCase {
                 trade.outboundResponse(buildResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = createTestServerWith(testAddr, 
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 requestAndTradeAwareWhenCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
@@ -1221,7 +1167,7 @@ public class DefaultSignalClientTestCase {
             
         //  launch test server for attachment send
         final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = createTestServerWith(testAddr, 
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 requestAndTradeAwareWhenCompleted,
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR );
