@@ -9,12 +9,14 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
 import javax.net.ssl.SSLException;
 
-import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
+import org.jocean.http.TestHttpUtil;
+import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
 import org.jocean.http.util.HttpUtil;
@@ -47,6 +49,7 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Subscription;
+import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.observers.TestSubscriber;
 
@@ -105,13 +108,17 @@ public class DefaultHttpClientTestCase {
     //  Happy Path
     @Test
     public void testHttpHappyPathOnce() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                ENABLE_LOGGING);
+//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
         try {
         
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.just(fullHttpRequest()))
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
@@ -121,8 +128,18 @@ public class DefaultHttpClientTestCase {
             assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
+    }
+
+    private Action1<HttpTrade> responseBy(
+            final String contentType, 
+            final byte[] bodyAsBytes) {
+        return new Action1<HttpTrade>() {
+            @Override
+            public void call(final HttpTrade trade) {
+                trade.outboundResponse(TestHttpUtil.buildBytesResponse(contentType, bodyAsBytes));
+            }};
     }
 
     @Test

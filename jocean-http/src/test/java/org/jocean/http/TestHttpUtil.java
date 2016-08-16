@@ -1,5 +1,8 @@
 package org.jocean.http;
 
+import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
+import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+
 import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.impl.AbstractBootstrapCreator;
@@ -9,11 +12,18 @@ import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.RxActions;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpVersion;
+import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
 import rx.functions.Action2;
@@ -61,5 +71,16 @@ public class TestHttpUtil {
                         .doOnCompleted(RxActions.bindParameter(onRequestCompleted, trade))
                         .subscribe();
                 }});
+    }
+    
+    public static Observable<HttpObject> buildBytesResponse(
+            final String contentType, 
+            final byte[] bodyAsBytes) {
+        final FullHttpResponse response = new DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1, OK, 
+                Unpooled.wrappedBuffer(bodyAsBytes));
+        response.headers().set(CONTENT_TYPE, contentType);
+        response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, response.content().readableBytes());
+        return  Observable.<HttpObject>just(response);
     }
 }
