@@ -17,6 +17,7 @@ import org.jocean.http.PayloadCounter;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.rosa.SignalClient;
+import org.jocean.http.rosa.impl.internal.Facades.ResponseTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.UriSource;
 import org.jocean.http.rosa.impl.internal.RosaProfiles;
 import org.jocean.http.util.FeaturesBuilder;
@@ -233,7 +234,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                                 initRequestOf(uri), 
                                 fullfeatures),
                             genFeatures4HttpClient(signalBean, fullfeatures))
-                    .compose(new ToSignalResponse<RESP>(safeGetResponseClass(signalBean)))
+                    .compose(new ToSignalResponse<RESP>(safeGetResponseType(signalBean, fullfeatures)))
                     .subscribe(subscriber);
                 }
             }
@@ -564,9 +565,15 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return (null != profile ? profile.features() : Feature.EMPTY_FEATURES);
     }
     
-    private Class<?> safeGetResponseClass(final Object signalBean) {
-        final RequestProfile profile = signal2Profile(signalBean);
-        return (null != profile ? profile.responseType() : null);
+    private Class<?> safeGetResponseType(final Object signalBean, final Feature[] features) {
+        final ResponseTypeSource[] respTypeSource = 
+                InterfaceUtils.selectIncludeType(ResponseTypeSource.class, (Object[])features);
+        if (null != respTypeSource && respTypeSource.length > 0) {
+            return respTypeSource[0].responseType();
+        } else {
+            final RequestProfile profile = signal2Profile(signalBean);
+            return (null != profile ? profile.responseType() : null);
+        }
     }
 
     @Override

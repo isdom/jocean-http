@@ -7,6 +7,7 @@ import org.jocean.http.Feature;
 import org.jocean.http.rosa.impl.internal.Facades.JSONSource;
 import org.jocean.http.rosa.impl.internal.Facades.MethodSource;
 import org.jocean.http.rosa.impl.internal.Facades.PathSource;
+import org.jocean.http.rosa.impl.internal.Facades.ResponseTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.UriSource;
 
 import io.netty.util.CharsetUtil;
@@ -59,6 +60,19 @@ public interface SignalClient {
         }
         
         private final Class<? extends Annotation> _method;
+    }
+    
+    public class DecodeResponseAs implements Feature, ResponseTypeSource {
+        public DecodeResponseAs(final Class<?> respType) {
+            this._respType = respType;
+        }
+        
+        @Override
+        public Class<?> responseType() {
+            return this._respType;
+        }
+         
+        private final Class<?> _respType;
     }
     
     public class JSONContent implements Feature, JSONSource {

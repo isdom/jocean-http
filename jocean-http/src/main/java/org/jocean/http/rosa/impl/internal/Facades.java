@@ -23,4 +23,8 @@ public class Facades {
     
     public interface JSONSource extends ContentSource {
     }
+
+    public interface ResponseTypeSource {
+        public Class<?> responseType();
+    }
 }
