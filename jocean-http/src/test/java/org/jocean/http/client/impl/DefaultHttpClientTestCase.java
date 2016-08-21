@@ -103,6 +103,16 @@ public class DefaultHttpClientTestCase {
         return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
     }
 
+    private Action1<HttpTrade> responseBy(
+            final String contentType, 
+            final byte[] bodyAsBytes) {
+        return new Action1<HttpTrade>() {
+            @Override
+            public void call(final HttpTrade trade) {
+                trade.outboundResponse(TestHttpUtil.buildBytesResponse(contentType, bodyAsBytes));
+            }};
+    }
+    
     //  TODO, add more multi-call for same interaction define
     //       and check if each call generate different channel instance
     //  Happy Path
@@ -112,7 +122,6 @@ public class DefaultHttpClientTestCase {
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 ENABLE_LOGGING);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
         try {
         
@@ -132,19 +141,12 @@ public class DefaultHttpClientTestCase {
         }
     }
 
-    private Action1<HttpTrade> responseBy(
-            final String contentType, 
-            final byte[] bodyAsBytes) {
-        return new Action1<HttpTrade>() {
-            @Override
-            public void call(final HttpTrade trade) {
-                trade.outboundResponse(TestHttpUtil.buildBytesResponse(contentType, bodyAsBytes));
-            }};
-    }
-
     @Test
     public void testHttpHappyPathOnceAndCheckRefCount() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                ENABLE_LOGGING);
 
         final ByteBuf content = Unpooled.buffer(0);
         content.writeBytes("test content".getBytes("UTF-8"));
@@ -156,19 +158,20 @@ public class DefaultHttpClientTestCase {
         try {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.just(request))
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            ReferenceCountUtil.release(request);
+            //  assert true referenced count release to zero
+            assertTrue(ReferenceCountUtil.release(request));
             
             assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
         
         assertEquals(0, request.refCnt());
