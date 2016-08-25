@@ -3,6 +3,7 @@ package org.jocean.http.client.impl;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.jocean.http.Feature.ENABLE_LOGGING;
+import static org.jocean.http.Feature.ENABLE_LOGGING_PREV_SSL;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -45,7 +46,9 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.NotSslRecordException;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Subscription;
@@ -179,15 +182,23 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttpsHappyPathOnce() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
+        
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                new ENABLE_SSL(sslCtx4Server),
+                ENABLE_LOGGING_PREV_SSL);
 
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
-                ENABLE_LOGGING,
+                ENABLE_LOGGING_PREV_SSL,
                 new ENABLE_SSL(sslCtx));
         try {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.just(fullHttpRequest()))
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
@@ -197,13 +208,16 @@ public class DefaultHttpClientTestCase {
             assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
     
     @Test
     public void testHttpHappyPathKeepAliveReuseConnection() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                ENABLE_LOGGING);
 
         final TestChannelCreator creator = new TestChannelCreator();
     
@@ -215,7 +229,7 @@ public class DefaultHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(fullHttpRequest()))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -232,7 +246,7 @@ public class DefaultHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(fullHttpRequest()))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -246,7 +260,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertNotClose(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
     
