@@ -234,6 +234,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder {
     static {
         _APPLY_BUILDER = new Class2ApplyBuilder();
         _APPLY_BUILDER.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
+        _APPLY_BUILDER.register(Feature.ENABLE_LOGGING_OVER_SSL.getClass(), APPLY.LOGGING_OVER_SSL);
         _APPLY_BUILDER.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
         _APPLY_BUILDER.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
         _APPLY_BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);

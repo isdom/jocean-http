@@ -70,7 +70,7 @@ public interface Feature {
         }
     };
     
-    public static final Feature ENABLE_LOGGING_PREV_SSL = new AbstractFeature0() {
+    public static final Feature ENABLE_LOGGING_OVER_SSL = new AbstractFeature0() {
         @Override
         public String toString() {
             return "ENABLE_LOGGING_PREV_SSL";

@@ -3,7 +3,7 @@ package org.jocean.http.client.impl;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.jocean.http.Feature.ENABLE_LOGGING;
-import static org.jocean.http.Feature.ENABLE_LOGGING_PREV_SSL;
+import static org.jocean.http.Feature.ENABLE_LOGGING_OVER_SSL;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -190,10 +190,10 @@ public class DefaultHttpClientTestCase {
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 new ENABLE_SSL(sslCtx4Server),
-                ENABLE_LOGGING_PREV_SSL);
+                ENABLE_LOGGING_OVER_SSL);
 
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
-                ENABLE_LOGGING_PREV_SSL,
+                ENABLE_LOGGING_OVER_SSL,
                 new ENABLE_SSL(sslCtx));
         try {
             final Iterator<HttpObject> itr = 

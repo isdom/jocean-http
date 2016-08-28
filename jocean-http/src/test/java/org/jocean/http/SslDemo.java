@@ -77,7 +77,7 @@ public class SslDemo {
                 client.defineInteraction(
                     new InetSocketAddress(host, 443), 
                     Observable.just(request),
-                    Feature.ENABLE_LOGGING_PREV_SSL,
+                    Feature.ENABLE_LOGGING_OVER_SSL,
                     sslfeature
                     )
                 .compose(holder.assembleAndHold())
@@ -112,7 +112,7 @@ public class SslDemo {
                 client.defineInteraction(
                     new InetSocketAddress(host, 443), 
                     Observable.just(request),
-                    Feature.ENABLE_LOGGING_PREV_SSL,
+                    Feature.ENABLE_LOGGING_OVER_SSL,
                     sslfeature
                     )
                 .compose(holder.assembleAndHold())
