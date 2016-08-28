@@ -184,7 +184,8 @@ public class DefaultHttpClientTestCase {
     public void testHttpsHappyPathOnce() throws Exception {
         
         final SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx4Server = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
 
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -339,7 +340,16 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttpsHappyPathKeepAliveReuseConnection() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                new ENABLE_SSL(sslCtx4Server),
+                ENABLE_LOGGING_OVER_SSL);
+//        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
 
         final TestChannelCreator creator = new TestChannelCreator();
         
@@ -353,7 +363,7 @@ public class DefaultHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(fullHttpRequest()))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -371,7 +381,7 @@ public class DefaultHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(fullHttpRequest()))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -385,7 +395,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertNotClose(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
     
