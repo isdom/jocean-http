@@ -349,7 +349,6 @@ public class DefaultHttpClientTestCase {
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 new ENABLE_SSL(sslCtx4Server),
                 ENABLE_LOGGING_OVER_SSL);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
 
         final TestChannelCreator creator = new TestChannelCreator();
         
@@ -428,7 +427,7 @@ public class DefaultHttpClientTestCase {
                     assertEquals(1, testSubscriber.getOnErrorEvents().size());
                     assertEquals(RuntimeException.class, 
                             testSubscriber.getOnErrorEvents().get(0).getClass());
-                    assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+                    assertEquals(0, testSubscriber.getCompletions());
                     assertEquals(0, testSubscriber.getOnNextEvents().size());
                 }
             }
@@ -457,7 +456,11 @@ public class DefaultHttpClientTestCase {
 
     @Test(timeout=10000)
     public void testHttpSendingError1stAnd2ndHappyPathNotReuseConnection() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                ENABLE_LOGGING);
+//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
         /*
             createTestServerWith(false, "test", new Func0<ChannelInboundHandler>() {
@@ -504,7 +507,7 @@ public class DefaultHttpClientTestCase {
                     assertEquals(1, testSubscriber.getOnErrorEvents().size());
                     assertEquals(RuntimeException.class, 
                             testSubscriber.getOnErrorEvents().get(0).getClass());
-                    assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+                    assertEquals(0, testSubscriber.getCompletions());
                     assertEquals(0, testSubscriber.getOnNextEvents().size());
                 }
             }
@@ -531,7 +534,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(1).assertNotClose(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
     
