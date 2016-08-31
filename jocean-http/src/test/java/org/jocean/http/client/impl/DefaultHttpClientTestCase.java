@@ -460,25 +460,6 @@ public class DefaultHttpClientTestCase {
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 ENABLE_LOGGING);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
-        
-        /*
-            createTestServerWith(false, "test", new Func0<ChannelInboundHandler>() {
-            @Override
-            public ChannelInboundHandler call() {
-                return new HttpTestServerHandler() {
-                    @Override
-                    public void channelActive(final ChannelHandlerContext ctx)
-                            throws Exception {
-                        ctx.channel().close();
-                    }
-
-                    @Override
-                    protected void channelRead0(ChannelHandlerContext ctx,
-                            HttpObject msg) throws Exception {
-                    }};
-            }});
-            */
 
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
@@ -495,7 +476,7 @@ public class DefaultHttpClientTestCase {
                 final CountDownLatch unsubscribed = new CountDownLatch(1);
                 try {
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(fullHttpRequest()))
                     .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                     .subscribe(testSubscriber);
@@ -521,7 +502,7 @@ public class DefaultHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(fullHttpRequest()))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -564,7 +545,7 @@ public class DefaultHttpClientTestCase {
         } finally {
             client.close();
             assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             nextSensor.assertNotCalled();
         }
@@ -600,7 +581,7 @@ public class DefaultHttpClientTestCase {
         } finally {
             client.close();
             assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             nextSensor.assertNotCalled();
         }
@@ -608,7 +589,10 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testTrafficCounterWhenHttpHappyPathOnce() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                ENABLE_LOGGING);
 
         final HttpUtil.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
@@ -617,7 +601,7 @@ public class DefaultHttpClientTestCase {
         try {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.just(fullHttpRequest()))
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
@@ -631,7 +615,7 @@ public class DefaultHttpClientTestCase {
             LOG.debug("meter.downloadBytes: {}", counter.downloadBytes());
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
     
@@ -648,7 +632,7 @@ public class DefaultHttpClientTestCase {
         try {
             testSubscriber.unsubscribe();
             
-            client.defineInteraction(new LocalAddress("test"), 
+            client.defineInteraction(new LocalAddress(UUID.randomUUID().toString()), 
                 Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -659,7 +643,7 @@ public class DefaultHttpClientTestCase {
         } finally {
             client.close();
             assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(0, testSubscriber.getOnErrorEvents().size());
             nextSensor.assertNotCalled();
         }
@@ -676,7 +660,7 @@ public class DefaultHttpClientTestCase {
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
-            client.defineInteraction(new LocalAddress("test"), 
+            client.defineInteraction(new LocalAddress(UUID.randomUUID().toString()), 
                 Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -688,7 +672,7 @@ public class DefaultHttpClientTestCase {
         } finally {
             client.close();
             assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             nextSensor.assertNotCalled();
         }
