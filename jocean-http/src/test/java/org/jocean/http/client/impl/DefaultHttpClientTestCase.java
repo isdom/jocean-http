@@ -680,8 +680,10 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttpsNotShakehand() throws Exception {
-        // http server
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                ENABLE_LOGGING);
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
@@ -692,7 +694,7 @@ public class DefaultHttpClientTestCase {
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
-                new LocalAddress("test"), 
+                new LocalAddress(testAddr), 
                 Observable.just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -706,9 +708,9 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
             assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(NotSslRecordException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
@@ -731,7 +733,7 @@ public class DefaultHttpClientTestCase {
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
-                new LocalAddress("test"), 
+                new LocalAddress(UUID.randomUUID().toString()), 
                 Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -742,7 +744,7 @@ public class DefaultHttpClientTestCase {
         } finally {
             client.close();
             assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(errorMsg, 
                     testSubscriber.getOnErrorEvents().get(0).getMessage());
