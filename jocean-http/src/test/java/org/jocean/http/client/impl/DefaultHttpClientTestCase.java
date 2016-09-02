@@ -780,7 +780,7 @@ public class DefaultHttpClientTestCase {
         } finally {
             client.close();
             assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(errorMsg, 
                     testSubscriber.getOnErrorEvents().get(0).getMessage());
@@ -994,8 +994,8 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed(1);
         } finally {
-            // 注意: 一个 try-with-resources 语句可以像普通的 try 语句那样有 catch 和 finally 块。
-            //  在try-with-resources 语句中, 任意的 catch 或者 finally 块都是在声明的资源被关闭以后才运行。
+            // 娉ㄦ剰: 涓�涓� try-with-resources 璇彞鍙互鍍忔櫘閫氱殑 try 璇彞閭ｆ牱鏈� catch 鍜� finally 鍧椼��
+            //  鍦╰ry-with-resources 璇彞涓�, 浠绘剰鐨� catch 鎴栬�� finally 鍧楅兘鏄湪澹版槑鐨勮祫婧愯鍏抽棴浠ュ悗鎵嶈繍琛屻��
             client.close();
             server.stop();
 //            assertEquals(0, client.getActiveChannelCount());
@@ -1662,5 +1662,5 @@ public class DefaultHttpClientTestCase {
     }
     */
     
-    // TODO, 增加 transfer request 时, 调用 response subscriber.unsubscribe 后，write future是否会被正确取消。
+    // TODO, 澧炲姞 transfer request 鏃�, 璋冪敤 response subscriber.unsubscribe 鍚庯紝write future鏄惁浼氳姝ｇ‘鍙栨秷銆�
 }
