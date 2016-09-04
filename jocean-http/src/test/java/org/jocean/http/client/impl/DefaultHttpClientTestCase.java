@@ -834,7 +834,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
 //            assertEquals(RuntimeException.class, 
 //                    testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             //  channel connected, so message has been send
             nextSensor.assertCalled();
@@ -887,7 +887,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
 //            assertEquals(RuntimeException.class, 
 //                    testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             //  channel connected, so message has been send
             nextSensor.assertCalled();
@@ -939,7 +939,7 @@ public class DefaultHttpClientTestCase {
             server.stop();
             
             testSubscriber.assertNoErrors();
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             //  channel connected, so message has been send
             nextSensor.assertCalled();
