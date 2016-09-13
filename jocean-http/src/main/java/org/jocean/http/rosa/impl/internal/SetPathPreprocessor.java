@@ -62,7 +62,9 @@ class SetPathPreprocessor implements Feature, RequestPreprocessor {
                 final Object signalBean, 
                 final PlaceholderResolver pathparamResolver,
                 final PropertyPlaceholderHelper pathparamReplacer) {
-            final String fullPath = prefix + getPath(signalBean.getClass());
+            //  当 rawpath 结果为 null 时, 避免在 fullpath 后空字符串
+            final String rawpath = getPath(signalBean.getClass());
+            final String fullPath = prefix + (null != rawpath ? rawpath : "");
             if ( null != pathparamReplacer ) {
                 return pathparamReplacer.replacePlaceholders(
                         signalBean,
