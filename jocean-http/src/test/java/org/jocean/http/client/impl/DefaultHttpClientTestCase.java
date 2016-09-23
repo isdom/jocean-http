@@ -1037,7 +1037,7 @@ public class DefaultHttpClientTestCase {
         }
     }
 
-    @Test
+    @Test(timeout=10000)
     public void testHttpsRequestEmitErrorAfterConnected() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
@@ -1073,7 +1073,7 @@ public class DefaultHttpClientTestCase {
         }
     }
     
-    @Test
+    @Test(timeout=10000)
     public void testHttpRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
@@ -1125,7 +1125,7 @@ public class DefaultHttpClientTestCase {
         }
     }
 
-    @Test
+    @Test(timeout=10000)
     public void testHttpsRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
         final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
