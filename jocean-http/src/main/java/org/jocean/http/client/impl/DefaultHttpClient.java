@@ -26,15 +26,18 @@ import org.slf4j.LoggerFactory;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
 import rx.Single;
+import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
@@ -68,8 +71,7 @@ public class DefaultHttpClient implements HttpClient {
                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
             .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
             .doOnNext(hookFeatures(fullFeatures))
-            .flatMap(buildAndSendRequestThenPushChannel(requestProvider, fullFeatures))
-            .flatMap(waitforResponse());
+            .flatMap(waitforResponse(buildAndSendRequest(requestProvider, fullFeatures)));
     }
     
     @Override
@@ -143,44 +145,66 @@ public class DefaultHttpClient implements HttpClient {
         return false;
     }
 
-    @SuppressWarnings("unused")
-    private Func1<Channel, Single<? extends Channel>> sendRequestThenPushChannelAsSingle(
-            final Observable<? extends Object> request,
-            final Feature[] features, 
-            final DoOnUnsubscribe doOnUnsubscribe) {
-        return new Func1<Channel, Single<? extends Channel>> () {
-            @Override
-            public Single<? extends Channel> call(final Channel channel) {
-                return sendRequestThenPushChannel(request, features)
-                        .call(channel)
-                        .toSingle();
-            }
-        };
-    }
+//    @SuppressWarnings("unused")
+//    private Func1<Channel, Single<? extends Channel>> sendRequestThenPushChannelAsSingle(
+//            final Observable<? extends Object> request,
+//            final Feature[] features, 
+//            final DoOnUnsubscribe doOnUnsubscribe) {
+//        return new Func1<Channel, Single<? extends Channel>> () {
+//            @Override
+//            public Single<? extends Channel> call(final Channel channel) {
+//                return sendRequestThenPushChannel(request, features)
+//                        .call(channel)
+//                        .toSingle();
+//            }
+//        };
+//    }
 
-    private Func1<Channel, Observable<? extends Channel>> sendRequestThenPushChannel(
-            final Observable<? extends Object> request,
-            final Feature[] features) {
-        return new Func1<Channel, Observable<? extends Channel>> () {
+//    private Func1<Channel, Observable<? extends Channel>> sendRequestThenPushChannel(
+//            final Observable<? extends Object> request,
+//            final Feature[] features) {
+//        return new Func1<Channel, Observable<? extends Channel>> () {
+//            @Override
+//            public Observable<? extends Channel> call(final Channel channel) {
+//                return request.doOnNext(doOnRequest(features, channel))
+//                    .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
+//                    .compose(RxNettys.<Object>sendRequestThenPushChannel(channel));
+//            }
+//        };
+//    }
+    
+    private Func1<Channel, Observable<? extends HttpObject>> waitforResponse(
+            final Action1<Channel> afterApplyHttpSubscriber) {
+        return new Func1<Channel, Observable<? extends HttpObject>>() {
             @Override
-            public Observable<? extends Channel> call(final Channel channel) {
-                return request.doOnNext(doOnRequest(features, channel))
-                    .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
-                    .compose(RxNettys.<Object>sendRequestThenPushChannel(channel));
-            }
-        };
+            public Observable<? extends HttpObject> call(final Channel channel) {
+                return RxNettys.waitforHttpResponse(afterApplyHttpSubscriber).call(channel)
+                    .compose(ChannelPool.Util.hookPostReceiveLastContent(channel));
+            }};
     }
     
-    private Func1<Channel, Observable<? extends Channel>> buildAndSendRequestThenPushChannel(
+    private Action1<Channel> buildAndSendRequest(
             final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
             final Feature[] features) {
-        return new Func1<Channel, Observable<? extends Channel>> () {
+        return new Action1<Channel> () {
             @Override
-            public Observable<? extends Channel> call(final Channel channel) {
-                return safeBuildRequestByProvider(requestProvider, channel)
-                    .doOnNext(doOnRequest(features, channel))
-                    .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
-                    .compose(RxNettys.<Object>sendRequestThenPushChannel(channel));
+            public void call(final Channel channel) {
+                //  TODO, transfer request's creation error or send error to main Observable
+                safeBuildRequestByProvider(requestProvider, channel)
+                .doOnNext(doOnRequest(features, channel))
+                .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
+                .doOnCompleted(new Action0() {
+                    @Override
+                    public void call() {
+                        channel.flush();
+                    }})
+                .doOnNext(new Action1<Object>() {
+                    @Override
+                    public void call(final Object msg) {
+                        final ChannelFuture future = channel.write(ReferenceCountUtil.retain(msg));
+                        RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
+                    }})
+                .subscribe();
             }
         };
     }
@@ -220,15 +244,6 @@ public class DefaultHttpClient implements HttpClient {
         };
     }
     
-    private Func1<Channel, Observable<? extends HttpObject>> waitforResponse() {
-        return new Func1<Channel, Observable<? extends HttpObject>>() {
-            @Override
-            public Observable<? extends HttpObject> call(final Channel channel) {
-                return RxNettys.waitforHttpResponse().call(channel)
-                    .compose(ChannelPool.Util.hookPostReceiveLastContent(channel));
-            }};
-    }
-
     @SuppressWarnings("unused")
     private Single<? extends Channel> createChannelAndConnectToAsSingle(
             final SocketAddress remoteAddress, 

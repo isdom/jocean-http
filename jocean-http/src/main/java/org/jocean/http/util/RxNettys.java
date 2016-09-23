@@ -234,28 +234,25 @@ public class RxNettys {
             }};
     }
     
-    public static <M> Observable.Transformer<M, Channel> sendRequestThenPushChannel(final Channel channel) {
-        return new Observable.Transformer<M, Channel>() {
-            @Override
-            public Observable<Channel> call(final Observable<M> request) {
-                return request.doOnCompleted(new Action0() {
-                          @Override
-                          public void call() {
-                              channel.flush();
-                          }})
-                      .map(new Func1<M, ChannelFuture>() {
-                          @Override
-                          public ChannelFuture call(final M msg) {
-                              final ChannelFuture future = channel.write(ReferenceCountUtil.retain(msg));
-                              RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
-                              return future;
-                          }
-                      })
-                      .flatMap(funcFutureToChannel())
-                      .last();
-            };
-        };
-    }
+//    public static <M> Observable.Transformer<M, Channel> sendRequestThenPushChannel(final Channel channel) {
+//        return new Observable.Transformer<M, Channel>() {
+//            @Override
+//            public void call(final Observable<M> request) {
+//                return request.doOnCompleted(new Action0() {
+//                          @Override
+//                          public void call() {
+//                              channel.flush();
+//                          }})
+//                      .doOnNext(new Action1<M>() {
+//                          @Override
+//                          public void call(final M msg) {
+//                              final ChannelFuture future = channel.write(ReferenceCountUtil.retain(msg));
+//                              RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
+//                          }
+//                      })
+//            };
+//        };
+//    }
     
     public static Action1<Channel> actionPermanentlyApplyFeatures(
             final HandlerBuilder builder,
@@ -376,7 +373,8 @@ public class RxNettys {
             }};
     }
     
-    public static Func1<Channel, Observable<? extends HttpObject>> waitforHttpResponse() {
+    public static Func1<Channel, Observable<? extends HttpObject>> waitforHttpResponse(
+            final Action1<Channel> afterApplyHttpSubscriber) {
         return new Func1<Channel, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final Channel channel) {
@@ -386,6 +384,9 @@ public class RxNettys {
                         RxNettys.doOnUnsubscribe(channel, 
                             Subscriptions.create(RxNettys.actionToRemoveHandler(channel, 
                                 APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
+                        if (null != afterApplyHttpSubscriber) {
+                            afterApplyHttpSubscriber.call(channel);
+                        }
                     }});
             };
         };
