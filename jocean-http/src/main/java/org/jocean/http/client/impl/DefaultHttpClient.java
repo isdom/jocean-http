@@ -37,8 +37,10 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
 import rx.Single;
+import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.functions.Action2;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
@@ -174,7 +176,7 @@ public class DefaultHttpClient implements HttpClient {
 //    }
     
     private Func1<Channel, Observable<? extends HttpObject>> waitforResponse(
-            final Action1<Channel> afterApplyHttpSubscriber) {
+            final Action2<Subscriber<?>,Channel> afterApplyHttpSubscriber) {
         return new Func1<Channel, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final Channel channel) {
@@ -183,13 +185,12 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
     
-    private Action1<Channel> buildAndSendRequest(
+    private Action2<Subscriber<?>,Channel> buildAndSendRequest(
             final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
             final Feature[] features) {
-        return new Action1<Channel> () {
+        return new Action2<Subscriber<?>,Channel> () {
             @Override
-            public void call(final Channel channel) {
-                //  TODO, transfer request's creation error or send error to main Observable
+            public void call(final Subscriber<?> subscriber, final Channel channel) {
                 safeBuildRequestByProvider(requestProvider, channel)
                 .doOnNext(doOnRequest(features, channel))
                 .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
@@ -203,6 +204,15 @@ public class DefaultHttpClient implements HttpClient {
                     public void call(final Object msg) {
                         final ChannelFuture future = channel.write(ReferenceCountUtil.retain(msg));
                         RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
+                        future.addListener(RxNettys.listenerOfOnError(subscriber));
+                    }
+                })
+                .doOnError(new Action1<Throwable> () {
+                    @Override
+                    public void call(final Throwable e) {
+                        if (!subscriber.isUnsubscribed()) {
+                            subscriber.onError(e);
+                        }
                     }})
                 .subscribe();
             }
