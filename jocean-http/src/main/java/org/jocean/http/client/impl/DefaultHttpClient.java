@@ -147,36 +147,8 @@ public class DefaultHttpClient implements HttpClient {
         return false;
     }
 
-//    @SuppressWarnings("unused")
-//    private Func1<Channel, Single<? extends Channel>> sendRequestThenPushChannelAsSingle(
-//            final Observable<? extends Object> request,
-//            final Feature[] features, 
-//            final DoOnUnsubscribe doOnUnsubscribe) {
-//        return new Func1<Channel, Single<? extends Channel>> () {
-//            @Override
-//            public Single<? extends Channel> call(final Channel channel) {
-//                return sendRequestThenPushChannel(request, features)
-//                        .call(channel)
-//                        .toSingle();
-//            }
-//        };
-//    }
-
-//    private Func1<Channel, Observable<? extends Channel>> sendRequestThenPushChannel(
-//            final Observable<? extends Object> request,
-//            final Feature[] features) {
-//        return new Func1<Channel, Observable<? extends Channel>> () {
-//            @Override
-//            public Observable<? extends Channel> call(final Channel channel) {
-//                return request.doOnNext(doOnRequest(features, channel))
-//                    .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
-//                    .compose(RxNettys.<Object>sendRequestThenPushChannel(channel));
-//            }
-//        };
-//    }
-    
     private Func1<Channel, Observable<? extends HttpObject>> waitforResponse(
-            final Action2<Subscriber<?>,Channel> afterApplyHttpSubscriber) {
+            final Action2<Channel, Subscriber<?>> afterApplyHttpSubscriber) {
         return new Func1<Channel, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final Channel channel) {
@@ -185,12 +157,12 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
     
-    private Action2<Subscriber<?>,Channel> buildAndSendRequest(
+    private Action2<Channel,Subscriber<?>> buildAndSendRequest(
             final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
             final Feature[] features) {
-        return new Action2<Subscriber<?>,Channel> () {
+        return new Action2<Channel,Subscriber<?>> () {
             @Override
-            public void call(final Subscriber<?> subscriber, final Channel channel) {
+            public void call(final Channel channel, final Subscriber<?> subscriber) {
                 safeBuildRequestByProvider(requestProvider, channel)
                 .doOnNext(doOnRequest(features, channel))
                 .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))

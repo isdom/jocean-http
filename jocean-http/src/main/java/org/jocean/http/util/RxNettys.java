@@ -375,7 +375,7 @@ public class RxNettys {
     }
     
     public static Func1<Channel, Observable<? extends HttpObject>> waitforHttpResponse(
-            final Action2<Subscriber<?>,Channel> afterApplyHttpSubscriber) {
+            final Action2<Channel, Subscriber<?>> afterApplyHttpSubscriber) {
         return new Func1<Channel, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final Channel channel) {
@@ -386,7 +386,7 @@ public class RxNettys {
                             Subscriptions.create(RxNettys.actionToRemoveHandler(channel, 
                                 APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
                         if (null != afterApplyHttpSubscriber) {
-                            afterApplyHttpSubscriber.call(subscriber, channel);
+                            afterApplyHttpSubscriber.call(channel, subscriber);
                         }
                     }});
             };
