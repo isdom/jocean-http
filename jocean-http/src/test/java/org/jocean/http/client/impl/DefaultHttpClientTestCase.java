@@ -20,7 +20,9 @@ import org.jocean.http.TestHttpUtil;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.server.HttpTestServerHandler;
+import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.HttpUtil;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.OnNextSensor;
 import org.jocean.idiom.rx.RxFunctions;
@@ -55,6 +57,7 @@ import rx.Subscription;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.observers.TestSubscriber;
+import rx.schedulers.Schedulers;
 
 public class DefaultHttpClientTestCase {
 
@@ -74,6 +77,14 @@ public class DefaultHttpClientTestCase {
             return null;
         }
     }
+    
+//    private static SslContext initSslCtx() {
+//        try {
+//            return SslContextBuilder.forClient().build();
+//        } catch (SSLException e) {
+//            return null;
+//        }
+//    }
     
     private HttpTestServer createTestServerWithDefaultHandler(
             final boolean enableSSL, 
@@ -144,6 +155,36 @@ public class DefaultHttpClientTestCase {
         }
     }
 
+    @Test(timeout=1000)
+    public void testHttpHappyPathObserveOnOtherthread() throws Exception {
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                ENABLE_LOGGING);
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
+        try {
+            final HttpMessageHolder holder = new HttpMessageHolder(0);
+        
+            client.defineInteraction(
+                new LocalAddress(testAddr), 
+                Observable.just(fullHttpRequest()))
+            .observeOn(Schedulers.io())
+            .compose(holder.assembleAndHold())
+            .toBlocking().last();
+            
+            final byte[] bytes = 
+                Nettys.dumpByteBufAsBytes(
+                    holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE).call().content());
+            
+            holder.release().call();
+            
+            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
     @Test
     public void testHttpHappyPathOnceAndCheckRefCount() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
@@ -271,7 +312,6 @@ public class DefaultHttpClientTestCase {
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 ENABLE_LOGGING);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
         final TestChannelCreator creator = new TestChannelCreator();
     

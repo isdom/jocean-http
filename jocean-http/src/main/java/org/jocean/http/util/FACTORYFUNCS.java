@@ -21,12 +21,14 @@ import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.util.ReferenceCountUtil;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.functions.Func2;
 import rx.functions.FuncN;
+import rx.subscriptions.Subscriptions;
 
 class FACTORYFUNCS {
     private static final Logger LOG =
@@ -174,17 +176,17 @@ class FACTORYFUNCS {
     static final Func1<Subscriber<? super HttpObject>, ChannelHandler> HTTPOBJ_SUBSCRIBER_FUNC1 = 
             new Func1<Subscriber<? super HttpObject>, ChannelHandler>() {
         @Override
-        public ChannelHandler call(final Subscriber<? super HttpObject> httpObjectSubscriber) {
+        public ChannelHandler call(final Subscriber<? super HttpObject> subscriber) {
             return new SimpleChannelInboundHandler<HttpObject>(true) {
                 @Override
-                public void exceptionCaught(ChannelHandlerContext ctx,
-                        Throwable cause) throws Exception {
+                public void exceptionCaught(final ChannelHandlerContext ctx,
+                        final Throwable cause) throws Exception {
                     LOG.warn("exceptionCaught at channel({})/handler({}), detail:{}, and call ({}).onError with TransportException.", 
                             ctx.channel(), ctx.name(),
                             ExceptionUtils.exception2detail(cause), 
-                            httpObjectSubscriber);
-                    if (!httpObjectSubscriber.isUnsubscribed()) {
-                        httpObjectSubscriber.onError(new TransportException("exceptionCaught", cause));
+                            subscriber);
+                    if (!subscriber.isUnsubscribed()) {
+                        subscriber.onError(new TransportException("exceptionCaught", cause));
                     }
                     ctx.close();
                 }
@@ -199,10 +201,10 @@ class FACTORYFUNCS {
                         throws Exception {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("channel({})/handler({}): channelInactive and call ({}).onError with TransportException.", 
-                                ctx.channel(), ctx.name(), httpObjectSubscriber);
+                                ctx.channel(), ctx.name(), subscriber);
                     }
-                    if (!httpObjectSubscriber.isUnsubscribed()) {
-                        httpObjectSubscriber.onError(new TransportException("channelInactive"));
+                    if (!subscriber.isUnsubscribed()) {
+                        subscriber.onError(new TransportException("channelInactive"));
                     }
                 }
 
@@ -211,15 +213,26 @@ class FACTORYFUNCS {
                         final HttpObject msg) throws Exception {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("channel({})/handler({}): channelRead0 and call ({}).onNext with msg({}).", 
-                                ctx.channel(), ctx.name(), httpObjectSubscriber, msg);
+                                ctx.channel(), ctx.name(), subscriber, msg);
                     }
-                    try {
-                        if (!httpObjectSubscriber.isUnsubscribed()) {
-                            httpObjectSubscriber.onNext(msg);
+                    
+                    if (!subscriber.isUnsubscribed()) {
+                        try {
+                            subscriber.onNext(ReferenceCountUtil.retain(msg));
+                        } catch (Exception e) {
+                            LOG.warn("exception when invoke onNext for channel({})/msg ({}), detail: {}.", 
+                                    ctx.channel(), msg, ExceptionUtils.exception2detail(e));
+                        } finally {
+                            RxNettys.doOnUnsubscribe(ctx.channel(), Subscriptions.create(new Action0() {
+                                @Override
+                                public void call() {
+                                    final boolean released = ReferenceCountUtil.release(msg);
+                                    if (LOG.isDebugEnabled()) {
+                                        LOG.debug("HttpObject({}) released({}) from {}'s unsubscribe", 
+                                                msg, released, ctx.channel());
+                                    }
+                                }}));
                         }
-                    } catch (Exception e) {
-                        LOG.warn("exception when invoke onNext for channel({})/msg ({}), detail: {}.", 
-                                ctx.channel(), msg, ExceptionUtils.exception2detail(e));
                     }
                     
                     if (msg instanceof LastHttpContent) {
@@ -238,8 +251,8 @@ class FACTORYFUNCS {
                         //  remove handler itself
                         RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
                         try {
-                            if (!httpObjectSubscriber.isUnsubscribed()) {
-                                httpObjectSubscriber.onCompleted();
+                            if (!subscriber.isUnsubscribed()) {
+                                subscriber.onCompleted();
                             }
                         } catch (Exception e) {
                             LOG.warn("exception when invoke onCompleted for channel({}), detail: {}.", 
