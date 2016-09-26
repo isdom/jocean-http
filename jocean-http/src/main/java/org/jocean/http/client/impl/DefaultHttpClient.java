@@ -152,8 +152,14 @@ public class DefaultHttpClient implements HttpClient {
         return new Func1<Channel, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final Channel channel) {
-                return RxNettys.waitforHttpResponse(afterApplyHttpSubscriber).call(channel)
-                    .compose(ChannelPool.Util.hookPostReceiveLastContent(channel));
+                try {
+                    return RxNettys.waitforHttpResponse(afterApplyHttpSubscriber).call(channel)
+                        .compose(ChannelPool.Util.hookPostReceiveLastContent(channel));
+                } finally {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("after waitforResponse.call & hookPostReceiveLastContent for channel:{}", channel);
+                    }
+                }
             }};
     }
     
@@ -177,6 +183,9 @@ public class DefaultHttpClient implements HttpClient {
                         final ChannelFuture future = channel.write(ReferenceCountUtil.retain(msg));
                         RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
                         future.addListener(RxNettys.listenerOfOnError(subscriber));
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("send http request msg :{}", msg);
+                        }
                     }
                 })
                 .doOnError(new Action1<Throwable> () {

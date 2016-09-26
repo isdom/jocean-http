@@ -104,7 +104,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
     }
 
     private void transactionEnd(final Channel channel) {
-        channel.attr(TRANSACTIONING).remove();
+        channel.attr(TRANSACTIONING).set(null);
     }
 
     private boolean isTransactioning(final Channel channel) {
