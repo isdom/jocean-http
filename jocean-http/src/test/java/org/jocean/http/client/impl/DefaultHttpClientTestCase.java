@@ -172,13 +172,16 @@ public class DefaultHttpClientTestCase {
             .compose(holder.assembleAndHold())
             .toBlocking().last();
             
-            final byte[] bytes = 
-                Nettys.dumpByteBufAsBytes(
-                    holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE).call().content());
+            final FullHttpResponse resp = holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE).call();
+            try {
+                final byte[] bytes = Nettys.dumpByteBufAsBytes(resp.content());
+                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            } finally {
+                ReferenceCountUtil.release(resp);
+            }
             
             holder.release().call();
             
-            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
         } finally {
             client.close();
             server.unsubscribe();
