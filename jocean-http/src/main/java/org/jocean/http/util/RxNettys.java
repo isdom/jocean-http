@@ -562,18 +562,6 @@ public class RxNettys {
         return Observable.<HttpObject>just(response);
     }
     
-    public static Observable<? extends HttpObject> httpobjObservable(final Channel channel) {
-        return Observable.create(new Observable.OnSubscribe<HttpObject>() {
-            @Override
-            public void call(final Subscriber<? super HttpObject> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    subscriber.add(Subscriptions.create(
-                        RxNettys.actionToRemoveHandler(channel, 
-                            APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
-                }
-            }} );
-    }
-    
     public static Func1<HttpObject[], FullHttpRequest> BUILD_FULL_REQUEST = new Func1<HttpObject[], FullHttpRequest>() {
         @Override
         public FullHttpRequest call(final HttpObject[] httpobjs) {

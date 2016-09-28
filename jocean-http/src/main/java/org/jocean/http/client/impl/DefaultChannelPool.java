@@ -16,21 +16,12 @@ import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
-import rx.Subscription;
 
 public class DefaultChannelPool extends AbstractChannelPool {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultChannelPool.class);
 
-    private final static DoOnUnsubscribe UNSUBSCRIBE_NOW = new DoOnUnsubscribe() {
-        @Override
-        public void call(final Subscription s) {
-            if (!s.isUnsubscribed()) {
-                s.unsubscribe();
-            }
-        }};
-        
     private static final AttributeKey<Boolean> KEEPALIVE = AttributeKey.valueOf("__KEEPALIVE");
     
     @Override
@@ -84,7 +75,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
             && !isTransactioning(channel)) {
             final SocketAddress address = channel.remoteAddress();
             if (null!=address) {
-                RxNettys.installDoOnUnsubscribe(channel, UNSUBSCRIBE_NOW);
+                RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
                 getOrCreateChannels(address).add(channel);
                 LOG.info("channel({}) save to queue for ({}), can be reused.", channel, address);
                 return  true;

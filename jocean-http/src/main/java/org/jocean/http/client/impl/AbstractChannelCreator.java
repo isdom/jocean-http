@@ -20,7 +20,6 @@ import rx.Observable;
 import rx.Single;
 import rx.SingleSubscriber;
 import rx.Subscriber;
-import rx.Subscription;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -114,11 +113,7 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
                     if ( LOG.isDebugEnabled() ) {
                         LOG.debug("create new channel: {}", future.channel());
                     }
-                    RxNettys.installDoOnUnsubscribe(future.channel(), new DoOnUnsubscribe() {
-                        @Override
-                        public void call(final Subscription s) {
-                            subscriber.add(s);
-                        }});
+                    RxNettys.installDoOnUnsubscribe(future.channel(), DoOnUnsubscribe.Util.from(subscriber));
                     subscriber.add(Subscriptions.from(future));
                     subscriber.add(RxNettys.subscriptionForReleaseChannel(future.channel()));
                     future.addListener(RxNettys.listenerOfOnError(subscriber))

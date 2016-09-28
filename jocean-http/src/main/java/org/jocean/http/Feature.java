@@ -40,7 +40,7 @@ public interface Feature {
         public void setFeatures(final Feature[] features);
     }
     
-    public interface FeatureOverChannelHandler extends Feature, Func2<Feature.HandlerBuilder, ChannelPipeline, ChannelHandler> {
+    public interface FeatureOverChannelHandler extends Feature, Func2<HandlerBuilder, ChannelPipeline, ChannelHandler> {
     }
     
     public interface HandlerBuilder {

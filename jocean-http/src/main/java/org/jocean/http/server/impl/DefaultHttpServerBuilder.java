@@ -18,6 +18,7 @@ import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
+import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +31,7 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
@@ -147,7 +149,21 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder {
     }
 
     private HttpTrade httpTradeOf(final Channel channel) {
-        return new DefaultHttpTrade(channel, RxNettys.httpobjObservable(channel));
+        return new DefaultHttpTrade(channel, httpobjObservable(channel));
+    }
+    
+    private static Observable<? extends HttpObject> httpobjObservable(final Channel channel) {
+        return Observable.create(new Observable.OnSubscribe<HttpObject>() {
+            @Override
+            public void call(final Subscriber<? super HttpObject> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    RxNettys.installDoOnUnsubscribe(channel, 
+                            DoOnUnsubscribe.Util.from(subscriber));
+                    subscriber.add(Subscriptions.create(
+                        RxNettys.actionToRemoveHandler(channel, 
+                            APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
+                }
+            }} );
     }
     
     private Action1<HttpTrade> actionRecycleChannel(
@@ -157,6 +173,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder {
         return new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade trade) {
+                RxNettys.installDoOnUnsubscribe(channel, 
+                        DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
                 if (channel.isActive()
                     && trade.isEndedWithKeepAlive()
                     && !subscriber.isUnsubscribed()) {
@@ -227,7 +245,6 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder {
 
     private final BootstrapCreator _creator;
     private final Feature[] _defaultFeatures;
-//    private final boolean _cacheRequest;
     
     private static final Class2ApplyBuilder _APPLY_BUILDER;
         
@@ -238,6 +255,5 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder {
         _APPLY_BUILDER.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
         _APPLY_BUILDER.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
         _APPLY_BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
-        
     }
 }

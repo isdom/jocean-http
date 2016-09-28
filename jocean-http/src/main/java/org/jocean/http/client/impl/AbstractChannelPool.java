@@ -12,7 +12,6 @@ import rx.Observable;
 import rx.Single;
 import rx.SingleSubscriber;
 import rx.Subscriber;
-import rx.Subscription;
 
 public abstract class AbstractChannelPool implements ChannelPool {
     
@@ -60,11 +59,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                             channel = reuseChannel(address);
                             if (null != channel) {
                                 if (channel.isActive()) {
-                                    RxNettys.installDoOnUnsubscribe(channel, new DoOnUnsubscribe() {
-                                        @Override
-                                        public void call(Subscription s) {
-                                            subscriber.add(s);
-                                        }});
+                                    RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.from(subscriber));
                                     subscriber.add(RxNettys.subscriptionForReleaseChannel(channel));
                                     subscriber.onNext(channel);
                                     subscriber.onCompleted();
