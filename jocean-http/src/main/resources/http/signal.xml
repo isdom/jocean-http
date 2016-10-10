@@ -8,7 +8,7 @@
         <constructor-arg ref="httpClient"/>
     </bean>
     
-    <bean id="signalExporter" class="org.springframework.jmx.export.MBeanExporter"
+    <bean class="org.springframework.jmx.export.MBeanExporter"
           lazy-init="false">
         <property name="beans">
             <map>
