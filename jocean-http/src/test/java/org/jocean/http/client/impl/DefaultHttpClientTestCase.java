@@ -441,8 +441,13 @@ public class DefaultHttpClientTestCase {
         }
     }
     
-    @Test
+    @Test(timeout=10000)
     public void testHttpOnErrorBeforeSend1stAnd2ndHappyPathKeepAliveReuseConnection() throws Exception {
+        //  TODO? create http server using flowing code, but exception with connectionException ? why? fix it
+//        final String testAddr = UUID.randomUUID().toString();
+//        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+//                responseBy("text/plain", HttpTestServer.CONTENT));
+        
         final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
 
         final TestChannelCreator creator = new TestChannelCreator();
@@ -493,6 +498,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertNotClose(1);
         } finally {
             client.close();
+//            server.unsubscribe();
             server.stop();
         }
     }
@@ -1043,7 +1049,7 @@ public class DefaultHttpClientTestCase {
             server.stop();
 //            assertEquals(0, client.getActiveChannelCount());
             testSubscriber.assertNoErrors();
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             //  channel connected, so message has been send
             nextSensor.assertCalled();
