@@ -841,20 +841,29 @@ public class DefaultHttpClientTestCase {
     //  connected but meet error
     @Test
     public void testHttpDisconnectFromServerAfterConnected() throws Exception {
-        final HttpTestServer server = createTestServerWith(false, "test",
-                new Func0<ChannelInboundHandler> () {
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                new Action1<HttpTrade>() {
                     @Override
-                    public ChannelInboundHandler call() {
-                        return new HttpTestServerHandler() {
-                            @Override
-                            protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-                                    throws Exception {
-                                if (msg instanceof HttpRequest) {
-                                    ctx.close();
-                                }
-                            }
-                        };
-                    }});
+                    public void call(final HttpTrade trade) {
+                        trade.abort();
+                    }},
+                ENABLE_LOGGING);
+        
+//        final HttpTestServer server = createTestServerWith(false, "test",
+//                new Func0<ChannelInboundHandler> () {
+//                    @Override
+//                    public ChannelInboundHandler call() {
+//                        return new HttpTestServerHandler() {
+//                            @Override
+//                            protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
+//                                    throws Exception {
+//                                if (msg instanceof HttpRequest) {
+//                                    ctx.close();
+//                                }
+//                            }
+//                        };
+//                    }});
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
@@ -865,7 +874,8 @@ public class DefaultHttpClientTestCase {
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
-                new LocalAddress("test"), 
+//                new LocalAddress("test"),
+                new LocalAddress(testAddr),
                 Observable.just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -878,7 +888,8 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
-            server.stop();
+//            server.stop();
+            server.unsubscribe();
             testSubscriber.assertTerminalEvent();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
 //            assertEquals(RuntimeException.class, 
