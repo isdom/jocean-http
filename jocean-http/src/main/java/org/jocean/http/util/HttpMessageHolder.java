@@ -58,7 +58,7 @@ public class HttpMessageHolder {
     }
     
     @SuppressWarnings("unchecked")
-    public <R> Func0<R> bindHttpObjects(final Func1<HttpObject[], R> visitor) {
+    public <R> Func0<R> httpMessageBuilder(final Func1<HttpObject[], R> visitor) {
         return new Func0<R>() {
             @Override
             public R call() {
@@ -73,7 +73,7 @@ public class HttpMessageHolder {
                     HttpMessageHolder.class, "doVisitHttpObjects"))
             .callWhenDestroyed(new Func1_N<HttpMessageHolder, Object>() {
                 @Override
-                public Object call(HttpMessageHolder t, Object... args) {
+                public Object call(final HttpMessageHolder holder, final Object... args) {
                     return null;
                 }}));
     

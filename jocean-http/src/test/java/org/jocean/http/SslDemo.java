@@ -84,7 +84,7 @@ public class SslDemo {
                 .subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError(), new Action0() {
                     @Override
                     public void call() {
-                        final FullHttpResponse resp = holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE).call();
+                        final FullHttpResponse resp = holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();
                         holder.release().call();
                         
                         try {
@@ -119,7 +119,7 @@ public class SslDemo {
                 .subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError(), new Action0() {
                     @Override
                     public void call() {
-                        final FullHttpResponse resp = holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE).call();
+                        final FullHttpResponse resp = holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();
                         holder.release().call();
                         
                         try {

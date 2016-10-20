@@ -51,7 +51,7 @@ public class TestHttpUtil {
                     trade.inboundRequest()
                         .compose(holder.assembleAndHold())
                         .doOnCompleted(RxActions.bindParameter(onRequestCompleted,
-                                holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST), 
+                                holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST), 
                                 trade))
                         .doAfterTerminate(holder.release())
                         .doOnUnsubscribe(holder.release())

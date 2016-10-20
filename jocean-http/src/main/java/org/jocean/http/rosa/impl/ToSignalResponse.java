@@ -49,7 +49,7 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
         return source.compose(holder.assembleAndHold())
                 .flatMap(buildOnNext(), 
                         buildOnError(), 
-                        buildOnCompleted(holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE)))
+                        buildOnCompleted(holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE)))
                 .doAfterTerminate(holder.release())
                 .doOnUnsubscribe(holder.release());
     }

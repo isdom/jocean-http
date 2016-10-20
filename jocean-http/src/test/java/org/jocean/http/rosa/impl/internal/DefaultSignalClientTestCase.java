@@ -896,7 +896,7 @@ public class DefaultSignalClientTestCase {
                         new SignalClient.UsingPath("/test/raw"),
                         new SignalClient.UsingMethod(POST.class),
                         new SignalClient.JSONContent("{\"code\": \"added\"}"),
-                        new SignalClient.DecodeResponseAs(TestResponse.class))
+                        new SignalClient.DecodeResponseBodyAs(TestResponse.class))
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             

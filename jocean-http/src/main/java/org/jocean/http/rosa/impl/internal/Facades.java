@@ -24,6 +24,11 @@ public class Facades {
     public interface JSONSource extends ContentSource {
     }
 
+    public interface ResponseBodyTypeSource {
+        public Class<?> responseBodyType();
+    }
+
+    //  consider ResponseBodyTypeSource, this Facade use ResponseTypeSource first
     public interface ResponseTypeSource {
         public Class<?> responseType();
     }

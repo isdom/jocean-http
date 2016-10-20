@@ -7,6 +7,7 @@ import org.jocean.http.Feature;
 import org.jocean.http.rosa.impl.internal.Facades.JSONSource;
 import org.jocean.http.rosa.impl.internal.Facades.MethodSource;
 import org.jocean.http.rosa.impl.internal.Facades.PathSource;
+import org.jocean.http.rosa.impl.internal.Facades.ResponseBodyTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.ResponseTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.UriSource;
 
@@ -62,8 +63,21 @@ public interface SignalClient {
         private final Class<? extends Annotation> _method;
     }
     
-    public class DecodeResponseAs implements Feature, ResponseTypeSource {
-        public DecodeResponseAs(final Class<?> respType) {
+    public class DecodeResponseBodyAs implements Feature, ResponseBodyTypeSource {
+        public DecodeResponseBodyAs(final Class<?> bodyType) {
+            this._bodyType = bodyType;
+        }
+        
+        @Override
+        public Class<?> responseBodyType() {
+            return this._bodyType;
+        }
+         
+        private final Class<?> _bodyType;
+    }
+    
+    public class ConvertResponseTo implements Feature, ResponseTypeSource {
+        public ConvertResponseTo(final Class<?> respType) {
             this._respType = respType;
         }
         

@@ -62,7 +62,7 @@ public class DefaultHttpServerBuilderTestCase {
                     new Action0() {
                         @Override
                         public void call() {
-                            final FullHttpRequest req = holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST).call();
+                            final FullHttpRequest req = holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call();
                             if (null!=req) {
                                 try {
                                     try (final InputStream is = new ByteBufInputStream(req.content())) {

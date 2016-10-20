@@ -48,7 +48,7 @@ public class HttpServerForCloopen {
                     trade.inboundRequest().compose(holder.assembleAndHold()).subscribe(new Subscriber<HttpObject>() {
                         @Override
                         public void onCompleted() {
-                            final FullHttpRequest req = holder.bindHttpObjects(RxNettys.BUILD_FULL_REQUEST).call();
+                            final FullHttpRequest req = holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call();
                             if (null!=req) {
                                 try {
                                     final byte[] bytes = Nettys.dumpByteBufAsBytes(req.content());

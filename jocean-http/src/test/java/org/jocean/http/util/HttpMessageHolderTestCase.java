@@ -118,7 +118,7 @@ public class HttpMessageHolderTestCase {
         .compose(holder.assembleAndHold())
         .subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
         
-        holder.bindHttpObjects(new Func1<HttpObject[],Void>() {
+        holder.httpMessageBuilder(new Func1<HttpObject[],Void>() {
             @Override
             public Void call(final HttpObject[] objs) {
                 assertTrue(Arrays.equals(partReq.toArray(new HttpObject[0]), objs));
@@ -136,7 +136,7 @@ public class HttpMessageHolderTestCase {
                 objsRef.set(objs);
                 return null;
             }};
-        final Func0<Void> getobjs = holder.bindHttpObjects(visitorHttpObjs);
+        final Func0<Void> getobjs = holder.httpMessageBuilder(visitorHttpObjs);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -169,7 +169,7 @@ public class HttpMessageHolderTestCase {
                 objsRef.set(objs);
                 return null;
             }};
-        final Func0<Void> getobjs = holder.bindHttpObjects(visitorHttpObjs);
+        final Func0<Void> getobjs = holder.httpMessageBuilder(visitorHttpObjs);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -221,7 +221,7 @@ public class HttpMessageHolderTestCase {
                 objsRef.set(objs);
                 return null;
             }};
-        holder.bindHttpObjects(visitorHttpObjs).call();
+        holder.httpMessageBuilder(visitorHttpObjs).call();
         assertNull(objsRef.get());
     }
     

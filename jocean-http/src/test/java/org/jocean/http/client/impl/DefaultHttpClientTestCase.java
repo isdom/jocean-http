@@ -172,7 +172,7 @@ public class DefaultHttpClientTestCase {
             .compose(holder.assembleAndHold())
             .toBlocking().last();
             
-            final FullHttpResponse resp = holder.bindHttpObjects(RxNettys.BUILD_FULL_RESPONSE).call();
+            final FullHttpResponse resp = holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();
             try {
                 final byte[] bytes = Nettys.dumpByteBufAsBytes(resp.content());
                 assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
