@@ -215,12 +215,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     */
     
     @Override
-    public <RESP> Observable<? extends RESP> rawDefineInteraction(final Feature... features) {
+    public <RESP> Observable<RESP> rawDefineInteraction(final Feature... features) {
         return defineInteraction(null, features);
     }
     
     @Override
-    public <RESP> Observable<? extends RESP> defineInteraction(
+    public <RESP> Observable<RESP> defineInteraction(
             final Object signalBean, 
             final Feature... features) {
         final Feature[] fullfeatures = Feature.Util.union(RosaProfiles._DEFAULT_PROFILE, features);
