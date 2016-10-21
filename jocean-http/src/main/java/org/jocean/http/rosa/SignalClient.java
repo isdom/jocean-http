@@ -24,7 +24,6 @@ public interface SignalClient {
         
         public final String filename;
         public final String contentType;
-        //  add direct content for test
     }
     
     public class UsingUri implements Feature, UriSource {

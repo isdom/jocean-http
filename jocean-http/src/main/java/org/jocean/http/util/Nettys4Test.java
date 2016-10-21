@@ -1,11 +1,13 @@
 package org.jocean.http.util;
 
+import java.lang.reflect.Field;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.UnsafeOp;
 import org.slf4j.Logger;
@@ -36,6 +38,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 import io.netty.util.CharsetUtil;
+import io.netty.util.ResourceLeak;
 import rx.Observer;
 
 public class Nettys4Test {
@@ -353,5 +356,20 @@ public class Nettys4Test {
                 return 0;
             }*/
             };
+    }
+    
+    public static String dumpByteBufLeakRecords(final ByteBuf buf) {
+        try {
+            final Field field = buf.getClass().getDeclaredField("leak");
+            if (null != field) {
+                field.setAccessible(true);
+                final ResourceLeak leak = (ResourceLeak)field.get(buf);
+                return leak.toString();
+            }
+        } catch (Exception e) {
+            LOG.warn("exception when access {}'s leak field, detail: {}",
+                    buf, ExceptionUtils.exception2detail(e));
+        }
+        return null;
     }
 }

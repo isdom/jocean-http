@@ -18,6 +18,7 @@ import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.impl.internal.Facades.ResponseBodyTypeSource;
+import org.jocean.http.rosa.impl.internal.Facades.ResponseTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.UriSource;
 import org.jocean.http.rosa.impl.internal.RosaProfiles;
 import org.jocean.http.util.FeaturesBuilder;
@@ -234,7 +235,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                                 initRequestOf(uri), 
                                 fullfeatures),
                             genFeatures4HttpClient(signalBean, fullfeatures))
-                    .compose(new ToSignalResponse<RESP>(safeGetResponseBodyType(signalBean, fullfeatures)))
+                    .compose(new ToSignalResponse<RESP>(
+                            safeGetResponseType(fullfeatures),
+                            safeGetResponseBodyType(signalBean, fullfeatures)))
                     .subscribe(subscriber);
                 }
             }
@@ -340,12 +343,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         
         final Observable<Object> _requestObservable;
         final long _requestSizeInBytes;
-        final Subscription _subscription;
+        final Subscription _torelease;
         
-        Outgoing(final Observable<Object> request, final long size, final Subscription subscription) {
+        Outgoing(final Observable<Object> request, final long size, final Subscription torelease) {
             this._requestObservable = request;
             this._requestSizeInBytes = size;
-            this._subscription = subscription;
+            this._torelease = torelease;
         }
         
         Observable<Object> request() {
@@ -357,7 +360,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         }
         
         Subscription toRelease() {
-            return this._subscription;
+            return this._torelease;
         }
     }
     
@@ -565,11 +568,20 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return (null != profile ? profile.features() : Feature.EMPTY_FEATURES);
     }
     
+    private Class<?> safeGetResponseType(final Feature[] features) {
+        final ResponseTypeSource[] respTypeSource = 
+                InterfaceUtils.selectIncludeType(ResponseTypeSource.class, (Object[])features);
+        return (null != respTypeSource && respTypeSource.length > 0) 
+                ? respTypeSource[0].responseType()
+                : null
+                ;
+    }
+
     private Class<?> safeGetResponseBodyType(final Object signalBean, final Feature[] features) {
-        final ResponseBodyTypeSource[] respTypeSource = 
+        final ResponseBodyTypeSource[] respBodyTypeSource = 
                 InterfaceUtils.selectIncludeType(ResponseBodyTypeSource.class, (Object[])features);
-        if (null != respTypeSource && respTypeSource.length > 0) {
-            return respTypeSource[0].responseBodyType();
+        if (null != respBodyTypeSource && respBodyTypeSource.length > 0) {
+            return respBodyTypeSource[0].responseBodyType();
         } else {
             final RequestProfile profile = signal2Profile(signalBean);
             return (null != profile ? profile.responseType() : null);
