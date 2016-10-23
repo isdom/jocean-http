@@ -231,7 +231,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     final URI uri = req2uri(signalBean, fullfeatures);
                     _httpClient.defineInteraction(
                             safeGetAddress(signalBean, uri), 
-                            requestProviderOf(checkAndWrapSignalIfNeed(signalBean), 
+                            requestProviderOf(signalBean, 
                                 initRequestOf(uri), 
                                 fullfeatures),
                             genFeatures4HttpClient(signalBean, fullfeatures))
@@ -244,9 +244,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         });
     }
 
-    private Object checkAndWrapSignalIfNeed(final Object signalBean) {
-        return null != signalBean ? signalBean : new Object();
-    }
+//    private Object checkAndWrapSignalIfNeed(final Object signalBean) {
+//        return null != signalBean ? signalBean : new Object();
+//    }
 
     private Feature[] genFeatures4HttpClient(final Object signalBean,
             final Feature... features) {

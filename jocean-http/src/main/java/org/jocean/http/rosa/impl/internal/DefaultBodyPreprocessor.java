@@ -11,7 +11,8 @@ class DefaultBodyPreprocessor implements Feature, BodyPreprocessor {
 
     @Override
     public BodyBuilder call(final Object signal, final HttpRequest request) {
-        if (request.getMethod().equals(HttpMethod.POST)) {
+        if (null != signal
+            && request.getMethod().equals(HttpMethod.POST)) {
             return new JSONBodyBuilder(signal);
         } else {
             return null;

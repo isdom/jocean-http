@@ -22,6 +22,10 @@ class HeaderParamPreprocessor implements Feature, RequestPreprocessor {
     @Override
     public RequestChanger call(final Object signalBean) {
         
+        if (null == signalBean) {
+            return null;
+        }
+        
         final Field[] headerFields = 
                 ReflectUtils.getAnnotationFieldsOf(signalBean.getClass(), HeaderParam.class);
         if ( headerFields.length > 0 ) {

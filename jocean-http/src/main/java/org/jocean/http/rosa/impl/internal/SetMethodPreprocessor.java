@@ -43,7 +43,9 @@ class SetMethodPreprocessor implements Feature, RequestPreprocessor {
     
     @Override
     public RequestChanger call(final Object signalBean) {
-        return new RequestMethodSetter(methodOf(signalBean.getClass()));
+        return new RequestMethodSetter(null != signalBean 
+                ? methodOf(signalBean.getClass()) 
+                : HttpMethod.GET);
     }
 
     private static HttpMethod methodOf(final Class<?> signalType) {

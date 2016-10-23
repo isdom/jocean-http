@@ -17,11 +17,19 @@ import rx.Observable;
 public interface SignalClient {
     
     public class Attachment implements Feature {
-        public Attachment(final String filename, final String contentType) {
+        public Attachment(final String name, final String filename, final String contentType) {
+            this.name = name;
             this.filename = filename;
             this.contentType = contentType;
         }
         
+        public Attachment(final String filename, final String contentType) {
+            this.name = null;
+            this.filename = filename;
+            this.contentType = contentType;
+        }
+        
+        public final String name;
         public final String filename;
         public final String contentType;
     }

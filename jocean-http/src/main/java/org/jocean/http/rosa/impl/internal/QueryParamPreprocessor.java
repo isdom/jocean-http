@@ -25,6 +25,10 @@ class QueryParamPreprocessor implements Feature, RequestPreprocessor {
     @Override
     public RequestChanger call(final Object signalBean) {
         
+        if (null == signalBean) {
+            return null;
+        }
+        
         final Field[] queryFields = 
                 ReflectUtils.getAnnotationFieldsOf(signalBean.getClass(), QueryParam.class);
         if ( queryFields.length > 0 ) {

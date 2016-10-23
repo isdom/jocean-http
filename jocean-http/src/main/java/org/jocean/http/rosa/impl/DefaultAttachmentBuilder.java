@@ -22,7 +22,10 @@ public class DefaultAttachmentBuilder implements AttachmentBuilder {
     public HttpData call(final Attachment attachment) {
         final File file = new File(attachment.filename);
         final DiskFileUpload filePayload = 
-                new DiskFileUpload(FilenameUtils.getBaseName(attachment.filename), 
+                new DiskFileUpload(
+                    null != attachment.name 
+                        ? attachment.name 
+                        : FilenameUtils.getBaseName(attachment.filename), 
                     attachment.filename, attachment.contentType, null, null, file.length()) {
             @Override
             public Charset getCharset() {

@@ -63,7 +63,7 @@ class SetPathPreprocessor implements Feature, RequestPreprocessor {
                 final PlaceholderResolver pathparamResolver,
                 final PropertyPlaceholderHelper pathparamReplacer) {
             //  当 rawpath 结果为 null 时, 避免在 fullpath 后空字符串
-            final String rawpath = getPath(signalBean.getClass());
+            final String rawpath = getPath(null != signalBean ? signalBean.getClass() : Object.class);
             final String fullPath = prefix + (null != rawpath ? rawpath : "");
             if ( null != pathparamReplacer ) {
                 return pathparamReplacer.replacePlaceholders(
@@ -97,13 +97,17 @@ class SetPathPreprocessor implements Feature, RequestPreprocessor {
     
     @Override
     public RequestChanger call(final Object signalBean) {
-        final PlaceholderResolver pathparamResolver = genPlaceholderResolverOf(
-                signalBean.getClass(), PathParam.class);
-
-        final PropertyPlaceholderHelper pathparamReplacer = 
-                ( null != pathparamResolver ? new PropertyPlaceholderHelper("{", "}") : null);
-        
-        return new UriSetter(signalBean, pathparamResolver, pathparamReplacer);
+        if (null == signalBean) {
+            return new UriSetter(null, null, null);
+        } else {
+            final PlaceholderResolver pathparamResolver = genPlaceholderResolverOf(
+                    signalBean.getClass(), PathParam.class);
+    
+            final PropertyPlaceholderHelper pathparamReplacer = 
+                    ( null != pathparamResolver ? new PropertyPlaceholderHelper("{", "}") : null);
+            
+            return new UriSetter(signalBean, pathparamResolver, pathparamReplacer);
+        }
     }
 
     private static PlaceholderResolver genPlaceholderResolverOf(
