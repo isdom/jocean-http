@@ -772,7 +772,8 @@ public class DefaultSignalClientTestCase {
                     buildUri2Addr(testAddr), httpclient);
             
             final byte[] bytesReceived = 
-                ((SignalClient)signalClient).<byte[]>rawDefineInteraction( 
+                ((SignalClient)signalClient).<byte[]>defineInteraction( 
+                        new Object(),
                         new SignalClient.UsingPath("/test/raw"),
                         new SignalClient.UsingMethod(POST.class),
                         new SignalClient.JSONContent("{\"code\": \"added\"}"))
@@ -831,7 +832,8 @@ public class DefaultSignalClientTestCase {
             final DefaultSignalClient signalClient = new DefaultSignalClient(buildUri2Addr(testAddr), httpclient);
             
             final byte[] bytesReceived = 
-                ((SignalClient)signalClient).<byte[]>rawDefineInteraction( 
+                ((SignalClient)signalClient).<byte[]>defineInteraction( 
+                        new Object(),
                         new SignalClient.UsingUri(new URI("http://test")),
                         new SignalClient.UsingPath("/test/raw"),
                         new SignalClient.UsingMethod(POST.class),
@@ -891,7 +893,8 @@ public class DefaultSignalClientTestCase {
             final DefaultSignalClient signalClient = new DefaultSignalClient(buildUri2Addr(testAddr), httpclient);
             
             final TestResponse respReceived = 
-                ((SignalClient)signalClient).<TestResponse>rawDefineInteraction( 
+                ((SignalClient)signalClient).<TestResponse>defineInteraction( 
+                        new Object(),
                         new SignalClient.UsingUri(new URI("http://test")),
                         new SignalClient.UsingPath("/test/raw"),
                         new SignalClient.UsingMethod(POST.class),
