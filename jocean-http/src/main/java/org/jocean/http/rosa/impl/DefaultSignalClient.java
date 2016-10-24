@@ -397,9 +397,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             ReferenceCountUtil.release(request4send);
                             RxNettys.releaseObjects(postRequestEncoder.getBodyListAttributes());
                         }});
-            
+         
             return postRequestEncoder.isChunked() 
-                ? new Outgoing(Observable.<Object>just(request4send, postRequestEncoder), total, toRelease)
+                ? new Outgoing(Observable.<Object>just(request4send, postRequestEncoder), 
+                        total, toRelease)
                 : new Outgoing(Observable.<Object>just(request4send), total, toRelease);
         }
     }
