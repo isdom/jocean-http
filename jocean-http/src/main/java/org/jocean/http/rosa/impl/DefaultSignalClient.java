@@ -44,8 +44,10 @@ import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
 import io.netty.handler.codec.http.multipart.HttpData;
 import io.netty.handler.codec.http.multipart.HttpDataFactory;
 import io.netty.handler.codec.http.multipart.HttpPostRequestEncoder;
+import io.netty.handler.codec.http.multipart.HttpPostRequestEncoder.EncoderMode;
 import io.netty.handler.codec.http.multipart.HttpPostRequestEncoder.ErrorDataEncoderException;
 import io.netty.handler.codec.http.multipart.MemoryFileUpload;
+import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
@@ -381,7 +383,8 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         } else {
             // Use the PostBody encoder
             final HttpPostRequestEncoder postRequestEncoder =
-                    new HttpPostRequestEncoder(_DATA_FACTORY, request, true); // true => multipart
+                    new HttpPostRequestEncoder(_DATA_FACTORY, request, true,
+                            CharsetUtil.UTF_8, EncoderMode.HTML5); // true => multipart
             
             final long signalSize = addSignalToMultipart(postRequestEncoder, body);
             final long attachmentSize = addAttachmentsToMultipart(postRequestEncoder, attachments);
@@ -526,8 +529,14 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final HttpRequest request,
             final BodyForm body) {
         if (null != body) {
-            HttpHeaders.setContentLength(request, body.length());
-            HttpHeaders.setHeader(request, HttpHeaders.Names.CONTENT_TYPE, body.contentType());
+            if (null == request.headers().get(HttpHeaders.Names.CONTENT_LENGTH)) {
+                //  Content-Length not set
+                HttpHeaders.setContentLength(request, body.length());
+            }
+            if (null == request.headers().get(HttpHeaders.Names.CONTENT_TYPE)) {
+                //  Content-Type not set
+                HttpHeaders.setHeader(request, HttpHeaders.Names.CONTENT_TYPE, body.contentType());
+            }
             return new DefaultLastHttpContent(body.content().retain());
         } else {
             return LastHttpContent.EMPTY_LAST_CONTENT;

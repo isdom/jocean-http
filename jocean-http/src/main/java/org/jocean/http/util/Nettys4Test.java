@@ -21,6 +21,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelId;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelMetadata;
 import io.netty.channel.ChannelPipeline;
@@ -334,8 +335,7 @@ public class Nettys4Test {
             public ChannelFuture writeAndFlush(Object msg) {
                 return null;
             }
-
-            /*
+            
             @Override
             public <T> boolean hasAttr(AttributeKey<T> key) {
                 return false;
@@ -354,8 +354,7 @@ public class Nettys4Test {
             @Override
             public long bytesBeforeWritable() {
                 return 0;
-            }*/
-            };
+            }};
     }
     
     public static String dumpByteBufLeakRecords(final ByteBuf buf) {
