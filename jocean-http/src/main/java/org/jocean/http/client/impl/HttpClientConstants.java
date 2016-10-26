@@ -35,7 +35,7 @@ final class HttpClientConstants {
             new ApplyToRequest() {
                 @Override
                 public void call(final HttpRequest request) {
-                    HttpHeaders.addHeader(request,
+                    request.headers().add(
                             HttpHeaders.Names.ACCEPT_ENCODING, 
                             HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
                 }

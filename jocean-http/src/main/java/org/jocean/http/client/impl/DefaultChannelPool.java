@@ -13,8 +13,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
-import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.util.AttributeKey;
 
 public class DefaultChannelPool extends AbstractChannelPool {
@@ -29,7 +29,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
         //  当Channel被重用，但由于source cancel等情况，没有发送过request
         //  则此时仍然可以被再次回收
         transactionBegin(channel);
-        channel.attr(KEEPALIVE).set(HttpHeaders.isKeepAlive(request));
+        channel.attr(KEEPALIVE).set(HttpUtil.isKeepAlive(request));
     }
 
     @Override
