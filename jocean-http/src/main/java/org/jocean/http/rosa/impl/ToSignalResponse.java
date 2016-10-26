@@ -138,7 +138,7 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
             final Object bean,
             final HttpMessage httpmsg, 
             final byte[] bodyBytes) {
-        final String contentType = HttpHeaders.getHeader(httpmsg, HttpHeaders.Names.CONTENT_TYPE);
+        final String contentType = httpmsg.headers().get(HttpHeaders.Names.CONTENT_TYPE);
         final Field[] beanfields = 
                 ReflectUtils.getAnnotationFieldsOf(bean.getClass(), BeanParam.class);
         if (null != beanfields && beanfields.length > 0) {

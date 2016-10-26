@@ -38,11 +38,11 @@ class QueryParamPreprocessor implements Feature, RequestPreprocessor {
                     //  only GET method will assemble query parameters
                     //  or the QueryParam field explicit annotated HttpMethod via AnnotationWrapper 
                     //      assemble query parameters
-                    final boolean isGetMethod = request.getMethod().equals(HttpMethod.GET);
-                    final QueryStringEncoder encoder = new QueryStringEncoder(request.getUri());
+                    final boolean isGetMethod = request.method().equals(HttpMethod.GET);
+                    final QueryStringEncoder encoder = new QueryStringEncoder(request.uri());
                     for ( Field field : queryFields ) {
                         if (isGetMethod ||
-                           Nettys.isFieldAnnotatedOfHttpMethod(field, request.getMethod())) {
+                           Nettys.isFieldAnnotatedOfHttpMethod(field, request.method())) {
                             try {
                                 final Object value = field.get(signalBean);
                                 if ( null != value ) {

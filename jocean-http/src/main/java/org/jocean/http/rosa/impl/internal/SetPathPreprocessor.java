@@ -51,7 +51,7 @@ class SetPathPreprocessor implements Feature, RequestPreprocessor {
         
         @Override
         public void call(final HttpRequest request) {
-            request.setUri(genUriAsString(request.getUri(),
+            request.setUri(genUriAsString(request.uri(),
                     _signalBean, 
                     _pathparamResolver,
                     _pathparamReplacer));
