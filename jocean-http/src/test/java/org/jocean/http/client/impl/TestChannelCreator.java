@@ -11,14 +11,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.bootstrap.Bootstrap;
-import io.netty.bootstrap.ChannelFactory;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFactory;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOutboundBuffer;
 import io.netty.channel.ChannelPromise;
+import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.local.LocalChannel;
-import io.netty.channel.local.LocalEventLoopGroup;
 
 public class TestChannelCreator extends AbstractChannelCreator {
 
@@ -102,7 +102,7 @@ public class TestChannelCreator extends AbstractChannelCreator {
     
     @Override
     protected void initializeBootstrap(final Bootstrap bootstrap) {
-        bootstrap.group(new LocalEventLoopGroup(1))
+        bootstrap.group(new DefaultEventLoopGroup(1))
             .channelFactory(new ChannelFactory<TestChannel>() {
                         @Override
                         public TestChannel newChannel() {

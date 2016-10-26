@@ -24,8 +24,8 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.local.LocalAddress;
-import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -60,7 +60,7 @@ public class HttpServerDemo {
         @SuppressWarnings("resource")
         final HttpServerBuilder server = new DefaultHttpServerBuilder(
                 new AbstractBootstrapCreator(
-                new LocalEventLoopGroup(1), new LocalEventLoopGroup()) {
+                new DefaultEventLoopGroup(1), new DefaultEventLoopGroup()) {
             @Override
             protected void initializeBootstrap(final ServerBootstrap bootstrap) {
                 bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
@@ -111,9 +111,9 @@ public class HttpServerDemo {
                                     bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
                                 }
                                 return new DefaultFullHttpRequest(
-                                        req.getProtocolVersion(), 
-                                        req.getMethod(), 
-                                        req.getUri(), 
+                                        req.protocolVersion(), 
+                                        req.method(), 
+                                        req.uri(), 
                                         Unpooled.wrappedBuffer(bufs));
                             } else {
                                 return null;

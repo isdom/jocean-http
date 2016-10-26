@@ -578,9 +578,9 @@ public class RxNettys {
                     bufs[idx-1] = ((HttpContent)httpobjs[idx]).content().retain();
                 }
                 final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
-                        req.getProtocolVersion(), 
-                        req.getMethod(), 
-                        req.getUri(), 
+                        req.protocolVersion(), 
+                        req.method(), 
+                        req.uri(), 
                         Unpooled.wrappedBuffer(bufs));
                 fullreq.headers().add(req.headers());
                 //  ? need update Content-Length header field ?
@@ -605,8 +605,8 @@ public class RxNettys {
                     bufs[idx-1] = ((HttpContent)httpobjs[idx]).content().retain();
                 }
                 final DefaultFullHttpResponse fullresp = new DefaultFullHttpResponse(
-                        resp.getProtocolVersion(), 
-                        resp.getStatus(),
+                        resp.protocolVersion(), 
+                        resp.status(),
                         Unpooled.wrappedBuffer(bufs));
                 fullresp.headers().add(resp.headers());
                 //  ? need update Content-Length header field ?

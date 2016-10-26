@@ -12,8 +12,6 @@ import com.alibaba.fastjson.annotation.JSONField;
 @Path("/yjy/queryMyPatientsForDoctor")
 public class QueryMyPatientsForDoctorRequest extends CommonRequest{
     
-    private static final long serialVersionUID = -5573949723336356087L;
-    
     @QueryParam("groupId")
     private String _groupId;//分组
 

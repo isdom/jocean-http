@@ -383,8 +383,8 @@ public class DefaultSignalClientTestCase {
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
-                    reqMethodReceivedRef.set(req.getMethod());
-                    final QueryStringDecoder decoder = new QueryStringDecoder(req.getUri());
+                    reqMethodReceivedRef.set(req.method());
+                    final QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
                     reqpathReceivedRef.set(decoder.path());
                     reqbeanReceivedRef.set(decoder.parameters().get("id").get(0));
                 } finally {
@@ -498,8 +498,8 @@ public class DefaultSignalClientTestCase {
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
-                    reqMethodReceivedRef.set(req.getMethod());
-                    final QueryStringDecoder decoder = new QueryStringDecoder(req.getUri());
+                    reqMethodReceivedRef.set(req.method());
+                    final QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
                     reqpathReceivedRef.set(decoder.path());
                     reqbeanReceivedRef.set(decoder.parameters().get("id").get(0));
                 } finally {
@@ -556,8 +556,8 @@ public class DefaultSignalClientTestCase {
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
-                    reqMethodReceivedRef.set(req.getMethod());
-                    final QueryStringDecoder decoder = new QueryStringDecoder(req.getUri());
+                    reqMethodReceivedRef.set(req.method());
+                    final QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
                     reqpathReceivedRef.set(decoder.path());
                     reqbeanReceivedRef.set(decoder.parameters().get("id").get(0));
                 } finally {
@@ -616,8 +616,8 @@ public class DefaultSignalClientTestCase {
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
-                    reqMethodReceivedRef.set(req.getMethod());
-                    reqpathReceivedRef.set(req.getUri());
+                    reqMethodReceivedRef.set(req.method());
+                    reqpathReceivedRef.set(req.uri());
                     reqbeanReceivedRef.set(
                             (TestRequestByPost) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
                                     TestRequestByPost.class));
@@ -679,8 +679,8 @@ public class DefaultSignalClientTestCase {
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
-                    reqMethodReceivedRef.set(req.getMethod());
-                    reqpathReceivedRef.set(req.getUri());
+                    reqMethodReceivedRef.set(req.method());
+                    reqpathReceivedRef.set(req.uri());
                     reqbeanReceivedRef.set(
                             (TestRequestByPost) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
                                     TestRequestByPost.class));
@@ -743,8 +743,8 @@ public class DefaultSignalClientTestCase {
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
-                    reqMethodReceivedRef.set(req.getMethod());
-                    reqpathReceivedRef.set(req.getUri());
+                    reqMethodReceivedRef.set(req.method());
+                    reqpathReceivedRef.set(req.uri());
                     reqbeanReceivedRef.set(
                             (TestRequestByPost) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
                                     TestRequestByPost.class));
@@ -804,8 +804,8 @@ public class DefaultSignalClientTestCase {
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
-                    reqMethodReceivedRef.set(req.getMethod());
-                    reqpathReceivedRef.set(req.getUri());
+                    reqMethodReceivedRef.set(req.method());
+                    reqpathReceivedRef.set(req.uri());
                     reqbeanReceivedRef.set(
                             (TestRequestByPost) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
                                     TestRequestByPost.class));
@@ -865,8 +865,8 @@ public class DefaultSignalClientTestCase {
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
-                    reqMethodReceivedRef.set(req.getMethod());
-                    reqpathReceivedRef.set(req.getUri());
+                    reqMethodReceivedRef.set(req.method());
+                    reqpathReceivedRef.set(req.uri());
                     reqbeanReceivedRef.set(
                             (TestRequestByPost) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
                                     TestRequestByPost.class));
@@ -998,8 +998,8 @@ public class DefaultSignalClientTestCase {
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
-                    reqMethodReceivedRef.set(req.getMethod());
-                    final QueryStringDecoder decoder = new QueryStringDecoder(req.getUri());
+                    reqMethodReceivedRef.set(req.method());
+                    final QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
                     reqpathReceivedRef.set(decoder.path());
                     final TestRequestByPostWithQueryParam reqbean = (TestRequestByPostWithQueryParam) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
                             TestRequestByPostWithQueryParam.class);
@@ -1133,8 +1133,8 @@ public class DefaultSignalClientTestCase {
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
-                    reqMethodReceivedRef.set(req.getMethod());
-                    reqpathReceivedRef.set(req.getUri());
+                    reqMethodReceivedRef.set(req.method());
+                    reqpathReceivedRef.set(req.uri());
                     final TestRequestByPostWithHeaderParam reqbean = (TestRequestByPostWithHeaderParam) JSON.parseObject(Nettys.dumpByteBufAsBytes(req.content()), 
                             TestRequestByPostWithHeaderParam.class);
                     reqbean._headerp = req.headers().get("X-P");
@@ -1199,8 +1199,8 @@ public class DefaultSignalClientTestCase {
             public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
                 final FullHttpRequest req = genFullHttpRequest.call();
                 try {
-                    reqMethodReceivedRef.set(req.getMethod());
-                    reqpathReceivedRef.set(req.getUri());
+                    reqMethodReceivedRef.set(req.method());
+                    reqpathReceivedRef.set(req.uri());
                     HttpPostRequestDecoder decoder = new HttpPostRequestDecoder(
                             HTTP_DATA_FACTORY, req);
                     //  first is signal

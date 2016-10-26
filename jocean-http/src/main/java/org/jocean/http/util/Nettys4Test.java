@@ -27,10 +27,10 @@ import io.netty.channel.ChannelMetadata;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelProgressivePromise;
 import io.netty.channel.ChannelPromise;
+import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.EventLoop;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
-import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.HttpContent;
@@ -47,9 +47,9 @@ public class Nettys4Test {
     private static final Logger LOG =
             LoggerFactory.getLogger(Nettys4Test.class);
 
-    private static final LocalEventLoopGroup EVENTLOOP4CLIENT = new LocalEventLoopGroup(1);
-    private static final LocalEventLoopGroup EVENTLOOP4BOSS = new LocalEventLoopGroup(1);
-    private static final LocalEventLoopGroup EVENTLOOP4SERVER = new LocalEventLoopGroup(1);
+    private static final DefaultEventLoopGroup EVENTLOOP4CLIENT = new DefaultEventLoopGroup(1);
+    private static final DefaultEventLoopGroup EVENTLOOP4BOSS = new DefaultEventLoopGroup(1);
+    private static final DefaultEventLoopGroup EVENTLOOP4SERVER = new DefaultEventLoopGroup(1);
 
     private Nettys4Test() {
         throw new IllegalStateException("No instances!");

@@ -6,8 +6,6 @@ import com.alibaba.fastjson.annotation.JSONField;
 
 public class QueryMyPatientsForDoctorResponse extends CommonResponse{
     
-    private static final long serialVersionUID = 5741005682710241497L;
-
     private DoctorPatientRelevantBean[] _patients;
 
     @JSONField(name="patients")

@@ -37,10 +37,10 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpHeaders.Values;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
@@ -68,10 +68,10 @@ public final class HttpTestServer {
                         if (msg instanceof HttpRequest) {
                             HttpRequest req = (HttpRequest) msg;
 
-                            if (HttpHeaders.is100ContinueExpected(req)) {
+                            if (HttpUtil.is100ContinueExpected(req)) {
                                 ctx.write(new DefaultFullHttpResponse(HTTP_1_1, CONTINUE));
                             }
-                            boolean keepAlive = HttpHeaders.isKeepAlive(req);
+                            boolean keepAlive = HttpUtil.isKeepAlive(req);
                             FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
                                     Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
                             response.headers().set(CONTENT_TYPE, "text/plain");

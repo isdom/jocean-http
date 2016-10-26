@@ -20,9 +20,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
-import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
@@ -90,7 +90,7 @@ class DefaultHttpTrade implements HttpTrade {
                     public void call(final HttpObject msg) {
                         _isRequestReceived.compareAndSet(false, true);
                       if (msg instanceof HttpRequest) {
-                          _isKeepAlive.set(HttpHeaders.isKeepAlive((HttpRequest)msg));
+                          _isKeepAlive.set(HttpUtil.isKeepAlive((HttpRequest)msg));
                       }
                     }})
                 .doOnCompleted(new Action0() {
