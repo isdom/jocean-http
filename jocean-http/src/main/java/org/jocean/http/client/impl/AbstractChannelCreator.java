@@ -78,7 +78,8 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
     public void close() {
         if (null!=this._bootstrap) {
             // Shut down executor threads to exit.
-            this._bootstrap.group()
+            this._bootstrap.config()
+                .group()
                 .shutdownGracefully(100, 1000, TimeUnit.MILLISECONDS)
                 .syncUninterruptibly();
             this._bootstrap = null;

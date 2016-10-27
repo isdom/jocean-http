@@ -6,7 +6,8 @@ import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Class2ApplyBuilder;
 
-import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpRequest;
 
 final class HttpClientConstants {
@@ -36,8 +37,8 @@ final class HttpClientConstants {
                 @Override
                 public void call(final HttpRequest request) {
                     request.headers().add(
-                            HttpHeaders.Names.ACCEPT_ENCODING, 
-                            HttpHeaders.Values.GZIP + "," + HttpHeaders.Values.DEFLATE);
+                            HttpHeaderNames.ACCEPT_ENCODING, 
+                            HttpHeaderValues.GZIP + "," + HttpHeaderValues.DEFLATE);
                 }
             });
     }
