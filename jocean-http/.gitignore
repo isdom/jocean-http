@@ -6,7 +6,8 @@
 /logs/*
 /.settings/
 /.settings/*
-.gradle
+/.gradle/
+/.gradle/*
 .DS_Store
 .classpath
 .project
