@@ -35,8 +35,8 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
+import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.local.LocalAddress;
-import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -93,8 +93,8 @@ public class DefaultHttpClientTestCase {
         return new HttpTestServer(
                 enableSSL, 
                 new LocalAddress(acceptId), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
+                new DefaultEventLoopGroup(1), 
+                new DefaultEventLoopGroup(),
                 LocalServerChannel.class,
                 HttpTestServer.DEFAULT_NEW_HANDLER);
     }
@@ -107,8 +107,8 @@ public class DefaultHttpClientTestCase {
         return new HttpTestServer(
                 enableSSL, 
                 new LocalAddress(acceptId), 
-                new LocalEventLoopGroup(1), 
-                new LocalEventLoopGroup(),
+                new DefaultEventLoopGroup(1), 
+                new DefaultEventLoopGroup(),
                 LocalServerChannel.class,
                 newHandler);
     }
