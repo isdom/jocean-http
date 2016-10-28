@@ -903,6 +903,21 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttpsDisconnectFromServerAfterConnected() throws Exception {
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                new Action1<HttpTrade>() {
+                    @Override
+                    public void call(final HttpTrade trade) {
+                        trade.abort();
+                    }},
+                new ENABLE_SSL(sslCtx4Server),
+                ENABLE_LOGGING_OVER_SSL);
+        
+        /*
         final HttpTestServer server = createTestServerWith(true, "test",
                 new Func0<ChannelInboundHandler> () {
                     @Override
@@ -917,18 +932,19 @@ public class DefaultHttpClientTestCase {
                             }
                         };
                     }});
+        */
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING,
+                ENABLE_LOGGING_OVER_SSL,
                 new ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
-                new LocalAddress("test"), 
+                new LocalAddress(testAddr), 
                 Observable.just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -942,7 +958,8 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
-            server.stop();
+//            server.stop();
+            server.unsubscribe();
             testSubscriber.assertTerminalEvent();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
 //            assertEquals(RuntimeException.class, 
@@ -1092,7 +1109,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
         }
     }
@@ -1128,7 +1145,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
         }
     }
@@ -1162,7 +1179,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             // second
             {
@@ -1215,7 +1232,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             // second
             {
@@ -1267,7 +1284,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             //  no response received
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             //  message has been write to send queue
@@ -1310,7 +1327,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(SSLException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             //  no response received
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             //  message has been write to send queue
@@ -1350,7 +1367,7 @@ public class DefaultHttpClientTestCase {
                 assertEquals(1, testSubscriber.getOnErrorEvents().size());
                 assertEquals(RuntimeException.class, 
                         testSubscriber.getOnErrorEvents().get(0).getClass());
-                assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+                assertEquals(0, testSubscriber.getCompletions());
                 //  no response received
                 assertEquals(0, testSubscriber.getOnNextEvents().size());
                 //  message has been write to send queue
@@ -1414,7 +1431,7 @@ public class DefaultHttpClientTestCase {
                 assertEquals(1, testSubscriber.getOnErrorEvents().size());
                 assertEquals(SSLException.class, 
                         testSubscriber.getOnErrorEvents().get(0).getClass());
-                assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+                assertEquals(0, testSubscriber.getCompletions());
                 //  no response received
                 assertEquals(0, testSubscriber.getOnNextEvents().size());
                 //  message has been write to send queue
@@ -1543,7 +1560,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
 //            assertEquals(RuntimeException.class, 
 //                    testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertTrue(testSubscriber.getOnNextEvents().size()>=1);
         }
     }
@@ -1655,7 +1672,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
 //            assertEquals(RuntimeException.class, 
 //                    testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getOnCompletedEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
             assertTrue(testSubscriber.getOnNextEvents().size()>=1);
         }
     }
