@@ -974,6 +974,16 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpClientCanceledAfterConnected() throws Exception {
         final CountDownLatch serverRecvd = new CountDownLatch(1);
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                new Action1<HttpTrade>() {
+                    @Override
+                    public void call(final HttpTrade trade) {
+                        serverRecvd.countDown();
+                    }},
+                ENABLE_LOGGING);
+        
+        /*
         final HttpTestServer server = createTestServerWith(false, "test",
                 new Func0<ChannelInboundHandler> () {
                     @Override
@@ -990,6 +1000,7 @@ public class DefaultHttpClientTestCase {
                             }
                         };
                     }});
+        */
         
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator);
@@ -999,7 +1010,7 @@ public class DefaultHttpClientTestCase {
         try {
             final Subscription subscription = 
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
                 .subscribe(testSubscriber);
             
@@ -1013,7 +1024,8 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
-            server.stop();
+//            server.stop();
+            server.unsubscribe();
             
             testSubscriber.assertNoErrors();
             assertEquals(0, testSubscriber.getCompletions());
@@ -1026,6 +1038,21 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttpsClientCanceledAfterConnected() throws Exception {
         final CountDownLatch serverRecvd = new CountDownLatch(1);
+        
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                new Action1<HttpTrade>() {
+                    @Override
+                    public void call(final HttpTrade trade) {
+                        serverRecvd.countDown();
+                    }},
+                new ENABLE_SSL(sslCtx4Server),
+                ENABLE_LOGGING_OVER_SSL);
+        /*
         final HttpTestServer server = createTestServerWith(true, "test",
                 new Func0<ChannelInboundHandler> () {
                     @Override
@@ -1042,11 +1069,12 @@ public class DefaultHttpClientTestCase {
                             }
                         };
                     }});
+         */
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING,
+                ENABLE_LOGGING_OVER_SSL,
                 new ENABLE_SSL(sslCtx));
         
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
@@ -1054,7 +1082,7 @@ public class DefaultHttpClientTestCase {
         try {
             final Subscription subscription = 
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
                 .subscribe(testSubscriber);
             
@@ -1074,7 +1102,8 @@ public class DefaultHttpClientTestCase {
             // 注意: 一个 try-with-resources 语句可以像普通的 try 语句那样有 catch 和 finally 块。 
             //  在try-with-resources 语句中, 任意的 catch 或者 finally 块都是在声明的资源被关闭以后才运行。 
 			client.close();
-            server.stop();
+//            server.stop();
+			server.unsubscribe();
 //            assertEquals(0, client.getActiveChannelCount());
             testSubscriber.assertNoErrors();
             assertEquals(0, testSubscriber.getCompletions());
@@ -1086,7 +1115,11 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttpRequestEmitErrorAfterConnected() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                ENABLE_LOGGING);
+//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
@@ -1095,7 +1128,7 @@ public class DefaultHttpClientTestCase {
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
-                new LocalAddress("test"), 
+                new LocalAddress(testAddr), 
                 Observable.<HttpObject>error(new RuntimeException("test error")))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -1105,7 +1138,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertNotClose(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
@@ -1116,18 +1149,27 @@ public class DefaultHttpClientTestCase {
 
     @Test(timeout=10000)
     public void testHttpsRequestEmitErrorAfterConnected() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                new ENABLE_SSL(sslCtx4Server),
+                ENABLE_LOGGING_OVER_SSL);
+//        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING,
+                ENABLE_LOGGING_OVER_SSL,
                 new ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
-                new LocalAddress("test"), 
+                new LocalAddress(testAddr), 
                 Observable.<HttpObject>error(new RuntimeException("test error")))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -1141,7 +1183,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertNotClose(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
@@ -1152,7 +1194,11 @@ public class DefaultHttpClientTestCase {
     
     @Test(timeout=10000)
     public void testHttpRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                ENABLE_LOGGING);
+//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
@@ -1164,7 +1210,7 @@ public class DefaultHttpClientTestCase {
             {
                 final CountDownLatch unsubscribed = new CountDownLatch(1);
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.<HttpObject>error(new RuntimeException("test error")))
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
@@ -1185,7 +1231,7 @@ public class DefaultHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(fullHttpRequest()))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -1198,7 +1244,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertNotClose(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
 
