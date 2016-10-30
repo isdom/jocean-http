@@ -1250,12 +1250,21 @@ public class DefaultHttpClientTestCase {
 
     @Test(timeout=10000)
     public void testHttpsRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                new ENABLE_SSL(sslCtx4Server),
+                ENABLE_LOGGING_OVER_SSL);
+//        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING,
+                ENABLE_LOGGING_OVER_SSL,
                 new ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
@@ -1263,7 +1272,7 @@ public class DefaultHttpClientTestCase {
             {
                 final CountDownLatch unsubscribed = new CountDownLatch(1);
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.<HttpObject>error(new RuntimeException("test error")))
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
@@ -1284,7 +1293,7 @@ public class DefaultHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(fullHttpRequest()))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -1297,13 +1306,17 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertNotClose(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
     
     @Test(timeout=10000)
     public void testHttpClientWriteAndFlushExceptionAfterConnected() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                ENABLE_LOGGING);
+//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
@@ -1316,7 +1329,7 @@ public class DefaultHttpClientTestCase {
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
-                new LocalAddress("test"), 
+                new LocalAddress(testAddr), 
                 Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -1326,7 +1339,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(RuntimeException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
@@ -1340,7 +1353,16 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttpsClientWriteAndFlushExceptionAfterConnected() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                new ENABLE_SSL(sslCtx4Server),
+                ENABLE_LOGGING_OVER_SSL);
+//        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
@@ -1348,14 +1370,14 @@ public class DefaultHttpClientTestCase {
         
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING,
+                ENABLE_LOGGING_OVER_SSL,
                 new ENABLE_SSL(sslCtx));
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
-                new LocalAddress("test"), 
+                new LocalAddress(testAddr), 
                 Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -1369,7 +1391,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
             assertEquals(SSLException.class, 
                     testSubscriber.getOnErrorEvents().get(0).getClass());
@@ -1382,8 +1404,13 @@ public class DefaultHttpClientTestCase {
     }
     
     @Test(timeout=10000)
-    public void testHttpClientWriteAndFlushExceptionAfterConnectedAndNewConnection2nd() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+    public void testHttpClientWriteAndFlushExceptionAfterConnectedAndNewConnection2nd() 
+            throws Exception {
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                ENABLE_LOGGING);
+//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
         final TestChannelCreator creator = new TestChannelCreator();
         creator.setWriteException(new RuntimeException("doWrite Error for test"));
@@ -1398,7 +1425,7 @@ public class DefaultHttpClientTestCase {
                 // first
                 final CountDownLatch unsubscribed = new CountDownLatch(1);
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
@@ -1427,7 +1454,7 @@ public class DefaultHttpClientTestCase {
                 // second
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(fullHttpRequest()))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -1440,7 +1467,7 @@ public class DefaultHttpClientTestCase {
             }
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
 
