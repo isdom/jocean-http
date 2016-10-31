@@ -1,6 +1,5 @@
 package org.jocean.http.client.impl;
 
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.jocean.http.Feature.ENABLE_LOGGING;
 import static org.jocean.http.Feature.ENABLE_LOGGING_OVER_SSL;
@@ -41,7 +40,8 @@ import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
@@ -1473,7 +1473,16 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttpsClientWriteAndFlushExceptionAfterConnectedAndNewConnection2nd() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", HttpTestServer.CONTENT),
+                new ENABLE_SSL(sslCtx4Server),
+                ENABLE_LOGGING_OVER_SSL);
+//        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
@@ -1481,7 +1490,7 @@ public class DefaultHttpClientTestCase {
         
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING,
+                ENABLE_LOGGING_OVER_SSL,
                 new ENABLE_SSL(sslCtx));
         try {
             {
@@ -1489,7 +1498,7 @@ public class DefaultHttpClientTestCase {
                 final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
                 final CountDownLatch unsubscribed = new CountDownLatch(1);
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .subscribe(testSubscriber);
@@ -1516,7 +1525,7 @@ public class DefaultHttpClientTestCase {
                 // second
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(fullHttpRequest()))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
@@ -1529,13 +1538,14 @@ public class DefaultHttpClientTestCase {
             }
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
     
     @Test
     public void testHttp10ConnectionCloseHappyPath() throws Exception {
-        final HttpTestServer server = createTestServerWith(false, "test",
+        final String testAddr = UUID.randomUUID().toString();
+        final HttpTestServer server = createTestServerWith(false, testAddr,
                 new Func0<ChannelInboundHandler> () {
             @Override
             public ChannelInboundHandler call() {
@@ -1548,10 +1558,10 @@ public class DefaultHttpClientTestCase {
                             final FullHttpResponse response = new DefaultFullHttpResponse(
                                     HttpVersion.HTTP_1_0, OK, 
                                     Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
-                            response.headers().set(CONTENT_TYPE, "text/plain");
+                            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
                             //  missing Content-Length
 //                            response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                            response.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
+                            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
                             ctx.write(response).addListener(ChannelFutureListener.CLOSE);
                         }
                     }
@@ -1563,11 +1573,11 @@ public class DefaultHttpClientTestCase {
                 ENABLE_LOGGING);
         try {
             final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
-            request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
+            request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
             
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.just(request))
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
@@ -1585,7 +1595,8 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttp10ConnectionCloseBadCaseMissingPartContent() throws Exception {
-        final HttpTestServer server = createTestServerWith(false, "test",
+        final String testAddr = UUID.randomUUID().toString();
+        final HttpTestServer server = createTestServerWith(false, testAddr,
                 new Func0<ChannelInboundHandler> () {
             @Override
             public ChannelInboundHandler call() {
@@ -1598,11 +1609,11 @@ public class DefaultHttpClientTestCase {
                             final FullHttpResponse response = new DefaultFullHttpResponse(
                                     HttpVersion.HTTP_1_0, OK, 
                                     Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
-                            response.headers().set(CONTENT_TYPE, "text/plain");
+                            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
                             //  BAD Content-Length, actual length + 1
-                            response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, 
+                            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
                                     response.content().readableBytes() + 1);
-                            response.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
+                            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
                             ctx.write(response).addListener(ChannelFutureListener.CLOSE);
                         }
                     }
@@ -1613,13 +1624,13 @@ public class DefaultHttpClientTestCase {
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 ENABLE_LOGGING);
         final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
-        request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
+        request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
         
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
-                new LocalAddress("test"), 
+                new LocalAddress(testAddr), 
                 Observable.<HttpObject>just(request))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
@@ -1640,7 +1651,8 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttps10ConnectionCloseHappyPath() throws Exception {
-        final HttpTestServer server = createTestServerWith(true, "test",
+        final String testAddr = UUID.randomUUID().toString();
+        final HttpTestServer server = createTestServerWith(true, testAddr,
                 new Func0<ChannelInboundHandler> () {
             @Override
             public ChannelInboundHandler call() {
@@ -1653,10 +1665,10 @@ public class DefaultHttpClientTestCase {
                             final FullHttpResponse response = new DefaultFullHttpResponse(
                                     HttpVersion.HTTP_1_0, OK, 
                                     Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
-                            response.headers().set(CONTENT_TYPE, "text/plain");
+                            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
                             //  missing Content-Length
 //                            response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                            response.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
+                            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
                             ctx.write(response).addListener(ChannelFutureListener.CLOSE);
                         }
                     }
@@ -1665,15 +1677,15 @@ public class DefaultHttpClientTestCase {
 
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
-                ENABLE_LOGGING,
+                ENABLE_LOGGING_OVER_SSL,
                 new ENABLE_SSL(sslCtx));
         try {
             final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
-            request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
+            request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
             
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.just(request))
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
@@ -1691,7 +1703,8 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttps10ConnectionCloseBadCaseMissingPartContent() throws Exception {
-        final HttpTestServer server = createTestServerWith(true, "test",
+        final String testAddr = UUID.randomUUID().toString();
+        final HttpTestServer server = createTestServerWith(true, testAddr,
                 new Func0<ChannelInboundHandler> () {
             @Override
             public ChannelInboundHandler call() {
@@ -1704,11 +1717,11 @@ public class DefaultHttpClientTestCase {
                             final FullHttpResponse response = new DefaultFullHttpResponse(
                                     HttpVersion.HTTP_1_0, OK, 
                                     Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
-                            response.headers().set(CONTENT_TYPE, "text/plain");
+                            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
                             //  BAD Content-Length, actual length + 1
-                            response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, 
+                            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
                                     response.content().readableBytes() + 1);
-                            response.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
+                            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
                             ctx.write(response).addListener(ChannelFutureListener.CLOSE);
                         }
                     }
@@ -1718,16 +1731,16 @@ public class DefaultHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING,
+                ENABLE_LOGGING_OVER_SSL,
                 new ENABLE_SSL(sslCtx));
         final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
-        request.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.CLOSE);
+        request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
         
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
-                new LocalAddress("test"), 
+                new LocalAddress(testAddr), 
                 Observable.<HttpObject>just(request))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
             .subscribe(testSubscriber);
