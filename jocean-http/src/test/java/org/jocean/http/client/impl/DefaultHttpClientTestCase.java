@@ -1703,7 +1703,30 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttps10ConnectionCloseBadCaseMissingPartContent() throws Exception {
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        
         final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                new Action1<HttpTrade>() {
+                    @Override
+                    public void call(final HttpTrade trade) {
+                        //  for HTTP 1.0 Connection: Close response behavior
+                        final FullHttpResponse response = new DefaultFullHttpResponse(
+                                HttpVersion.HTTP_1_0, OK, 
+                                Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+                        //  BAD Content-Length, actual length + 1
+                        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
+                                response.content().readableBytes() + 1);
+                        response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+                        trade.outboundResponse(Observable.just(response));
+                    }},
+//                responseBy("text/plain", HttpTestServer.CONTENT),
+                new ENABLE_SSL(sslCtx4Server),
+                ENABLE_LOGGING_OVER_SSL);
+        /*
         final HttpTestServer server = createTestServerWith(true, testAddr,
                 new Func0<ChannelInboundHandler> () {
             @Override
@@ -1727,6 +1750,7 @@ public class DefaultHttpClientTestCase {
                     }
                 };
             }});
+            */
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
@@ -1754,7 +1778,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
 //            assertEquals(RuntimeException.class, 
 //                    testSubscriber.getOnErrorEvents().get(0).getClass());
