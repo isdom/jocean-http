@@ -18,7 +18,6 @@ import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TestHttpUtil;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.HttpTestServer;
-import org.jocean.http.server.HttpTestServerHandler;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.HttpUtil;
 import org.jocean.http.util.Nettys;
@@ -31,9 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalServerChannel;
@@ -55,7 +51,6 @@ import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
-import rx.functions.Func0;
 import rx.observers.TestSubscriber;
 import rx.schedulers.Schedulers;
 
@@ -99,6 +94,7 @@ public class DefaultHttpClientTestCase {
                 HttpTestServer.DEFAULT_NEW_HANDLER);
     }
 
+    /*
     private HttpTestServer createTestServerWith(
             final boolean enableSSL, 
             final String acceptId,
@@ -112,6 +108,7 @@ public class DefaultHttpClientTestCase {
                 LocalServerChannel.class,
                 newHandler);
     }
+    */
     
     private DefaultFullHttpRequest fullHttpRequest() {
         return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
@@ -1545,6 +1542,24 @@ public class DefaultHttpClientTestCase {
     @Test
     public void testHttp10ConnectionCloseHappyPath() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                new Action1<HttpTrade>() {
+                    @Override
+                    public void call(final HttpTrade trade) {
+                        //  for HTTP 1.0 Connection: Close response behavior
+                        final FullHttpResponse response = new DefaultFullHttpResponse(
+                                HttpVersion.HTTP_1_0, OK, 
+                                Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+                        //  missing Content-Length
+//                        response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                        response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+                        trade.outboundResponse(Observable.just(response));
+                    }
+            
+            },
+            ENABLE_LOGGING);
+        /*
         final HttpTestServer server = createTestServerWith(false, testAddr,
                 new Func0<ChannelInboundHandler> () {
             @Override
@@ -1567,7 +1582,8 @@ public class DefaultHttpClientTestCase {
                     }
                 };
             }});
-
+        */
+    
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 ENABLE_LOGGING);
@@ -1589,13 +1605,32 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).awaitClosed();
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
 
     @Test
     public void testHttp10ConnectionCloseBadCaseMissingPartContent() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                new Action1<HttpTrade>() {
+                    @Override
+                    public void call(final HttpTrade trade) {
+                        //  for HTTP 1.0 Connection: Close response behavior
+                        final FullHttpResponse response = new DefaultFullHttpResponse(
+                                HttpVersion.HTTP_1_0, OK, 
+                                Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+                        //  BAD Content-Length, actual length + 1
+                        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
+                                response.content().readableBytes() + 1);
+                        response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+                        trade.outboundResponse(Observable.just(response));
+                    }
+            
+            },
+            ENABLE_LOGGING);
+        /*
         final HttpTestServer server = createTestServerWith(false, testAddr,
                 new Func0<ChannelInboundHandler> () {
             @Override
@@ -1619,6 +1654,7 @@ public class DefaultHttpClientTestCase {
                     }
                 };
             }});
+            */
         
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
@@ -1640,7 +1676,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
 //            assertEquals(RuntimeException.class, 
 //                    testSubscriber.getOnErrorEvents().get(0).getClass());
@@ -1651,7 +1687,30 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttps10ConnectionCloseHappyPath() throws Exception {
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        
         final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                new Action1<HttpTrade>() {
+                    @Override
+                    public void call(final HttpTrade trade) {
+                        //  for HTTP 1.0 Connection: Close response behavior
+                        final FullHttpResponse response = new DefaultFullHttpResponse(
+                                HttpVersion.HTTP_1_0, OK, 
+                                Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+                        //  missing Content-Length
+//                        response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                        response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+                        trade.outboundResponse(Observable.just(response));
+                    }
+            
+            },
+            new ENABLE_SSL(sslCtx4Server),
+            ENABLE_LOGGING_OVER_SSL);
+        /*
         final HttpTestServer server = createTestServerWith(true, testAddr,
                 new Func0<ChannelInboundHandler> () {
             @Override
@@ -1674,6 +1733,7 @@ public class DefaultHttpClientTestCase {
                     }
                 };
             }});
+            */
 
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
@@ -1697,7 +1757,7 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).awaitClosed();
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
 
@@ -1723,7 +1783,6 @@ public class DefaultHttpClientTestCase {
                         response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
                         trade.outboundResponse(Observable.just(response));
                     }},
-//                responseBy("text/plain", HttpTestServer.CONTENT),
                 new ENABLE_SSL(sslCtx4Server),
                 ENABLE_LOGGING_OVER_SSL);
         /*
