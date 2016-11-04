@@ -7,8 +7,8 @@ import java.util.Collection;
 import java.util.Iterator;
 
 import org.jocean.http.Feature;
-import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
+import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.util.Nettys.ServerChannelAware;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ProxyBuilder;
@@ -35,7 +35,7 @@ import io.netty.handler.codec.http.FullHttpMessage;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
-import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
@@ -549,8 +549,8 @@ public class RxNettys {
             final HttpVersion version, final String vlaueOfWWWAuthenticate) {
         final HttpResponse response = new DefaultFullHttpResponse(
                 version, HttpResponseStatus.UNAUTHORIZED);
-        HttpHeaders.setHeader(response, HttpHeaders.Names.WWW_AUTHENTICATE, vlaueOfWWWAuthenticate);
-        HttpHeaders.setHeader(response, HttpHeaders.Names.CONTENT_LENGTH, 0);
+        response.headers().set(HttpHeaderNames.WWW_AUTHENTICATE, vlaueOfWWWAuthenticate);
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
         return Observable.<HttpObject>just(response);
     }
     
@@ -558,7 +558,7 @@ public class RxNettys {
             final HttpVersion version) {
         final HttpResponse response = new DefaultFullHttpResponse(
                 version, HttpResponseStatus.OK);
-        HttpHeaders.setHeader(response, HttpHeaders.Names.CONTENT_LENGTH, 0);
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
         return Observable.<HttpObject>just(response);
     }
     
