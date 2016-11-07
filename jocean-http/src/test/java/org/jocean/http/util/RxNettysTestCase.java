@@ -22,7 +22,7 @@ import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
-import io.netty.handler.codec.http.HttpHeaders.Names;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpResponseStatus;
@@ -133,8 +133,8 @@ public class RxNettysTestCase {
         final FullHttpResponse response = new DefaultFullHttpResponse(
                 HttpVersion.HTTP_1_1, OK, 
                 Nettys4Test.buildByteBuf(REQ_CONTENT));
-        response.headers().set(Names.CONTENT_TYPE, "text/plain");
-        response.headers().set(Names.CONTENT_LENGTH, response.content().readableBytes());
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
 
         final TestSubscriber<HttpObject> respSubscriber = new TestSubscriber<>();
         Observable.just(response).flatMap(RxNettys.splitFullHttpMessage())
