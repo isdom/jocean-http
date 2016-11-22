@@ -87,8 +87,12 @@ class JSONBodyBuilder implements BodyBuilder, FeaturesAware {
     }
 
     private byte[] genJSONBytes() {
-        return JSON.toJSONBytes(
-                mergeWithSources(JSON.toJSON(this._signalBean), this._jsons));
+        if (this._jsons.isEmpty()) {
+            return JSON.toJSONBytes(this._signalBean);
+        } else {
+            return JSON.toJSONBytes(
+                    mergeWithSources(JSON.toJSON(this._signalBean), this._jsons));
+        }
     }
 
     private Object mergeWithSources(final Object jsonbase, final List<JSONSource> sources) {
