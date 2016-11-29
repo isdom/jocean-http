@@ -15,7 +15,6 @@ import rx.Subscriber;
 
 public abstract class AbstractChannelPool implements ChannelPool {
     
-    @SuppressWarnings("unused")
     private static final Logger LOG =
             LoggerFactory.getLogger(AbstractChannelPool.class);
 
@@ -31,6 +30,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                             channel = reuseChannel(address);
                             if (null != channel) {
                                 if (channel.isActive()) {
+                                    LOG.info("fetch channel({}) of address ({}) for reuse.", channel, address);
                                     subscriber.onSuccess(channel);
                                     return;
                                 } else {
@@ -59,6 +59,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                             channel = reuseChannel(address);
                             if (null != channel) {
                                 if (channel.isActive()) {
+                                    LOG.info("fetch channel({}) of address ({}) for reuse.", channel, address);
                                     RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.from(subscriber));
                                     subscriber.add(RxNettys.subscriptionForReleaseChannel(channel));
                                     subscriber.onNext(channel);
