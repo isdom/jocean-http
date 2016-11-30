@@ -49,17 +49,4 @@ public interface HttpServerBuilder extends Closeable {
         public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed);
         public void undoOnClosed(final Action1<HttpTrade> onClosed);
     }
-    
-    public class TransportException extends RuntimeException {
-
-        private static final long serialVersionUID = 1620281485023205687L;
-        
-        public TransportException(final String message) {
-            super(message);
-        }
-        
-        public TransportException(final String message, final Throwable cause) {
-            super(message, cause);
-        }
-    }
 }

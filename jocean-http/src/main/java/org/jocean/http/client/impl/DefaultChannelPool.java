@@ -48,7 +48,16 @@ public class DefaultChannelPool extends AbstractChannelPool {
         Channel channel = null;
         do {
             channel = channels.poll();
-        } while (null != channel && !channel.isActive());
+            if (null != channel) {
+                if (channel.isActive()) {
+                    LOG.info("fetch active channel({}) from pool, try to reuse.", channel);
+                    break;
+                } else {
+                    LOG.info("fetch inactive channel({}) from pool, drop and fetch next from pool.", channel);
+                    channel.close();
+                }
+            }
+        } while (null != channel);
         return channel;
     }
 

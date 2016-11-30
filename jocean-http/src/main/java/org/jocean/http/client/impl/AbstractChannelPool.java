@@ -34,6 +34,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                                     subscriber.onSuccess(channel);
                                     return;
                                 } else {
+                                    LOG.info("fetch inactive channel({}) of address ({}) for reuse, drop it.", channel, address);
                                     channel.close();
                                 }
                             }
