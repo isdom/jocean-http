@@ -94,22 +94,6 @@ public class DefaultHttpClientTestCase {
                 HttpTestServer.DEFAULT_NEW_HANDLER);
     }
 
-    /*
-    private HttpTestServer createTestServerWith(
-            final boolean enableSSL, 
-            final String acceptId,
-            final Func0<ChannelInboundHandler> newHandler) 
-            throws Exception {
-        return new HttpTestServer(
-                enableSSL, 
-                new LocalAddress(acceptId), 
-                new DefaultEventLoopGroup(1), 
-                new DefaultEventLoopGroup(),
-                LocalServerChannel.class,
-                newHandler);
-    }
-    */
-    
     private DefaultFullHttpRequest fullHttpRequest() {
         return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
     }
@@ -847,21 +831,6 @@ public class DefaultHttpClientTestCase {
                     }},
                 ENABLE_LOGGING);
         
-//        final HttpTestServer server = createTestServerWith(false, "test",
-//                new Func0<ChannelInboundHandler> () {
-//                    @Override
-//                    public ChannelInboundHandler call() {
-//                        return new HttpTestServerHandler() {
-//                            @Override
-//                            protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-//                                    throws Exception {
-//                                if (msg instanceof HttpRequest) {
-//                                    ctx.close();
-//                                }
-//                            }
-//                        };
-//                    }});
-        
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
@@ -871,7 +840,6 @@ public class DefaultHttpClientTestCase {
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
             client.defineInteraction(
-//                new LocalAddress("test"),
                 new LocalAddress(testAddr),
                 Observable.just(fullHttpRequest()).doOnNext(nextSensor))
             .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
@@ -914,23 +882,6 @@ public class DefaultHttpClientTestCase {
                 new ENABLE_SSL(sslCtx4Server),
                 ENABLE_LOGGING_OVER_SSL);
         
-        /*
-        final HttpTestServer server = createTestServerWith(true, "test",
-                new Func0<ChannelInboundHandler> () {
-                    @Override
-                    public ChannelInboundHandler call() {
-                        return new HttpTestServerHandler() {
-                            @Override
-                            protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-                                    throws Exception {
-                                if (msg instanceof HttpRequest) {
-                                    ctx.close();
-                                }
-                            }
-                        };
-                    }});
-        */
-        
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
@@ -955,7 +906,6 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
-//            server.stop();
             server.unsubscribe();
             testSubscriber.assertTerminalEvent();
             assertEquals(1, testSubscriber.getOnErrorEvents().size());
@@ -976,28 +926,11 @@ public class DefaultHttpClientTestCase {
                 new Action1<HttpTrade>() {
                     @Override
                     public void call(final HttpTrade trade) {
+                        LOG.debug("recv request {}, and do nothing.", trade);
                         serverRecvd.countDown();
+                        //  never send response
                     }},
                 ENABLE_LOGGING);
-        
-        /*
-        final HttpTestServer server = createTestServerWith(false, "test",
-                new Func0<ChannelInboundHandler> () {
-                    @Override
-                    public ChannelInboundHandler call() {
-                        return new HttpTestServerHandler() {
-                            @Override
-                            protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-                                    throws Exception {
-                                if (msg instanceof HttpRequest) {
-                                    LOG.debug("recv request {}, and do nothing.", msg);
-                                    serverRecvd.countDown();
-                                    //  never send response
-                                }
-                            }
-                        };
-                    }});
-        */
         
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator);
@@ -1021,7 +954,6 @@ public class DefaultHttpClientTestCase {
             creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
-//            server.stop();
             server.unsubscribe();
             
             testSubscriber.assertNoErrors();
@@ -1045,28 +977,12 @@ public class DefaultHttpClientTestCase {
                 new Action1<HttpTrade>() {
                     @Override
                     public void call(final HttpTrade trade) {
+                        LOG.debug("recv request {}, and do nothing.", trade);
                         serverRecvd.countDown();
+                        //  never send response
                     }},
                 new ENABLE_SSL(sslCtx4Server),
                 ENABLE_LOGGING_OVER_SSL);
-        /*
-        final HttpTestServer server = createTestServerWith(true, "test",
-                new Func0<ChannelInboundHandler> () {
-                    @Override
-                    public ChannelInboundHandler call() {
-                        return new HttpTestServerHandler() {
-                            @Override
-                            protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-                                    throws Exception {
-                                if (msg instanceof HttpRequest) {
-                                    LOG.debug("recv request {}, and do nothing.", msg);
-                                    serverRecvd.countDown();
-                                    //  never send response
-                                }
-                            }
-                        };
-                    }});
-         */
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
@@ -1099,7 +1015,6 @@ public class DefaultHttpClientTestCase {
             // 注意: 一个 try-with-resources 语句可以像普通的 try 语句那样有 catch 和 finally 块。 
             //  在try-with-resources 语句中, 任意的 catch 或者 finally 块都是在声明的资源被关闭以后才运行。 
 			client.close();
-//            server.stop();
 			server.unsubscribe();
 //            assertEquals(0, client.getActiveChannelCount());
             testSubscriber.assertNoErrors();
@@ -1116,7 +1031,6 @@ public class DefaultHttpClientTestCase {
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 ENABLE_LOGGING);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
@@ -1155,7 +1069,6 @@ public class DefaultHttpClientTestCase {
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 new ENABLE_SSL(sslCtx4Server),
                 ENABLE_LOGGING_OVER_SSL);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
@@ -1195,7 +1108,6 @@ public class DefaultHttpClientTestCase {
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 ENABLE_LOGGING);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
@@ -1256,7 +1168,6 @@ public class DefaultHttpClientTestCase {
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 new ENABLE_SSL(sslCtx4Server),
                 ENABLE_LOGGING_OVER_SSL);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
@@ -1313,7 +1224,6 @@ public class DefaultHttpClientTestCase {
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 ENABLE_LOGGING);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
@@ -1359,7 +1269,6 @@ public class DefaultHttpClientTestCase {
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 new ENABLE_SSL(sslCtx4Server),
                 ENABLE_LOGGING_OVER_SSL);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
@@ -1407,7 +1316,6 @@ public class DefaultHttpClientTestCase {
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 ENABLE_LOGGING);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
         
         final TestChannelCreator creator = new TestChannelCreator();
         creator.setWriteException(new RuntimeException("doWrite Error for test"));
@@ -1479,7 +1387,6 @@ public class DefaultHttpClientTestCase {
                 responseBy("text/plain", HttpTestServer.CONTENT),
                 new ENABLE_SSL(sslCtx4Server),
                 ENABLE_LOGGING_OVER_SSL);
-//        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
         
         @SuppressWarnings("resource")
         final TestChannelCreator creator = new TestChannelCreator()
@@ -1559,30 +1466,6 @@ public class DefaultHttpClientTestCase {
             
             },
             ENABLE_LOGGING);
-        /*
-        final HttpTestServer server = createTestServerWith(false, testAddr,
-                new Func0<ChannelInboundHandler> () {
-            @Override
-            public ChannelInboundHandler call() {
-                return new HttpTestServerHandler() {
-                    @Override
-                    protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-                            throws Exception {
-                        if (msg instanceof HttpRequest) {
-                            //  for HTTP 1.0 Connection: Close response behavior
-                            final FullHttpResponse response = new DefaultFullHttpResponse(
-                                    HttpVersion.HTTP_1_0, OK, 
-                                    Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
-                            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
-                            //  missing Content-Length
-//                            response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-                            ctx.write(response).addListener(ChannelFutureListener.CLOSE);
-                        }
-                    }
-                };
-            }});
-        */
     
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
@@ -1630,31 +1513,6 @@ public class DefaultHttpClientTestCase {
             
             },
             ENABLE_LOGGING);
-        /*
-        final HttpTestServer server = createTestServerWith(false, testAddr,
-                new Func0<ChannelInboundHandler> () {
-            @Override
-            public ChannelInboundHandler call() {
-                return new HttpTestServerHandler() {
-                    @Override
-                    protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-                            throws Exception {
-                        if (msg instanceof HttpRequest) {
-                            //  for HTTP 1.0 Connection: Close response behavior
-                            final FullHttpResponse response = new DefaultFullHttpResponse(
-                                    HttpVersion.HTTP_1_0, OK, 
-                                    Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
-                            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
-                            //  BAD Content-Length, actual length + 1
-                            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
-                                    response.content().readableBytes() + 1);
-                            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-                            ctx.write(response).addListener(ChannelFutureListener.CLOSE);
-                        }
-                    }
-                };
-            }});
-            */
         
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
@@ -1710,30 +1568,6 @@ public class DefaultHttpClientTestCase {
             },
             new ENABLE_SSL(sslCtx4Server),
             ENABLE_LOGGING_OVER_SSL);
-        /*
-        final HttpTestServer server = createTestServerWith(true, testAddr,
-                new Func0<ChannelInboundHandler> () {
-            @Override
-            public ChannelInboundHandler call() {
-                return new HttpTestServerHandler() {
-                    @Override
-                    protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-                            throws Exception {
-                        if (msg instanceof HttpRequest) {
-                            //  for HTTP 1.0 Connection: Close response behavior
-                            final FullHttpResponse response = new DefaultFullHttpResponse(
-                                    HttpVersion.HTTP_1_0, OK, 
-                                    Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
-                            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
-                            //  missing Content-Length
-//                            response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-                            ctx.write(response).addListener(ChannelFutureListener.CLOSE);
-                        }
-                    }
-                };
-            }});
-            */
 
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
@@ -1785,31 +1619,6 @@ public class DefaultHttpClientTestCase {
                     }},
                 new ENABLE_SSL(sslCtx4Server),
                 ENABLE_LOGGING_OVER_SSL);
-        /*
-        final HttpTestServer server = createTestServerWith(true, testAddr,
-                new Func0<ChannelInboundHandler> () {
-            @Override
-            public ChannelInboundHandler call() {
-                return new HttpTestServerHandler() {
-                    @Override
-                    protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject msg) 
-                            throws Exception {
-                        if (msg instanceof HttpRequest) {
-                            //  for HTTP 1.0 Connection: Close response behavior
-                            final FullHttpResponse response = new DefaultFullHttpResponse(
-                                    HttpVersion.HTTP_1_0, OK, 
-                                    Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
-                            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
-                            //  BAD Content-Length, actual length + 1
-                            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
-                                    response.content().readableBytes() + 1);
-                            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-                            ctx.write(response).addListener(ChannelFutureListener.CLOSE);
-                        }
-                    }
-                };
-            }});
-            */
         
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
