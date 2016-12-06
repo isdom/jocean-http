@@ -7,6 +7,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.security.cert.CertificateException;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import java.util.concurrent.CountDownLatch;
 
 import javax.net.ssl.SSLException;
 
+import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TestHttpUtil;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
@@ -80,6 +82,14 @@ public class DefaultHttpClientTestCase {
 //            return null;
 //        }
 //    }
+    
+    private static Feature enableSSL4ServerWithSelfSigned()
+            throws CertificateException, SSLException {
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        return new ENABLE_SSL(sslCtx4Server);
+    }
     
     private HttpTestServer createTestServerWithDefaultHandler(
             final boolean enableSSL, 
@@ -207,15 +217,10 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttpsHappyPathOnce() throws Exception {
-        
-        final SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx4Server = 
-                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
-
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
-                new ENABLE_SSL(sslCtx4Server),
+                enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
 
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
@@ -364,14 +369,10 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttpsHappyPathKeepAliveReuseConnection() throws Exception {
-        final SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx4Server = 
-                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
-        
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
-                new ENABLE_SSL(sslCtx4Server),
+                enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
 
         final TestChannelCreator creator = new TestChannelCreator();
@@ -868,10 +869,6 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttpsDisconnectFromServerAfterConnected() throws Exception {
-        final SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx4Server = 
-                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
-        
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 new Action1<HttpTrade>() {
@@ -879,7 +876,7 @@ public class DefaultHttpClientTestCase {
                     public void call(final HttpTrade trade) {
                         trade.abort();
                     }},
-                new ENABLE_SSL(sslCtx4Server),
+                enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
         
         final TestChannelCreator creator = new TestChannelCreator();
@@ -968,10 +965,6 @@ public class DefaultHttpClientTestCase {
     public void testHttpsClientCanceledAfterConnected() throws Exception {
         final CountDownLatch serverRecvd = new CountDownLatch(1);
         
-        final SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx4Server = 
-                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
-        
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 new Action1<HttpTrade>() {
@@ -981,7 +974,7 @@ public class DefaultHttpClientTestCase {
                         serverRecvd.countDown();
                         //  never send response
                     }},
-                new ENABLE_SSL(sslCtx4Server),
+                enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
         
         final TestChannelCreator creator = new TestChannelCreator();
@@ -1024,7 +1017,7 @@ public class DefaultHttpClientTestCase {
             nextSensor.assertCalled();
         }
     }
-    
+
     @Test
     public void testHttpRequestEmitErrorAfterConnected() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
@@ -1060,14 +1053,10 @@ public class DefaultHttpClientTestCase {
 
     @Test(timeout=10000)
     public void testHttpsRequestEmitErrorAfterConnected() throws Exception {
-        final SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx4Server = 
-                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
-        
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
-                new ENABLE_SSL(sslCtx4Server),
+                enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
         
         final TestChannelCreator creator = new TestChannelCreator();
@@ -1159,14 +1148,10 @@ public class DefaultHttpClientTestCase {
 
     @Test(timeout=10000)
     public void testHttpsRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
-        final SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx4Server = 
-                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
-        
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
-                new ENABLE_SSL(sslCtx4Server),
+                enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
         
         final TestChannelCreator creator = new TestChannelCreator();
@@ -1260,14 +1245,10 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttpsClientWriteAndFlushExceptionAfterConnected() throws Exception {
-        final SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx4Server = 
-                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
-        
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
-                new ENABLE_SSL(sslCtx4Server),
+                enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
         
         @SuppressWarnings("resource")
@@ -1308,7 +1289,7 @@ public class DefaultHttpClientTestCase {
             nextSensor.assertNotCalled();
         }
     }
-    
+
     @Test(timeout=10000)
     public void testHttpClientWriteAndFlushExceptionAfterConnectedAndNewConnection2nd() 
             throws Exception {
@@ -1378,14 +1359,10 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttpsClientWriteAndFlushExceptionAfterConnectedAndNewConnection2nd() throws Exception {
-        final SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx4Server = 
-                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
-        
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", HttpTestServer.CONTENT),
-                new ENABLE_SSL(sslCtx4Server),
+                enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
         
         @SuppressWarnings("resource")
@@ -1545,10 +1522,6 @@ public class DefaultHttpClientTestCase {
     
     @Test
     public void testHttps10ConnectionCloseHappyPath() throws Exception {
-        final SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx4Server = 
-                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
-        
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 new Action1<HttpTrade>() {
@@ -1566,7 +1539,7 @@ public class DefaultHttpClientTestCase {
                     }
             
             },
-            new ENABLE_SSL(sslCtx4Server),
+            enableSSL4ServerWithSelfSigned(),
             ENABLE_LOGGING_OVER_SSL);
 
         final TestChannelCreator creator = new TestChannelCreator();
@@ -1597,10 +1570,6 @@ public class DefaultHttpClientTestCase {
 
     @Test
     public void testHttps10ConnectionCloseBadCaseMissingPartContent() throws Exception {
-        final SelfSignedCertificate ssc = new SelfSignedCertificate();
-        final SslContext sslCtx4Server = 
-                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
-        
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 new Action1<HttpTrade>() {
@@ -1617,7 +1586,7 @@ public class DefaultHttpClientTestCase {
                         response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
                         trade.outboundResponse(Observable.just(response));
                     }},
-                new ENABLE_SSL(sslCtx4Server),
+                enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
         
         final TestChannelCreator creator = new TestChannelCreator();
