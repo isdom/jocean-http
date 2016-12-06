@@ -61,27 +61,19 @@ public class DefaultHttpClientTestCase {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClientTestCase.class);
 
-    final static SslContext sslCtx;
-    static {
-        sslCtx = initSslCtx();
-    }
-
-    @SuppressWarnings("deprecation")
-    private static SslContext initSslCtx() {
+    private static SslContext initSslCtx4Client() {
         try {
-            return SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
+            return SslContextBuilder.forClient()
+                .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                .build();
         } catch (SSLException e) {
             return null;
         }
     }
     
-//    private static SslContext initSslCtx() {
-//        try {
-//            return SslContextBuilder.forClient().build();
-//        } catch (SSLException e) {
-//            return null;
-//        }
-//    }
+    private static Feature enableSSL4Client() {
+        return new ENABLE_SSL(initSslCtx4Client());
+    }
     
     private static Feature enableSSL4ServerWithSelfSigned()
             throws CertificateException, SSLException {
@@ -225,7 +217,7 @@ public class DefaultHttpClientTestCase {
 
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
                 ENABLE_LOGGING_OVER_SSL,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         try {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
@@ -242,7 +234,7 @@ public class DefaultHttpClientTestCase {
             server.unsubscribe();
         }
     }
-    
+
     @Test
     public void testHttpHappyPathKeepAliveReuseConnection() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
@@ -380,7 +372,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         
         try {
             // first 
@@ -685,7 +677,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 ENABLE_LOGGING,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         //  NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -719,7 +711,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator();
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -793,7 +785,7 @@ public class DefaultHttpClientTestCase {
             .setConnectException(new RuntimeException(errorMsg));
         
         final DefaultHttpClient client = new DefaultHttpClient(creator,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         //    NOT setup server for local channel
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -883,7 +875,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING_OVER_SSL,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -981,7 +973,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING_OVER_SSL,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
@@ -1063,7 +1055,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING_OVER_SSL,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             final CountDownLatch unsubscribed = new CountDownLatch(1);
@@ -1158,7 +1150,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING_OVER_SSL,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         try {
             //  first
@@ -1258,7 +1250,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING_OVER_SSL,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
         final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
         try {
@@ -1372,7 +1364,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING_OVER_SSL,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         try {
             {
                 final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
@@ -1545,7 +1537,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelCreator creator = new TestChannelCreator();
         final DefaultHttpClient client = new DefaultHttpClient(creator,
                 ENABLE_LOGGING_OVER_SSL,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         try {
             final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
             request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
@@ -1593,7 +1585,7 @@ public class DefaultHttpClientTestCase {
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
                 ENABLE_LOGGING_OVER_SSL,
-                new ENABLE_SSL(sslCtx));
+                enableSSL4Client());
         final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
         request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
         
