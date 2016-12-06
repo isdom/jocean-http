@@ -4,60 +4,90 @@ import static org.jocean.http.Feature.ENABLE_LOGGING;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.security.cert.CertificateException;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.UUID;
 
 import javax.net.ssl.SSLException;
 
+import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
-import org.jocean.http.server.HttpTestServer;
+import org.jocean.http.TestHttpUtil;
+import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.junit.Test;
 
-import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.local.LocalAddress;
-import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 import rx.Observable;
+import rx.Subscription;
+import rx.functions.Action1;
 
 public class UnpoolHttpClientTestCase {
 
-    final static SslContext sslCtx;
-    static {
-        sslCtx = initSslCtx();
-    }
-
-    private static SslContext initSslCtx() {
+    public static final byte[] CONTENT = { 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd' };
+    
+    private static SslContext initSslCtx4Client() {
         try {
-            return SslContextBuilder.forClient().build();
+            return SslContextBuilder.forClient()
+                .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                .build();
         } catch (SSLException e) {
             return null;
         }
     }
     
-    private HttpTestServer createTestServerWithDefaultHandler(
-            final boolean enableSSL, 
-            final String acceptId) 
-            throws Exception {
-        return new HttpTestServer(
-                enableSSL, 
-                new LocalAddress(acceptId), 
-                new DefaultEventLoopGroup(1), 
-                new DefaultEventLoopGroup(),
-                LocalServerChannel.class,
-                HttpTestServer.DEFAULT_NEW_HANDLER);
+    private static Feature enableSSL4Client() {
+        return new ENABLE_SSL(initSslCtx4Client());
     }
+    
+    private static Feature enableSSL4ServerWithSelfSigned()
+            throws CertificateException, SSLException {
+        final SelfSignedCertificate ssc = new SelfSignedCertificate();
+        final SslContext sslCtx4Server = 
+                SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+        return new ENABLE_SSL(sslCtx4Server);
+    }
+
+    private Action1<HttpTrade> responseBy(
+            final String contentType, 
+            final byte[] bodyAsBytes) {
+        return new Action1<HttpTrade>() {
+            @Override
+            public void call(final HttpTrade trade) {
+                trade.outboundResponse(TestHttpUtil.buildBytesResponse(contentType, bodyAsBytes));
+            }};
+    }
+    
+//    private HttpTestServer createTestServerWithDefaultHandler(
+//            final boolean enableSSL, 
+//            final String acceptId) 
+//            throws Exception {
+//        return new HttpTestServer(
+//                enableSSL, 
+//                new LocalAddress(acceptId), 
+//                new DefaultEventLoopGroup(1), 
+//                new DefaultEventLoopGroup(),
+//                LocalServerChannel.class,
+//                HttpTestServer.DEFAULT_NEW_HANDLER);
+//    }
 
     //  Happy Path
     @Test
     public void testHttpHappyPathKeepAliveNOTReuseConnection() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", CONTENT),
+                ENABLE_LOGGING);
 
         final TestChannelCreator creator = new TestChannelCreator();
     
@@ -70,7 +100,7 @@ public class UnpoolHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")),
                         ENABLE_LOGGING)
                     .map(RxNettys.<HttpObject>retainer())
@@ -78,7 +108,7 @@ public class UnpoolHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed(1);
@@ -86,34 +116,38 @@ public class UnpoolHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
             }
             assertEquals(2, creator.getChannels().size());
             creator.getChannels().get(1).assertClosed(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
     
     @Test
     public void testHttpsHappyPathKeepAliveNOTReuseConnection() throws Exception {
-        final HttpTestServer server = createTestServerWithDefaultHandler(true, "test");
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", CONTENT),
+                enableSSL4ServerWithSelfSigned(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
 
         final TestChannelCreator creator = new TestChannelCreator();
         
         final DefaultHttpClient client = new DefaultHttpClient(
                 creator,
                 Nettys.unpoolChannels(),
-                ENABLE_LOGGING,
-                new ENABLE_SSL(sslCtx)
+                Feature.ENABLE_LOGGING_OVER_SSL,
+                enableSSL4Client()
                 );
         
         try {
@@ -121,14 +155,14 @@ public class UnpoolHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed(1);
@@ -136,20 +170,20 @@ public class UnpoolHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/")))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
             }
             assertEquals(2, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed(1);
         } finally {
             client.close();
-            server.stop();
+            server.unsubscribe();
         }
     }
 }

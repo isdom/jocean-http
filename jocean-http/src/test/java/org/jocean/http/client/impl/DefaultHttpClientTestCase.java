@@ -19,7 +19,6 @@ import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TestHttpUtil;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.HttpUtil;
 import org.jocean.http.util.Nettys;
@@ -32,9 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.local.LocalAddress;
-import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
@@ -61,6 +58,8 @@ public class DefaultHttpClientTestCase {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClientTestCase.class);
 
+    public static final byte[] CONTENT = { 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd' };
+    
     private static SslContext initSslCtx4Client() {
         try {
             return SslContextBuilder.forClient()
@@ -83,19 +82,6 @@ public class DefaultHttpClientTestCase {
         return new ENABLE_SSL(sslCtx4Server);
     }
     
-    private HttpTestServer createTestServerWithDefaultHandler(
-            final boolean enableSSL, 
-            final String acceptId) 
-            throws Exception {
-        return new HttpTestServer(
-                enableSSL, 
-                new LocalAddress(acceptId), 
-                new DefaultEventLoopGroup(1), 
-                new DefaultEventLoopGroup(),
-                LocalServerChannel.class,
-                HttpTestServer.DEFAULT_NEW_HANDLER);
-    }
-
     private DefaultFullHttpRequest fullHttpRequest() {
         return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
     }
@@ -117,7 +103,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpHappyPathOnce() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
         try {
@@ -131,7 +117,7 @@ public class DefaultHttpClientTestCase {
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            assertTrue(Arrays.equals(bytes, CONTENT));
         } finally {
             client.close();
             server.unsubscribe();
@@ -142,7 +128,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpHappyPathObserveOnOtherthread() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
         try {
@@ -158,7 +144,7 @@ public class DefaultHttpClientTestCase {
             final FullHttpResponse resp = holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();
             try {
                 final byte[] bytes = Nettys.dumpByteBufAsBytes(resp.content());
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
             } finally {
                 ReferenceCountUtil.release(resp);
             }
@@ -175,7 +161,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpHappyPathOnceAndCheckRefCount() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
 
         final ByteBuf content = Unpooled.buffer(0);
@@ -198,7 +184,7 @@ public class DefaultHttpClientTestCase {
             //  assert true referenced count release to zero
             assertTrue(ReferenceCountUtil.release(request));
             
-            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            assertTrue(Arrays.equals(bytes, CONTENT));
         } finally {
             client.close();
             server.unsubscribe();
@@ -211,7 +197,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpsHappyPathOnce() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
 
@@ -228,7 +214,7 @@ public class DefaultHttpClientTestCase {
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            assertTrue(Arrays.equals(bytes, CONTENT));
         } finally {
             client.close();
             server.unsubscribe();
@@ -239,7 +225,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpHappyPathKeepAliveReuseConnection() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
 
         final TestChannelCreator creator = new TestChannelCreator();
@@ -259,7 +245,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
                 //  await for 1 second
                 pool.awaitRecycleChannels(1);
             }
@@ -276,7 +262,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
             //  try wait for close
@@ -291,7 +277,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpHappyPathKeepAliveReuseConnectionTwice() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
 
         final TestChannelCreator creator = new TestChannelCreator();
@@ -311,7 +297,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
                 //  await for 1 second
                 pool.awaitRecycleChannelsAndReset(1, 1);
             }
@@ -329,7 +315,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
                 //  await for 1 second
                 pool.awaitRecycleChannelsAndReset(1, 1);
             }
@@ -347,7 +333,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
                 //  await for 1 second
                 pool.awaitRecycleChannelsAndReset(1, 1);
             }
@@ -363,7 +349,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpsHappyPathKeepAliveReuseConnection() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
 
@@ -386,7 +372,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
                 //  await for 1 second
                 pool.awaitRecycleChannels(1);
             }
@@ -404,7 +390,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
             //  try wait for close
@@ -417,13 +403,11 @@ public class DefaultHttpClientTestCase {
     
     @Test(timeout=10000)
     public void testHttpOnErrorBeforeSend1stAnd2ndHappyPathKeepAliveReuseConnection() throws Exception {
-        //  TODO? create http server using flowing code, but exception with connectionException ? why? fix it
-//        final String testAddr = UUID.randomUUID().toString();
-//        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-//                responseBy("text/plain", HttpTestServer.CONTENT));
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", CONTENT),
+                Feature.ENABLE_LOGGING);
         
-        final HttpTestServer server = createTestServerWithDefaultHandler(false, "test");
-
         final TestChannelCreator creator = new TestChannelCreator();
         
         final TestChannelPool pool = new TestChannelPool(1);
@@ -437,7 +421,7 @@ public class DefaultHttpClientTestCase {
                 final CountDownLatch unsubscribed = new CountDownLatch(1);
                 try {
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr),
                         Observable.<HttpObject>error(new RuntimeException("test error")))
                     .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                     .subscribe(testSubscriber);
@@ -459,21 +443,21 @@ public class DefaultHttpClientTestCase {
             {
                 final Iterator<HttpObject> itr = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr),
                         Observable.just(fullHttpRequest()))
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose(1);
         } finally {
             client.close();
-//            server.unsubscribe();
-            server.stop();
+//            server.stop();
+            server.unsubscribe();
         }
     }
 
@@ -481,7 +465,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpSendingError1stAnd2ndHappyPathNotReuseConnection() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
 
         @SuppressWarnings("resource")
@@ -532,7 +516,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
             }
             assertEquals(2, creator.getChannels().size());
             creator.getChannels().get(1).assertNotClose(1);
@@ -614,7 +598,7 @@ public class DefaultHttpClientTestCase {
     public void testTrafficCounterWhenHttpHappyPathOnce() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
 
         final HttpUtil.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
@@ -631,7 +615,7 @@ public class DefaultHttpClientTestCase {
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            assertTrue(Arrays.equals(bytes, CONTENT));
             assertTrue(0 < counter.uploadBytes());
             assertTrue(0 < counter.downloadBytes());
             LOG.debug("meter.uploadBytes: {}", counter.uploadBytes());
@@ -705,7 +689,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpsNotShakehand() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
         
         final TestChannelCreator creator = new TestChannelCreator();
@@ -1014,7 +998,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpRequestEmitErrorAfterConnected() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
         
         final TestChannelCreator creator = new TestChannelCreator();
@@ -1047,7 +1031,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpsRequestEmitErrorAfterConnected() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
         
@@ -1087,7 +1071,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
         
         final TestChannelCreator creator = new TestChannelCreator();
@@ -1128,7 +1112,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose(1);
@@ -1142,7 +1126,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpsRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
         
@@ -1185,7 +1169,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
             }
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertNotClose(1);
@@ -1199,7 +1183,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpClientWriteAndFlushExceptionAfterConnected() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
         
         @SuppressWarnings("resource")
@@ -1239,7 +1223,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpsClientWriteAndFlushExceptionAfterConnected() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
         
@@ -1287,7 +1271,7 @@ public class DefaultHttpClientTestCase {
             throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
         
         final TestChannelCreator creator = new TestChannelCreator();
@@ -1339,7 +1323,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
                 assertEquals(2, creator.getChannels().size());
                 creator.getChannels().get(1).assertNotClose(1);
             }
@@ -1353,7 +1337,7 @@ public class DefaultHttpClientTestCase {
     public void testHttpsClientWriteAndFlushExceptionAfterConnectedAndNewConnection2nd() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", HttpTestServer.CONTENT),
+                responseBy("text/plain", CONTENT),
                 enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
         
@@ -1405,7 +1389,7 @@ public class DefaultHttpClientTestCase {
                 
                 final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
                 
-                assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes, CONTENT));
                 assertEquals(2, creator.getChannels().size());
                 creator.getChannels().get(1).assertNotClose(1);
             }
@@ -1425,7 +1409,7 @@ public class DefaultHttpClientTestCase {
                         //  for HTTP 1.0 Connection: Close response behavior
                         final FullHttpResponse response = new DefaultFullHttpResponse(
                                 HttpVersion.HTTP_1_0, OK, 
-                                Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                                Unpooled.wrappedBuffer(CONTENT));
                         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
                         //  missing Content-Length
 //                        response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
@@ -1452,7 +1436,7 @@ public class DefaultHttpClientTestCase {
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            assertTrue(Arrays.equals(bytes, CONTENT));
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).awaitClosed();
         } finally {
@@ -1471,7 +1455,7 @@ public class DefaultHttpClientTestCase {
                         //  for HTTP 1.0 Connection: Close response behavior
                         final FullHttpResponse response = new DefaultFullHttpResponse(
                                 HttpVersion.HTTP_1_0, OK, 
-                                Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                                Unpooled.wrappedBuffer(CONTENT));
                         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
                         //  BAD Content-Length, actual length + 1
                         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
@@ -1522,7 +1506,7 @@ public class DefaultHttpClientTestCase {
                         //  for HTTP 1.0 Connection: Close response behavior
                         final FullHttpResponse response = new DefaultFullHttpResponse(
                                 HttpVersion.HTTP_1_0, OK, 
-                                Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                                Unpooled.wrappedBuffer(CONTENT));
                         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
                         //  missing Content-Length
 //                        response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
@@ -1551,7 +1535,7 @@ public class DefaultHttpClientTestCase {
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            assertTrue(Arrays.equals(bytes, CONTENT));
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).awaitClosed();
         } finally {
@@ -1570,7 +1554,7 @@ public class DefaultHttpClientTestCase {
                         //  for HTTP 1.0 Connection: Close response behavior
                         final FullHttpResponse response = new DefaultFullHttpResponse(
                                 HttpVersion.HTTP_1_0, OK, 
-                                Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                                Unpooled.wrappedBuffer(CONTENT));
                         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
                         //  BAD Content-Length, actual length + 1
                         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
@@ -1631,7 +1615,7 @@ public class DefaultHttpClientTestCase {
                             //  for HTTP 1.0 Connection: Close response behavior
                             final FullHttpResponse response = new DefaultFullHttpResponse(
                                     HttpVersion.HTTP_1_1, OK, 
-                                    Unpooled.wrappedBuffer(HttpTestServer.CONTENT));
+                                    Unpooled.wrappedBuffer(CONTENT));
                             response.headers().set(CONTENT_TYPE, "text/plain");
                             //  BAD Content-Length, actual length + 1
                             response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, 

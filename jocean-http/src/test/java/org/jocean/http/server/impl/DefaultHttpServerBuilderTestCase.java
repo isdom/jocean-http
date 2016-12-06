@@ -19,7 +19,6 @@ import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.client.impl.TestChannelPool;
 import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.http.server.HttpTestServer;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.RxFunctions;
@@ -33,7 +32,6 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.local.LocalAddress;
-import io.netty.channel.local.LocalEventLoopGroup;
 import io.netty.channel.local.LocalServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -49,6 +47,9 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 
 public class DefaultHttpServerBuilderTestCase {
+    
+    public static final byte[] CONTENT = { 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd' };
+    
     private Action1<HttpTrade> echoReactor(final AtomicReference<Object> transportRef) {
         return new Action1<HttpTrade>() {
             @Override
@@ -115,14 +116,14 @@ public class DefaultHttpServerBuilderTestCase {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
                     new LocalAddress("test"), 
-                    Observable.just(buildFullRequest(HttpTestServer.CONTENT)),
+                    Observable.just(buildFullRequest(CONTENT)),
                     Feature.ENABLE_LOGGING)
                 .map(RxNettys.<HttpObject>retainer())
                 .toBlocking().toIterable().iterator();
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            assertTrue(Arrays.equals(bytes, CONTENT));
         } finally {
             client.close();
             testServer.unsubscribe();
@@ -156,7 +157,7 @@ public class DefaultHttpServerBuilderTestCase {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
                     new LocalAddress("test"), 
-                    Observable.just(buildFullRequest(HttpTestServer.CONTENT)),
+                    Observable.just(buildFullRequest(CONTENT)),
                     Feature.ENABLE_LOGGING)
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
                 .map(RxNettys.<HttpObject>retainer())
@@ -164,7 +165,7 @@ public class DefaultHttpServerBuilderTestCase {
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
-            assertTrue(Arrays.equals(bytes, HttpTestServer.CONTENT));
+            assertTrue(Arrays.equals(bytes, CONTENT));
             
             final Object channel1 = transportRef.get();
             
@@ -178,14 +179,14 @@ public class DefaultHttpServerBuilderTestCase {
             final Iterator<HttpObject> itr2 = 
                     client.defineInteraction(
                         new LocalAddress("test"), 
-                        Observable.just(buildFullRequest(HttpTestServer.CONTENT)),
+                        Observable.just(buildFullRequest(CONTENT)),
                         Feature.ENABLE_LOGGING)
                     .map(RxNettys.<HttpObject>retainer())
                     .toBlocking().toIterable().iterator();
                 
                 final byte[] bytes2 = RxNettys.httpObjectsAsBytes(itr2);
                 
-                assertTrue(Arrays.equals(bytes2, HttpTestServer.CONTENT));
+                assertTrue(Arrays.equals(bytes2, CONTENT));
                 
                 final Object channel2 = transportRef.get();
                 assertTrue(channel1 == channel2);
