@@ -153,6 +153,8 @@ public class HttpMessageHolder {
                 if (msg instanceof ByteBufHolder) {
                     LOG.debug("HttpMessageHolder: receive ByteBufHolder's content: {}", 
                             Nettys.dumpByteBufHolder((ByteBufHolder)msg));
+                } else {
+                    LOG.debug("HttpMessageHolder: receive HttpObject: {}", msg);
                 }
             }
             if (_enableAssemble && (msg instanceof HttpContent)) {
