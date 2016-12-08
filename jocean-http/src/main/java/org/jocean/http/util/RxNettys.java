@@ -565,6 +565,13 @@ public class RxNettys {
     public static Func1<HttpObject[], FullHttpRequest> BUILD_FULL_REQUEST = new Func1<HttpObject[], FullHttpRequest>() {
         @Override
         public FullHttpRequest call(final HttpObject[] httpobjs) {
+            if (LOG.isDebugEnabled()) {
+                int idx = 0;
+                for (HttpObject httpobj : httpobjs) {
+                    LOG.debug("BUILD_FULL_REQUEST: dump [{}] httpobj {}", ++idx, httpobj);
+                }
+            }
+            
             if (httpobjs.length>0 
             && (httpobjs[0] instanceof HttpRequest) 
             && (httpobjs[httpobjs.length-1] instanceof LastHttpContent)) {
