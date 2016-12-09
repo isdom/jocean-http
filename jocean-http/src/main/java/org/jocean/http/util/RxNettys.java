@@ -576,7 +576,7 @@ public class RxNettys {
             && (httpobjs[0] instanceof HttpRequest) 
             && (httpobjs[httpobjs.length-1] instanceof LastHttpContent)) {
                 if (httpobjs[0] instanceof FullHttpRequest) {
-                    return ((FullHttpRequest)httpobjs[0]).retain();
+                    return ((FullHttpRequest)httpobjs[0]).retainedDuplicate();
                 }
                 
                 final HttpRequest req = (HttpRequest)httpobjs[0];
@@ -603,7 +603,7 @@ public class RxNettys {
             && (httpobjs[0] instanceof HttpResponse) 
             && (httpobjs[httpobjs.length-1] instanceof LastHttpContent)) {
                 if (httpobjs[0] instanceof FullHttpResponse) {
-                    return ((FullHttpResponse)httpobjs[0]).retain();
+                    return ((FullHttpResponse)httpobjs[0]).retainedDuplicate();
                 }
                 
                 final HttpResponse resp = (HttpResponse)httpobjs[0];
