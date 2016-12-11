@@ -651,4 +651,21 @@ public class RxNettys {
     private static LastHttpContent lastContentOf(final FullHttpMessage msg) {
         return new ProxyBuilder<>(LastHttpContent.class, msg).buildProxy();
     }
+
+    //  对 HttpMessage 中的 HttpContent 产生独立的 readIndex & writeIndex
+    public static Observable.Transformer<? super HttpObject, ? extends HttpObject> duplicateHttpContent() {
+        return new Observable.Transformer<HttpObject, HttpObject>() {
+            @Override
+            public Observable<HttpObject> call(final Observable<HttpObject> source) {
+                return source.map(new Func1<HttpObject, HttpObject>() {
+                    @Override
+                    public HttpObject call(final HttpObject httpobj) {
+                        if (httpobj instanceof HttpContent) {
+                            return ((HttpContent)httpobj).duplicate();
+                        } else {
+                            return httpobj;
+                        }
+                    }});
+            }};
+    }
 }
