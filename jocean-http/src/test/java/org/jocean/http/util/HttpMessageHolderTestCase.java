@@ -2,6 +2,7 @@ package org.jocean.http.util;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
@@ -16,7 +17,9 @@ import org.junit.Test;
 
 import com.google.common.base.Charsets;
 
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpRequest;
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
@@ -31,6 +34,27 @@ import rx.observers.TestSubscriber;
 
 public class HttpMessageHolderTestCase {
     final String REQ_CONTENT = "testcontent";
+    
+    @Test(expected = RuntimeException.class)
+    public final void testHttpMessageHolderForMultiSubscribe() {
+        // max block size == -1 means disable assemble
+        final HttpMessageHolder holder = new HttpMessageHolder(-1);
+        
+        final FullHttpRequest request = 
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", 
+                    Nettys4Test.buildByteBuf(REQ_CONTENT));
+        
+        
+        final Observable<HttpObject> requestObservable = 
+            Observable.<HttpObject>just(request)
+                .compose(holder.assembleAndHold());
+        
+        //  subscribe more than once
+        final HttpObject h1 = requestObservable.toBlocking().single();
+        assertSame(h1, request);
+        
+        requestObservable.toBlocking().single();
+    }
     
     @Test
     public final void testHttpMessageHolderForDisableAssembleOnlyCached() {
