@@ -992,4 +992,46 @@ public class DefaultHttpTradeTestCase {
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
             fullRequestBuilder, REQ_CONTENT.getBytes(Charsets.UTF_8), 2);
     }
+
+    @Test
+    public final void testTradeForFullRequestSourceAndMultiInboundThenDumpFullRequestContent() throws IOException {
+        final DefaultFullHttpRequest request = 
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", 
+                    Nettys4Test.buildByteBuf(REQ_CONTENT));
+        
+        final ConnectableObservable<HttpObject> requestObservable = 
+                Observable.<HttpObject>just(request).publish();
+        
+        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
+                requestObservable);
+        
+        final AtomicReference<DefaultFullHttpRequest> ref1 = 
+                new AtomicReference<DefaultFullHttpRequest>();
+        trade.inboundRequest().subscribe(new Action1<HttpObject>() {
+            @Override
+            public void call(HttpObject httpobj) {
+                ref1.set((DefaultFullHttpRequest)httpobj);
+            }
+        });
+                
+        final AtomicReference<DefaultFullHttpRequest> ref2 = 
+                new AtomicReference<DefaultFullHttpRequest>();
+            
+        trade.inboundRequest().subscribe(new Action1<HttpObject>() {
+            @Override
+            public void call(HttpObject httpobj) {
+                ref2.set((DefaultFullHttpRequest)httpobj);
+            }
+        });
+        
+        requestObservable.connect();
+        
+        final byte[] firstReadBytes = Nettys.dumpByteBufAsBytes(ref1.get().content());
+        
+        assertTrue(Arrays.equals(REQ_CONTENT.getBytes(Charsets.UTF_8), firstReadBytes));
+        
+        final byte[] secondReadBytes = Nettys.dumpByteBufAsBytes(ref2.get().content());
+        
+        assertTrue(Arrays.equals(REQ_CONTENT.getBytes(Charsets.UTF_8), secondReadBytes));
+    }
 }
