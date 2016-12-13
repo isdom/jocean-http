@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.net.SocketAddress;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
@@ -15,8 +16,11 @@ import org.jocean.idiom.ProxyBuilder;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
+import org.jocean.idiom.store.BlobRepo.Blob;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.Lists;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
@@ -36,12 +40,20 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
+import io.netty.handler.codec.http.multipart.FileUpload;
+import io.netty.handler.codec.http.multipart.HttpDataFactory;
+import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder;
+import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder.EndOfDataDecoderException;
+import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder.ErrorDataDecoderException;
+import io.netty.handler.codec.http.multipart.InterfaceHttpData;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.ReferenceCounted;
@@ -667,5 +679,123 @@ public class RxNettys {
                         }
                     }});
             }};
+    }
+
+    public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob() {
+        return new Observable.Transformer<HttpObject, Blob>() {
+            @Override
+            public Observable<Blob> call(final Observable<HttpObject> source) {
+                return source.flatMap(new AsBlob());
+            }};
+    }
+    
+    static class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
+
+        private boolean _isMultipart = false;
+        private HttpPostRequestDecoder _postDecoder = null;
+                
+        private static final HttpDataFactory HTTP_DATA_FACTORY =
+                new DefaultHttpDataFactory(false);  // DO NOT use Disk
+        
+        @Override
+        public Observable<? extends Blob> call(final HttpObject msg) {
+            if (msg instanceof HttpRequest) {
+                final HttpRequest request = (HttpRequest)msg;
+                if ( request.method().equals(HttpMethod.POST)
+                        && HttpPostRequestDecoder.isMultipart(request)) {
+                    _isMultipart = true;
+                    _postDecoder = new HttpPostRequestDecoder(
+                            HTTP_DATA_FACTORY, request);
+                    
+                    LOG.info("{} isMultipart", msg);
+                } else {
+                    _isMultipart = false;
+                    LOG.info("{} is !NOT! Multipart", msg);
+                }
+            }
+            if (msg instanceof HttpContent && _isMultipart && (null != _postDecoder)) {
+                return onNext4Multipart((HttpContent)msg);
+            } else {
+                return Observable.empty();
+            }
+        }
+
+        private Observable<? extends Blob> onNext4Multipart(
+                final HttpContent content) {
+            try {
+                _postDecoder.offer(content);
+            } catch (ErrorDataDecoderException e) {
+                LOG.warn("exception when postDecoder.offer, detail: {}", 
+                        ExceptionUtils.exception2detail(e));
+            }
+            final List<Blob> blobs = Lists.newArrayList();
+            try {
+                while (_postDecoder.hasNext()) {
+                    final InterfaceHttpData data = _postDecoder.next();
+                    if (data != null) {
+                        try {
+                            final Blob blob = processHttpData(data);
+                            if (null != blob) {
+                                blobs.add(blob);
+                                LOG.info("onNext4Multipart: add Blob {}", blob);
+                            }
+                        } finally {
+                            data.release();
+                        }
+                    }
+                }
+            } catch (EndOfDataDecoderException e) {
+                LOG.warn("exception when postDecoder.hasNext, detail: {}", 
+                        ExceptionUtils.exception2detail(e));
+            }
+            return blobs.isEmpty() ? Observable.<Blob>empty() : Observable.from(blobs);
+        }
+
+        private Blob processHttpData(
+                final InterfaceHttpData data) {
+            if (data.getHttpDataType().equals(
+                InterfaceHttpData.HttpDataType.FileUpload)) {
+                final FileUpload fileUpload = (FileUpload)data;
+                try {
+                    final byte[] bytes = Nettys.dumpByteBufAsBytes(fileUpload.content());
+                    final String contentType = fileUpload.getContentType();
+                    final String filename = fileUpload.getFilename();
+                    final String name = fileUpload.getName();
+                    return new Blob() {
+                        @Override
+                        public String toString() {
+                            final StringBuilder builder = new StringBuilder();
+                            builder.append("Blob [name=").append(name())
+                                    .append(", filename=").append(filename())
+                                    .append(", contentType=").append(contentType())
+                                    .append(", content.size=").append(content().length)
+                                    .append("]");
+                            return builder.toString();
+                        }
+                        
+                        @Override
+                        public byte[] content() {
+                            return bytes;
+                        }
+                        @Override
+                        public String contentType() {
+                            return contentType;
+                        }
+                        @Override
+                        public String name() {
+                            return name;
+                        }
+                        @Override
+                        public String filename() {
+                            return filename;
+                        }};
+                } catch (IOException e) {
+                    LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
+                            ExceptionUtils.exception2detail(e));
+                }
+                
+            }
+            return null;
+        };
     }
 }
