@@ -157,6 +157,12 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
+                    if (null != channel.pipeline().get(APPLY.HTTPOBJ_SUBSCRIBER.name()) ) {
+                        // already add HTTPOBJ_SUBSCRIBER Handler, so throw exception
+                        LOG.warn("channel ({}) already add HTTPOBJ_SUBSCRIBER handler, internal error",
+                                channel);
+                        throw new RuntimeException("Channel already add HTTPOBJ_SUBSCRIBER handler.");
+                    }
                     RxNettys.installDoOnUnsubscribe(channel, 
                             DoOnUnsubscribe.Util.from(subscriber));
                     subscriber.add(Subscriptions.create(
