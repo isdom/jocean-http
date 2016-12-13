@@ -3,6 +3,7 @@ package org.jocean.http.util;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketAddress;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -19,8 +20,6 @@ import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.jocean.idiom.store.BlobRepo.Blob;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.Lists;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
@@ -728,7 +727,7 @@ public class RxNettys {
                 LOG.warn("exception when postDecoder.offer, detail: {}", 
                         ExceptionUtils.exception2detail(e));
             }
-            final List<Blob> blobs = Lists.newArrayList();
+            final List<Blob> blobs = new ArrayList<>();
             try {
                 while (_postDecoder.hasNext()) {
                     final InterfaceHttpData data = _postDecoder.next();
