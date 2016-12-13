@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
@@ -73,7 +74,9 @@ class DefaultHttpTrade implements HttpTrade {
         this._requestObservable = requestObservable
                 .compose(hookRequest())
                 .publish()
-                .refCount();
+                .refCount()
+                .compose(RxNettys.duplicateHttpContent());
+                ;
         for (Action1<HttpTrade> onclosed : doOnCloseds) {
             doOnClosed(onclosed);
         }
