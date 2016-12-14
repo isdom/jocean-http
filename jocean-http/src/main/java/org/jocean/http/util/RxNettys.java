@@ -681,21 +681,32 @@ public class RxNettys {
     }
 
     public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob() {
+        return postRequest2Blob(null);
+    }
+    
+    public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob(
+            final String contentTypePrefix) {
         return new Observable.Transformer<HttpObject, Blob>() {
             @Override
             public Observable<Blob> call(final Observable<HttpObject> source) {
-                return source.flatMap(new AsBlob());
+                return source.flatMap(new AsBlob(contentTypePrefix));
             }};
     }
     
     static class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
 
+        private final String _contentTypePrefix;
+        
         private boolean _isMultipart = false;
         private HttpPostRequestDecoder _postDecoder = null;
-                
+        
         private static final HttpDataFactory HTTP_DATA_FACTORY =
                 new DefaultHttpDataFactory(false);  // DO NOT use Disk
         
+        public AsBlob(final String contentTypePrefix) {
+            this._contentTypePrefix = contentTypePrefix;
+        }
+
         @Override
         public Observable<? extends Blob> call(final HttpObject msg) {
             if (msg instanceof HttpRequest) {
@@ -750,11 +761,19 @@ public class RxNettys {
             return blobs.isEmpty() ? Observable.<Blob>empty() : Observable.from(blobs);
         }
 
-        private Blob processHttpData(
-                final InterfaceHttpData data) {
+        private Blob processHttpData(final InterfaceHttpData data) {
             if (data.getHttpDataType().equals(
                 InterfaceHttpData.HttpDataType.FileUpload)) {
                 final FileUpload fileUpload = (FileUpload)data;
+                
+                //  if _contentTypePrefix is not null, try to match
+                if (null != _contentTypePrefix 
+                    && !fileUpload.getContentType().startsWith(_contentTypePrefix)) {
+                    LOG.info("fileUpload's contentType is {}, NOT match prefix {}, so ignore",
+                            fileUpload.getContentType(), _contentTypePrefix);
+                    return null;
+                }
+                    
                 try {
                     final byte[] bytes = Nettys.dumpByteBufAsBytes(fileUpload.content());
                     final String contentType = fileUpload.getContentType();
@@ -793,6 +812,8 @@ public class RxNettys {
                             ExceptionUtils.exception2detail(e));
                 }
                 
+            } else {
+                LOG.info("InterfaceHttpData ({}) is NOT fileUpload, so ignore", data);
             }
             return null;
         };
