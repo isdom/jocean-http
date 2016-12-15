@@ -17,6 +17,7 @@ import org.jocean.idiom.ProxyBuilder;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
+import org.jocean.idiom.rx.RxObservables;
 import org.jocean.idiom.store.BlobRepo.Blob;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -689,7 +690,9 @@ public class RxNettys {
         return new Observable.Transformer<HttpObject, Blob>() {
             @Override
             public Observable<Blob> call(final Observable<HttpObject> source) {
-                return source.flatMap(new AsBlob(contentTypePrefix));
+                return source.flatMap(new AsBlob(contentTypePrefix))
+                        .compose(RxObservables.<Blob>ensureSubscribeAtmostOnce())
+                        ;
             }};
     }
     
@@ -698,6 +701,8 @@ public class RxNettys {
         private final String _contentTypePrefix;
         
         private boolean _isMultipart = false;
+        
+        //  TODO , at least call _postDecoder.destroy();
         private HttpPostRequestDecoder _postDecoder = null;
         
         private static final HttpDataFactory HTTP_DATA_FACTORY =

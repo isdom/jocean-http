@@ -2,13 +2,13 @@ package org.jocean.http.util;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
+import org.jocean.idiom.rx.RxObservables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -174,19 +174,7 @@ public class HttpMessageHolder {
             @Override
             public Observable<HttpObject> call(final Observable<HttpObject> source) {
                 return source.flatMap(_ASSEMBLE_AND_HOLD)
-                        .doOnSubscribe(new Action0() {
-                            @Override
-                            public void call() {
-                                if (_hasSubscribed.compareAndSet(false, true)) {
-                                    LOG.info("HttpMessageHolder ({}) is subscribed now", 
-                                            HttpMessageHolder.this);
-                                } else {
-                                    // operator has subscribed before, throw Exception
-                                    throw new RuntimeException(HttpMessageHolder.class 
-                                            + " can't subscribed more than once");
-                                }
-                            }})
-                        ;
+                        .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
             }};
     }
 
@@ -289,8 +277,6 @@ public class HttpMessageHolder {
             this._currentBlockSize = 0;
         }
     }
-    
-    private final AtomicBoolean _hasSubscribed = new AtomicBoolean(false);
     
     private final boolean _enableAssemble;
     
