@@ -681,6 +681,25 @@ public class RxNettys {
             }};
     }
 
+    private final static Observable.Transformer<HttpObject, HttpRequest> AS_HTTPREQ = 
+        new Observable.Transformer<HttpObject, HttpRequest>() {
+            @Override
+            public Observable<HttpRequest> call(final Observable<HttpObject> httpMessage) {
+                return httpMessage.first().map(new Func1<HttpObject, HttpRequest>() {
+                    @Override
+                    public HttpRequest call(final HttpObject httpobj) {
+                        if (httpobj instanceof HttpRequest) {
+                            return (HttpRequest)httpobj;
+                        } else {
+                            return null;
+                        }
+                    }});
+            }};
+        
+    public static Observable.Transformer<? super HttpObject, ? extends HttpRequest> asHttpRequest() {
+        return AS_HTTPREQ;
+    }
+    
     public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob() {
         return postRequest2Blob(null);
     }
