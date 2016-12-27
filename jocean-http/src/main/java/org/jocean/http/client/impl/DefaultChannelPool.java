@@ -86,13 +86,13 @@ public class DefaultChannelPool extends AbstractChannelPool {
             if (null!=address) {
                 RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
                 getOrCreateChannels(address).add(channel);
-                LOG.info("channel({}) save to queue for ({}), can be reused.", channel, address);
+                LOG.info("recycleChannel: channel({}) save to queue for ({}), can be reused.", channel, address);
                 return  true;
             }
         }
         
         channel.close();
-        LOG.info("channel({}) has been closed.", channel);
+        LOG.info("recycleChannel: try recycle channel({}), BUT it has been closed.", channel);
         return false;
     }
 
