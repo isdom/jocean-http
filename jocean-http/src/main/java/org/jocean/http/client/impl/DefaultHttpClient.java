@@ -36,7 +36,6 @@ import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
-import rx.Single;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
@@ -235,21 +234,6 @@ public class DefaultHttpClient implements HttpClient {
         };
     }
     
-    @SuppressWarnings("unused")
-    private Single<? extends Channel> createChannelAndConnectToAsSingle(
-            final SocketAddress remoteAddress, 
-            final Feature[] features,
-            final DoOnUnsubscribe doOnUnsubscribe) {
-        return this._channelCreator.newChannelAsSingle(doOnUnsubscribe)
-            .doOnSuccess(ChannelPool.Util.attachToChannelPoolAndEnableRecycle(_channelPool))
-            .doOnSuccess(RxNettys.actionPermanentlyApplyFeatures(
-                    HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
-            .doOnSuccess(RxNettys.actionUndoableApplyFeatures(
-                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features))
-            .flatMap(RxNettys.asyncConnectToAsSingle(remoteAddress, doOnUnsubscribe))
-            .compose(RxNettys.markAndPushChannelWhenReadyAsSingle(isSSLEnabled(features)));
-    }
-
     private Observable<? extends Channel> createChannelAndConnectTo(
             final SocketAddress remoteAddress, 
             final Feature[] features) {

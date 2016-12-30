@@ -17,8 +17,6 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import rx.Observable;
-import rx.Single;
-import rx.SingleSubscriber;
 import rx.Subscriber;
 import rx.subscriptions.Subscriptions;
 
@@ -86,24 +84,6 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
         }
     }
 
-    @Override
-    public Single<? extends Channel> newChannelAsSingle(final DoOnUnsubscribe doOnUnsubscribe) {
-        return Single.create(new Single.OnSubscribe<ChannelFuture>() {
-            @Override
-            public void call(final SingleSubscriber<? super ChannelFuture> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    final ChannelFuture future = _bootstrap.register();
-                    if ( LOG.isDebugEnabled() ) {
-                        LOG.debug("create new channel: {}", future.channel());
-                    }
-                    doOnUnsubscribe.call(Subscriptions.from(future));
-                    subscriber.onSuccess(future);
-                }
-            }})
-            .doOnSuccess(RxNettys.<ChannelFuture>enableReleaseChannelWhenUnsubscribe())
-            .flatMap(RxNettys.singleFutureToChannel());
-    }
-    
     @Override
     public Observable<? extends Channel> newChannel() {
         return Observable.create(new Observable.OnSubscribe<Channel>() {
