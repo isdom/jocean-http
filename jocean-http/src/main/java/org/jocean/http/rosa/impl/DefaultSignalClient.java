@@ -35,9 +35,10 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.DefaultLastHttpContent;
-import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
@@ -246,10 +247,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         });
     }
 
-//    private Object checkAndWrapSignalIfNeed(final Object signalBean) {
-//        return null != signalBean ? signalBean : new Object();
-//    }
-
     private Feature[] genFeatures4HttpClient(final Object signalBean,
             final Feature... features) {
         final Feature[] addSignalFeatures = Feature.Util.union( 
@@ -270,7 +267,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 HttpMethod.GET, 
                 null != uri.getRawPath() ? uri.getRawPath() : "");
         if (null != uri.getHost()) {
-            request.headers().set(HttpHeaders.Names.HOST, uri.getHost());
+            request.headers().set(HttpHeaderNames.HOST, uri.getHost());
         }
         return request;
     }
@@ -529,13 +526,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final HttpRequest request,
             final BodyForm body) {
         if (null != body) {
-            if (null == request.headers().get(HttpHeaders.Names.CONTENT_LENGTH)) {
+            if (null == request.headers().get(HttpHeaderNames.CONTENT_LENGTH)) {
                 //  Content-Length not set
-                HttpHeaders.setContentLength(request, body.length());
+                HttpUtil.setContentLength(request, body.length());
             }
-            if (null == request.headers().get(HttpHeaders.Names.CONTENT_TYPE)) {
+            if (null == request.headers().get(HttpHeaderNames.CONTENT_TYPE)) {
                 //  Content-Type not set
-                HttpHeaders.setHeader(request, HttpHeaders.Names.CONTENT_TYPE, body.contentType());
+                request.headers().set(HttpHeaderNames.CONTENT_TYPE, body.contentType());
             }
             return new DefaultLastHttpContent(body.content().retain());
         } else {
