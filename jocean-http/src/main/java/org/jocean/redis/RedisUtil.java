@@ -45,6 +45,68 @@ public class RedisUtil {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("SELECT", Integer.toString(dbno)));
     }
     
+    public static class SetCommand {
+        
+        SetCommand(final String key, final String value) {
+            this._key = key;
+            this._value = value;
+        }
+        
+        public SetCommand px(final long milliseconds) {
+            this._px = Long.toString(milliseconds);
+            return this;
+        }
+        
+        public SetCommand ex(final long seconds) {
+            this._ex = Long.toString(seconds);
+            return this;
+        }
+        
+        public SetCommand xx() {
+            this._xx = true;
+            return this;
+        }
+        
+        public SetCommand nx() {
+            this._nx = true;
+            return this;
+        }
+        
+        public Observable<RedisMessage> build() {
+            final List<String> cmds = new ArrayList<>();
+            cmds.add("SET");
+            cmds.add(this._key);
+            cmds.add(this._value);
+            if (null != this._ex) {
+                cmds.add("EX");
+                cmds.add(this._ex);
+            }
+            if (null != this._px) {
+                cmds.add("PX");
+                cmds.add(this._px);
+            }
+            if (this._nx) {
+                cmds.add("NX");
+            }
+            if (this._xx) {
+                cmds.add("XX");
+            }
+            return Observable.<RedisMessage>just(RedisUtil.strs2array(cmds.toArray(new String[0])));
+        }
+        
+        private final String _key;
+        private final String _value;
+        
+        private String _ex = null;
+        private String _px = null;
+        private boolean _nx = false;
+        private boolean _xx = false;
+    }
+    
+    public static SetCommand cmdSet(final String key, final String value) {
+        return new SetCommand(key, value);
+    }
+    
     public static Observable<RedisMessage> cmdGet(final String key) {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("GET", key));
     }
