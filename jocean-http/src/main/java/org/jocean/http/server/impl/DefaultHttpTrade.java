@@ -73,8 +73,7 @@ class DefaultHttpTrade implements HttpTrade {
         this._channel = channel;
         this._requestObservable = requestObservable
                 .compose(hookRequest())
-                .publish()
-                .refCount()
+                .share()
                 .compose(RxNettys.duplicateHttpContent());
                 ;
         for (Action1<HttpTrade> onclosed : doOnCloseds) {
