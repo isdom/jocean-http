@@ -161,6 +161,21 @@ public class RedisUtil {
                 }};
     }
     
+    @SafeVarargs
+    public static Transformer<? super RedisConnection, ? extends RedisConnection>
+        composite(final Transformer<? super RedisConnection, ? extends RedisConnection> ... transformers) {
+        return new Transformer<RedisConnection, RedisConnection>() {
+            @Override
+            public Observable<RedisConnection> call(final Observable<RedisConnection> source) {
+                Observable<RedisConnection> transformered = source;
+                for (Transformer<? super RedisConnection, ? extends RedisConnection> t : transformers) {
+                    transformered = transformered.compose(t);
+                }
+                return transformered;
+            }
+        };
+    }
+    
     public static Transformer<? super RedisConnection, ? extends RedisConnection> 
         authRedis(final String passwd) {
         return new Transformer<RedisConnection, RedisConnection>() {
@@ -182,6 +197,34 @@ public class RedisUtil {
                                 } else {
                                     return Observable.<RedisConnection>error(
                                             new RuntimeException("Auth Failed"));
+                                }
+                            }});
+                    }});
+            }
+        };
+    }
+    
+    public static Transformer<? super RedisConnection, ? extends RedisConnection> 
+        selectDB(final int dbno) {
+        return new Transformer<RedisConnection, RedisConnection>() {
+            @Override
+            public Observable<RedisConnection> call(final Observable<RedisConnection> source) {
+                return source.flatMap(new Func1<RedisConnection, Observable<RedisConnection>>() {
+                    @Override
+                    public Observable<RedisConnection> call(final RedisConnection conn) {
+                        return conn.defineInteraction(
+                                Observable.<RedisMessage>just(RedisUtil.strs2array("SELECT", Integer.toString(dbno))))
+                        .flatMap(new Func1<RedisMessage, Observable<RedisConnection>>() {
+                            @Override
+                            public Observable<RedisConnection> call(final RedisMessage resp) {
+                                if (LOG.isDebugEnabled()) {
+                                    LOG.debug("receive redis resp[{}] for select", resp);
+                                }
+                                if (isOK(resp)) {
+                                    return Observable.<RedisConnection>just(conn);
+                                } else {
+                                    return Observable.<RedisConnection>error(
+                                            new RuntimeException("Select Failed"));
                                 }
                             }});
                     }});

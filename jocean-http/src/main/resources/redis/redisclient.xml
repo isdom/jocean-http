@@ -8,8 +8,19 @@
         <constructor-arg value="${redis.client.thread.count:0}"/>
         <property name="fornew">
             <bean class="org.jocean.redis.RedisUtil"
-                factory-method="authRedis">
-                <constructor-arg name="passwd" value="${redis.server.passwd}"/>
+                factory-method="composite">
+                <constructor-arg>
+                    <list>
+			            <bean class="org.jocean.redis.RedisUtil"
+			                factory-method="authRedis">
+			                <constructor-arg name="passwd" value="${redis.server.passwd}"/>
+			            </bean>
+                        <bean class="org.jocean.redis.RedisUtil"
+                            factory-method="selectDB">
+                            <constructor-arg name="dbno" value="${redis.server.dbno}"/>
+                        </bean>
+                    </list>
+                </constructor-arg>
             </bean>
         </property>
         <property name="defaultRedisServer">
