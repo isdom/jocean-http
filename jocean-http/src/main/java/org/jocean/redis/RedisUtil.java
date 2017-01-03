@@ -4,6 +4,7 @@
 package org.jocean.redis;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.jocean.redis.RedisClient.RedisConnection;
@@ -109,6 +110,13 @@ public class RedisUtil {
     
     public static Observable<RedisMessage> cmdGet(final String key) {
         return Observable.<RedisMessage>just(RedisUtil.strs2array("GET", key));
+    }
+    
+    public static Observable<RedisMessage> cmdDel(final String... keys) {
+        final List<String> cmds = new ArrayList<>();
+        cmds.add("DEL");
+        cmds.addAll(Arrays.asList(keys));
+        return Observable.<RedisMessage>just(RedisUtil.strs2array(cmds.toArray(new String[0])));
     }
     
     public static Observable<RedisMessage> error(final String errorMessage) {
