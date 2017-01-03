@@ -13,7 +13,7 @@
                     <list>
 			            <bean class="org.jocean.redis.RedisUtil"
 			                factory-method="authRedis">
-			                <constructor-arg name="passwd" value="${redis.server.passwd}"/>
+			                <constructor-arg name="passwd" value="${redis.server.passwd:}"/>
 			            </bean>
                         <bean class="org.jocean.redis.RedisUtil"
                             factory-method="selectDB">
@@ -28,7 +28,7 @@
                 <constructor-arg index="0" type="java.lang.String"
                     value="${redis.server.hostname}"/>
                 <constructor-arg index="1"  type="int"
-                    value="${redis.server.port}"/>
+                    value="${redis.server.port:6379}"/>
             </bean>
         </property>
     </bean>

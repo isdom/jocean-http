@@ -181,7 +181,10 @@ public class RedisUtil {
         return new Transformer<RedisConnection, RedisConnection>() {
             @Override
             public Observable<RedisConnection> call(final Observable<RedisConnection> source) {
-                return source.flatMap(new Func1<RedisConnection, Observable<RedisConnection>>() {
+                if (null == passwd || (null != passwd && passwd.isEmpty())) {
+                    return source;
+                } else {
+                    return source.flatMap(new Func1<RedisConnection, Observable<RedisConnection>>() {
                     @Override
                     public Observable<RedisConnection> call(final RedisConnection conn) {
                         return conn.defineInteraction(
@@ -200,6 +203,7 @@ public class RedisUtil {
                                 }
                             }});
                     }});
+                }
             }
         };
     }
