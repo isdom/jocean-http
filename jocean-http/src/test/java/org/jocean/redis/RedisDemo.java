@@ -18,17 +18,16 @@ public class RedisDemo {
     public static void main(String[] args) throws InterruptedException, IOException {
         try(final DefaultRedisClient client = new DefaultRedisClient()) {
         
-            client.setFornew(RedisUtil.authRedis("password"));
+            client.setFornew(RedisUtil.composite(
+                    RedisUtil.authRedis("passwd"),
+                    RedisUtil.selectDB(255)
+                    ));
             
             @SuppressWarnings("unchecked")
             final RedisMessage ret = 
             client.getConnection(new InetSocketAddress("localhost", 6379))
             .compose(RedisUtil.interactWithRedis(
-                RedisUtil.cmdSelect(255),
-                RedisUtil.ifOKThenElse(
-                        RedisUtil.cmdSet("demo_key", "new hello, world! from isdom").xx().build(), 
-                        RedisUtil.error("select failed.")
-                        ),
+                RedisUtil.cmdSet("demo_key", "new hello, world! from isdom").nx().build(), 
                 RedisUtil.ifOKThenElse(
                     RedisUtil.cmdGet("demo_key"), 
                     RedisUtil.error("set failed.")
