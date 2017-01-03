@@ -25,9 +25,9 @@
         </property>
         <property name="defaultRedisServer">
             <bean class="java.net.InetSocketAddress">
-                <constructor-arg name="hostname" 
+                <constructor-arg name="hostname" type="java.lang.String"
                     value="${redis.server.hostname}"/>
-                <constructor-arg name="port" 
+                <constructor-arg name="port" type="int"
                     value="${redis.server.port}"/>
             </bean>
         </property>
