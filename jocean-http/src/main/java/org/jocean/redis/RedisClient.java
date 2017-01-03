@@ -36,4 +36,6 @@ public interface RedisClient extends Closeable {
     }
     
     public Observable<? extends RedisConnection> getConnection(final SocketAddress remoteAddress);
+    
+    public Observable<? extends RedisConnection> getConnection();
 }

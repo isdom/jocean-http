@@ -64,6 +64,17 @@ public class DefaultRedisClient implements RedisClient {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultRedisClient.class);
     
+    @Override
+    public Observable<? extends RedisConnection> getConnection() {
+        return null == this._defaultRemoteAddress 
+                ? Observable.<RedisConnection>error(new RuntimeException("No Default Redis Server"))
+                : this._channelPool.retainChannel(this._defaultRemoteAddress)
+                    .map(channel2RedisConnection())
+                    .onErrorResumeNext(createChannelAndConnectTo(this._defaultRemoteAddress))
+                    ;
+    }
+    
+    @Override
     public Observable<? extends RedisConnection> getConnection(final SocketAddress remoteAddress) {
         return this._channelPool.retainChannel(remoteAddress)
                 .map(channel2RedisConnection())
@@ -440,11 +451,16 @@ public class DefaultRedisClient implements RedisClient {
         this._channelCreator.close();
     }
     
-    public void setFornew(Transformer<? super RedisConnection, ? extends RedisConnection> fornew) {
+    public void setFornew(final Transformer<? super RedisConnection, ? extends RedisConnection> fornew) {
         this._fornew = fornew;
+    }
+    
+    public void setDefaultRedisServer(final SocketAddress _defaultRedisServerAddr) {
+        this._defaultRemoteAddress = _defaultRedisServerAddr;
     }
     
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
+    private SocketAddress _defaultRemoteAddress;
     private Transformer<? super RedisConnection, ? extends RedisConnection> _fornew = null;
 }
