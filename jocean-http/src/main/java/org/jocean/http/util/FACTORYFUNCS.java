@@ -338,7 +338,14 @@ class FACTORYFUNCS {
     }
 
     private static void touchAndHoldContent(final Channel channel, final HttpContent msg) {
-        msg.touch(channel.attr(ATTR_TOUCH_HINT).get());
+        final StringBuilder sb = new StringBuilder();
+        sb.append(channel.attr(ATTR_TOUCH_HINT).get());
+        sb.append("refCnt(");
+        sb.append(msg.refCnt());
+        sb.append(")[");
+        sb.append(msg.toString());
+        sb.append("]");
+        msg.touch(sb.toString());
         final Queue<HttpContent> queue = channel.attr(ATTR_HTTPCONTENTS).get();
         if (null != queue) {
             queue.add(msg);
