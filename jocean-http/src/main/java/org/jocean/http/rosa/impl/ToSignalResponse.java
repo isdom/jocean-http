@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
 import com.alibaba.fastjson.JSON;
 
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.CharsetUtil;
@@ -138,7 +138,7 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
             final Object bean,
             final HttpMessage httpmsg, 
             final byte[] bodyBytes) {
-        final String contentType = httpmsg.headers().get(HttpHeaders.Names.CONTENT_TYPE);
+        final String contentType = httpmsg.headers().get(HttpHeaderNames.CONTENT_TYPE);
         final Field[] beanfields = 
                 ReflectUtils.getAnnotationFieldsOf(bean.getClass(), BeanParam.class);
         if (null != beanfields && beanfields.length > 0) {
