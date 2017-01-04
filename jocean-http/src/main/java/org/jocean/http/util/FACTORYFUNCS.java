@@ -1,5 +1,8 @@
 package org.jocean.http.util;
 
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
 import org.jocean.http.TransportException;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
@@ -11,9 +14,13 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpClientCodec;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpContentDecompressor;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.ssl.SslContext;
@@ -21,6 +28,7 @@ import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 import rx.Subscriber;
 import rx.functions.Action0;
@@ -185,6 +193,7 @@ class FACTORYFUNCS {
                             ctx.channel(), ctx.name(),
                             ExceptionUtils.exception2detail(cause), 
                             subscriber);
+                    touchAllContentWith(ctx.channel(), "exceptionCaught:" + ExceptionUtils.exception2detail(cause));
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onError(new TransportException("exceptionCaught", cause));
                     }
@@ -203,6 +212,7 @@ class FACTORYFUNCS {
                         LOG.debug("channel({})/handler({}): channelInactive and call ({}).onError with TransportException.", 
                                 ctx.channel(), ctx.name(), subscriber);
                     }
+                    touchAllContentWith(ctx.channel(), "channelInactive");
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onError(new TransportException("channelInactive"));
                     }
@@ -214,6 +224,16 @@ class FACTORYFUNCS {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("channel({})/handler({}): channelRead0 and call ({}).onNext with msg({}).", 
                                 ctx.channel(), ctx.name(), subscriber, msg);
+                    }
+                    
+                    if (msg instanceof HttpRequest) {
+                        initTouchableWithRequest(ctx.channel(), (HttpRequest)msg);
+                    } else if (msg instanceof HttpResponse) {
+                        initTouchableWithResponse(ctx.channel(), (HttpResponse)msg);
+                    }
+                    
+                    if (msg instanceof HttpContent) {
+                        touchAndHoldContent(ctx.channel(), (HttpContent)msg);
                     }
                     
                     if (!subscriber.isUnsubscribed()) {
@@ -268,4 +288,71 @@ class FACTORYFUNCS {
             };
         }
     };
+    
+    private static final AttributeKey<String> ATTR_TOUCH_HINT = 
+            AttributeKey.valueOf("__HTTP_TOUCH_HINT");
+    
+    private static final AttributeKey<Queue<HttpContent>> ATTR_HTTPCONTENTS = 
+            AttributeKey.valueOf("__HTTPCONTENTS");
+    
+    private static void clearContentsOnUnsubscribe(final Channel channel) {
+        RxNettys.doOnUnsubscribe(channel, Subscriptions.create(new Action0() {
+            @Override
+            public void call() {
+                final Queue<HttpContent> queue = channel.attr(ATTR_HTTPCONTENTS).getAndSet(null);
+                if (null != queue) {
+                    queue.clear();
+                }
+            }}));
+    }
+    private static void initTouchableWithRequest(final Channel channel, final HttpRequest req) {
+        final StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        sb.append(req.headers().get("remoteip", ""));
+        sb.append('|');
+        sb.append(req.method().name());
+        sb.append('|');
+        sb.append(req.uri());
+        sb.append('|');
+        sb.append(req.headers().get(HttpHeaderNames.CONTENT_TYPE, ""));
+        sb.append('|');
+        sb.append(req.headers().get(HttpHeaderNames.CONTENT_LENGTH, ""));
+        sb.append(']');
+        channel.attr(ATTR_TOUCH_HINT).set(sb.toString());
+        channel.attr(ATTR_HTTPCONTENTS).set(new ConcurrentLinkedQueue<HttpContent>());
+        clearContentsOnUnsubscribe(channel);
+    }
+
+    private static void initTouchableWithResponse(final Channel channel, final HttpResponse resp) {
+        final StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        sb.append(resp.status().code());
+        sb.append('|');
+        sb.append(resp.headers().get(HttpHeaderNames.CONTENT_TYPE, ""));
+        sb.append('|');
+        sb.append(resp.headers().get(HttpHeaderNames.CONTENT_LENGTH, ""));
+        sb.append(']');
+        channel.attr(ATTR_TOUCH_HINT).set(sb.toString());
+        channel.attr(ATTR_HTTPCONTENTS).set(new ConcurrentLinkedQueue<HttpContent>());
+        clearContentsOnUnsubscribe(channel);
+    }
+
+    private static void touchAndHoldContent(final Channel channel, final HttpContent msg) {
+        msg.touch(channel.attr(ATTR_TOUCH_HINT).get());
+        final Queue<HttpContent> queue = channel.attr(ATTR_HTTPCONTENTS).get();
+        if (null != queue) {
+            queue.add(msg);
+        }
+    }
+
+    private static void touchAllContentWith(final Channel channel, final String hint) {
+        String fullhint = channel.attr(ATTR_TOUCH_HINT).get();
+        fullhint = (null != fullhint ? fullhint : "") + hint;
+        final Queue<HttpContent> queue = channel.attr(ATTR_HTTPCONTENTS).get();
+        if (null != queue) {
+            for (HttpContent c : queue) {
+                c.touch(fullhint);
+            }
+        }
+    }
 }
