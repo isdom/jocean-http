@@ -5,12 +5,16 @@ package org.jocean.http.server.impl;
 
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
 import org.jocean.http.server.HttpServerBuilder;
+import org.jocean.http.server.mbean.TradeHolderMXBean;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys.ServerChannelAware;
@@ -46,7 +50,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-public class DefaultHttpServerBuilder implements HttpServerBuilder {
+public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderMXBean {
 
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
@@ -57,6 +61,29 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder {
     
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpServerBuilder.class);
+    
+    @Override
+    public int getTradeCount() {
+        return this._trades.size();
+    }
+
+    @Override
+    public String[] getAllTrade() {
+        final List<String> infos = new ArrayList<>();
+        for (HttpTrade t : this._trades) {
+            infos.add(t.toString());
+        }
+        return infos.toArray(new String[0]);
+    }
+    
+    private HttpTrade addToTrades(final HttpTrade trade) {
+        this._trades.add(trade);
+        return trade;
+    }
+    
+    private void removeFromTrades(final HttpTrade trade) {
+        this._trades.remove(trade);
+    }
     
     public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress, 
@@ -138,7 +165,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder {
                     awaitChannels.remove(channel);
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onNext(
-                            RxNettys.attachProcessorToChannel(channel, httpTradeOf(channel))
+                            addToTrades(RxNettys.attachProcessorToChannel(channel, httpTradeOf(channel)))
                             .doOnClosed(actionRecycleChannel(channel, subscriber, awaitChannels)));
                     } else {
                         LOG.warn("HttpTrade Subscriber {} has unsubscribed, so close channel({})",
@@ -179,6 +206,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder {
         return new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade trade) {
+                removeFromTrades(trade);
                 RxNettys.detachProcessorFromChannel(channel, trade);
                 RxNettys.installDoOnUnsubscribe(channel, 
                         DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
@@ -254,6 +282,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder {
     private final Feature[] _defaultFeatures;
     
     private static final Class2ApplyBuilder _APPLY_BUILDER;
+    
+    private final Set<HttpTrade> _trades = new ConcurrentSkipListSet<HttpTrade>();
         
     static {
         _APPLY_BUILDER = new Class2ApplyBuilder();

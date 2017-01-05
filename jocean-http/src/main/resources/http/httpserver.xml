@@ -8,5 +8,14 @@
         <constructor-arg value="${http.server.accept.thread.count:1}"/>
         <constructor-arg value="${http.server.work.thread.count:0}"/>
     </bean>
+    
+    <bean class="org.springframework.jmx.export.MBeanExporter"
+          lazy-init="false">
+        <property name="beans">
+            <map>
+                <entry key="org.jocean:name=httpServers" value-ref="httpServerBuilder"/>
+            </map>
+        </property>
+    </bean>
      
 </beans>

@@ -3,6 +3,8 @@
  */
 package org.jocean.http.server.impl;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -40,12 +42,23 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpTrade implements HttpTrade {
+class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
+    
+    private static final AtomicInteger _IDSRC = new AtomicInteger(0);
+    
+    private final int _id = _IDSRC.getAndIncrement();
+    
+    @Override
+    public int compareTo(final DefaultHttpTrade o) {
+        return this._id - o._id;
+    }
     
     @Override
     public String toString() {
         final StringBuilder builder = new StringBuilder();
-        builder.append("DefaultHttpTrade [request subscriber count=")
+        builder.append("DefaultHttpTrade [create at:")
+                .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(_createTime))
+                .append(", request subscriber count=")
                 .append(_requestSubscribers.size())
                 .append(", currentResponseIdx=").append(_responseIdx.get())
                 .append(", isRequestReceived=").append(_isRequestReceived.get())
@@ -383,6 +396,7 @@ class DefaultHttpTrade implements HttpTrade {
     private final COWCompositeSupport<Action1<HttpTrade>> _onClosedActions = 
             new COWCompositeSupport<Action1<HttpTrade>>();
     
+    private final Date _createTime = new Date();
     private final Channel _channel;
     private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
