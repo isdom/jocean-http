@@ -861,4 +861,23 @@ public class RxNettys {
             return null;
         };
     }
+
+    private static final AttributeKey<Object> __PROCESSOR = AttributeKey.valueOf("__TRADE_PROCESSOR");
+    
+    public static <T> T attachProcessorToChannel(final Channel channel, final T processor) {
+        channel.attr(__PROCESSOR).setIfAbsent(processor);
+        return processor;
+    }
+    
+    public static <T> void detachProcessorFromChannel(final Channel channel, final T processor) {
+        channel.attr(__PROCESSOR).compareAndSet(processor, null);
+    }
+    
+    public static boolean hasProcessorForChannel(final Channel channel) {
+        return channel.attr(__PROCESSOR).get() != null;
+    }
+    
+    public static Object getProcessorForChannel(final Channel channel) {
+        return channel.attr(__PROCESSOR).get();
+    }
 }

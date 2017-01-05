@@ -212,6 +212,11 @@ class FACTORYFUNCS {
                         LOG.debug("channel({})/handler({}): channelInactive and call ({}).onError with TransportException.", 
                                 ctx.channel(), ctx.name(), subscriber);
                     }
+                    if (RxNettys.hasProcessorForChannel(ctx.channel())) {
+                        LOG.info("channel({})/handler({}): channelInactive BUT still has processor({}).", 
+                                ctx.channel(), ctx.name(), RxNettys.getProcessorForChannel(ctx.channel()));
+                    }
+                    
                     touchAllContentWith(ctx.channel(), "channelInactive");
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onError(new TransportException("channelInactive"));
@@ -308,6 +313,8 @@ class FACTORYFUNCS {
     private static void initTouchableWithRequest(final Channel channel, final HttpRequest req) {
         final StringBuilder sb = new StringBuilder();
         sb.append('[');
+        sb.append(channel.toString());
+        sb.append('|');
         sb.append(req.headers().get("remoteip", ""));
         sb.append('|');
         sb.append(req.method().name());
@@ -326,6 +333,8 @@ class FACTORYFUNCS {
     private static void initTouchableWithResponse(final Channel channel, final HttpResponse resp) {
         final StringBuilder sb = new StringBuilder();
         sb.append('[');
+        sb.append(channel.toString());
+        sb.append('|');
         sb.append(resp.status().code());
         sb.append('|');
         sb.append(resp.headers().get(HttpHeaderNames.CONTENT_TYPE, ""));
