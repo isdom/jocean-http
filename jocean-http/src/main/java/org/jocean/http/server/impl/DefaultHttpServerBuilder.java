@@ -82,7 +82,10 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     }
     
     private void removeFromTrades(final HttpTrade trade) {
-        this._trades.remove(trade);
+        final boolean deleted = this._trades.remove(trade);
+        if (deleted) {
+            LOG.debug("trade{} has been erased.", trade);
+        }
     }
     
     public Observable<? extends HttpTrade> defineServer(
