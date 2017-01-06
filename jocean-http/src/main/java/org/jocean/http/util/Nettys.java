@@ -129,8 +129,8 @@ public class Nettys {
                 }
             } catch (IllegalArgumentException e) {
                 // throw by toOrdinal.call, so just ignore this entry and continue
-                LOG.warn("insert handler named({}), meet handler entry:{}, which is !NOT! ordinal, just ignore", 
-                        name, entry);
+                LOG.warn("channel({}): insert handler named({}), meet handler entry:{}, which is !NOT! ordinal, just ignore", 
+                        pipeline.channel(), name, entry);
                 continue;
             }
         }
