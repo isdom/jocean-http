@@ -92,14 +92,15 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
                 .share()
                 .compose(RxNettys.duplicateHttpContent());
                 ;
-                
-        closeTradeWhenChannelInactive();
         
         for (Action1<HttpTrade> onclosed : doOnCloseds) {
             doOnClosed(onclosed);
         }
 //        //  TODO when to unsubscribe ?
         this._requestObservable.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
+        
+        //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
+        closeTradeWhenChannelInactive();
     }
 
     private void closeTradeWhenChannelInactive() {
