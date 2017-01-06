@@ -23,6 +23,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -89,11 +92,30 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
                 .share()
                 .compose(RxNettys.duplicateHttpContent());
                 ;
+                
+        closeTradeWhenChannelInactive();
+        
         for (Action1<HttpTrade> onclosed : doOnCloseds) {
             doOnClosed(onclosed);
         }
 //        //  TODO when to unsubscribe ?
         this._requestObservable.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
+    }
+
+    private void closeTradeWhenChannelInactive() {
+        final ChannelHandler doCloseWhenChannelInactive = 
+            new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+                    doClose();
+                }
+            };
+        this._channel.pipeline().addLast(doCloseWhenChannelInactive);
+        doOnClosed(new Action1<HttpTrade>() {
+            @Override
+            public void call(final HttpTrade trade) {
+                _channel.pipeline().remove(doCloseWhenChannelInactive);
+            }});
     }
 
     private Transformer<HttpObject, HttpObject> hookRequest() {
