@@ -20,6 +20,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
+import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -187,14 +188,13 @@ public class DefaultHttpClient implements HttpClient {
                         }
                     }
                 })
-                .doOnError(new Action1<Throwable> () {
+                .subscribe(RxSubscribers.nopOnNext(), new Action1<Throwable>() {
                     @Override
-                    public void call(final Throwable e) {
+                    public void call(final Throwable error) {
                         if (!subscriber.isUnsubscribed()) {
-                            subscriber.onError(e);
+                            subscriber.onError(error);
                         }
-                    }})
-                .subscribe();
+                    }});
             }
         };
     }
