@@ -94,7 +94,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
                 ;
         
         for (Action1<HttpTrade> onclosed : doOnCloseds) {
-            doOnClosed(onclosed);
+            addCloseHook(onclosed);
         }
 //        //  TODO when to unsubscribe ?
         this._requestObservable.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
@@ -112,7 +112,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
                 }
             };
         this._channel.pipeline().addLast(doCloseWhenChannelInactive);
-        doOnClosed(new Action1<HttpTrade>() {
+        addCloseHook(new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade trade) {
                 _channel.pipeline().remove(doCloseWhenChannelInactive);
@@ -336,7 +336,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     }
     
     @Override
-    public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed) {
+    public HttpTrade addCloseHook(final Action1<HttpTrade> onClosed) {
         this._actionDoOnClosed.call(onClosed);
         return this;
     }
@@ -358,7 +358,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     }
     
     @Override
-    public void undoOnClosed(final Action1<HttpTrade> onClosed) {
+    public void removeCloseHook(final Action1<HttpTrade> onClosed) {
         this._actionUndoOnClosed.call(onClosed);
     }
     

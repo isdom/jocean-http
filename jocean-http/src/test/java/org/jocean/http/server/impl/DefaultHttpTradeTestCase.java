@@ -78,7 +78,7 @@ public class DefaultHttpTradeTestCase {
                 Observable.<HttpObject>empty());
         
         final AtomicBoolean onClosed = new AtomicBoolean(false);
-        trade.doOnClosed(new Action1<HttpTrade>(){
+        trade.addCloseHook(new Action1<HttpTrade>(){
             @Override
             public void call(final HttpTrade trade) {
                 onClosed.set(true);
@@ -101,7 +101,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
         
         final AtomicBoolean onClosed = new AtomicBoolean(false);
-        trade.doOnClosed(new Action1<HttpTrade>(){
+        trade.addCloseHook(new Action1<HttpTrade>(){
             @Override
             public void call(final HttpTrade trade) {
                 onClosed.set(true);
@@ -845,7 +845,7 @@ public class DefaultHttpTradeTestCase {
         
         final HttpMessageHolder holder = new HttpMessageHolder(0);
         final Observable<? extends HttpObject> inbound = 
-            trade.doOnClosed(RxActions.<HttpTrade>toAction1(holder.release()))
+            trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
             .inboundRequest()
             .compose(holder.assembleAndHold());
         
@@ -910,7 +910,7 @@ public class DefaultHttpTradeTestCase {
         
         final HttpMessageHolder holder = new HttpMessageHolder(0);
         final Observable<? extends HttpObject> inbound = 
-            trade.doOnClosed(RxActions.<HttpTrade>toAction1(holder.release()))
+            trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
             .inboundRequest()
             .compose(holder.assembleAndHold());
         
@@ -941,7 +941,7 @@ public class DefaultHttpTradeTestCase {
         
         final HttpMessageHolder holder = new HttpMessageHolder(0);
         final Observable<? extends HttpObject> inbound = 
-            trade.doOnClosed(RxActions.<HttpTrade>toAction1(holder.release()))
+            trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
             .inboundRequest()
             .compose(holder.assembleAndHold());
         
@@ -974,7 +974,7 @@ public class DefaultHttpTradeTestCase {
         
         final HttpMessageHolder holder = new HttpMessageHolder(0);
         final Observable<? extends HttpObject> inbound = 
-            trade.doOnClosed(RxActions.<HttpTrade>toAction1(holder.release()))
+            trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
             .inboundRequest()
             .compose(holder.assembleAndHold());
         

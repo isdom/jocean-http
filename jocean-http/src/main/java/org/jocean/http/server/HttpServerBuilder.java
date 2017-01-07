@@ -46,7 +46,7 @@ public interface HttpServerBuilder extends Closeable {
                     final Action1<Throwable> onError);
         public boolean readyforOutboundResponse();
         public Object transport();
-        public HttpTrade doOnClosed(final Action1<HttpTrade> onClosed);
-        public void undoOnClosed(final Action1<HttpTrade> onClosed);
+        public HttpTrade addCloseHook(final Action1<HttpTrade> onClosed);
+        public void removeCloseHook(final Action1<HttpTrade> onClosed);
     }
 }

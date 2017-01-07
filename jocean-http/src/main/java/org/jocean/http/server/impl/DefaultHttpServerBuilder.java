@@ -169,7 +169,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onNext(
                             addToTrades(RxNettys.attachProcessorToChannel(channel, httpTradeOf(channel)))
-                            .doOnClosed(actionRecycleChannel(channel, subscriber, awaitChannels)));
+                            .addCloseHook(actionRecycleChannel(channel, subscriber, awaitChannels)));
                     } else {
                         LOG.warn("HttpTrade Subscriber {} has unsubscribed, so close channel({})",
                                 subscriber, channel);
