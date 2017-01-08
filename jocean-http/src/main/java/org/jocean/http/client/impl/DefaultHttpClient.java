@@ -170,7 +170,7 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public void call(final Channel channel, final Subscriber<?> subscriber) {
                 safeBuildRequestByProvider(requestProvider, channel)
-                .doOnNext(doOnRequest(features, channel))
+                .doOnNext(doOnRequest(features))
                 .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
                 .doOnCompleted(new Action0() {
                     @Override
@@ -209,7 +209,7 @@ public class DefaultHttpClient implements HttpClient {
                 : Observable.error(new RuntimeException("Can't build request observable"));
     }
 
-    private Action1<Object> doOnRequest(final Feature[] features, final Channel channel) {
+    private Action1<Object> doOnRequest(final Feature[] features) {
         final ApplyToRequest applyToRequest = 
                 InterfaceUtils.compositeIncludeType(
                     ApplyToRequest.class,
