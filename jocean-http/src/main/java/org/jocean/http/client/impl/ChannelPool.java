@@ -5,7 +5,6 @@ import java.net.SocketAddress;
 import org.jocean.http.util.Nettys;
 
 import io.netty.channel.Channel;
-import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
 import rx.Observable;
@@ -59,11 +58,11 @@ public interface ChannelPool {
                 }};
         }
         
-        public static Transformer<HttpObject,HttpObject> hookPostReceiveLastContent(final Channel channel) {
-            return new Transformer<HttpObject,HttpObject>() {
+        public static <T> Transformer<T,T> hookPostReceiveLastContent(final Channel channel) {
+            return new Transformer<T,T>() {
 
                 @Override
-                public Observable<HttpObject> call(final Observable<HttpObject> source) {
+                public Observable<T> call(final Observable<T> source) {
                     return source.doOnCompleted(new Action0 () {
                         @Override
                         public void call() {

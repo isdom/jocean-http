@@ -20,7 +20,6 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
-import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +39,6 @@ import rx.Observable;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Action2;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
@@ -73,7 +71,9 @@ public class DefaultHttpClient implements HttpClient {
                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
             .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
             .doOnNext(hookFeatures(fullFeatures))
-            .flatMap(waitforResponse(buildAndSendRequest(requestProvider, fullFeatures)));
+            .flatMap(prepareRecvResponse())
+            .flatMap(buildAndSendRequest(requestProvider, fullFeatures))
+            ;
     }
     
     @Override
@@ -147,66 +147,47 @@ public class DefaultHttpClient implements HttpClient {
         return false;
     }
 
-    private Func1<Channel, Observable<? extends HttpObject>> waitforResponse(
-            final Action2<Channel, Subscriber<?>> afterApplyHttpSubscriber) {
-        return new Func1<Channel, Observable<? extends HttpObject>>() {
+    private Func1<Channel, Observable<? extends Object>> prepareRecvResponse() {
+        return new Func1<Channel, Observable<? extends Object>>() {
             @Override
-            public Observable<? extends HttpObject> call(final Channel channel) {
-                try {
-                    return Observable.create(new Observable.OnSubscribe<HttpObject>() {
-                        @Override
-                        public void call(final Subscriber<? super HttpObject> subscriber) {
-                            RxNettys.doOnUnsubscribe(channel, 
-                                Subscriptions.create(RxNettys.actionToRemoveHandler(channel, 
-                                    APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
-                            if (null != afterApplyHttpSubscriber) {
-                                afterApplyHttpSubscriber.call(channel, subscriber);
-                            }
-                        }}).compose(ChannelPool.Util.hookPostReceiveLastContent(channel));
-                } finally {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("after waitforResponse.call & hookPostReceiveLastContent for channel:{}", channel);
-                    }
-                }
+            public Observable<? extends Object> call(final Channel channel) {
+                return Observable.create(new Observable.OnSubscribe<Object>() {
+                    @Override
+                    public void call(final Subscriber<? super Object> subscriber) {
+                        RxNettys.doOnUnsubscribe(channel, 
+                            Subscriptions.create(RxNettys.actionToRemoveHandler(channel, 
+                                APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
+                        if ( !subscriber.isUnsubscribed()) {
+                            subscriber.onNext(channel);
+                        }
+                    }})
+                    .compose(ChannelPool.Util.hookPostReceiveLastContent(channel))
+                    ;
             }};
     }
     
-    private Action2<Channel,Subscriber<?>> buildAndSendRequest(
+    private Func1<Object, Observable<? extends HttpObject>> buildAndSendRequest(
             final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
             final Feature[] features) {
-        return new Action2<Channel,Subscriber<?>> () {
+        return new Func1<Object, Observable<? extends HttpObject>>() {
             @Override
-            public void call(final Channel channel, final Subscriber<?> subscriber) {
-                safeBuildRequestByProvider(requestProvider, channel)
-                .doOnNext(doOnRequest(features))
-                .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
-                .doOnCompleted(new Action0() {
-                    @Override
-                    public void call() {
-                        channel.flush();
-                    }})
-                .doOnNext(new Action1<Object>() {
-                    @Override
-                    public void call(final Object msg) {
-                        final ChannelFuture future = channel.write(ReferenceCountUtil.retain(msg));
-                        RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
-                        future.addListener(RxNettys.listenerOfOnError(subscriber));
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("send http request msg :{}", msg);
-                        }
-                    }
-                })
-                .subscribe(RxSubscribers.nopOnNext(), new Action1<Throwable>() {
-                    @Override
-                    public void call(final Throwable error) {
-                        if (!subscriber.isUnsubscribed()) {
-                            subscriber.onError(error);
-                        }
-                    }});
+            public Observable<? extends HttpObject> call(final Object obj) {
+                if (obj instanceof Channel) {
+                    final Channel channel = (Channel)obj;
+                    return safeBuildRequestByProvider(requestProvider, channel)
+                        .doOnNext(doOnRequest(features))
+                        .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
+                        .doOnCompleted(flushWhenCompleted(channel))
+                        .flatMap(sendRequest(channel));
+                } else if (obj instanceof HttpObject) {
+                    return Observable.<HttpObject>just((HttpObject)obj);
+                } else {
+                    return Observable.<HttpObject>error(new RuntimeException("unknowm obj:" + obj));
+                }
             }
         };
     }
-
+    
     private Observable<? extends Object> safeBuildRequestByProvider(
             final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
             final Channel channel) {
@@ -240,6 +221,28 @@ public class DefaultHttpClient implements HttpClient {
                 }
             }
         };
+    }
+    
+    private Action0 flushWhenCompleted(final Channel channel) {
+        return new Action0() {
+            @Override
+            public void call() {
+                channel.flush();
+            }};
+    }
+
+    private Func1<Object, Observable<? extends HttpObject>> sendRequest(
+            final Channel channel) {
+        return new Func1<Object, Observable<? extends HttpObject>>() {
+            @Override
+            public Observable<? extends HttpObject> call(final Object reqmsg) {
+                final ChannelFuture future = channel.write(ReferenceCountUtil.retain(reqmsg));
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("send http request msg :{}", reqmsg);
+                }
+                RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
+                return RxNettys.observableFromFuture(future);
+            }};
     }
     
     private Observable<? extends Channel> createChannelAndConnectTo(

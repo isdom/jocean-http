@@ -994,7 +994,7 @@ public class DefaultHttpClientTestCase {
         }
     }
 
-    @Test
+    @Test(timeout=10000)
     public void testHttpRequestEmitErrorAfterConnected() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 

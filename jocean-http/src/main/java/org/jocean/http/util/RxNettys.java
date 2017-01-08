@@ -152,6 +152,26 @@ public class RxNettys {
         return (Func1)RETAIN_OBJ;
     }
         
+    public static <T, V> Observable<T> observableFromFuture(final Future<V> future) {
+        return Observable.create(new Observable.OnSubscribe<T>() {
+            @Override
+            public void call(final Subscriber<? super T> subscriber) {
+                future.addListener(new GenericFutureListener<Future<V>>() {
+                    @Override
+                    public void operationComplete(final Future<V> f)
+                            throws Exception {
+                        if (!subscriber.isUnsubscribed()) {
+                            if (f.isSuccess()) {
+                                subscriber.onCompleted();
+                            } else {
+                                subscriber.onError(f.cause());
+                            }
+                        }
+                    }
+                });
+            }});
+    }
+    
     public static <V> GenericFutureListener<Future<V>> listenerOfOnError(final Subscriber<?> subscriber) {
         return new GenericFutureListener<Future<V>>() {
             @Override
