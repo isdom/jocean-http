@@ -66,7 +66,6 @@ import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Action2;
 import rx.functions.Actions;
 import rx.functions.Func1;
 import rx.internal.util.SubscriptionList;
@@ -364,25 +363,6 @@ public class RxNettys {
                         }});
                 }
             }};
-    }
-    
-    public static Func1<Channel, Observable<? extends HttpObject>> waitforHttpResponse(
-            final Action2<Channel, Subscriber<?>> afterApplyHttpSubscriber) {
-        return new Func1<Channel, Observable<? extends HttpObject>>() {
-            @Override
-            public Observable<? extends HttpObject> call(final Channel channel) {
-                return Observable.create(new Observable.OnSubscribe<HttpObject>() {
-                    @Override
-                    public void call(final Subscriber<? super HttpObject> subscriber) {
-                        RxNettys.doOnUnsubscribe(channel, 
-                            Subscriptions.create(RxNettys.actionToRemoveHandler(channel, 
-                                APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
-                        if (null != afterApplyHttpSubscriber) {
-                            afterApplyHttpSubscriber.call(channel, subscriber);
-                        }
-                    }});
-            };
-        };
     }
     
     public static <V> GenericFutureListener<Future<V>> listenerOfOnError(final SingleSubscriber<?> subscriber) {

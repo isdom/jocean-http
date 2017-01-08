@@ -153,8 +153,16 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public Observable<? extends HttpObject> call(final Channel channel) {
                 try {
-                    return RxNettys.waitforHttpResponse(afterApplyHttpSubscriber).call(channel)
-                        .compose(ChannelPool.Util.hookPostReceiveLastContent(channel));
+                    return Observable.create(new Observable.OnSubscribe<HttpObject>() {
+                        @Override
+                        public void call(final Subscriber<? super HttpObject> subscriber) {
+                            RxNettys.doOnUnsubscribe(channel, 
+                                Subscriptions.create(RxNettys.actionToRemoveHandler(channel, 
+                                    APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
+                            if (null != afterApplyHttpSubscriber) {
+                                afterApplyHttpSubscriber.call(channel, subscriber);
+                            }
+                        }}).compose(ChannelPool.Util.hookPostReceiveLastContent(channel));
                 } finally {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("after waitforResponse.call & hookPostReceiveLastContent for channel:{}", channel);
