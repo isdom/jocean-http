@@ -44,7 +44,6 @@ import rx.Observable.Transformer;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Action2;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
@@ -90,9 +89,10 @@ public class DefaultRedisClient implements RedisClient {
                     @Override
                     public Observable<? extends RedisMessage> defineInteraction(
                             final Func1<DoOnUnsubscribe, Observable<? extends RedisMessage>> requestProvider) {
-                        return waitforResponse(buildAndSendRequest(requestProvider)).call(channel)
-                                .compose(RxObservables.<RedisMessage>ensureSubscribeAtmostOnce())
-                                ;
+                        return prepareRecvResponse(channel)
+                            .flatMap(buildAndSendRequest(requestProvider))
+                            .compose(RxObservables.<RedisMessage>ensureSubscribeAtmostOnce())
+                            ;
                     }
 
                     @Override
@@ -106,112 +106,61 @@ public class DefaultRedisClient implements RedisClient {
                     }};
             }};
     }
-    
-    /*
-    @Override
-    public Observable<? extends RedisMessage> defineInteraction(
-            final SocketAddress remoteAddress,
-            final Func1<DoOnUnsubscribe, Observable<? extends RedisMessage>> requestProvider) {
-        return this._channelPool.retainChannel(remoteAddress)
-                .onErrorResumeNext(createChannelAndConnectTo(remoteAddress))
-//                .doOnNext(hookFeatures(fullFeatures))
-                .flatMap(waitforResponse(buildAndSendRequest(requestProvider)));
-    }
-    
-    @Override
-    public Observable<? extends RedisMessage> defineInteraction(
-            final SocketAddress remoteAddress,
-            final Observable<? extends RedisMessage> request) {
-        return defineInteraction(remoteAddress, new Func1<DoOnUnsubscribe, Observable<? extends RedisMessage>>() {
+
+    private Observable<? extends Object> prepareRecvResponse(final Channel channel) {
+        return Observable.create(new Observable.OnSubscribe<Object>() {
             @Override
-            public Observable<? extends RedisMessage> call(final DoOnUnsubscribe doOnUnsubscribe) {
-                return request;
+            public void call(final Subscriber<? super Object> subscriber) {
+                //  TODO: now just add business handler at last
+                final ChannelHandler handler = buildSubscribHandler(subscriber);
+                channel.pipeline().addLast(handler);
+                RxNettys.doOnUnsubscribe(channel, 
+                    Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
+                if ( !subscriber.isUnsubscribed()) {
+                    subscriber.onNext(channel);
+                }
             }});
     }
-    */
-
-//    protected Action1<? super Channel> hookFeatures(final Feature[] features) {
-//        final ChannelAware channelAware = 
-//                InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
-//        final TrafficCounterAware trafficCounterAware = 
-//                InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])features);
-//        
-//        return new Action1<Channel>() {
-//            @Override
-//            public void call(final Channel channel) {
-//                fillChannelAware(channel, channelAware);
-//                hookTrafficCounter(channel, trafficCounterAware);
-//            }};
-//    }
-//
-//    private void fillChannelAware(final Channel channel, ChannelAware channelAware) {
-//        if (null!=channelAware) {
-//            try {
-//                channelAware.setChannel(channel);
-//            } catch (Exception e) {
-//                LOG.warn("exception when invoke setChannel for channel ({}), detail: {}",
-//                        channel, ExceptionUtils.exception2detail(e));
-//            }
-//        }
-//    }
-//
-//    private void hookTrafficCounter(
-//            final Channel channel,
-//            final TrafficCounterAware trafficCounterAware) {
-//        if (null!=trafficCounterAware) {
-//            try {
-//                trafficCounterAware.setTrafficCounter(buildTrafficCounter(channel));
-//            } catch (Exception e) {
-//                LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
-//                        channel, ExceptionUtils.exception2detail(e));
-//            }
-//        }
-//    }
-//
-//    private TrafficCounter buildTrafficCounter(final Channel channel) {
-//        final TrafficCounterHandler handler = 
-//                (TrafficCounterHandler)APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
-//        
-//        RxNettys.doOnUnsubscribe(channel, 
-//                Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
-//        return handler;
-//    }
-
-    private Func1<Channel, Observable<? extends RedisMessage>> waitforResponse(
-            final Action2<Channel, Subscriber<?>> afterApplySubscriber) {
-        return new Func1<Channel, Observable<? extends RedisMessage>>() {
+    
+    private Func1<Object, Observable<? extends RedisMessage>> buildAndSendRequest(
+            final Func1<DoOnUnsubscribe, Observable<? extends RedisMessage>> requestProvider) {
+        return new Func1<Object, Observable<? extends RedisMessage>>() {
             @Override
-            public Observable<? extends RedisMessage> call(final Channel channel) {
-                try {
-                    return waitforRedisResponse(afterApplySubscriber).call(channel);
-//                        .compose(ChannelPool.Util.hookPostReceiveLastContent(channel));
-                } finally {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("after waitforResponse.call for channel:{}", channel);
-                    }
+            public Observable<? extends RedisMessage> call(final Object obj) {
+                if (obj instanceof Channel) {
+                    final Channel channel = (Channel)obj;
+                    return safeBuildRequestByProvider(requestProvider, channel)
+                        .doOnCompleted(flushWhenCompleted(channel))
+                        .flatMap(sendRequest(channel));
+                } else if (obj instanceof RedisMessage) {
+                    return Observable.<RedisMessage>just((RedisMessage)obj);
+                } else {
+                    return Observable.<RedisMessage>error(new RuntimeException("unknowm obj:" + obj));
                 }
+            }
+        };
+    }
+    
+    private Action0 flushWhenCompleted(final Channel channel) {
+        return new Action0() {
+            @Override
+            public void call() {
+                channel.flush();
             }};
     }
     
-    public static Func1<Channel, Observable<? extends RedisMessage>> waitforRedisResponse(
-            final Action2<Channel, Subscriber<?>> afterApplySubscriber) {
-        return new Func1<Channel, Observable<? extends RedisMessage>>() {
+    private Func1<RedisMessage, Observable<? extends RedisMessage>> sendRequest(
+            final Channel channel) {
+        return new Func1<RedisMessage, Observable<? extends RedisMessage>>() {
             @Override
-            public Observable<? extends RedisMessage> call(final Channel channel) {
-                return Observable.create(new Observable.OnSubscribe<RedisMessage>() {
-                    @Override
-                    public void call(final Subscriber<? super RedisMessage> subscriber) {
-                        //  TODO: now just add business handler at last
-                        final ChannelHandler handler = buildSubscribHandler(subscriber);
-                        channel.pipeline().addLast(handler);
-                        RxNettys.doOnUnsubscribe(channel, 
-                            Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
-                        if (null != afterApplySubscriber) {
-                            afterApplySubscriber.call(channel, subscriber);
-                        }
-                    }});
-            };
-        };
+            public Observable<? extends RedisMessage> call(final RedisMessage reqmsg) {
+                final ChannelFuture future = channel.write(ReferenceCountUtil.retain(reqmsg));
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("send redis request msg :{}", reqmsg);
+                }
+                RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
+                return RxNettys.observableFromFuture(future);
+            }};
     }
     
     private static ChannelHandler buildSubscribHandler(final Subscriber<? super RedisMessage> subscriber) {
@@ -293,43 +242,6 @@ public class DefaultRedisClient implements RedisClient {
             // }
         };
     }
-    
-    private Action2<Channel,Subscriber<?>> buildAndSendRequest(
-            final Func1<DoOnUnsubscribe, Observable<? extends RedisMessage>> requestProvider) {
-        return new Action2<Channel,Subscriber<?>> () {
-            @Override
-            public void call(final Channel channel, final Subscriber<?> subscriber) {
-                //  TODO
-                safeBuildRequestByProvider(requestProvider, channel)
-//                .doOnNext(doOnRequest(features, channel))
-//                .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
-                .doOnCompleted(new Action0() {
-                    @Override
-                    public void call() {
-                        channel.flush();
-                    }})
-                .doOnNext(new Action1<RedisMessage>() {
-                    @Override
-                    public void call(final RedisMessage msg) {
-                        final ChannelFuture future = channel.write(ReferenceCountUtil.retain(msg));
-                        RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
-                        future.addListener(RxNettys.listenerOfOnError(subscriber));
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("send redis request msg :{}", msg);
-                        }
-                    }
-                })
-                .doOnError(new Action1<Throwable> () {
-                    @Override
-                    public void call(final Throwable e) {
-                        if (!subscriber.isUnsubscribed()) {
-                            subscriber.onError(e);
-                        }
-                    }})
-                .subscribe();
-            }
-        };
-    }
 
     private Observable<? extends RedisMessage> safeBuildRequestByProvider(
             final Func1<DoOnUnsubscribe, Observable<? extends RedisMessage>> requestProvider,
@@ -341,31 +253,6 @@ public class DefaultRedisClient implements RedisClient {
                 : Observable.<RedisMessage>error(new RuntimeException("Can't build request observable"));
     }
 
-//    private Action1<Object> doOnRequest(final Feature[] features, final Channel channel) {
-//        final ApplyToRequest applyToRequest = 
-//                InterfaceUtils.compositeIncludeType(
-//                    ApplyToRequest.class,
-//                    InterfaceUtils.compositeBySource(
-//                        ApplyToRequest.class, HttpClientConstants._CLS_TO_APPLY2REQ, features),
-//                    InterfaceUtils.compositeIncludeType(
-//                        ApplyToRequest.class, (Object[])features));
-//        return new Action1<Object> () {
-//            @Override
-//            public void call(final Object msg) {
-//                if (msg instanceof HttpRequest) {
-//                    if (null!=applyToRequest) {
-//                        try {
-//                            applyToRequest.call((HttpRequest)msg);
-//                        } catch (Exception e) {
-//                            LOG.warn("exception when invoke applyToRequest.call, detail: {}",
-//                                    ExceptionUtils.exception2detail(e));
-//                        }
-//                    }
-//                }
-//            }
-//        };
-//    }
-    
     private Observable<? extends RedisConnection> createChannelAndConnectTo(
             final SocketAddress remoteAddress) {
         final Observable<? extends RedisConnection> ret = this._channelCreator.newChannel()
