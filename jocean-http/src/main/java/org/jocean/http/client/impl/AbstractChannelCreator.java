@@ -18,6 +18,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import rx.Observable;
 import rx.Subscriber;
+import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -86,9 +87,9 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
 
     @Override
     public Observable<? extends Channel> newChannel() {
-        return Observable.create(new Observable.OnSubscribe<Channel>() {
+        return Observable.create(new Observable.OnSubscribe<ChannelFuture>() {
             @Override
-            public void call(final Subscriber<? super Channel> subscriber) {
+            public void call(final Subscriber<? super ChannelFuture> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final ChannelFuture future = _bootstrap.register();
                     if ( LOG.isDebugEnabled() ) {
@@ -97,10 +98,16 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
                     RxNettys.installDoOnUnsubscribe(future.channel(), DoOnUnsubscribe.Util.from(subscriber));
                     subscriber.add(Subscriptions.from(future));
                     subscriber.add(RxNettys.subscriptionForReleaseChannel(future.channel()));
-                    future.addListener(RxNettys.listenerOfOnError(subscriber))
-                        .addListener(RxNettys.listenerOfOnNextAndCompleted(subscriber));
+                    subscriber.onNext(future);
+                    subscriber.onCompleted();
                 }
-            }});
+            }})
+            .flatMap(new Func1<ChannelFuture, Observable<? extends Channel>>() {
+                @Override
+                public Observable<? extends Channel> call(final ChannelFuture f) {
+                    return RxNettys.channelObservableFromFuture(f);
+                }})
+            ;
     }
 
     public int getActiveChannelCount() {

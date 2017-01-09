@@ -172,6 +172,27 @@ public class RxNettys {
             }});
     }
     
+    public static Observable<? extends Channel> channelObservableFromFuture(final ChannelFuture future) {
+        return Observable.create(new Observable.OnSubscribe<Channel>() {
+            @Override
+            public void call(final Subscriber<? super Channel> subscriber) {
+                future.addListener(new GenericFutureListener<ChannelFuture>() {
+                    @Override
+                    public void operationComplete(final ChannelFuture f)
+                            throws Exception {
+                        if (!subscriber.isUnsubscribed()) {
+                            if (f.isSuccess()) {
+                                subscriber.onNext(f.channel());
+                                subscriber.onCompleted();
+                            } else {
+                                subscriber.onError(f.cause());
+                            }
+                        }
+                    }
+                });
+            }});
+    }
+    
     public static <V> GenericFutureListener<Future<V>> listenerOfOnError(final Subscriber<?> subscriber) {
         return new GenericFutureListener<Future<V>>() {
             @Override
@@ -184,18 +205,18 @@ public class RxNettys {
         };
     }
     
-    public static ChannelFutureListener listenerOfOnNextAndCompleted(final Subscriber<? super Channel> subscriber) {
-        return new ChannelFutureListener() {
-            @Override
-            public void operationComplete(final ChannelFuture f)
-                    throws Exception {
-                if (f.isSuccess() && !subscriber.isUnsubscribed()) {
-                    subscriber.onNext(f.channel());
-                    subscriber.onCompleted();
-                }
-            }
-        };
-    }
+//    public static ChannelFutureListener listenerOfOnNextAndCompleted(final Subscriber<? super Channel> subscriber) {
+//        return new ChannelFutureListener() {
+//            @Override
+//            public void operationComplete(final ChannelFuture f)
+//                    throws Exception {
+//                if (f.isSuccess() && !subscriber.isUnsubscribed()) {
+//                    subscriber.onNext(f.channel());
+//                    subscriber.onCompleted();
+//                }
+//            }
+//        };
+//    }
     
     public static ChannelFutureListener listenerOfSetServerChannel(
             final ServerChannelAware serverChannelAware) {
@@ -214,20 +235,20 @@ public class RxNettys {
             }};
     }
     
-    public static Func1<ChannelFuture, Observable<? extends Channel>> funcFutureToChannel() {
-        return new Func1<ChannelFuture, Observable<? extends Channel>>() {
-            @Override
-            public Observable<? extends Channel> call(final ChannelFuture future) {
-                return Observable.create(new Observable.OnSubscribe<Channel>() {
-                    @Override
-                    public void call(final Subscriber<? super Channel> subscriber) {
-                        if (!subscriber.isUnsubscribed()) {
-                            future.addListener(listenerOfOnError(subscriber))
-                                .addListener(listenerOfOnNextAndCompleted(subscriber));
-                        }
-                    }});
-            }};
-    }
+//    public static Func1<ChannelFuture, Observable<? extends Channel>> funcFutureToChannel() {
+//        return new Func1<ChannelFuture, Observable<? extends Channel>>() {
+//            @Override
+//            public Observable<? extends Channel> call(final ChannelFuture future) {
+//                return Observable.create(new Observable.OnSubscribe<Channel>() {
+//                    @Override
+//                    public void call(final Subscriber<? super Channel> subscriber) {
+//                        if (!subscriber.isUnsubscribed()) {
+//                            future.addListener(listenerOfOnError(subscriber))
+//                                .addListener(listenerOfOnNextAndCompleted(subscriber));
+//                        }
+//                    }});
+//            }};
+//    }
     
     public static Func1<Channel, Single<? extends Channel>> asyncConnectToAsSingle(
             final SocketAddress remoteAddress,
@@ -253,16 +274,21 @@ public class RxNettys {
         return new Func1<Channel, Observable<? extends Channel>>() {
             @Override
             public Observable<? extends Channel> call(final Channel channel) {
-                return Observable.create(new Observable.OnSubscribe<Channel>() {
+                return Observable.create(new Observable.OnSubscribe<ChannelFuture>() {
                     @Override
-                    public void call(final Subscriber<? super Channel> subscriber) {
+                    public void call(final Subscriber<? super ChannelFuture> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
                             final ChannelFuture future = channel.connect(remoteAddress);
                             RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
-                            future.addListener(listenerOfOnError(subscriber))
-                                .addListener(listenerOfOnNextAndCompleted(subscriber));
+                            subscriber.onNext(future);
+                            subscriber.onCompleted();
                         }
-                    }});
+                    }}).flatMap(new Func1<ChannelFuture, Observable<? extends Channel>>() {
+                        @Override
+                        public Observable<? extends Channel> call(
+                                final ChannelFuture f) {
+                            return channelObservableFromFuture(f);
+                        }});
             }};
     }
     

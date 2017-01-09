@@ -19,6 +19,7 @@ import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys.ServerChannelAware;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
@@ -147,7 +148,12 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                         @Override
                         public void call() {
                             while (!awaitChannels.isEmpty()) {
-                                awaitChannels.remove(0).close();
+                                try {
+                                    awaitChannels.remove(0).close();
+                                } catch (Exception e) {
+                                    LOG.warn("exception when remove all awaitChannels, detail: {}",
+                                            ExceptionUtils.exception2detail(e));
+                                }
                             }
                         }}));
                     future.addListener(RxNettys.listenerOfOnError(subscriber))
