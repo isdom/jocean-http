@@ -11,7 +11,6 @@ import java.util.List;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
 import org.jocean.http.Feature.HandlerBuilder;
-import org.jocean.http.util.Nettys.ServerChannelAware;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ProxyBuilder;
 import org.jocean.idiom.ToString;
@@ -32,7 +31,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
-import io.netty.channel.ServerChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpMessage;
@@ -151,7 +149,7 @@ public class RxNettys {
     public static <T> Func1<T, T> retainer() {
         return (Func1)RETAIN_OBJ;
     }
-        
+
     public static <T, V> Observable<T> observableFromFuture(final Future<V> future) {
         return Observable.create(new Observable.OnSubscribe<T>() {
             @Override
@@ -193,17 +191,17 @@ public class RxNettys {
             }});
     }
     
-    public static <V> GenericFutureListener<Future<V>> listenerOfOnError(final Subscriber<?> subscriber) {
-        return new GenericFutureListener<Future<V>>() {
-            @Override
-            public void operationComplete(final Future<V> f)
-                    throws Exception {
-                if (!f.isSuccess() && !subscriber.isUnsubscribed()) {
-                    subscriber.onError(f.cause());
-                }
-            }
-        };
-    }
+//    public static <V> GenericFutureListener<Future<V>> listenerOfOnError(final Subscriber<?> subscriber) {
+//        return new GenericFutureListener<Future<V>>() {
+//            @Override
+//            public void operationComplete(final Future<V> f)
+//                    throws Exception {
+//                if (!f.isSuccess() && !subscriber.isUnsubscribed()) {
+//                    subscriber.onError(f.cause());
+//                }
+//            }
+//        };
+//    }
     
 //    public static ChannelFutureListener listenerOfOnNextAndCompleted(final Subscriber<? super Channel> subscriber) {
 //        return new ChannelFutureListener() {
@@ -218,22 +216,22 @@ public class RxNettys {
 //        };
 //    }
     
-    public static ChannelFutureListener listenerOfSetServerChannel(
-            final ServerChannelAware serverChannelAware) {
-        return new ChannelFutureListener() {
-            @Override
-            public void operationComplete(final ChannelFuture future)
-                    throws Exception {
-                if (future.isSuccess() && null!=serverChannelAware) {
-                    try {
-                        serverChannelAware.setServerChannel((ServerChannel)future.channel());
-                    } catch (Exception e) {
-                        LOG.warn("exception when invoke setServerChannel for channel ({}), detail: {}",
-                                future.channel(), ExceptionUtils.exception2detail(e));
-                    }
-                }
-            }};
-    }
+//    public static ChannelFutureListener listenerOfSetServerChannel(
+//            final ServerChannelAware serverChannelAware) {
+//        return new ChannelFutureListener() {
+//            @Override
+//            public void operationComplete(final ChannelFuture future)
+//                    throws Exception {
+//                if (future.isSuccess() && null!=serverChannelAware) {
+//                    try {
+//                        serverChannelAware.setServerChannel((ServerChannel)future.channel());
+//                    } catch (Exception e) {
+//                        LOG.warn("exception when invoke setServerChannel for channel ({}), detail: {}",
+//                                future.channel(), ExceptionUtils.exception2detail(e));
+//                    }
+//                }
+//            }};
+//    }
     
 //    public static Func1<ChannelFuture, Observable<? extends Channel>> funcFutureToChannel() {
 //        return new Func1<ChannelFuture, Observable<? extends Channel>>() {

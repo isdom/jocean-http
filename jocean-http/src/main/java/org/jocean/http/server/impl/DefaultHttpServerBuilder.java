@@ -34,17 +34,18 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.ServerChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
-import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
+import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -117,9 +118,9 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             final SocketAddress localAddress, 
             final Func0<Feature[]> featuresBuilder,
             final Feature... features) {
-        return Observable.create(new OnSubscribe<HttpTrade>() {
+        return Observable.create(new Observable.OnSubscribe<Object>() {
             @Override
-            public void call(final Subscriber<? super HttpTrade> subscriber) {
+            public void call(final Subscriber<? super Object> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final ServerBootstrap bootstrap = _creator.newBootstrap();
                     final List<Channel> awaitChannels = new CopyOnWriteArrayList<>();
@@ -156,10 +157,34 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                                 }
                             }
                         }}));
-                    future.addListener(RxNettys.listenerOfOnError(subscriber))
-                        .addListener(RxNettys.listenerOfSetServerChannel(serverChannelAwareOf(features)));
+                    subscriber.onNext(future);
                 }
-            }});
+            }})
+            .flatMap(new Func1<Object, Observable<? extends Object>>() {
+                @Override
+                public Observable<? extends Object> call(final Object obj) {
+                    if (obj instanceof ChannelFuture) {
+                        return RxNettys.channelObservableFromFuture((ChannelFuture)obj);
+                    } else {
+                        return Observable.just(obj);
+                    }
+                }})
+            .flatMap(new Func1<Object, Observable<HttpTrade>>() {
+                @Override
+                public Observable<HttpTrade> call(final Object obj) {
+                    if (obj instanceof ServerChannel) {
+                        final ServerChannelAware serverChannelAware = serverChannelAwareOf(features);
+                        if (null != serverChannelAware) {
+                            serverChannelAware.setServerChannel((ServerChannel)obj);
+                        }
+                        return Observable.<HttpTrade>empty();
+                    } else if (obj instanceof HttpTrade) {
+                        return Observable.<HttpTrade>just((HttpTrade)obj);
+                    } else {
+                        return Observable.<HttpTrade>error(new RuntimeException("unknowm obj:" + obj));
+                    }
+                }})
+            ;
     }
 
     private void awaitInboundRequest(
