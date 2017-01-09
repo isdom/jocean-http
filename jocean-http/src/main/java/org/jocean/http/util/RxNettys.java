@@ -27,7 +27,6 @@ import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
@@ -191,82 +190,6 @@ public class RxNettys {
             }});
     }
     
-//    public static <V> GenericFutureListener<Future<V>> listenerOfOnError(final Subscriber<?> subscriber) {
-//        return new GenericFutureListener<Future<V>>() {
-//            @Override
-//            public void operationComplete(final Future<V> f)
-//                    throws Exception {
-//                if (!f.isSuccess() && !subscriber.isUnsubscribed()) {
-//                    subscriber.onError(f.cause());
-//                }
-//            }
-//        };
-//    }
-    
-//    public static ChannelFutureListener listenerOfOnNextAndCompleted(final Subscriber<? super Channel> subscriber) {
-//        return new ChannelFutureListener() {
-//            @Override
-//            public void operationComplete(final ChannelFuture f)
-//                    throws Exception {
-//                if (f.isSuccess() && !subscriber.isUnsubscribed()) {
-//                    subscriber.onNext(f.channel());
-//                    subscriber.onCompleted();
-//                }
-//            }
-//        };
-//    }
-    
-//    public static ChannelFutureListener listenerOfSetServerChannel(
-//            final ServerChannelAware serverChannelAware) {
-//        return new ChannelFutureListener() {
-//            @Override
-//            public void operationComplete(final ChannelFuture future)
-//                    throws Exception {
-//                if (future.isSuccess() && null!=serverChannelAware) {
-//                    try {
-//                        serverChannelAware.setServerChannel((ServerChannel)future.channel());
-//                    } catch (Exception e) {
-//                        LOG.warn("exception when invoke setServerChannel for channel ({}), detail: {}",
-//                                future.channel(), ExceptionUtils.exception2detail(e));
-//                    }
-//                }
-//            }};
-//    }
-    
-//    public static Func1<ChannelFuture, Observable<? extends Channel>> funcFutureToChannel() {
-//        return new Func1<ChannelFuture, Observable<? extends Channel>>() {
-//            @Override
-//            public Observable<? extends Channel> call(final ChannelFuture future) {
-//                return Observable.create(new Observable.OnSubscribe<Channel>() {
-//                    @Override
-//                    public void call(final Subscriber<? super Channel> subscriber) {
-//                        if (!subscriber.isUnsubscribed()) {
-//                            future.addListener(listenerOfOnError(subscriber))
-//                                .addListener(listenerOfOnNextAndCompleted(subscriber));
-//                        }
-//                    }});
-//            }};
-//    }
-    
-    public static Func1<Channel, Single<? extends Channel>> asyncConnectToAsSingle(
-            final SocketAddress remoteAddress,
-            final DoOnUnsubscribe doOnUnsubscribe) {
-        return new Func1<Channel, Single<? extends Channel>>() {
-            @Override
-            public Single<? extends Channel> call(final Channel channel) {
-                return Single.create(new Single.OnSubscribe<Channel>() {
-                    @Override
-                    public void call(final SingleSubscriber<? super Channel> subscriber) {
-                        if (!subscriber.isUnsubscribed()) {
-                            final ChannelFuture future = channel.connect(remoteAddress);
-                            doOnUnsubscribe.call(Subscriptions.from(future));
-                            future.addListener(listenerOfOnError(subscriber))
-                                .addListener(listenerOfOnSuccess(subscriber));
-                        }
-                    }});
-            }};
-    }
-    
     public static Func1<Channel, Observable<? extends Channel>> asyncConnectTo(
             final SocketAddress remoteAddress) {
         return new Func1<Channel, Observable<? extends Channel>>() {
@@ -406,45 +329,6 @@ public class RxNettys {
                             Nettys.setChannelReady(channel);
                         }});
                 }
-            }};
-    }
-    
-    public static <V> GenericFutureListener<Future<V>> listenerOfOnError(final SingleSubscriber<?> subscriber) {
-        return new GenericFutureListener<Future<V>>() {
-            @Override
-            public void operationComplete(final Future<V> f)
-                    throws Exception {
-                if (!f.isSuccess() && !subscriber.isUnsubscribed()) {
-                    subscriber.onError(f.cause());
-                }
-            }
-        };
-    }
-    
-    public static ChannelFutureListener listenerOfOnSuccess(final SingleSubscriber<? super Channel> subscriber) {
-        return new ChannelFutureListener() {
-            @Override
-            public void operationComplete(final ChannelFuture f)
-                    throws Exception {
-                if (f.isSuccess() && !subscriber.isUnsubscribed()) {
-                    subscriber.onSuccess(f.channel());
-                }
-            }
-        };
-    }
-    
-    public static Func1<ChannelFuture, Single<? extends Channel>> singleFutureToChannel() {
-        return new Func1<ChannelFuture, Single<? extends Channel>>() {
-            @Override
-            public Single<? extends Channel> call(final ChannelFuture future) {
-                return Single.create(new Single.OnSubscribe<Channel>() {
-                    @Override
-                    public void call(final SingleSubscriber<? super Channel> subscriber) {
-                        if (!subscriber.isUnsubscribed()) {
-                            future.addListener(listenerOfOnError(subscriber));
-                            future.addListener(listenerOfOnSuccess(subscriber));
-                        }
-                    }});
             }};
     }
     
