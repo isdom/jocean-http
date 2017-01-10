@@ -18,7 +18,6 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import rx.Observable;
 import rx.Subscriber;
-import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -102,12 +101,7 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
                     subscriber.onCompleted();
                 }
             }})
-            .flatMap(new Func1<ChannelFuture, Observable<? extends Channel>>() {
-                @Override
-                public Observable<? extends Channel> call(final ChannelFuture f) {
-                    return RxNettys.channelObservableFromFuture(f);
-                }})
-            ;
+            .compose(RxNettys.channelFutureToChannel());
     }
 
     public int getActiveChannelCount() {

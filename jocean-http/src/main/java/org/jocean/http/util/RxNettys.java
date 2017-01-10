@@ -204,12 +204,7 @@ public class RxNettys {
                             subscriber.onNext(future);
                             subscriber.onCompleted();
                         }
-                    }}).flatMap(new Func1<ChannelFuture, Observable<? extends Channel>>() {
-                        @Override
-                        public Observable<? extends Channel> call(
-                                final ChannelFuture f) {
-                            return channelObservableFromFuture(f);
-                        }});
+                    }}).compose(channelFutureToChannel());
             }};
     }
     
@@ -642,6 +637,22 @@ public class RxNettys {
             }};
     }
     
+    private final static Observable.Transformer<ChannelFuture, Channel> CHANNELFUTURE_CHANNEL = 
+            new Observable.Transformer<ChannelFuture, Channel>() {
+                @Override
+                public Observable<Channel> call(final Observable<ChannelFuture> source) {
+                    return source.flatMap(new Func1<ChannelFuture, Observable<? extends Channel>>() {
+                        @Override
+                        public Observable<? extends Channel> call(
+                                final ChannelFuture f) {
+                            return channelObservableFromFuture(f);
+                        }});
+                }};
+                
+    public static Observable.Transformer<ChannelFuture, Channel> channelFutureToChannel() {
+        return CHANNELFUTURE_CHANNEL;
+    }
+
     static class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
 
         private final String _contentTypePrefix;
@@ -768,24 +779,5 @@ public class RxNettys {
             }
             return null;
         };
-    }
-
-    private static final AttributeKey<Object> __PROCESSOR = AttributeKey.valueOf("__TRADE_PROCESSOR");
-    
-    public static <T> T attachProcessorToChannel(final Channel channel, final T processor) {
-        channel.attr(__PROCESSOR).setIfAbsent(processor);
-        return processor;
-    }
-    
-    public static <T> void detachProcessorFromChannel(final Channel channel, final T processor) {
-        channel.attr(__PROCESSOR).compareAndSet(processor, null);
-    }
-    
-    public static boolean hasProcessorForChannel(final Channel channel) {
-        return channel.attr(__PROCESSOR).get() != null;
-    }
-    
-    public static Object getProcessorForChannel(final Channel channel) {
-        return channel.attr(__PROCESSOR).get();
     }
 }

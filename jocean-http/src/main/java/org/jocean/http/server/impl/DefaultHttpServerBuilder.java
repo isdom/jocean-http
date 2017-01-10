@@ -199,7 +199,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                     awaitChannels.remove(channel);
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onNext(
-                            addToTrades(RxNettys.attachProcessorToChannel(channel, httpTradeOf(channel)))
+                            addToTrades(httpTradeOf(channel))
                             .addCloseHook(actionRecycleChannel(channel, subscriber, awaitChannels)));
                     } else {
                         LOG.warn("HttpTrade Subscriber {} has unsubscribed, so close channel({})",
@@ -241,7 +241,6 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             @Override
             public void call(final HttpTrade trade) {
                 removeFromTrades(trade);
-                RxNettys.detachProcessorFromChannel(channel, trade);
                 RxNettys.installDoOnUnsubscribe(channel, 
                         DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
                 if (channel.isActive()

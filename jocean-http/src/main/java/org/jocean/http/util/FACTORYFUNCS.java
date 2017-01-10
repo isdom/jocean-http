@@ -212,10 +212,6 @@ class FACTORYFUNCS {
                         LOG.debug("channel({})/handler({}): channelInactive and call ({}).onError with TransportException.", 
                                 ctx.channel(), ctx.name(), subscriber);
                     }
-                    if (RxNettys.hasProcessorForChannel(ctx.channel())) {
-                        LOG.info("channel({})/handler({}): channelInactive BUT still has processor({}).", 
-                                ctx.channel(), ctx.name(), RxNettys.getProcessorForChannel(ctx.channel()));
-                    }
                     
                     touchAllContentWith(ctx.channel(), "channelInactive");
                     if (!subscriber.isUnsubscribed()) {

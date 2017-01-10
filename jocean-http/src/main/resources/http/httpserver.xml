@@ -13,7 +13,7 @@
           lazy-init="false">
         <property name="beans">
             <map>
-                <entry key="org.jocean:name=httpServers" value-ref="httpServerBuilder"/>
+                <entry key="org.jocean:name=tradeHolder" value-ref="httpServerBuilder"/>
             </map>
         </property>
     </bean>
