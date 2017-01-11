@@ -104,7 +104,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
                 new Action1<HttpObject>() {
                     @Override
                     public void call(final HttpObject msg) {
-                        LOG.info("internal req's subscr.onNext {}", msg);
+//                        LOG.info("internal req's subscr.onNext {}", msg);
                     }},
                 new Action1<Throwable>() {
 
