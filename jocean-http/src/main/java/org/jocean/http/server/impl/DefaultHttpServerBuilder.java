@@ -24,6 +24,7 @@ import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
+import org.jocean.idiom.rx.RxObservables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -232,7 +233,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                 } else {
                     LOG.warn("subscriber {} isUnsubscribed, can't used as HTTPOBJ_SUBSCRIBER ", subscriber);
                 }
-            }} );
+            }} )
+            .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
     }
     
     private Action1<HttpTrade> actionRecycleChannel(
