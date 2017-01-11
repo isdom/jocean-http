@@ -15,6 +15,7 @@ import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
+import org.jocean.idiom.Ordered;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
@@ -99,6 +100,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
             addCloseHook(onclosed);
         }
 //        //  TODO when to unsubscribe ?
+        /*
         this._requestObservable.subscribe(
                 //RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
                 new Action1<HttpObject>() {
@@ -113,19 +115,27 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
                         LOG.warn("internal req's subscr.onError {}", 
                                 ExceptionUtils.exception2detail(e));
                     }});
+        */
         
         //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
         closeTradeWhenChannelInactive();
     }
 
+    private final class TradeCloser extends ChannelInboundHandlerAdapter implements Ordered {
+        @Override
+        public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
+            doClose();
+        }
+
+        @Override
+        public int ordinal() {
+            return 1000;
+        }
+    }
+    
     private void closeTradeWhenChannelInactive() {
         final ChannelHandler doCloseWhenChannelInactive = 
-            new ChannelInboundHandlerAdapter() {
-                @Override
-                public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-                    doClose();
-                }
-            };
+            new TradeCloser();
         this._channel.pipeline().addLast(doCloseWhenChannelInactive);
         addCloseHook(new Action1<HttpTrade>() {
             @Override
