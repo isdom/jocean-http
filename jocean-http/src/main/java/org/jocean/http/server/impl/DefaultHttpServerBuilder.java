@@ -229,6 +229,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                     subscriber.add(Subscriptions.create(
                         RxNettys.actionToRemoveHandler(channel, 
                             APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
+                } else {
+                    LOG.warn("subscriber {} isUnsubscribed, can't used as HTTPOBJ_SUBSCRIBER ", subscriber);
                 }
             }} );
     }
