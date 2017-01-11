@@ -131,6 +131,7 @@ public class Nettys {
                 // throw by toOrdinal.call, so just ignore this entry and continue
                 LOG.warn("channel({}): insert handler named({}), meet handler entry:{}, which is !NOT! ordinal, just ignore", 
                         pipeline.channel(), name, entry);
+                LOG.warn("call from {}", ExceptionUtils.dumpCallStack(new Throwable(), "", 2));
                 continue;
             }
         }
