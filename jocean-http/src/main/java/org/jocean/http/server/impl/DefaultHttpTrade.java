@@ -87,7 +87,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     DefaultHttpTrade(
         final Channel channel, 
         final Observable<? extends HttpObject> requestObservable,
-        final Action1<HttpTrade> ... doOnCloseds) {
+        final Action1<HttpTrade> ... onCloseds) {
         this._channel = channel;
         this._requestObservable = requestObservable
                 .compose(hookRequest())
@@ -95,11 +95,24 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
                 .compose(RxNettys.duplicateHttpContent());
                 ;
         
-        for (Action1<HttpTrade> onclosed : doOnCloseds) {
+        for (Action1<HttpTrade> onclosed : onCloseds) {
             addCloseHook(onclosed);
         }
 //        //  TODO when to unsubscribe ?
-        this._requestObservable.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
+        this._requestObservable.subscribe(
+                //RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
+                new Action1<HttpObject>() {
+                    @Override
+                    public void call(final HttpObject msg) {
+                        LOG.info("internal req's subscr.onNext {}", msg);
+                    }},
+                new Action1<Throwable>() {
+
+                    @Override
+                    public void call(final Throwable e) {
+                        LOG.warn("internal req's subscr.onError {}", 
+                                ExceptionUtils.exception2detail(e));
+                    }});
         
         //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
         closeTradeWhenChannelInactive();
