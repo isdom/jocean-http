@@ -63,9 +63,11 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(_createTime))
                 .append(", request subscriber count=")
                 .append(_requestSubscribers.size())
-                .append(", currentResponseIdx=").append(_responseIdx.get())
                 .append(", isRequestReceived=").append(_isRequestReceived.get())
+                .append(", requestMethod=").append(_requestMethod)
+                .append(", requestUri=").append(_requestUri)
                 .append(", isRequestCompleted=").append(_isRequestCompleted.get())
+                .append(", currentResponseIdx=").append(_responseIdx.get())
                 .append(", isResponseSended=").append(_isResponseSended.get())
                 .append(", isResponseCompleted=").append(_isResponseCompleted.get())
                 .append(", isKeepAlive=").append(_isKeepAlive.get())
@@ -126,10 +128,15 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
                 return src.doOnNext(new Action1<HttpObject>() {
                     @Override
                     public void call(final HttpObject msg) {
-                        _isRequestReceived.compareAndSet(false, true);
-                      if (msg instanceof HttpRequest) {
-                          _isKeepAlive.set(HttpUtil.isKeepAlive((HttpRequest)msg));
-                      }
+                        if (msg instanceof HttpRequest) {
+                            _requestMethod = ((HttpRequest)msg).method().name();
+                            _requestUri = ((HttpRequest)msg).uri();
+                            _isRequestReceived.compareAndSet(false, true);
+                            _isKeepAlive.set(HttpUtil.isKeepAlive((HttpRequest)msg));
+                        } else if (!_isRequestReceived.get()) {
+                            LOG.warn("trade {} missing http request and recv httpobj {}", 
+                                DefaultHttpTrade.this, msg);
+                        }
                     }})
                 .doOnCompleted(new Action0() {
                     @Override
@@ -421,6 +428,8 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     
     private final Date _createTime = new Date();
     private final Channel _channel;
+    private String _requestMethod;
+    private String _requestUri;
     private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
