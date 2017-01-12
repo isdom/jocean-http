@@ -46,7 +46,6 @@ import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
-import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -119,9 +118,9 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             final SocketAddress localAddress, 
             final Func0<Feature[]> featuresBuilder,
             final Feature... features) {
-        return Observable.create(new Observable.OnSubscribe<Object>() {
+        return Observable.create(new Observable.OnSubscribe<HttpTrade>() {
             @Override
-            public void call(final Subscriber<? super Object> subscriber) {
+            public void call(final Subscriber<? super HttpTrade> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final ServerBootstrap bootstrap = _creator.newBootstrap();
                     final List<Channel> awaitChannels = new CopyOnWriteArrayList<>();
@@ -144,47 +143,30 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                             awaitInboundRequest(channel, subscriber, awaitChannels);
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
-                    subscriber.add(Subscriptions.from(future));
-                    subscriber.add(RxNettys.subscriptionForCloseChannel(future.channel()));
-                    subscriber.add(Subscriptions.create(new Action0() {
-                        @Override
-                        public void call() {
-                            while (!awaitChannels.isEmpty()) {
-                                try {
-                                    awaitChannels.remove(0).close();
-                                } catch (Exception e) {
-                                    LOG.warn("exception when remove all awaitChannels, detail: {}",
-                                            ExceptionUtils.exception2detail(e));
+                    try {
+                        future.sync();
+                        subscriber.add(RxNettys.subscriptionForCloseChannel(future.channel()));
+                        subscriber.add(Subscriptions.create(new Action0() {
+                            @Override
+                            public void call() {
+                                while (!awaitChannels.isEmpty()) {
+                                    try {
+                                        awaitChannels.remove(0).close();
+                                    } catch (Exception e) {
+                                        LOG.warn("exception when remove all awaitChannels, detail: {}",
+                                                ExceptionUtils.exception2detail(e));
+                                    }
                                 }
-                            }
-                        }}));
-                    subscriber.onNext(future);
-                }
-            }})
-            .flatMap(new Func1<Object, Observable<? extends Object>>() {
-                @Override
-                public Observable<? extends Object> call(final Object obj) {
-                    if (obj instanceof ChannelFuture) {
-                        return RxNettys.channelObservableFromFuture((ChannelFuture)obj);
-                    } else {
-                        return Observable.just(obj);
-                    }
-                }})
-            .flatMap(new Func1<Object, Observable<HttpTrade>>() {
-                @Override
-                public Observable<HttpTrade> call(final Object obj) {
-                    if (obj instanceof ServerChannel) {
+                            }}));
                         final ServerChannelAware serverChannelAware = serverChannelAwareOf(features);
                         if (null != serverChannelAware) {
-                            serverChannelAware.setServerChannel((ServerChannel)obj);
+                            serverChannelAware.setServerChannel((ServerChannel)future.channel());
                         }
-                        return Observable.<HttpTrade>empty();
-                    } else if (obj instanceof HttpTrade) {
-                        return Observable.<HttpTrade>just((HttpTrade)obj);
-                    } else {
-                        return Observable.<HttpTrade>error(new RuntimeException("unknowm obj:" + obj));
+                    } catch (Exception e) {
+                        subscriber.onError(e);
                     }
-                }})
+                }
+            }})
             ;
     }
 
