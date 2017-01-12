@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
+import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
@@ -88,34 +89,33 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     DefaultHttpTrade(
         final Channel channel, 
         final Observable<? extends HttpObject> requestObservable,
-        final Action1<HttpTrade> ... onCloseds) {
+        final Action1<HttpTrade> ... oncloseds) {
         this._channel = channel;
-        this._requestObservable = requestObservable
-                .compose(hookRequest())
-                .share()
-                .compose(RxNettys.duplicateHttpContent());
-                ;
         
-        for (Action1<HttpTrade> onclosed : onCloseds) {
-            addCloseHook(onclosed);
+        final HttpMessageHolder _holder = new HttpMessageHolder(0);
+        addCloseHook(RxActions.<HttpTrade>toAction1(_holder.release()));
+        
+        this._requestObservable = requestObservable
+                .compose(_holder.assembleAndHold())
+                .compose(hookRequest())
+                .cache()
+                .compose(RxNettys.duplicateHttpContent())
+                ;
+//                .share()
+//                .compose(RxNettys.duplicateHttpContent());
+//                ;
+        for (Action1<HttpTrade> hook : oncloseds) {
+            addCloseHook(hook);
         }
-//        //  TODO when to unsubscribe ?
-        /*
+        //  TODO when to unsubscribe ?
         this._requestObservable.subscribe(
-                //RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
-                new Action1<HttpObject>() {
-                    @Override
-                    public void call(final HttpObject msg) {
-//                        LOG.info("internal req's subscr.onNext {}", msg);
-                    }},
+                RxSubscribers.nopOnNext(), //RxSubscribers.nopOnError());
                 new Action1<Throwable>() {
-
                     @Override
                     public void call(final Throwable e) {
-                        LOG.warn("internal req's subscr.onError {}", 
-                                ExceptionUtils.exception2detail(e));
+                        LOG.warn("Trade({})'s internal request subscriber invoke with onError {}", 
+                                DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
                     }});
-        */
         
         //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
         closeTradeWhenChannelInactive();
