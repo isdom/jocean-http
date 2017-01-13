@@ -2,6 +2,7 @@ package org.jocean.http.util;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
@@ -102,6 +103,7 @@ public class HttpMessageHolder {
         releaseReferenceCountedList(this._currentBlock);
         releaseReferenceCountedList(this._cachedHttpObjects);
         this._currentBlockSize = 0;
+        this._retainedByteBufSize.set(0);
     }
 
     private static <T> void releaseReferenceCountedList(final List<T> objs) {
@@ -214,6 +216,7 @@ public class HttpMessageHolder {
         if (null != content) {
             this._currentBlock.add(ReferenceCountUtil.retain(content));
             this._currentBlockSize += content.content().readableBytes();
+            this._retainedByteBufSize.addAndGet(content.content().readableBytes());
         }
     }
     
@@ -277,6 +280,12 @@ public class HttpMessageHolder {
             this._currentBlockSize = 0;
         }
     }
+    
+    public int retainedByteBufSize() {
+        return this._retainedByteBufSize.get();
+    }
+    
+    private final AtomicInteger _retainedByteBufSize = new AtomicInteger(0);
     
     private final boolean _enableAssemble;
     

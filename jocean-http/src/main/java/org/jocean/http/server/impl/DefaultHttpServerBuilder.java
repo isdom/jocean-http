@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
@@ -63,6 +64,26 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpServerBuilder.class);
+    
+    @Override
+    public int getCurrentInboundMemoryInBytes() {
+        return this._currentInboundMemory.get();
+    }
+    
+    @Override
+    public int getPeakInboundMemoryInBytes() {
+        return this._peakInboundMemory.get();
+    }
+    
+    @Override
+    public float getCurrentInboundMemoryInMBs() {
+        return getCurrentInboundMemoryInBytes() / (float)(1024 * 1024);
+    }
+    
+    @Override
+    public float getPeakInboundMemoryInMBs() {
+        return getPeakInboundMemoryInBytes() / (float)(1024 * 1024);
+    }
     
     @Override
     public int getTradeCount() {
@@ -192,8 +213,42 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                 }});
     }
 
+    private void updateCurrentInboundMemory(final int delta) {
+        final int current = this._currentInboundMemory.addAndGet(delta);
+        if (delta > 0) {
+            boolean updated = false;
+            
+            do {
+                // try to update peak memory value
+                final int peak = this._peakInboundMemory.get();
+                if (current > peak) {
+                    updated = this._peakInboundMemory.compareAndSet(peak, current);
+                } else {
+                    break;
+                }
+            } while (!updated);
+        }
+    }
+    
     private HttpTrade httpTradeOf(final Channel channel) {
-        return new DefaultHttpTrade(channel, httpobjObservable(channel));
+        final DefaultHttpTrade trade = new DefaultHttpTrade(channel, httpobjObservable(channel));
+        final AtomicInteger _lastAddedSize = new AtomicInteger(0);
+        
+        trade.inboundRequest().subscribe(new Action1<HttpObject>() {
+            @Override
+            public void call(final HttpObject msg) {
+                final int currentsize = trade.retainedInboundMemory();
+                final int lastsize = _lastAddedSize.getAndSet(currentsize);
+                if (lastsize >= 0) { // -1 means trade has closed
+                    updateCurrentInboundMemory(currentsize - lastsize);
+                }
+            }});
+        trade.addCloseHook(new Action1<HttpTrade>() {
+            @Override
+            public void call(final HttpTrade t) {
+                updateCurrentInboundMemory(-_lastAddedSize.getAndSet(-1));
+            }});
+        return trade;
     }
     
     private static Observable<? extends HttpObject> httpobjObservable(final Channel channel) {
@@ -303,6 +358,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private static final Class2ApplyBuilder _APPLY_BUILDER;
     
     private final Set<HttpTrade> _trades = new ConcurrentSkipListSet<HttpTrade>();
+    private final AtomicInteger  _currentInboundMemory = new AtomicInteger(0);
+    private final AtomicInteger  _peakInboundMemory = new AtomicInteger(0);
         
     static {
         _APPLY_BUILDER = new Class2ApplyBuilder();

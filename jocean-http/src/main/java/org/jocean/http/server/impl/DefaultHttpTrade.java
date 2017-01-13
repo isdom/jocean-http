@@ -91,19 +91,16 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
         final Observable<? extends HttpObject> requestObservable,
         final Action1<HttpTrade> ... oncloseds) {
         this._channel = channel;
+        this._holder = new HttpMessageHolder(0);
         
-        final HttpMessageHolder _holder = new HttpMessageHolder(0);
-        addCloseHook(RxActions.<HttpTrade>toAction1(_holder.release()));
+        addCloseHook(RxActions.<HttpTrade>toAction1(this._holder.release()));
         
         this._requestObservable = requestObservable
-                .compose(_holder.assembleAndHold())
+                .compose(this._holder.assembleAndHold())
                 .compose(hookRequest())
                 .cache()
                 .compose(RxNettys.duplicateHttpContent())
                 ;
-//                .share()
-//                .compose(RxNettys.duplicateHttpContent());
-//                ;
         for (Action1<HttpTrade> hook : oncloseds) {
             addCloseHook(hook);
         }
@@ -121,6 +118,11 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
         closeTradeWhenChannelInactive();
     }
 
+    @Override
+    public int retainedInboundMemory() {
+        return this._holder.retainedByteBufSize();
+    }
+    
     private final class TradeCloser extends ChannelInboundHandlerAdapter implements Ordered {
         @Override
         public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
@@ -449,6 +451,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     private final COWCompositeSupport<Action1<HttpTrade>> _onClosedActions = 
             new COWCompositeSupport<Action1<HttpTrade>>();
     
+    private final HttpMessageHolder _holder;
     private final Date _createTime = new Date();
     private final Channel _channel;
     private String _requestMethod;

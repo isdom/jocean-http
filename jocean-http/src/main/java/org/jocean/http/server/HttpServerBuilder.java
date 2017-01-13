@@ -36,6 +36,7 @@ public interface HttpServerBuilder extends Closeable {
             final Feature ... features);
     
     public interface HttpTrade {
+        public int retainedInboundMemory();
         public boolean isActive();
         public boolean isEndedWithKeepAlive();
         //  try to abort trade explicit
