@@ -216,7 +216,6 @@ public class HttpMessageHolder {
         if (null != content) {
             this._currentBlock.add(ReferenceCountUtil.retain(content));
             this._currentBlockSize += content.content().readableBytes();
-            this._retainedByteBufSize.addAndGet(content.content().readableBytes());
         }
     }
     
@@ -234,6 +233,10 @@ public class HttpMessageHolder {
     private HttpObject doRetainAndHoldHttpObject(final HttpObject httpobj) {
         if (null != httpobj) {
             this._cachedHttpObjects.add(ReferenceCountUtil.retain(httpobj));
+            if (httpobj instanceof ByteBufHolder) {
+                this._retainedByteBufSize.addAndGet(
+                    ((ByteBufHolder)httpobj).content().readableBytes());
+            }
         }
         return httpobj;
     }
