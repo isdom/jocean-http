@@ -47,7 +47,7 @@ public class HttpMessageHolderTestCase {
         
         final Observable<HttpObject> requestObservable = 
             Observable.<HttpObject>just(request)
-                .compose(holder.assembleAndHold());
+                .compose(holder.<HttpObject>assembleAndHold());
         
         //  subscribe more than once
         final HttpObject h1 = requestObservable.toBlocking().single();
@@ -75,7 +75,7 @@ public class HttpMessageHolderTestCase {
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         Observable.<HttpObject>from(reqs)
-            .compose(holder.assembleAndHold())
+            .compose(holder.<HttpObject>assembleAndHold())
             .subscribe(reqSubscriber);
         
         reqSubscriber.assertValueCount(reqs.size());
@@ -102,7 +102,7 @@ public class HttpMessageHolderTestCase {
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         
         Observable.create(subscholder)
-            .compose(holder.assembleAndHold())
+            .compose(holder.<HttpObject>assembleAndHold())
             .subscribe(reqSubscriber);
         
         assertEquals(1, subscholder.getSubscriberCount());

@@ -847,7 +847,7 @@ public class DefaultHttpTradeTestCase {
         final Observable<? extends HttpObject> inbound = 
             trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
             .inboundRequest()
-            .compose(holder.assembleAndHold());
+            .compose(holder.<HttpObject>assembleAndHold());
         
         final Observable<? extends HttpObject> cached = inbound.cache();
         //  force cached to subscribe upstream
@@ -912,7 +912,7 @@ public class DefaultHttpTradeTestCase {
         final Observable<? extends HttpObject> inbound = 
             trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
             .inboundRequest()
-            .compose(holder.assembleAndHold());
+            .compose(holder.<HttpObject>assembleAndHold());
         
         inbound.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
         
@@ -943,7 +943,7 @@ public class DefaultHttpTradeTestCase {
         final Observable<? extends HttpObject> inbound = 
             trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
             .inboundRequest()
-            .compose(holder.assembleAndHold());
+            .compose(holder.<HttpObject>assembleAndHold());
         
         inbound.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
         
@@ -976,7 +976,7 @@ public class DefaultHttpTradeTestCase {
         final Observable<? extends HttpObject> inbound = 
             trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
             .inboundRequest()
-            .compose(holder.assembleAndHold());
+            .compose(holder.<HttpObject>assembleAndHold());
         
         inbound.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
         
