@@ -96,7 +96,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
         addCloseHook(RxActions.<HttpTrade>toAction1(this._holder.release()));
         
         this._requestObservable = requestObservable
-                .compose(this._holder.assembleAndHold())
+                .compose(this._holder.<HttpObject>assembleAndHold())
                 .compose(hookRequest())
                 .cache()
                 .compose(RxNettys.duplicateHttpContent())
@@ -104,9 +104,9 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
         for (Action1<HttpTrade> hook : oncloseds) {
             addCloseHook(hook);
         }
-        //  TODO when to unsubscribe ?
+        
         this._requestObservable.subscribe(
-                RxSubscribers.nopOnNext(), //RxSubscribers.nopOnError());
+                RxSubscribers.nopOnNext(),
                 new Action1<Throwable>() {
                     @Override
                     public void call(final Throwable e) {

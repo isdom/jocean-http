@@ -148,36 +148,45 @@ public class HttpMessageHolder {
             }}).call();
     }
     
-    private final Func1<HttpObject, Observable<? extends HttpObject>> _ASSEMBLE_AND_HOLD = 
-    new Func1<HttpObject, Observable<? extends HttpObject>>() {
+    private final Func1<Object, Observable<? extends Object>> _ASSEMBLE_AND_HOLD = 
+    new Func1<Object, Observable<? extends Object>>() {
         @Override
-        public Observable<? extends HttpObject> call(final HttpObject msg) {
-            if (LOG.isDebugEnabled()) {
-                if (msg instanceof ByteBufHolder) {
-                    LOG.debug("HttpMessageHolder: receive ByteBufHolder's content: {}", 
-                            Nettys.dumpByteBufHolder((ByteBufHolder)msg));
-                } else {
-                    LOG.debug("HttpMessageHolder: receive HttpObject: {}", msg);
+        public Observable<? extends Object> call(final Object obj) {
+            if (obj instanceof HttpObject) {
+                final HttpObject msg = (HttpObject)obj;
+                if (LOG.isDebugEnabled()) {
+                    if (msg instanceof ByteBufHolder) {
+                        LOG.debug("HttpMessageHolder: receive ByteBufHolder's content: {}", 
+                                Nettys.dumpByteBufHolder((ByteBufHolder)msg));
+                    } else {
+                        LOG.debug("HttpMessageHolder: receive HttpObject: {}", msg);
+                    }
                 }
-            }
-            if (_enableAssemble && (msg instanceof HttpContent)) {
-                if (msg instanceof LastHttpContent) {
-                    return asObservable(retainAnyBlockLeft(), retainAndHoldHttpObject(msg));
+                if (_enableAssemble && (msg instanceof HttpContent)) {
+                    if (msg instanceof LastHttpContent) {
+                        return asObservable(retainAnyBlockLeft(), retainAndHoldHttpObject(msg));
+                    } else {
+                        return assembleAndReturnObservable((HttpContent)msg);
+                    }
                 } else {
-                    return assembleAndReturnObservable((HttpContent)msg);
+                    return asObservable(retainAndHoldHttpObject(msg));
                 }
             } else {
-                return asObservable(retainAndHoldHttpObject(msg));
+                return Observable.just(obj);
             }
         }};
         
-    public Transformer<HttpObject, HttpObject> assembleAndHold() {
-        return new Transformer<HttpObject, HttpObject>() {
+    private final Transformer<Object, Object> _TRANS_OF_ASSEMBLE_AND_HOLD = 
+        new Transformer<Object, Object>() {
             @Override
-            public Observable<HttpObject> call(final Observable<HttpObject> source) {
+            public Observable<Object> call(final Observable<Object> source) {
                 return source.flatMap(_ASSEMBLE_AND_HOLD)
-                        .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
+                    .compose(RxObservables.ensureSubscribeAtmostOnce());
             }};
+            
+    @SuppressWarnings("unchecked")
+    public <T> Transformer<T, T> assembleAndHold() {
+        return (Transformer<T, T>)_TRANS_OF_ASSEMBLE_AND_HOLD;
     }
 
     private HttpObject retainAnyBlockLeft() {

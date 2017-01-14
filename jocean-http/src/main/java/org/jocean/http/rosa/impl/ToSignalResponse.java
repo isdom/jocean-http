@@ -59,7 +59,7 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
     public Observable<RESP> call(final Observable<HttpObject> source) {
         final HttpMessageHolder holder = new HttpMessageHolder(0);
         
-        return source.compose(holder.assembleAndHold())
+        return source.compose(holder.<HttpObject>assembleAndHold())
                 .flatMap(buildOnNext(), 
                         buildOnError(), 
                         buildOnCompleted(holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE)))
