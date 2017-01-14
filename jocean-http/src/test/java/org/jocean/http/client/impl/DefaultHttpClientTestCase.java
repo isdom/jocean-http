@@ -136,9 +136,11 @@ public class DefaultHttpClientTestCase {
         
             client.defineInteraction(
                 new LocalAddress(testAddr), 
-                Observable.just(fullHttpRequest()))
+                Observable.just(fullHttpRequest()),
+                HttpUtil.buildHoldMessageFeature(holder)
+                )
             .observeOn(Schedulers.io())
-            .compose(holder.assembleAndHold())
+//            .compose(holder.assembleAndHold())
             .toBlocking().last();
             
             final FullHttpResponse resp = holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();

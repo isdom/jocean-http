@@ -12,6 +12,7 @@ import org.jocean.http.TrafficCounter;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
+import org.jocean.http.util.ComposeSource;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.http.util.TrafficCounterAware;
@@ -71,7 +72,7 @@ public class DefaultHttpClient implements HttpClient {
                     HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
             .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
             .doOnNext(hookFeatures(fullFeatures))
-            .flatMap(prepareRecvResponse())
+            .flatMap(prepareRecvResponse(fullFeatures))
             .flatMap(buildAndSendRequest(requestProvider, fullFeatures))
             ;
     }
@@ -147,11 +148,16 @@ public class DefaultHttpClient implements HttpClient {
         return false;
     }
 
-    private Func1<Channel, Observable<? extends Object>> prepareRecvResponse() {
+    private Func1<Channel, Observable<? extends Object>> prepareRecvResponse(final Feature[] features) {
+        final ComposeSource[] composeSources = 
+                InterfaceUtils.selectIncludeType(
+                        ComposeSource.class, (Object[])features);;
+        
         return new Func1<Channel, Observable<? extends Object>>() {
             @Override
             public Observable<? extends Object> call(final Channel channel) {
-                return Observable.create(new Observable.OnSubscribe<Object>() {
+                Observable<? extends Object> channelAndRespStream = 
+                        Observable.create(new Observable.OnSubscribe<Object>() {
                     @Override
                     public void call(final Subscriber<? super Object> subscriber) {
                         RxNettys.doOnUnsubscribe(channel, 
@@ -160,7 +166,13 @@ public class DefaultHttpClient implements HttpClient {
                         if ( !subscriber.isUnsubscribed()) {
                             subscriber.onNext(channel);
                         }
-                    }})
+                    }});
+                
+                if (null != composeSources) {
+                    channelAndRespStream = channelAndRespStream.compose(composeSources[0].transformer());
+                }
+                
+                return channelAndRespStream
                     .compose(ChannelPool.Util.hookPostReceiveLastContent(channel))
                     ;
             }};

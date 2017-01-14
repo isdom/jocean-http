@@ -8,6 +8,7 @@ import org.jocean.http.PayloadCounter;
 import org.jocean.http.TrafficCounter;
 
 import io.netty.handler.codec.http.HttpMethod;
+import rx.Observable.Transformer;
 
 public class HttpUtil {
     public interface TrafficCounterFeature extends  FeatureOverChannelHandler, TrafficCounter {
@@ -101,5 +102,16 @@ public class HttpUtil {
         } else {
             return defaultMethod;
         }
+    }
+
+    public interface ComposeSourceFeature extends Feature, ComposeSource {
+    }
+    
+    public static Feature buildHoldMessageFeature(final HttpMessageHolder holder) {
+        return new ComposeSourceFeature() {
+            @Override
+            public <T> Transformer<T, T> transformer() {
+                return holder.assembleAndHold();
+            }};
     }
 }
