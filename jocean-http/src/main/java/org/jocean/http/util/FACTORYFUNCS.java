@@ -29,7 +29,6 @@ import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.AttributeKey;
-import io.netty.util.ReferenceCountUtil;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
@@ -239,20 +238,10 @@ class FACTORYFUNCS {
                     
                     if (!subscriber.isUnsubscribed()) {
                         try {
-                            subscriber.onNext(ReferenceCountUtil.retain(msg));
+                            subscriber.onNext(msg);
                         } catch (Exception e) {
                             LOG.warn("exception when invoke onNext for channel({})/msg ({}), detail: {}.", 
                                     ctx.channel(), msg, ExceptionUtils.exception2detail(e));
-                        } finally {
-                            RxNettys.doOnUnsubscribe(ctx.channel(), Subscriptions.create(new Action0() {
-                                @Override
-                                public void call() {
-                                    final boolean released = ReferenceCountUtil.release(msg);
-                                    if (LOG.isDebugEnabled()) {
-                                        LOG.debug("HttpObject({}) released({}) from {}'s unsubscribe", 
-                                                msg, released, ctx.channel());
-                                    }
-                                }}));
                         }
                     }
                     
