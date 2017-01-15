@@ -169,7 +169,7 @@ public class DefaultHttpClient implements HttpClient {
                     }});
                 
                 if (null != composeSources) {
-                    channelAndRespStream = channelAndRespStream.compose(composeSources[0].transformer());
+                    channelAndRespStream = channelAndRespStream.compose(composeSources[0].transformer(channel));
                 }
                 
                 return channelAndRespStream
