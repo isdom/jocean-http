@@ -40,7 +40,7 @@ import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
-import rx.functions.Func2;
+import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -69,7 +69,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
                 .append(", requestMethod=").append(_requestMethod)
                 .append(", requestUri=").append(_requestUri)
                 .append(", isRequestCompleted=").append(_isRequestCompleted.get())
-                .append(", currentResponseIdx=").append(_responseIdx.get())
+                .append(", isResponseSetted=").append(_isResponseSetted.get())
                 .append(", isResponseSended=").append(_isResponseSended.get())
                 .append(", isResponseCompleted=").append(_isResponseCompleted.get())
                 .append(", isKeepAlive=").append(_isKeepAlive.get())
@@ -82,7 +82,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
-    private final FuncSelector<DefaultHttpTrade> _selector = 
+    private final FuncSelector<DefaultHttpTrade> _funcSelector = 
             new FuncSelector<>(this);
     
     @SafeVarargs
@@ -91,12 +91,12 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
         final Observable<? extends HttpObject> requestObservable,
         final Action1<HttpTrade> ... oncloseds) {
         this._channel = channel;
-        this._holder = new HttpMessageHolder(0);
+        this._reqmsgholder = new HttpMessageHolder(0);
         
-        addCloseHook(RxActions.<HttpTrade>toAction1(this._holder.release()));
+        addCloseHook(RxActions.<HttpTrade>toAction1(this._reqmsgholder.release()));
         
         this._requestObservable = requestObservable
-                .compose(this._holder.<HttpObject>assembleAndHold())
+                .compose(this._reqmsgholder.<HttpObject>assembleAndHold())
                 .compose(hookRequest())
                 .cache()
                 .compose(RxNettys.duplicateHttpContent())
@@ -120,7 +120,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
 
     @Override
     public int retainedInboundMemory() {
-        return this._holder.retainedByteBufSize();
+        return this._reqmsgholder.retainedByteBufSize();
     }
     
     private final class TradeCloser extends ChannelInboundHandlerAdapter implements Ordered {
@@ -178,7 +178,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     
     @Override
     public boolean isActive() {
-        return this._selector.isActive();
+        return this._funcSelector.isActive();
     }
 
     @Override
@@ -205,7 +205,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
 
     private final Func0<Observable<? extends HttpObject>> _funcGetInboundRequest = 
         RxFunctions.toFunc0(
-            this._selector.callWhenActive(
+            this._funcSelector.callWhenActive(
                 RxFunctions.<DefaultHttpTrade,Observable<? extends HttpObject>>toFunc1_N(
                     DefaultHttpTrade.class, "doGetRequest"))
                 .callWhenDestroyed(GET_INBOUND_REQ_ABOUT_ERROR));
@@ -240,171 +240,114 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
 
     @Override
     public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
-        return outboundResponse(response, null);
+        return this._funcSetOutboundResponse.call(response);
     }
     
-    @Override
-    public Subscription outboundResponse(
-            final Observable<? extends HttpObject> response,
-            final Action1<Throwable> onError) {
-        return this._funcSetOutboundResponse.call(response, onError);
-    }
-
-    private final Func2<Observable<? extends HttpObject>, Action1<Throwable>, Subscription> 
+    private final Func1<Observable<? extends HttpObject>, Subscription> 
         _funcSetOutboundResponse = 
-            RxFunctions.toFunc2(
-                this._selector.callWhenActive(RxFunctions.<DefaultHttpTrade,Subscription>toFunc1_N(
+            RxFunctions.toFunc1(
+                this._funcSelector.callWhenActive(RxFunctions.<DefaultHttpTrade,Subscription>toFunc1_N(
                         DefaultHttpTrade.class, "doSetOutboundResponse"))
                 .callWhenDestroyed(Func1_N.Util.<DefaultHttpTrade,Subscription>returnNull()));
     
     @SuppressWarnings("unused")
     private Subscription doSetOutboundResponse(
-        final Observable<? extends HttpObject> response,
-        final Action1<Throwable> onError) {
-        if (!isResponseStarted()) {
-            final int responseIdx = updateResponseIdx();
+        final Observable<? extends HttpObject> response) {
+        if (this._isResponseSetted.compareAndSet(false, true)) {
             return response.subscribe(
-                    actionResponseOnNext(responseIdx),
-                    null!=onError 
-                        ? wrapResponseOnError(responseIdx, onError) 
-                        : actionResponseOnError(responseIdx),
-                    actionResponseOnCompleted(responseIdx));
+                    actionResponseOnNext(),
+                    actionResponseOnError(),
+                    actionResponseOnCompleted());
         } else {
-            LOG.warn("trade({}) 's outboundResponse has taken effect, ignore new response({})",
+            LOG.warn("trade({}) 's outboundResponse has setted, ignore new response({})",
                     this, response);
             return null;
         }
     }
 
-    private boolean isResponseStarted() {
-        return this._isResponseSended.get() 
-            || this._isResponseCompleted.get();
-    }
-
-    private int updateResponseIdx() {
-        return this._responseIdx.incrementAndGet();
-    }
-    
-    private final AtomicInteger _responseIdx = new AtomicInteger(0);
-    
-    private final Action0 actionResponseOnCompleted(final int responseIdx) {
-        return RxActions.bindParameter(RxActions.<Integer>toAction1(
-            this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnCompleted"))),
-            responseIdx);
+    private final Action0 actionResponseOnCompleted() {
+        return RxActions.toAction0(
+            this._funcSelector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnCompleted")));
     }
 
     @SuppressWarnings("unused")
-    private void respOnCompleted(final int responseIdx) {
-        if (this._responseIdx.get() == responseIdx) {
-            this._isResponseCompleted.compareAndSet(false, true);
-            this._channel.flush();
-            try {
-                this.doClose();
-            } catch (Exception e) {
-                LOG.warn("exception when ({}).doClose, detail:{}",
-                        this, ExceptionUtils.exception2detail(e));
-            }
-        } else {
-            LOG.warn("onCompleted 's id({}) NOT EQUALS current response idx:{}, just ignore."
-                    , responseIdx, this._responseIdx.get());
+    private void respOnCompleted() {
+        this._isResponseCompleted.compareAndSet(false, true);
+        this._channel.flush();
+        try {
+            this.doClose();
+        } catch (Exception e) {
+            LOG.warn("exception when ({}).doClose, detail:{}",
+                    this, ExceptionUtils.exception2detail(e));
         }
     }
 
-    private final Action1<HttpObject> actionResponseOnNext(final int responseIdx) {
-        return RxActions.bindParameter(
-                RxActions.<Integer, HttpObject>toAction2(
-                    this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnNext"))),
-                responseIdx );
+    private final Action1<HttpObject> actionResponseOnNext() {
+        return RxActions.<HttpObject>toAction1(
+            this._funcSelector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnNext")));
     }
     
     @SuppressWarnings("unused")
-    private void respOnNext(final int responseIdx, final HttpObject msg) {
-        if (this._responseIdx.get() == responseIdx) {
-            this._isResponseSended.compareAndSet(false, true);
-            this._channel.write(ReferenceCountUtil.retain(msg));
-        } else {
-            LOG.warn("msg ({})'s id({}) NOT EQUALS current response idx:{}, just ignore."
-                    , msg, responseIdx, this._responseIdx.get());
-        }
+    private void respOnNext(final HttpObject msg) {
+        this._isResponseSended.compareAndSet(false, true);
+        this._channel.write(ReferenceCountUtil.retain(msg));
     }
 
-    private final Action1<Throwable> wrapResponseOnError(final int responseIdx, final Action1<Throwable> onError) {
-        return new Action1<Throwable>() {
-            @Override
-            public void call(final Throwable e) {
-                if (_responseIdx.get() == responseIdx) {
-                    LOG.warn("trade({})'s responseObserver.onError, custom action({}) is invoke and detail:{}",
-                            DefaultHttpTrade.this, onError, ExceptionUtils.exception2detail(e));
-                    onError.call(e);
-                } else {
-                    LOG.warn("onError ({})'s id({}) NOT EQUALS current response idx:{}, just ignore."
-                            , responseIdx, _responseIdx.get());
-                }
-            }};
-    }
-    
-    private final Action1<Throwable> actionResponseOnError(final int responseIdx) {
-        return RxActions.bindParameter(
-                RxActions.<Integer, Throwable>toAction2(
-                    this._selector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnError"))),
-                responseIdx);
+    private final Action1<Throwable> actionResponseOnError() {
+        return RxActions.<Throwable>toAction1(
+            this._funcSelector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnError")));
     }
     
     @SuppressWarnings("unused")
-    private void respOnError(final int responseIdx, final Throwable e) {
-        if (this._responseIdx.get() == responseIdx) {
-            LOG.warn("trade({})'s responseObserver.onError, default action is invoke doAbort() and detail:{}",
-                    DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-            doAbort();
-        } else {
-            LOG.warn("onError ({})'s id({}) NOT EQUALS current response idx:{}, just ignore."
-                    , responseIdx, this._responseIdx.get());
-        }
+    private void respOnError(final Throwable e) {
+        LOG.warn("trade({})'s responseObserver.onError, default action is invoke doAbort() and detail:{}",
+                DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
+        doAbort();
     }
         
     @Override
     public boolean readyforOutboundResponse() {
-        return this._selector.isActive() && !isResponseStarted();
+        return this._funcSelector.isActive() && !this._isResponseSetted.get();
     }
     
     @Override
     public HttpTrade addCloseHook(final Action1<HttpTrade> onClosed) {
-        this._actionDoOnClosed.call(onClosed);
+        this._actionAddCloseHook.call(onClosed);
         return this;
     }
     
-    private final Action1<Action1<HttpTrade>> _actionDoOnClosed = RxActions.toAction1(
-            this._selector.submitWhenActive(
-                RxActions.toAction1_N(DefaultHttpTrade.class, "internalDoOnClosed"))
+    private final Action1<Action1<HttpTrade>> _actionAddCloseHook = RxActions.toAction1(
+            this._funcSelector.submitWhenActive(
+                RxActions.toAction1_N(DefaultHttpTrade.class, "internalAddCloseHook"))
             .submitWhenDestroyed(
-                RxActions.toAction1_N(DefaultHttpTrade.class, "fireOnClosedOf")));
+                RxActions.toAction1_N(DefaultHttpTrade.class, "invokeCloseHookNow")));
     
     @SuppressWarnings("unused")
-    private void internalDoOnClosed(final Action1<HttpTrade> onClosed) {
+    private void internalAddCloseHook(final Action1<HttpTrade> onClosed) {
         this._onClosedActions.addComponent(onClosed);
     }
     
     @SuppressWarnings("unused")
-    private void fireOnClosedOf(final Action1<HttpTrade> onClosed) {
+    private void invokeCloseHookNow(final Action1<HttpTrade> onClosed) {
         onClosed.call(this);
     }
     
     @Override
     public void removeCloseHook(final Action1<HttpTrade> onClosed) {
-        this._actionUndoOnClosed.call(onClosed);
+        this._actionRemoveCloseHook.call(onClosed);
     }
     
-    private final Action1<Action1<HttpTrade>> _actionUndoOnClosed = RxActions.toAction1(
-            this._selector.submitWhenActive(
-                RxActions.toAction1_N(DefaultHttpTrade.class, "internalUndoOnClosed")));
+    private final Action1<Action1<HttpTrade>> _actionRemoveCloseHook = RxActions.toAction1(
+            this._funcSelector.submitWhenActive(
+                RxActions.toAction1_N(DefaultHttpTrade.class, "internalRemoveCloseHook")));
     
     @SuppressWarnings("unused")
-    private void internalUndoOnClosed(final Action1<HttpTrade> onClosed) {
+    private void internalRemoveCloseHook(final Action1<HttpTrade> onClosed) {
         this._onClosedActions.removeComponent(onClosed);
     }
         
     private void doAbort() {
-        this._selector.destroy(RxActions.toAction1_N(DefaultHttpTrade.class, "closeChannelAndFireDoOnClosed"));
+        this._funcSelector.destroy(RxActions.toAction1_N(DefaultHttpTrade.class, "closeChannelAndFireDoOnClosed"));
     }
     
     @SuppressWarnings("unused")
@@ -414,7 +357,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     }
     
     private void doClose() {
-        this._selector.destroy(RxActions.toAction1_N(DefaultHttpTrade.class, "fireDoOnClosed"));
+        this._funcSelector.destroy(RxActions.toAction1_N(DefaultHttpTrade.class, "fireDoOnClosed"));
     }
             
     private void fireDoOnClosed() {
@@ -451,13 +394,14 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     private final COWCompositeSupport<Action1<HttpTrade>> _onClosedActions = 
             new COWCompositeSupport<Action1<HttpTrade>>();
     
-    private final HttpMessageHolder _holder;
+    private final HttpMessageHolder _reqmsgholder;
     private final Date _createTime = new Date();
     private final Channel _channel;
     private String _requestMethod;
     private String _requestUri;
     private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
     private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
+    private final AtomicBoolean _isResponseSetted = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);

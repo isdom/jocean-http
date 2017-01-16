@@ -390,6 +390,9 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber.assertValues(part_req.toArray(new HttpObject[0]));
     }
 
+    /*// remove outboundResponse second method: outboundResponse(
+            final Observable<? extends HttpObject> response,
+            final Action1<Throwable> onError) 
     @Test
     public final void testTradeForFirstResponseErrorThenRetry() {
         final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
@@ -421,6 +424,7 @@ public class DefaultHttpTradeTestCase {
                 onError.set(e);
             }});
     }
+    */
     
     public static Channel dummyChannel(final AtomicReference<Object> output) {
         return new Channel() {
