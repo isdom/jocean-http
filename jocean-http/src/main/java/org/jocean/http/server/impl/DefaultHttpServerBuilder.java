@@ -241,6 +241,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                 final int lastsize = _lastAddedSize.getAndSet(currentsize);
                 if (lastsize >= 0) { // -1 means trade has closed
                     updateCurrentInboundMemory(currentsize - lastsize);
+                } else {
+                    //  TODO? set lastsize (== -1) back to _lastAddedSize ?
                 }
             }});
         trade.addCloseHook(new Action1<HttpTrade>() {

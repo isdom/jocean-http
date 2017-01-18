@@ -547,20 +547,20 @@ public class RxNettys {
             @Override
             public Observable<? extends HttpObject> call(final HttpObject obj) {
                 if (obj instanceof FullHttpRequest) {
-                    return Observable.just(requestOf((FullHttpRequest)obj), lastContentOf((FullHttpMessage)obj));
+                    return Observable.just(requestOf((HttpRequest)obj), lastContentOf((FullHttpMessage)obj));
                 } else if (obj instanceof FullHttpResponse) {
-                    return Observable.just(responseOf((FullHttpResponse)obj), lastContentOf((FullHttpMessage)obj));
+                    return Observable.just(responseOf((HttpResponse)obj), lastContentOf((FullHttpMessage)obj));
                 } else {
                     return Observable.just(obj);
                 }
             }};
             
-    private static HttpRequest requestOf(final FullHttpRequest fullReq) {
-        return new ProxyBuilder<>(HttpRequest.class, fullReq).buildProxy();
+    private static HttpRequest requestOf(final HttpRequest req) {
+        return new ProxyBuilder<>(HttpRequest.class, req).buildProxy();
     }
     
-    private static HttpResponse responseOf(final FullHttpResponse fullResp) {
-        return new ProxyBuilder<>(HttpResponse.class, fullResp).buildProxy();
+    private static HttpResponse responseOf(final HttpResponse resp) {
+        return new ProxyBuilder<>(HttpResponse.class, resp).buildProxy();
     }
     
     private static LastHttpContent lastContentOf(final FullHttpMessage msg) {
