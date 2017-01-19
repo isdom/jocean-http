@@ -194,7 +194,7 @@ class FACTORYFUNCS {
                             subscriber);
                     touchAllContentWith(ctx.channel(), "exceptionCaught:" + ExceptionUtils.exception2detail(cause));
                     if (!subscriber.isUnsubscribed()) {
-                        subscriber.onError(new TransportException("exceptionCaught", cause));
+                        subscriber.onError(new TransportException("exceptionCaught of" + ctx.channel(), cause));
                     }
                     ctx.close();
                 }
@@ -214,7 +214,7 @@ class FACTORYFUNCS {
                     
                     touchAllContentWith(ctx.channel(), "channelInactive");
                     if (!subscriber.isUnsubscribed()) {
-                        subscriber.onError(new TransportException("channelInactive"));
+                        subscriber.onError(new TransportException("channelInactive of " + ctx.channel()));
                     }
                 }
 
