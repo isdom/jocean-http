@@ -39,7 +39,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 import io.netty.util.CharsetUtil;
-import io.netty.util.ResourceLeak;
+import io.netty.util.ResourceLeakTracker;
 import rx.Observer;
 
 public class Nettys4Test {
@@ -362,7 +362,8 @@ public class Nettys4Test {
             final Field field = buf.getClass().getDeclaredField("leak");
             if (null != field) {
                 field.setAccessible(true);
-                final ResourceLeak leak = (ResourceLeak)field.get(buf);
+                @SuppressWarnings("unchecked")
+                final ResourceLeakTracker<ByteBuf> leak = (ResourceLeakTracker<ByteBuf>)field.get(buf);
                 return leak.toString();
             }
         } catch (Exception e) {

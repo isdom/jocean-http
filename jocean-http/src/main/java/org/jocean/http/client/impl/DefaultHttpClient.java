@@ -15,8 +15,10 @@ import org.jocean.http.util.APPLY;
 import org.jocean.http.util.ComposeSource;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
+import org.jocean.http.util.SendedMessageAware;
 import org.jocean.http.util.TrafficCounterAware;
 import org.jocean.http.util.TrafficCounterHandler;
+import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.ReflectUtils;
@@ -190,7 +192,7 @@ public class DefaultHttpClient implements HttpClient {
                         .doOnNext(doOnRequest(features))
                         .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
                         .doOnCompleted(flushWhenCompleted(channel))
-                        .flatMap(sendRequest(channel));
+                        .flatMap(sendRequest(channel, features));
                 } else if (obj instanceof HttpObject) {
                     return Observable.<HttpObject>just((HttpObject)obj);
                 } else {
@@ -244,17 +246,85 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     private Func1<Object, Observable<? extends HttpObject>> sendRequest(
-            final Channel channel) {
+            final Channel channel, final Feature[] features) {
+        
+        final COWCompositeSupport<Subscriber<? super Object>> _subscribers = 
+                buildSendedMessageSubscriber(features);
+        
         return new Func1<Object, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final Object reqmsg) {
                 final ChannelFuture future = channel.write(ReferenceCountUtil.retain(reqmsg));
+                
+                if (null != _subscribers) {
+                    RxNettys.channelObservableFromFuture(future).map(new Func1<Channel, Object>() {
+                        @Override
+                        public Object call(final Channel c) {
+                            return reqmsg;
+                        }})
+                    .concatWith(Observable.never()) // ensure NOT push onCompleted
+                    .subscribe(new Subscriber<Object>() {
+                        @Override
+                        public void onCompleted() {
+                            _subscribers.foreachComponent(new Action1<Subscriber<? super Object>>() {
+                                @Override
+                                public void call(final Subscriber<Object> subscriber) {
+                                    subscriber.onCompleted();
+                                }});
+                        }
+    
+                        @Override
+                        public void onError(final Throwable e) {
+                            _subscribers.foreachComponent(new Action1<Subscriber<? super Object>>() {
+                                @Override
+                                public void call(final Subscriber<Object> subscriber) {
+                                    subscriber.onError(e);
+                                }});
+                        }
+    
+                        @Override
+                        public void onNext(final Object obj) {
+                            _subscribers.foreachComponent(new Action1<Subscriber<? super Object>>() {
+                                @Override
+                                public void call(final Subscriber<Object> subscriber) {
+                                    subscriber.onNext(obj);
+                                }});
+                        }});
+                }
+                
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("send http request msg :{}", reqmsg);
                 }
                 RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
                 return RxNettys.observableFromFuture(future);
             }};
+    }
+
+    private COWCompositeSupport<Subscriber<? super Object>> buildSendedMessageSubscriber(
+            final Feature[] features) {
+        final SendedMessageAware sendedMessageAware = 
+                InterfaceUtils.compositeIncludeType(SendedMessageAware.class, (Object[])features);
+        if (null != sendedMessageAware) {
+            final COWCompositeSupport<Subscriber<? super Object>> _subscribers = 
+                    new COWCompositeSupport<>();
+            sendedMessageAware.setSendedMessage(
+                Observable.create(new Observable.OnSubscribe<Object>() {
+                    @Override
+                    public void call(final Subscriber<? super Object> subscriber) {
+                        if (!subscriber.isUnsubscribed()) {
+                            _subscribers.addComponent(subscriber);
+                            subscriber.add(Subscriptions.create(new Action0() {
+                                @Override
+                                public void call() {
+                                    _subscribers.removeComponent(subscriber);
+                                }}));
+                        }
+                    }})
+            );
+            return _subscribers;
+        } else {
+            return null;
+        }
     }
     
     private Observable<? extends Channel> createChannelAndConnectTo(
