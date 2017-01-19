@@ -81,7 +81,10 @@ public class SslDemo {
                     sslfeature
                     )
                 .compose(holder.assembleAndHold())
-                .subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError(), new Action0() {
+                .subscribe(
+                    RxSubscribers.ignoreNext(),
+                    RxSubscribers.ignoreError(), 
+                    new Action0() {
                     @Override
                     public void call() {
                         final FullHttpResponse resp = holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();
@@ -116,7 +119,10 @@ public class SslDemo {
                     sslfeature
                     )
                 .compose(holder.assembleAndHold())
-                .subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError(), new Action0() {
+                .subscribe(
+                    RxSubscribers.ignoreNext(),
+                    RxSubscribers.ignoreError(), 
+                    new Action0() {
                     @Override
                     public void call() {
                         final FullHttpResponse resp = holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();

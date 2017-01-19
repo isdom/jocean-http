@@ -106,7 +106,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
         }
         
         this._requestObservable.subscribe(
-                RxSubscribers.nopOnNext(),
+                RxSubscribers.ignoreNext(),
                 new Action1<Throwable>() {
                     @Override
                     public void call(final Throwable e) {

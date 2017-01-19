@@ -855,7 +855,10 @@ public class DefaultHttpTradeTestCase {
         
         final Observable<? extends HttpObject> cached = inbound.cache();
         //  force cached to subscribe upstream
-        cached.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
+        cached.subscribe(
+                RxSubscribers.ignoreNext(),
+                RxSubscribers.ignoreError()
+                );
         
         //  Error, will cause : exception when invoke visitor(org.jocean.http.util.RxNettys$2@722c517b), detail: 
         //      java.lang.ClassCastException: io.netty.handler.codec.http.DefaultHttpRequest cannot be cast to 
@@ -918,7 +921,10 @@ public class DefaultHttpTradeTestCase {
             .inboundRequest()
             .compose(holder.<HttpObject>assembleAndHold());
         
-        inbound.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
+        inbound.subscribe(
+                RxSubscribers.ignoreNext(),
+                RxSubscribers.ignoreError()
+                );
         
         requestObservable.connect();
         
@@ -949,7 +955,10 @@ public class DefaultHttpTradeTestCase {
             .inboundRequest()
             .compose(holder.<HttpObject>assembleAndHold());
         
-        inbound.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
+        inbound.subscribe(
+                RxSubscribers.ignoreNext(),
+                RxSubscribers.ignoreError()
+                );
         
         requestObservable.connect();
         
@@ -982,7 +991,10 @@ public class DefaultHttpTradeTestCase {
             .inboundRequest()
             .compose(holder.<HttpObject>assembleAndHold());
         
-        inbound.subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
+        inbound.subscribe(
+                RxSubscribers.ignoreNext(),
+                RxSubscribers.ignoreError()
+                );
         
         requestObservable.connect();
         

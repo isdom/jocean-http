@@ -170,7 +170,9 @@ public class HttpMessageHolderTestCase {
             Observable.<HttpObject>error(new RuntimeException("RequestPartError"))
         )
         .compose(holder.assembleAndHold())
-        .subscribe(RxSubscribers.nopOnNext(), RxSubscribers.nopOnError());
+        .subscribe(
+            RxSubscribers.ignoreNext(),
+            RxSubscribers.ignoreError());
         
         holder.httpMessageBuilder(new Func1<HttpObject[],Void>() {
             @Override
