@@ -2,6 +2,7 @@ package org.jocean.http.util;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.idiom.ExceptionUtils;
@@ -34,12 +35,12 @@ public class HttpMessageHolder {
     private static int _block_size = 128 * 1024; // 128KB
     static {
         // possible system property for overriding
-        final String sizeFromProperty = System.getProperty("org.jocean.http.httpholder.blocksize");
+        final String sizeFromProperty = System.getProperty("org.jocean.http.msgholder.blocksize");
         if (sizeFromProperty != null) {
             try {
                 _block_size = Integer.parseInt(sizeFromProperty);
             } catch (Exception e) {
-                System.err.println("Failed to set 'org.jocean.http.httpholder.blocksize' with value " + sizeFromProperty + " => " + e.getMessage());
+                System.err.println("Failed to set 'org.jocean.http.msgholder.blocksize' with value " + sizeFromProperty + " => " + e.getMessage());
             }
         }
     }
@@ -68,6 +69,10 @@ public class HttpMessageHolder {
             }};
     }
     
+    public boolean isFragmented() {
+        return this._fragmented.get();
+    }
+    
     private final Func1<Func1<HttpObject[], Object>,Object> _funcVisitHttpObjects = 
         RxFunctions.toFunc1(
             this._selector.callWhenActive(
@@ -81,6 +86,11 @@ public class HttpMessageHolder {
     
     @SuppressWarnings("unused")
     private Object doVisitHttpObjects(final Func1<HttpObject[], Object> visitor) {
+        if (this._fragmented.get()) {
+            //  some httpobj has been released
+            //  TODO, need throw Exception
+            return null;
+        }
         try {
             return visitor.call(this._cachedHttpObjects.toArray(__ZERO_HTTPOBJS));
         } catch (Exception e) {
@@ -118,6 +128,34 @@ public class HttpMessageHolder {
             }
         }
         objs.clear();
+    }
+    
+    public void releaseHttpObject(final HttpObject obj) {
+        this._actionReleaseHttpObject.call(obj);
+    }
+    
+    private final Action1<HttpObject> _actionReleaseHttpObject = 
+            RxActions.toAction1(
+                this._selector.submitWhenActive(
+                    RxActions.toAction1_N(HttpMessageHolder.class, "doReleaseHttpObject")));
+    
+    @SuppressWarnings("unused")
+    private void doReleaseHttpObject(final HttpObject obj) {
+        if (this._cachedHttpObjects.indexOf(obj) >= 0) {
+            this._fragmented.compareAndSet(false, true);
+            while (true) {
+                final HttpObject removedObj = this._cachedHttpObjects.remove(0);
+                reduceRetainedSize(removedObj);
+                ReferenceCountUtil.release(removedObj);
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("httpobj {} has been removed from holder({}) and released",
+                        removedObj, this);
+                }
+                if (removedObj == obj) {
+                    break;
+                }
+            }
+        }
     }
     
     public int currentBlockSize() {
@@ -242,12 +280,23 @@ public class HttpMessageHolder {
     private HttpObject doRetainAndHoldHttpObject(final HttpObject httpobj) {
         if (null != httpobj) {
             this._cachedHttpObjects.add(ReferenceCountUtil.retain(httpobj));
-            if (httpobj instanceof ByteBufHolder) {
-                this._retainedByteBufSize.addAndGet(
-                    ((ByteBufHolder)httpobj).content().readableBytes());
-            }
+            addRetainedSize(httpobj);
         }
         return httpobj;
+    }
+
+    private void addRetainedSize(final HttpObject httpobj) {
+        if (httpobj instanceof ByteBufHolder) {
+            this._retainedByteBufSize.addAndGet(
+                ((ByteBufHolder)httpobj).content().readableBytes());
+        }
+    }
+    
+    private void reduceRetainedSize(final HttpObject httpobj) {
+        if (httpobj instanceof ByteBufHolder) {
+            this._retainedByteBufSize.addAndGet(
+                -((ByteBufHolder)httpobj).content().readableBytes());
+        }
     }
     
     private HttpObject retainCurrentBlockAndReset() {
@@ -298,6 +347,10 @@ public class HttpMessageHolder {
     }
     
     private final AtomicInteger _retainedByteBufSize = new AtomicInteger(0);
+    
+    //  TODO
+    //  if any httpobj has release from holder when it active, then fragmented is true
+    private final AtomicBoolean _fragmented = new AtomicBoolean(false);
     
     private final boolean _enableAssemble;
     

@@ -1,6 +1,8 @@
 package org.jocean.http.util;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -88,6 +90,34 @@ public class HttpMessageHolderTestCase {
             public void call(final HttpContent c) {
                 assertEquals(2, c.refCnt());
             }});
+    }
+    
+    @Test
+    public final void testHttpMessageHolderForFragmentedFeature() {
+        // max block size == -1 means disable assemble
+        final HttpMessageHolder holder = new HttpMessageHolder(-1);
+        
+        final DefaultHttpRequest request = 
+                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
+            Observable.concat(
+                Observable.<HttpObject>just(request),
+                Observable.<HttpObject>from(req_contents),
+                Observable.<HttpObject>just(LastHttpContent.EMPTY_LAST_CONTENT)
+            )
+            .compose(holder.<HttpObject>assembleAndHold())
+            .subscribe(reqSubscriber);
+            
+        final int size = holder.retainedByteBufSize();
+        assertFalse(holder.isFragmented());
+        assertNotNull(holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call());
+         
+        holder.releaseHttpObject(req_contents[0]);
+        assertTrue(holder.isFragmented());
+        assertNull(holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call());
+        assertEquals(size -1, holder.retainedByteBufSize());
     }
     
     @Test
