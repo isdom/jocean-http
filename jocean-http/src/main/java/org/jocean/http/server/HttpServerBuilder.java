@@ -7,6 +7,7 @@ import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
+import org.jocean.http.util.HttpMessageHolder;
 
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
@@ -42,6 +43,7 @@ public interface HttpServerBuilder extends Closeable {
         //  try to abort trade explicit
         public void abort();
         public Observable<? extends HttpObject> inboundRequest();
+        public HttpMessageHolder inboundHolder();
         public Subscription outboundResponse(final Observable<? extends HttpObject> response);
         public boolean readyforOutboundResponse();
         public Object transport();

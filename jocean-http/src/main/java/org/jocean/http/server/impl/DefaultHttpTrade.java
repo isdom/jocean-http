@@ -119,6 +119,11 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     }
 
     @Override
+    public HttpMessageHolder inboundHolder() {
+        return this._reqmsgholder;
+    }
+    
+    @Override
     public int retainedInboundMemory() {
         return this._reqmsgholder.retainedByteBufSize();
     }
