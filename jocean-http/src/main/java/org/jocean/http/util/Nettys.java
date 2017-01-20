@@ -225,4 +225,12 @@ public class Nettys {
                     holder, ExceptionUtils.exception2detail(e));
         }
     }
+
+    public static ByteBuf unwrapIfNeed(final ByteBuf buf) {
+        return buf.unwrap() != null ? buf.unwrap() : buf;
+    }
+    
+    public static boolean isSameByteBuf(final ByteBuf buf1, final ByteBuf buf2) {
+        return unwrapIfNeed(buf1) == unwrapIfNeed(buf2);
+    }
 }

@@ -130,31 +130,37 @@ public class HttpMessageHolder {
         objs.clear();
     }
     
-    public void releaseHttpObject(final HttpObject obj) {
-        this._actionReleaseHttpObject.call(obj);
+    public void releaseHttpContent(final HttpContent content) {
+        this._actionReleaseHttpContent.call(content);
     }
     
-    private final Action1<HttpObject> _actionReleaseHttpObject = 
+    private final Action1<HttpContent> _actionReleaseHttpContent = 
             RxActions.toAction1(
                 this._selector.submitWhenActive(
-                    RxActions.toAction1_N(HttpMessageHolder.class, "doReleaseHttpObject")));
+                    RxActions.toAction1_N(HttpMessageHolder.class, "doReleaseHttpContent")));
     
     @SuppressWarnings("unused")
-    private void doReleaseHttpObject(final HttpObject obj) {
-        if (this._cachedHttpObjects.indexOf(obj) >= 0) {
-            this._fragmented.compareAndSet(false, true);
-            while (true) {
-                final HttpObject removedObj = this._cachedHttpObjects.remove(0);
-                reduceRetainedSize(removedObj);
-                ReferenceCountUtil.release(removedObj);
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("httpobj {} has been removed from holder({}) and released",
-                        removedObj, this);
-                }
-                if (removedObj == obj) {
+    private void doReleaseHttpContent(final HttpContent content) {
+        int idx = 0;
+        while (idx < this._cachedHttpObjects.size()) {
+            final HttpObject obj = this._cachedHttpObjects.get(idx);
+            if (obj instanceof HttpContent) {
+                if ( Nettys.isSameByteBuf(((HttpContent)obj).content(), content.content()) ) {
+                    LOG.info("found HttpContent {} to release ", obj);
+                    this._fragmented.compareAndSet(false, true);
+                    for (int i = 0; i<=idx; i++) {
+                        final HttpObject removedObj = this._cachedHttpObjects.remove(0);
+                        reduceRetainedSize(removedObj);
+                        ReferenceCountUtil.release(removedObj);
+                        if (LOG.isDebugEnabled()) {
+                            LOG.info("httpobj {} has been removed from holder({}) and released",
+                                removedObj, this);
+                        }
+                    }
                     break;
                 }
             }
+            idx++;
         }
     }
     
