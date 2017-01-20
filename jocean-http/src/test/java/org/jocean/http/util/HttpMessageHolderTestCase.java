@@ -114,7 +114,7 @@ public class HttpMessageHolderTestCase {
         assertFalse(holder.isFragmented());
         assertNotNull(holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call());
          
-        holder.releaseHttpObject(req_contents[0]);
+        holder.releaseHttpContent(req_contents[0]);
         assertTrue(holder.isFragmented());
         assertNull(holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call());
         assertEquals(size -1, holder.retainedByteBufSize());
