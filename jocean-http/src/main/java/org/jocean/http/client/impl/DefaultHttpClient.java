@@ -100,6 +100,7 @@ public class DefaultHttpClient implements HttpClient {
     @Override
     public InteractionBuilder interaction() {
         final AtomicReference<SocketAddress> _remoteAddress = new AtomicReference<>();
+        final AtomicReference<Observable<? extends Object>> _request = new AtomicReference<>();
         final AtomicReference<Func1<DoOnUnsubscribe, Observable<? extends Object>>> _requestProvider 
             = new AtomicReference<>();
         final List<Feature> _features = new ArrayList<>();
@@ -112,6 +113,12 @@ public class DefaultHttpClient implements HttpClient {
                 return this;
             }
 
+            @Override
+            public InteractionBuilder request(final Observable<? extends Object> request) {
+                _request.set(request);
+                return this;
+            }
+            
             @Override
             public InteractionBuilder requestProvider(
                     Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider) {
@@ -130,10 +137,14 @@ public class DefaultHttpClient implements HttpClient {
                 if (null == _remoteAddress.get()) {
                     throw new RuntimeException("remoteAddress not set");
                 }
-                if (null == _requestProvider.get()) {
-                    throw new RuntimeException("requestProvider not set");
+                if (null == _requestProvider.get() && null == _request.get()) {
+                    throw new RuntimeException("request and requestProvider not set");
                 }
-                return defineInteraction(_remoteAddress.get(), _requestProvider.get(), _features.toArray(Feature.EMPTY_FEATURES));
+                if (null != _requestProvider.get()) {
+                    return defineInteraction(_remoteAddress.get(), _requestProvider.get(), _features.toArray(Feature.EMPTY_FEATURES));
+                } else {
+                    return defineInteraction(_remoteAddress.get(), _request.get(), _features.toArray(Feature.EMPTY_FEATURES));
+                }
             }};
     }
 

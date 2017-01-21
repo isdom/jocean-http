@@ -52,6 +52,8 @@ public interface HttpClient extends Closeable {
         
         public InteractionBuilder remoteAddress(final SocketAddress remoteAddress);
         
+        public InteractionBuilder request(final Observable<? extends Object> request);
+        
         public InteractionBuilder requestProvider(final Func1<DoOnUnsubscribe,Observable<? extends Object>> requestProvider);
         
         public InteractionBuilder feature(final Feature... features);
