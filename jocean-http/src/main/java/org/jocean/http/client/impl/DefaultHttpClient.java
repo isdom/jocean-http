@@ -6,7 +6,6 @@ package org.jocean.http.client.impl;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -128,7 +127,11 @@ public class DefaultHttpClient implements HttpClient {
 
             @Override
             public InteractionBuilder feature(final Feature... features) {
-                _features.addAll(Arrays.asList(features));
+                for (Feature f : features) {
+                    if (null != f) {
+                        _features.add(f);
+                    }
+                }
                 return this;
             }
 
@@ -141,9 +144,13 @@ public class DefaultHttpClient implements HttpClient {
                     throw new RuntimeException("request and requestProvider not set");
                 }
                 if (null != _requestProvider.get()) {
-                    return defineInteraction(_remoteAddress.get(), _requestProvider.get(), _features.toArray(Feature.EMPTY_FEATURES));
+                    return defineInteraction(_remoteAddress.get(), 
+                            _requestProvider.get(), 
+                            _features.toArray(Feature.EMPTY_FEATURES));
                 } else {
-                    return defineInteraction(_remoteAddress.get(), _request.get(), _features.toArray(Feature.EMPTY_FEATURES));
+                    return defineInteraction(_remoteAddress.get(), 
+                            _request.get(), 
+                            _features.toArray(Feature.EMPTY_FEATURES));
                 }
             }};
     }
