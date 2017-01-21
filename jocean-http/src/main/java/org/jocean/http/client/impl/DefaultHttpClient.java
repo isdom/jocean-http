@@ -5,6 +5,10 @@ package org.jocean.http.client.impl;
 
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
@@ -91,6 +95,46 @@ public class DefaultHttpClient implements HttpClient {
             public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
                 return request;
             }}, features);
+    }
+    
+    @Override
+    public InteractionBuilder interaction() {
+        final AtomicReference<SocketAddress> _remoteAddress = new AtomicReference<>();
+        final AtomicReference<Func1<DoOnUnsubscribe, Observable<? extends Object>>> _requestProvider 
+            = new AtomicReference<>();
+        final List<Feature> _features = new ArrayList<>();
+        
+        return new InteractionBuilder() {
+            @Override
+            public InteractionBuilder remoteAddress(
+                    final SocketAddress remoteAddress) {
+                _remoteAddress.set(remoteAddress);
+                return this;
+            }
+
+            @Override
+            public InteractionBuilder requestProvider(
+                    Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider) {
+                _requestProvider.set(requestProvider);
+                return this;
+            }
+
+            @Override
+            public InteractionBuilder feature(final Feature... features) {
+                _features.addAll(Arrays.asList(features));
+                return this;
+            }
+
+            @Override
+            public Observable<? extends HttpObject> build() {
+                if (null == _remoteAddress.get()) {
+                    throw new RuntimeException("remoteAddress not set");
+                }
+                if (null == _requestProvider.get()) {
+                    throw new RuntimeException("requestProvider not set");
+                }
+                return defineInteraction(_remoteAddress.get(), _requestProvider.get(), _features.toArray(Feature.EMPTY_FEATURES));
+            }};
     }
 
     protected Action1<? super Channel> hookFeatures(final Feature[] features) {
