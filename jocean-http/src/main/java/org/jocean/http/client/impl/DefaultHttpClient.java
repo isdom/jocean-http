@@ -23,6 +23,8 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
+import org.jocean.idiom.rx.RxObservables;
+import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -248,7 +250,7 @@ public class DefaultHttpClient implements HttpClient {
     private Func1<Object, Observable<? extends HttpObject>> sendRequest(
             final Channel channel, final Feature[] features) {
         
-        final Subscriber<Object> subscriber = buildSendedMessageSubscriber(features);
+        final Subscriber<Object> subscriber = subscriberOfSendedMessage(features);
         
         return new Func1<Object, Observable<? extends HttpObject>>() {
             @Override
@@ -373,61 +375,17 @@ public class DefaultHttpClient implements HttpClient {
         this._channelCreator.close();
     }
     
-    private Subscriber<Object> buildSendedMessageSubscriber(final Feature[] features) {
+    private Subscriber<Object> subscriberOfSendedMessage(final Feature[] features) {
         final SendedMessageAware sendedMessageAware = 
                 InterfaceUtils.compositeIncludeType(SendedMessageAware.class, (Object[])features);
         if (null != sendedMessageAware) {
-            final COWCompositeSupport<Subscriber<Object>> subscribers = 
+            final COWCompositeSupport<Subscriber<Object>> composite = 
                     new COWCompositeSupport<>();
-            sendedMessageAware.setSendedMessage(
-                Observable.create(new Observable.OnSubscribe<Object>() {
-                    @Override
-                    public void call(final Subscriber<? super Object> subscriber) {
-                        if (!subscriber.isUnsubscribed()) {
-                            subscribers.addComponent(subscriber);
-                            subscriber.add(Subscriptions.create(new Action0() {
-                                @Override
-                                public void call() {
-                                    subscribers.removeComponent(subscriber);
-                                }}));
-                        }
-                    }})
-            );
-            return asSubscriber(subscribers);
+            sendedMessageAware.setSendedMessage(RxObservables.asObservable(composite));
+            return RxSubscribers.asSubscriber(composite);
         } else {
             return null;
         }
-    }
-    
-    private static <T> Subscriber<T> asSubscriber(
-            final COWCompositeSupport<Subscriber<T>> subscribers) {
-        return new Subscriber<T>() {
-            @Override
-            public void onCompleted() {
-                subscribers.foreachComponent(new Action1<Subscriber<T>>() {
-                    @Override
-                    public void call(final Subscriber<T> subscriber) {
-                        subscriber.onCompleted();
-                    }});
-            }
-   
-            @Override
-            public void onError(final Throwable e) {
-                subscribers.foreachComponent(new Action1<Subscriber<T>>() {
-                    @Override
-                    public void call(final Subscriber<T> subscriber) {
-                        subscriber.onError(e);
-                    }});
-            }
-   
-            @Override
-            public void onNext(final T obj) {
-                subscribers.foreachComponent(new Action1<Subscriber<T>>() {
-                    @Override
-                    public void call(final Subscriber<T> subscriber) {
-                        subscriber.onNext(obj);
-                    }});
-            }};
     }
 
     private final ChannelPool _channelPool;
