@@ -312,12 +312,19 @@ public class DefaultHttpClient implements HttpClient {
     private Func1<Object, Observable<? extends HttpObject>> sendRequest(
             final Channel channel, final Feature[] features) {
         
+        final boolean flushAfterWrite = 
+                InterfaceUtils.selectIncludeType(
+                        Feature.FLUSH_PER_WRITE.getClass(), (Object[])features) != null;
+        
         final Subscriber<Object> subscriber = subscriberOfSendedMessage(features);
         
         return new Func1<Object, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final Object reqmsg) {
-                final ChannelFuture future = channel.writeAndFlush(ReferenceCountUtil.retain(reqmsg));
+                final ChannelFuture future = flushAfterWrite 
+                        ? channel.writeAndFlush(ReferenceCountUtil.retain(reqmsg))
+                        : channel.write(ReferenceCountUtil.retain(reqmsg))
+                        ;
                 
                 if (null != subscriber) {
                     RxNettys.channelObservableFromFuture(future).map(new Func1<Channel, Object>() {

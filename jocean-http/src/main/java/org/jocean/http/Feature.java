@@ -84,6 +84,13 @@ public interface Feature {
         }
     };
     
+    public static final Feature FLUSH_PER_WRITE = new Feature() {
+        @Override
+        public String toString() {
+            return "FLUSH_PER_WRITE";
+        }
+    };
+    
     public static final class ENABLE_CLOSE_ON_IDLE implements FeatureOverChannelHandler {
         public ENABLE_CLOSE_ON_IDLE(final int allIdleTimeout) {
             this._allIdleTimeout = allIdleTimeout;
