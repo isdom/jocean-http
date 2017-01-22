@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeaturesAware;
@@ -217,6 +218,35 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     */
     
+    public InteractionBuilder interaction() {
+        final AtomicReference<Object> _request = new AtomicReference<>();
+        final List<Feature> _features = new ArrayList<>();
+        
+        return new InteractionBuilder() {
+
+            @Override
+            public InteractionBuilder request(final Object request) {
+                _request.set(request);
+                return this;
+            }
+
+            @Override
+            public InteractionBuilder feature(final Feature... features) {
+                for (Feature f : features) {
+                    if (null != f) {
+                        _features.add(f);
+                    }
+                }
+                return this;
+            }
+
+            @Override
+            public <RESP> Observable<RESP> build() {
+                return defineInteraction(_request.get(), 
+                        _features.toArray(Feature.EMPTY_FEATURES));
+            }};
+    }
+    
     @Override
     public <RESP> Observable<RESP> rawDefineInteraction(final Feature... features) {
         return defineInteraction(null, features);
@@ -246,7 +276,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }
         });
     }
-
+    
     private Feature[] genFeatures4HttpClient(final Object signalBean,
             final Feature... features) {
         final Feature[] addSignalFeatures = Feature.Util.union( 

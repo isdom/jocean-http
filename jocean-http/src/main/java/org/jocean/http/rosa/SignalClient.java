@@ -112,4 +112,15 @@ public interface SignalClient {
     
     public <RESP> Observable<RESP> defineInteraction(
             final Object request, final Feature... features);
+
+    public interface InteractionBuilder {
+        
+        public InteractionBuilder request(final Object request);
+        
+        public InteractionBuilder feature(final Feature... features);
+        
+        public <RESP> Observable<RESP> build();
+    }
+
+    public InteractionBuilder interaction();
 }
