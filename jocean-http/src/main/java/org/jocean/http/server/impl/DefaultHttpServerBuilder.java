@@ -18,6 +18,7 @@ import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.mbean.TradeHolderMXBean;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Class2ApplyBuilder;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ServerChannelAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
@@ -148,6 +149,9 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                     bootstrap.childHandler(new Initializer() {
                         @Override
                         protected void initChannel(final Channel channel) throws Exception {
+                            if (LOG.isDebugEnabled()) {
+                                LOG.debug("dump inbound channel({})'s config: \n{}", channel, Nettys.dumpChannelConfig(channel.config()));
+                            }
                             final Feature[] actualFeatures = JOArrays.addFirst(Feature[].class, 
                                     featuresOf(featuresBuilder), features);
                             final Feature[] applyFeatures = 

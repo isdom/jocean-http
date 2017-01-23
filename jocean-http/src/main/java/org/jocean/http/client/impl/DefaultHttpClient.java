@@ -16,6 +16,7 @@ import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.ComposeSource;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.http.util.SendedMessageAware;
@@ -33,7 +34,6 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelFactory;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoopGroup;
@@ -166,7 +166,7 @@ public class DefaultHttpClient implements HttpClient {
             @Override
             public void call(final Channel channel) {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("dump channel({})'s config: \n{}", channel, dumpConfig(channel.config()));
+                    LOG.debug("dump outbound channel({})'s config: \n{}", channel, Nettys.dumpChannelConfig(channel.config()));
                 }
                 fillChannelAware(channel, channelAware);
                 hookTrafficCounter(channel, trafficCounterAware);
@@ -459,17 +459,6 @@ public class DefaultHttpClient implements HttpClient {
         } else {
             return null;
         }
-    }
-
-    private static String dumpConfig(final ChannelConfig config) {
-        final StringBuilder sb = new StringBuilder();
-        sb.append("allocator: ");
-        sb.append(config.getAllocator().toString());
-        sb.append('\n');
-        sb.append("isAutoRead: ");
-        sb.append(config.isAutoRead());
-        sb.append('\n');
-        return sb.toString();
     }
 
     private final ChannelPool _channelPool;

@@ -23,6 +23,7 @@ import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
@@ -232,5 +233,16 @@ public class Nettys {
     
     public static boolean isSameByteBuf(final ByteBuf buf1, final ByteBuf buf2) {
         return unwrapIfNeed(buf1) == unwrapIfNeed(buf2);
+    }
+    
+    public static String dumpChannelConfig(final ChannelConfig config) {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("allocator: ");
+        sb.append(config.getAllocator().toString());
+        sb.append('\n');
+        sb.append("isAutoRead: ");
+        sb.append(config.isAutoRead());
+        sb.append('\n');
+        return sb.toString();
     }
 }
