@@ -223,8 +223,6 @@ class FACTORYFUNCS {
                 protected void channelRead0(final ChannelHandlerContext ctx,
                         final HttpObject msg) throws Exception {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("channelRead0: channel({})'s config: {}", ctx.channel(),
-                                Nettys.dumpChannelConfig(ctx.channel().config()));
                         if (msg instanceof ByteBufHolder) {
                             LOG.debug("channelRead0: channel({})/handler({}), call ({}).onNext with ByteBufHolder's content: {}.", 
                                     ctx.channel(), ctx.name(), subscriber, Nettys.dumpByteBufHolder((ByteBufHolder)msg));
