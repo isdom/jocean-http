@@ -164,6 +164,9 @@ public class DefaultHttpClient implements HttpClient {
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("dump channel({})'s config: {}", channel.config());
+                }
                 fillChannelAware(channel, channelAware);
                 hookTrafficCounter(channel, trafficCounterAware);
             }};
