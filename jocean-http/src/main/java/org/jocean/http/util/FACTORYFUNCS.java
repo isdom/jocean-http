@@ -8,6 +8,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.ByteBufHolder;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -222,8 +223,15 @@ class FACTORYFUNCS {
                 protected void channelRead0(final ChannelHandlerContext ctx,
                         final HttpObject msg) throws Exception {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("channel({})/handler({}): channelRead0 and call ({}).onNext with msg({}).", 
-                                ctx.channel(), ctx.name(), subscriber, msg);
+                        LOG.debug("channelRead0: channel({})'s config: {}", ctx.channel(),
+                                Nettys.dumpChannelConfig(ctx.channel().config()));
+                        if (msg instanceof ByteBufHolder) {
+                            LOG.debug("channelRead0: channel({})/handler({}), call ({}).onNext with ByteBufHolder's content: {}.", 
+                                    ctx.channel(), ctx.name(), subscriber, Nettys.dumpByteBufHolder((ByteBufHolder)msg));
+                        } else {
+                            LOG.debug("channelRead0: channel({})/handler({}), call ({}).onNext with HttpObject: {}.", 
+                                    ctx.channel(), ctx.name(), subscriber, msg);
+                        }
                     }
                     
                     if (msg instanceof HttpRequest) {
