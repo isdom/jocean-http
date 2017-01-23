@@ -4,13 +4,13 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd">
         
-    <bean id="nettyMBean" class="org.jocean.http.util.NettyMBean"/>
+    <bean id="nettystats" class="org.jocean.http.util.NettyStats"/>
     
     <bean class="org.springframework.jmx.export.MBeanExporter"
           lazy-init="false">
         <property name="beans">
             <map>
-                <entry key="org.jocean:name=nettystats" value-ref="nettyMBean"/>
+                <entry key="org.jocean:name=nettystats" value-ref="nettystats"/>
             </map>
         </property>
     </bean>
