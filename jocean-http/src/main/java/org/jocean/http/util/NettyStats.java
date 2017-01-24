@@ -1,9 +1,12 @@
 package org.jocean.http.util;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 import io.netty.buffer.PoolArenaMetric;
+import io.netty.buffer.PoolChunkListMetric;
+import io.netty.buffer.PoolChunkMetric;
 import io.netty.buffer.PoolSubpageMetric;
 import io.netty.buffer.PooledByteBufAllocator;
 
@@ -74,7 +77,12 @@ public class NettyStats {
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolChunkListMetric}s.
          */
-//        List<PoolChunkListMetric> chunkLists();
+        {
+            int idx = 0;
+            for (PoolChunkListMetric chunkListMetric :  poolArenaMetric.chunkLists()) {
+                metrics.put("chunkList[" + idx++ + "]", metricsOfPoolChunkList(chunkListMetric));
+            }
+        }
 
         /**
          * Return the number of allocations done via the arena. This includes all sizes.
@@ -156,6 +164,20 @@ public class NettyStats {
          */
         metrics.put("numActiveBytes", poolArenaMetric.numActiveBytes());
         
+        return metrics;
+    }
+
+    private static Map<String, Object> metricsOfPoolChunkList(final PoolChunkListMetric chunkListMetric) {
+        final Map<String, Object> metrics = new HashMap<>();
+        final Iterator<PoolChunkMetric> iter = chunkListMetric.iterator();
+        int idx = 0;
+        while (iter.hasNext()) {
+            final PoolChunkMetric chunkMetric = iter.next();
+            metrics.put("chunk[" + idx +"].usage", chunkMetric.usage());
+            metrics.put("chunk[" + idx +"].freeBytes", chunkMetric.freeBytes());
+            metrics.put("chunk[" + idx +"].chunkSize", chunkMetric.chunkSize());
+            idx++;
+        }
         return metrics;
     }
 
