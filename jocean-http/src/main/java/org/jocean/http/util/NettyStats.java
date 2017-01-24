@@ -4,22 +4,24 @@ import java.util.HashMap;
 import java.util.Map;
 
 import io.netty.buffer.PoolArenaMetric;
+import io.netty.buffer.PoolSubpageMetric;
 import io.netty.buffer.PooledByteBufAllocator;
 
 public class NettyStats {
-    public Map<String, Map<String, Object>> getPooledByteBufAllocatorMetric() {
+    public Map<String, Object> getPooledByteBufAllocatorMetric() {
         final PooledByteBufAllocator allocator = PooledByteBufAllocator.DEFAULT;
-        final Map<String, Map<String, Object>> metrics = new HashMap<>();
-        
-        int idx = 0;
-        for (PoolArenaMetric poolArenaMetric : allocator.heapArenas()) {
-            metrics.put("heap arena[" + idx + "]", metricsOfPoolArena(poolArenaMetric));
-            idx++;
+        final Map<String, Object> metrics = new HashMap<>();
+        {
+            int idx = 0;
+            for (PoolArenaMetric poolArenaMetric : allocator.heapArenas()) {
+                metrics.put("heap arena[" + idx++ + "]", metricsOfPoolArena(poolArenaMetric));
+            }
         }
-        idx = 0;
-        for (PoolArenaMetric poolArenaMetric : allocator.directArenas()) {
-            metrics.put("direct arena[" + idx + "]", metricsOfPoolArena(poolArenaMetric));
-            idx++;
+        {
+            int idx = 0;
+            for (PoolArenaMetric poolArenaMetric : allocator.directArenas()) {
+                metrics.put("direct arena[" + idx++ + "]", metricsOfPoolArena(poolArenaMetric));
+            }
         }
         
         return metrics;
@@ -52,12 +54,22 @@ public class NettyStats {
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolSubpageMetric}s for tiny sub-pages.
          */
-//        List<PoolSubpageMetric> tinySubpages();
+        {
+            int idx = 0;
+            for (PoolSubpageMetric subpageMetric :  poolArenaMetric.tinySubpages()) {
+                metrics.put("tinySubpage[" + idx++ + "]", metricsOfPoolSubpage(subpageMetric));
+            }
+        }
 
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolSubpageMetric}s for small sub-pages.
          */
-//        List<PoolSubpageMetric> smallSubpages();
+        {
+            int idx = 0;
+            for (PoolSubpageMetric subpageMetric :  poolArenaMetric.smallSubpages()) {
+                metrics.put("smallSubpage[" + idx++ + "]", metricsOfPoolSubpage(subpageMetric));
+            }
+        }
 
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolChunkListMetric}s.
@@ -144,6 +156,31 @@ public class NettyStats {
          */
         metrics.put("numActiveBytes", poolArenaMetric.numActiveBytes());
         
+        return metrics;
+    }
+
+    private static Map<String, Object> metricsOfPoolSubpage(final PoolSubpageMetric subpageMetric) {
+        final Map<String, Object> metrics = new HashMap<>();
+        /**
+         * Return the number of maximal elements that can be allocated out of the sub-page.
+         */
+        metrics.put("maxNumElements", subpageMetric.maxNumElements());
+
+        /**
+         * Return the number of available elements to be allocated.
+         */
+        metrics.put("numAvailable", subpageMetric.numAvailable());
+
+        /**
+         * Return the size (in bytes) of the elements that will be allocated.
+         */
+        metrics.put("elementSize", subpageMetric.elementSize());
+
+        /**
+         * Return the size (in bytes) of this page.
+         */
+        metrics.put("pageSize", subpageMetric.pageSize());
+
         return metrics;
     }
 
