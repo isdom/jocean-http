@@ -169,6 +169,10 @@ public class NettyStats {
 
     private static Map<String, Object> metricsOfPoolChunkList(final PoolChunkListMetric chunkListMetric) {
         final Map<String, Object> metrics = new HashMap<>();
+        
+        metrics.put("minUsage", chunkListMetric.minUsage());
+        metrics.put("maxUsage", chunkListMetric.maxUsage());
+        
         final Iterator<PoolChunkMetric> iter = chunkListMetric.iterator();
         int idx = 0;
         while (iter.hasNext()) {
