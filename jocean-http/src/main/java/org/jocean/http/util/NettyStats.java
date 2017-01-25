@@ -37,22 +37,106 @@ public class NettyStats {
         /**
          * Returns the number of thread caches backed by this arena.
          */
-        metrics.put("numThreadCaches", poolArenaMetric.numThreadCaches());
+        metrics.put("1_numThreadCaches", poolArenaMetric.numThreadCaches());
 
         /**
-         * Returns the number of tiny sub-pages for the arena.
+         * Return the number of allocations done via the arena. This includes all sizes.
          */
-        metrics.put("numTinySubpages", poolArenaMetric.numTinySubpages());
+        metrics.put("2_numAllocations", poolArenaMetric.numAllocations());
 
         /**
-         * Returns the number of small sub-pages for the arena.
+         * Return the number of tiny allocations done via the arena.
          */
-        metrics.put("numSmallSubpages", poolArenaMetric.numSmallSubpages());
+        metrics.put("2_1_numTinyAllocations", poolArenaMetric.numTinyAllocations());
 
+        /**
+         * Return the number of small allocations done via the arena.
+         */
+        metrics.put("2_2_numSmallAllocations", poolArenaMetric.numSmallAllocations());
+
+        /**
+         * Return the number of normal allocations done via the arena.
+         */
+        metrics.put("2_3_numNormalAllocations", poolArenaMetric.numNormalAllocations());
+
+        /**
+         * Return the number of huge allocations done via the arena.
+         */
+        metrics.put("2_4_numHugeAllocations", poolArenaMetric.numHugeAllocations());
+
+        /**
+         * Return the number of deallocations done via the arena. This includes all sizes.
+         */
+        metrics.put("3_numDeallocations", poolArenaMetric.numDeallocations());
+
+        /**
+         * Return the number of tiny deallocations done via the arena.
+         */
+        metrics.put("3_1_numTinyDeallocations", poolArenaMetric.numTinyDeallocations());
+
+        /**
+         * Return the number of small deallocations done via the arena.
+         */
+        metrics.put("3_2_numSmallDeallocations", poolArenaMetric.numSmallDeallocations());
+
+        /**
+         * Return the number of normal deallocations done via the arena.
+         */
+        metrics.put("3_3_numNormalDeallocations", poolArenaMetric.numNormalDeallocations());
+
+        /**
+         * Return the number of huge deallocations done via the arena.
+         */
+        metrics.put("3_4_numHugeDeallocations", poolArenaMetric.numHugeDeallocations());
+
+        /**
+         * Return the number of currently active allocations.
+         */
+        metrics.put("4_numActiveAllocations", poolArenaMetric.numActiveAllocations());
+
+        /**
+         * Return the number of currently active tiny allocations.
+         */
+        metrics.put("4_1_numActiveTinyAllocations", poolArenaMetric.numActiveTinyAllocations());
+
+        /**
+         * Return the number of currently active small allocations.
+         */
+        metrics.put("4_2_numActiveSmallAllocations", poolArenaMetric.numActiveSmallAllocations());
+
+        /**
+         * Return the number of currently active normal allocations.
+         */
+        metrics.put("4_3_numActiveNormalAllocations", poolArenaMetric.numActiveNormalAllocations());
+
+        /**
+         * Return the number of currently active huge allocations.
+         */
+        metrics.put("4_4_numActiveHugeAllocations", poolArenaMetric.numActiveHugeAllocations());
+
+        /**
+         * Return the number of active bytes that are currently allocated by the arena.
+         */
+        metrics.put("5_numActiveBytes", poolArenaMetric.numActiveBytes());
+        
         /**
          * Returns the number of chunk lists for the arena.
          */
-        metrics.put("numChunkLists", poolArenaMetric.numChunkLists());
+        metrics.put("6_numChunkLists", poolArenaMetric.numChunkLists());
+        
+        /**
+         * Returns an unmodifiable {@link List} which holds {@link PoolChunkListMetric}s.
+         */
+        {
+            int idx = 0;
+            for (PoolChunkListMetric chunkListMetric :  poolArenaMetric.chunkLists()) {
+                metrics.put("6_chunkList[" + idx++ + "]", metricsOfPoolChunkList(chunkListMetric));
+            }
+        }
+        /**
+         * Returns the number of tiny sub-pages for the arena.
+         */
+        metrics.put("7_numTinySubpages", poolArenaMetric.numTinySubpages());
 
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolSubpageMetric}s for tiny sub-pages.
@@ -60,9 +144,14 @@ public class NettyStats {
         {
             int idx = 0;
             for (PoolSubpageMetric subpageMetric :  poolArenaMetric.tinySubpages()) {
-                metrics.put("tinySubpage[" + idx++ + "]", metricsOfPoolSubpage(subpageMetric));
+                metrics.put("7_tinySubpage[" + idx++ + "]", metricsOfPoolSubpage(subpageMetric));
             }
         }
+
+        /**
+         * Returns the number of small sub-pages for the arena.
+         */
+        metrics.put("8_numSmallSubpages", poolArenaMetric.numSmallSubpages());
 
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolSubpageMetric}s for small sub-pages.
@@ -70,99 +159,9 @@ public class NettyStats {
         {
             int idx = 0;
             for (PoolSubpageMetric subpageMetric :  poolArenaMetric.smallSubpages()) {
-                metrics.put("smallSubpage[" + idx++ + "]", metricsOfPoolSubpage(subpageMetric));
+                metrics.put("8_smallSubpage[" + idx++ + "]", metricsOfPoolSubpage(subpageMetric));
             }
         }
-
-        /**
-         * Returns an unmodifiable {@link List} which holds {@link PoolChunkListMetric}s.
-         */
-        {
-            int idx = 0;
-            for (PoolChunkListMetric chunkListMetric :  poolArenaMetric.chunkLists()) {
-                metrics.put("chunkList[" + idx++ + "]", metricsOfPoolChunkList(chunkListMetric));
-            }
-        }
-
-        /**
-         * Return the number of allocations done via the arena. This includes all sizes.
-         */
-        metrics.put("numAllocations", poolArenaMetric.numAllocations());
-
-        /**
-         * Return the number of tiny allocations done via the arena.
-         */
-        metrics.put("numTinyAllocations", poolArenaMetric.numTinyAllocations());
-
-        /**
-         * Return the number of small allocations done via the arena.
-         */
-        metrics.put("numSmallAllocations", poolArenaMetric.numSmallAllocations());
-
-        /**
-         * Return the number of normal allocations done via the arena.
-         */
-        metrics.put("numNormalAllocations", poolArenaMetric.numNormalAllocations());
-
-        /**
-         * Return the number of huge allocations done via the arena.
-         */
-        metrics.put("numHugeAllocations", poolArenaMetric.numHugeAllocations());
-
-        /**
-         * Return the number of deallocations done via the arena. This includes all sizes.
-         */
-        metrics.put("numDeallocations", poolArenaMetric.numDeallocations());
-
-        /**
-         * Return the number of tiny deallocations done via the arena.
-         */
-        metrics.put("numTinyDeallocations", poolArenaMetric.numTinyDeallocations());
-
-        /**
-         * Return the number of small deallocations done via the arena.
-         */
-        metrics.put("numSmallDeallocations", poolArenaMetric.numSmallDeallocations());
-
-        /**
-         * Return the number of normal deallocations done via the arena.
-         */
-        metrics.put("numNormalDeallocations", poolArenaMetric.numNormalDeallocations());
-
-        /**
-         * Return the number of huge deallocations done via the arena.
-         */
-        metrics.put("numHugeDeallocations", poolArenaMetric.numHugeDeallocations());
-
-        /**
-         * Return the number of currently active allocations.
-         */
-        metrics.put("numActiveAllocations", poolArenaMetric.numActiveAllocations());
-
-        /**
-         * Return the number of currently active tiny allocations.
-         */
-        metrics.put("numActiveTinyAllocations", poolArenaMetric.numActiveTinyAllocations());
-
-        /**
-         * Return the number of currently active small allocations.
-         */
-        metrics.put("numActiveSmallAllocations", poolArenaMetric.numActiveSmallAllocations());
-
-        /**
-         * Return the number of currently active normal allocations.
-         */
-        metrics.put("numActiveNormalAllocations", poolArenaMetric.numActiveNormalAllocations());
-
-        /**
-         * Return the number of currently active huge allocations.
-         */
-        metrics.put("numActiveHugeAllocations", poolArenaMetric.numActiveHugeAllocations());
-
-        /**
-         * Return the number of active bytes that are currently allocated by the arena.
-         */
-        metrics.put("numActiveBytes", poolArenaMetric.numActiveBytes());
         
         return metrics;
     }
