@@ -42,7 +42,7 @@ public class NettyStats {
         /**
          * Return the number of allocations done via the arena. This includes all sizes.
          */
-        metrics.put("2_numAllocations", poolArenaMetric.numAllocations());
+        metrics.put("2_0_numAllocations", poolArenaMetric.numAllocations());
 
         /**
          * Return the number of tiny allocations done via the arena.
@@ -67,7 +67,7 @@ public class NettyStats {
         /**
          * Return the number of deallocations done via the arena. This includes all sizes.
          */
-        metrics.put("3_numDeallocations", poolArenaMetric.numDeallocations());
+        metrics.put("3_0_numDeallocations", poolArenaMetric.numDeallocations());
 
         /**
          * Return the number of tiny deallocations done via the arena.
@@ -92,7 +92,7 @@ public class NettyStats {
         /**
          * Return the number of currently active allocations.
          */
-        metrics.put("4_numActiveAllocations", poolArenaMetric.numActiveAllocations());
+        metrics.put("4_0_numActiveAllocations", poolArenaMetric.numActiveAllocations());
 
         /**
          * Return the number of currently active tiny allocations.
@@ -122,7 +122,7 @@ public class NettyStats {
         /**
          * Returns the number of chunk lists for the arena.
          */
-        metrics.put("6_numChunkLists", poolArenaMetric.numChunkLists());
+        metrics.put("6_0_numChunkLists", poolArenaMetric.numChunkLists());
         
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolChunkListMetric}s.
@@ -136,7 +136,7 @@ public class NettyStats {
         /**
          * Returns the number of tiny sub-pages for the arena.
          */
-        metrics.put("7_numTinySubpages", poolArenaMetric.numTinySubpages());
+        metrics.put("7_0_numTinySubpages", poolArenaMetric.numTinySubpages());
 
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolSubpageMetric}s for tiny sub-pages.
@@ -151,7 +151,7 @@ public class NettyStats {
         /**
          * Returns the number of small sub-pages for the arena.
          */
-        metrics.put("8_numSmallSubpages", poolArenaMetric.numSmallSubpages());
+        metrics.put("8_0_numSmallSubpages", poolArenaMetric.numSmallSubpages());
 
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolSubpageMetric}s for small sub-pages.
