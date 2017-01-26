@@ -138,14 +138,9 @@ public class NettyStats {
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolSubpageMetric}s for tiny sub-pages.
          */
-        {
-            final int w = (int)(Math.log10(poolArenaMetric.numTinySubpages()))+1;
-            final String fstr = "%0"+w+"d";
-            int idx = 1;
-            for (PoolSubpageMetric subpageMetric :  poolArenaMetric.tinySubpages()) {
-                metrics.put("7_"+ String.format(fstr, idx++) +"_tinySubpage", metricsOfPoolSubpage(subpageMetric));
-            }
-        }
+        metrics.put("7_1_tinySubpages", metricsOfSubpages(
+                poolArenaMetric.numTinySubpages(), 
+                poolArenaMetric.tinySubpages()));
 
         /**
          * Returns the number of small sub-pages for the arena.
@@ -155,14 +150,9 @@ public class NettyStats {
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolSubpageMetric}s for small sub-pages.
          */
-        {
-            final int w = (int)(Math.log10(poolArenaMetric.numSmallSubpages()))+1;
-            final String fstr = "%0"+w+"d";
-            int idx = 1;
-            for (PoolSubpageMetric subpageMetric :  poolArenaMetric.smallSubpages()) {
-                metrics.put("8_"+ String.format(fstr, idx++) +"_smallSubpage", metricsOfPoolSubpage(subpageMetric));
-            }
-        }
+        metrics.put("8_1_smallSubpage", metricsOfSubpages(
+                poolArenaMetric.numSmallSubpages(), 
+                poolArenaMetric.smallSubpages()));
         
         return metrics;
     }
@@ -196,6 +186,19 @@ public class NettyStats {
         metrics.put("1_usage",      chunkMetric.usage());
         metrics.put("2_freeBytes",  chunkMetric.freeBytes());
         metrics.put("3_chunkSize",  chunkMetric.chunkSize());
+        return metrics;
+    }
+
+    private static Map<String, Object> metricsOfSubpages(final int count, final List<PoolSubpageMetric> subpages) {
+        final Map<String, Object> metrics = new HashMap<>();
+        
+        final int w = (int)(Math.log10(count))+1;
+        final String fstr = "%0"+w+"d";
+        
+        int idx = 0;
+        for (PoolSubpageMetric subpageMetric : subpages ) {
+            metrics.put(String.format(fstr, idx++) +"_tinySubpage", metricsOfPoolSubpage(subpageMetric));
+        }
         return metrics;
     }
 
