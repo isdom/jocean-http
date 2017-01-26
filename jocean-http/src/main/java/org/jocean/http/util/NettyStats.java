@@ -2,6 +2,7 @@ package org.jocean.http.util;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import io.netty.buffer.PoolArenaMetric;
@@ -127,24 +128,22 @@ public class NettyStats {
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolChunkListMetric}s.
          */
-        {
-            int idx = 0;
-            for (PoolChunkListMetric chunkListMetric :  poolArenaMetric.chunkLists()) {
-                metrics.put("6_chunkList[" + idx++ + "]", metricsOfPoolChunkList(chunkListMetric));
-            }
-        }
+        metrics.put("6_1_chunkLists", metricsOfChunkLists(poolArenaMetric.chunkLists()));
+        
         /**
          * Returns the number of tiny sub-pages for the arena.
          */
         metrics.put("7_0_numTinySubpages", poolArenaMetric.numTinySubpages());
-
+        
         /**
          * Returns an unmodifiable {@link List} which holds {@link PoolSubpageMetric}s for tiny sub-pages.
          */
         {
-            int idx = 0;
+            final int w = (int)(Math.log10(poolArenaMetric.numTinySubpages()))+1;
+            final String fstr = "%0"+w+"d";
+            int idx = 1;
             for (PoolSubpageMetric subpageMetric :  poolArenaMetric.tinySubpages()) {
-                metrics.put("7_tinySubpage[" + idx++ + "]", metricsOfPoolSubpage(subpageMetric));
+                metrics.put("7_"+ String.format(fstr, idx++) +"_tinySubpage", metricsOfPoolSubpage(subpageMetric));
             }
         }
 
@@ -157,30 +156,46 @@ public class NettyStats {
          * Returns an unmodifiable {@link List} which holds {@link PoolSubpageMetric}s for small sub-pages.
          */
         {
-            int idx = 0;
+            final int w = (int)(Math.log10(poolArenaMetric.numSmallSubpages()))+1;
+            final String fstr = "%0"+w+"d";
+            int idx = 1;
             for (PoolSubpageMetric subpageMetric :  poolArenaMetric.smallSubpages()) {
-                metrics.put("8_smallSubpage[" + idx++ + "]", metricsOfPoolSubpage(subpageMetric));
+                metrics.put("8_"+ String.format(fstr, idx++) +"_smallSubpage", metricsOfPoolSubpage(subpageMetric));
             }
         }
         
         return metrics;
     }
 
+    private static Map<String, Object> metricsOfChunkLists(final List<PoolChunkListMetric> chunkLists) {
+        final Map<String, Object> metrics = new HashMap<>();
+        int idx = 0;
+        for (PoolChunkListMetric chunkListMetric :  chunkLists) {
+            metrics.put(idx++ +"_chunkList", metricsOfPoolChunkList(chunkListMetric));
+        }
+        return metrics;
+    }
+
     private static Map<String, Object> metricsOfPoolChunkList(final PoolChunkListMetric chunkListMetric) {
         final Map<String, Object> metrics = new HashMap<>();
         
-        metrics.put("minUsage", chunkListMetric.minUsage());
-        metrics.put("maxUsage", chunkListMetric.maxUsage());
+        metrics.put("1_minUsage", chunkListMetric.minUsage());
+        metrics.put("2_maxUsage", chunkListMetric.maxUsage());
         
         final Iterator<PoolChunkMetric> iter = chunkListMetric.iterator();
         int idx = 0;
         while (iter.hasNext()) {
-            final PoolChunkMetric chunkMetric = iter.next();
-            metrics.put("chunk[" + idx +"].usage", chunkMetric.usage());
-            metrics.put("chunk[" + idx +"].freeBytes", chunkMetric.freeBytes());
-            metrics.put("chunk[" + idx +"].chunkSize", chunkMetric.chunkSize());
-            idx++;
+            metrics.put("chunk_" + idx++, metricsOfPoolChunk(iter.next()));
         }
+        metrics.put("3_numChunks", idx);
+        return metrics;
+    }
+
+    private static Map<String, Object> metricsOfPoolChunk(final PoolChunkMetric chunkMetric) {
+        final Map<String, Object> metrics = new HashMap<>();
+        metrics.put("1_usage",      chunkMetric.usage());
+        metrics.put("2_freeBytes",  chunkMetric.freeBytes());
+        metrics.put("3_chunkSize",  chunkMetric.chunkSize());
         return metrics;
     }
 
@@ -189,22 +204,22 @@ public class NettyStats {
         /**
          * Return the number of maximal elements that can be allocated out of the sub-page.
          */
-        metrics.put("maxNumElements", subpageMetric.maxNumElements());
+        metrics.put("2_maxNumElements", subpageMetric.maxNumElements());
 
         /**
          * Return the number of available elements to be allocated.
          */
-        metrics.put("numAvailable", subpageMetric.numAvailable());
+        metrics.put("3_numAvailable", subpageMetric.numAvailable());
 
         /**
          * Return the size (in bytes) of the elements that will be allocated.
          */
-        metrics.put("elementSize", subpageMetric.elementSize());
+        metrics.put("1_elementSize", subpageMetric.elementSize());
 
         /**
          * Return the size (in bytes) of this page.
          */
-        metrics.put("pageSize", subpageMetric.pageSize());
+        metrics.put("4_pageSize", subpageMetric.pageSize());
 
         return metrics;
     }
