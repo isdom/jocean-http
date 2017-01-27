@@ -8,16 +8,21 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PoolArenaMetric;
 import io.netty.buffer.PooledByteBufAllocator;
 
-public class PooledByteBufAllocatorTestCase {
+public class PoolArenaTestCase {
 
     @Test
     public final void testPoolArenaAllocationCounter() {
-        System.setProperty("io.netty.allocator.tinyCacheSize", "0");
-        System.setProperty("io.netty.allocator.smallCacheSize", "0");
-        System.setProperty("io.netty.allocator.normalCacheSize", "0");
-        System.setProperty("io.netty.allocator.type", "pooled");
-        
-        final PooledByteBufAllocator allocator = PooledByteBufAllocator.DEFAULT;
+        final PooledByteBufAllocator allocator = new PooledByteBufAllocator(
+                true,   //boolean preferDirect, 
+                0,      //int nHeapArena, 
+                1,      //int nDirectArena, 
+                8192,   //int pageSize, 
+                11,     //int maxOrder,
+                0,      //int tinyCacheSize, 
+                0,      //int smallCacheSize, 
+                0,      //int normalCacheSize,
+                true    //boolean useCacheForAllThreads
+                );
         
         // alloc tiny buf
         final ByteBuf b1 = allocator.directBuffer(24);
@@ -40,11 +45,12 @@ public class PooledByteBufAllocatorTestCase {
         
         final PoolArenaMetric metric = allocator.directArenas().get(0);
         
-        assertEquals(metric.numDeallocations(), metric.numAllocations());
+        assertEquals(3, metric.numDeallocations());
+        assertEquals(3, metric.numAllocations());
+        
         assertEquals(metric.numTinyDeallocations(), metric.numTinyAllocations());
         assertEquals(metric.numSmallDeallocations(), metric.numSmallAllocations());
         assertEquals(metric.numNormalDeallocations(), metric.numNormalAllocations());
-        
     }
 
 }
