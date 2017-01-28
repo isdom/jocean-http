@@ -4,13 +4,13 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd">
         
-    <bean id="nettystats" class="org.jocean.http.util.NettyStats"/>
+    <bean id="pooledstats" class="org.jocean.http.util.PooledAllocatorStats"/>
     
     <bean class="org.springframework.jmx.export.MBeanExporter"
           lazy-init="false">
         <property name="beans">
             <map>
-                <entry key="org.jocean:name=nettystats" value-ref="nettystats"/>
+                <entry key="org.jocean:name=pooledstats" value-ref="pooledstats"/>
             </map>
         </property>
     </bean>

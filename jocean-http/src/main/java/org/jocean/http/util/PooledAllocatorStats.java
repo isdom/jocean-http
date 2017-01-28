@@ -11,20 +11,20 @@ import io.netty.buffer.PoolChunkMetric;
 import io.netty.buffer.PoolSubpageMetric;
 import io.netty.buffer.PooledByteBufAllocator;
 
-public class NettyStats {
-    public Map<String, Object> getPooledByteBufAllocatorMetric() {
+public class PooledAllocatorStats {
+    public Map<String, Object> getMetrics() {
         final PooledByteBufAllocator allocator = PooledByteBufAllocator.DEFAULT;
         final Map<String, Object> metrics = new HashMap<>();
         {
             int idx = 0;
-            for (PoolArenaMetric poolArenaMetric : allocator.heapArenas()) {
-                metrics.put("heap arena[" + idx++ + "]", metricsOfPoolArena(poolArenaMetric));
+            for (PoolArenaMetric poolArenaMetric : allocator.directArenas()) {
+                metrics.put("1_DirectArena[" + idx++ + "]", metricsOfPoolArena(poolArenaMetric));
             }
         }
         {
             int idx = 0;
-            for (PoolArenaMetric poolArenaMetric : allocator.directArenas()) {
-                metrics.put("direct arena[" + idx++ + "]", metricsOfPoolArena(poolArenaMetric));
+            for (PoolArenaMetric poolArenaMetric : allocator.heapArenas()) {
+                metrics.put("2_HeapArena[" + idx++ + "]", metricsOfPoolArena(poolArenaMetric));
             }
         }
         
@@ -227,7 +227,7 @@ public class NettyStats {
         return metrics;
     }
 
-    public String getPooledByteBufAllocatorMetricAsString() {
+    public String getMetricAsString() {
         return PooledByteBufAllocator.DEFAULT.dumpStats();
     }
 }
