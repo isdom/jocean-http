@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
@@ -87,12 +88,17 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     }
     
     @Override
-    public int getTradeCount() {
+    public int getNumActiveTrades() {
         return this._trades.size();
     }
 
     @Override
-    public String[] getAllTrade() {
+    public long getNumCompletedTrades() {
+        return this._numCompletedTrades.get();
+    }
+    
+    @Override
+    public String[] getAllActiveTrade() {
         final List<String> infos = new ArrayList<>();
         for (HttpTrade t : this._trades) {
             infos.add(t.toString());
@@ -208,7 +214,14 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onNext(
                             addToTrades(httpTradeOf(channel))
-                            .addCloseHook(actionRecycleChannel(channel, subscriber, awaitChannels)));
+                            .addCloseHook(actionRecycleChannel(channel, subscriber, awaitChannels))
+                            .addCloseHook(new Action1<HttpTrade>() {
+                                @Override
+                                public void call(HttpTrade t) {
+                                    _numCompletedTrades.incrementAndGet();
+                                }})
+                            )
+                        ;
                     } else {
                         LOG.warn("HttpTrade Subscriber {} has unsubscribed, so close channel({})",
                                 subscriber, channel);
@@ -363,6 +376,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     
     private static final Class2ApplyBuilder _APPLY_BUILDER;
     
+    private final AtomicLong     _numCompletedTrades = new AtomicLong(0);
     private final Set<HttpTrade> _trades = new ConcurrentSkipListSet<HttpTrade>();
     private final AtomicInteger  _currentInboundMemory = new AtomicInteger(0);
     private final AtomicInteger  _peakInboundMemory = new AtomicInteger(0);
