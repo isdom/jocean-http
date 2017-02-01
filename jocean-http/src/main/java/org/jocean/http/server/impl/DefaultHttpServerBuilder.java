@@ -93,6 +93,11 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     }
 
     @Override
+    public long getNumStartedTrades() {
+        return this._numStartedTrades.get();
+    }
+    
+    @Override
     public long getNumCompletedTrades() {
         return this._numCompletedTrades.get();
     }
@@ -248,6 +253,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     }
     
     private HttpTrade httpTradeOf(final Channel channel) {
+        this._numStartedTrades.incrementAndGet();
         final DefaultHttpTrade trade = new DefaultHttpTrade(channel, httpobjObservable(channel));
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
         
@@ -376,6 +382,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     
     private static final Class2ApplyBuilder _APPLY_BUILDER;
     
+    private final AtomicLong     _numStartedTrades = new AtomicLong(0);
     private final AtomicLong     _numCompletedTrades = new AtomicLong(0);
     private final Set<HttpTrade> _trades = new ConcurrentSkipListSet<HttpTrade>();
     private final AtomicInteger  _currentInboundMemory = new AtomicInteger(0);

@@ -10,6 +10,8 @@ public interface TradeHolderMXBean {
     
     public float getPeakInboundMemoryInMBs();
     
+    public long getNumStartedTrades();
+    
     public long getNumCompletedTrades();
     
     public int getNumActiveTrades();
