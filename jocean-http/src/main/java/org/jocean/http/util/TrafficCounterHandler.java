@@ -3,6 +3,8 @@ package org.jocean.http.util;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.jocean.http.TrafficCounter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
@@ -12,6 +14,8 @@ import io.netty.channel.ChannelPromise;
 
 final public class TrafficCounterHandler extends ChannelDuplexHandler 
     implements TrafficCounter {
+    private static final Logger LOG =
+            LoggerFactory.getLogger(TrafficCounterHandler.class);
 
     @Override
     public long outboundBytes() {
@@ -34,6 +38,9 @@ final public class TrafficCounterHandler extends ChannelDuplexHandler
     @Override
     public void channelRead(final ChannelHandlerContext ctx, final Object msg)
             throws Exception {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("TrafficCounterHandler.channelRead: channel {} recv {}", ctx.channel(), msg);
+        }
         if (msg instanceof ByteBuf) {
             updateInboundBytes((ByteBuf) msg);
         } else if (msg instanceof ByteBufHolder) {
@@ -45,6 +52,9 @@ final public class TrafficCounterHandler extends ChannelDuplexHandler
     @Override
     public void write(final ChannelHandlerContext ctx, Object msg,
             final ChannelPromise promise) throws Exception {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("TrafficCounterHandler.write: channel {} send {}", ctx.channel(), msg);
+        }
         if (msg instanceof ByteBuf) {
             updateOutboundBytes((ByteBuf) msg);
         } else if (msg instanceof ByteBufHolder) {
