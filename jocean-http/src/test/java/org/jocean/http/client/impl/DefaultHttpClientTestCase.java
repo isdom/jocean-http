@@ -585,8 +585,8 @@ public class DefaultHttpClientTestCase {
             testSubscriber.awaitTerminalEvent();
             assertEquals(1, creator.getChannels().size());
             creator.getChannels().get(0).assertClosed(1);
-            assertEquals(0, counter.uploadBytes());
-            assertEquals(0, counter.downloadBytes());
+            assertEquals(0, counter.outboundBytes());
+            assertEquals(0, counter.inboundBytes());
         } finally {
             client.close();
             assertEquals(0, testSubscriber.getOnNextEvents().size());
@@ -618,10 +618,10 @@ public class DefaultHttpClientTestCase {
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             
             assertTrue(Arrays.equals(bytes, CONTENT));
-            assertTrue(0 < counter.uploadBytes());
-            assertTrue(0 < counter.downloadBytes());
-            LOG.debug("meter.uploadBytes: {}", counter.uploadBytes());
-            LOG.debug("meter.downloadBytes: {}", counter.downloadBytes());
+            assertTrue(0 < counter.outboundBytes());
+            assertTrue(0 < counter.inboundBytes());
+            LOG.debug("meter.uploadBytes: {}", counter.outboundBytes());
+            LOG.debug("meter.downloadBytes: {}", counter.inboundBytes());
         } finally {
             client.close();
             server.unsubscribe();

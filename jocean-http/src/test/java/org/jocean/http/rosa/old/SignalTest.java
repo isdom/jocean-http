@@ -144,7 +144,7 @@ public class SignalTest {
                 @Override
                 public void onCompleted() {
                     LOG.debug("AddMultiMediasToJourneyRequest: onCompleted.");
-                    LOG.debug("traffic: upload: {}/download: {}", trafficCounter.uploadBytes(), trafficCounter.downloadBytes());
+                    LOG.debug("traffic: upload: {}/download: {}", trafficCounter.outboundBytes(), trafficCounter.inboundBytes());
                     LOG.debug("payload: totalUpload: {}/totalDownload: {}", payloadCounter.totalUploadBytes(), 
                             payloadCounter.totalDownloadBytes());
                 }
@@ -179,7 +179,7 @@ public class SignalTest {
 //            subscription.unsubscribe();
             //  TODO, why invoke onCompleted Event? not onError, check
             //  TO BE CONTINUE, 2015-05-13
-            LOG.debug("traffic: upload: {}/download: {}", trafficCounter.uploadBytes(), trafficCounter.downloadBytes());
+            LOG.debug("traffic: upload: {}/download: {}", trafficCounter.outboundBytes(), trafficCounter.inboundBytes());
             LOG.debug("payload: totalUpload: {}/totalDownload: {}", payloadCounter.totalUploadBytes(), 
                     payloadCounter.totalDownloadBytes());
         }

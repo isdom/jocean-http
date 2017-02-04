@@ -9,48 +9,48 @@ import org.junit.Test;
 public class TrafficCounterTestCase {
 
     @Test
-    public final void testTrafficCounterProxyUploadBytes() {
+    public final void testTrafficCounterProxyOutboundBytes() {
         final TrafficCounterProxy proxy = new TrafficCounterProxy();
         
-        assertEquals(proxy.uploadBytes(), 0);
+        assertEquals(proxy.outboundBytes(), 0);
     }
 
     @Test
-    public final void testTrafficCounterProxyDownloadBytes() {
+    public final void testTrafficCounterProxyInboundBytes() {
         final TrafficCounterProxy proxy = new TrafficCounterProxy();
         
-        assertEquals(proxy.downloadBytes(), 0);
+        assertEquals(proxy.inboundBytes(), 0);
     }
 
     @Test
-    public final void testTrafficCounterProxyAssignRefUploadBytes() {
+    public final void testTrafficCounterProxyAssignRefOutboundBytes() {
         final TrafficCounterProxy proxy = new TrafficCounterProxy();
         
         proxy.setTrafficCounter(new TrafficCounter() {
             @Override
-            public long uploadBytes() {
+            public long outboundBytes() {
                 return 100;
             }
             @Override
-            public long downloadBytes() {
+            public long inboundBytes() {
                 return 0;
             }});
-        assertEquals(proxy.uploadBytes(), 100);
+        assertEquals(proxy.outboundBytes(), 100);
     }
 
     @Test
-    public final void testTrafficCounterProxyAssignRefDownloadBytes() {
+    public final void testTrafficCounterProxyAssignRefInboundBytes() {
         final TrafficCounterProxy proxy = new TrafficCounterProxy();
         
         proxy.setTrafficCounter(new TrafficCounter() {
             @Override
-            public long uploadBytes() {
+            public long outboundBytes() {
                 return 100;
             }
             @Override
-            public long downloadBytes() {
+            public long inboundBytes() {
                 return 100;
             }});
-        assertEquals(proxy.downloadBytes(), 100);
+        assertEquals(proxy.inboundBytes(), 100);
     }
 }

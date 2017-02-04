@@ -14,30 +14,30 @@ final public class TrafficCounterHandler extends ChannelDuplexHandler
     implements TrafficCounter {
 
     @Override
-    public long uploadBytes() {
-        return this._uploadBytes.get();
+    public long outboundBytes() {
+        return this._outboundBytes.get();
     }
     
     @Override
-    public long downloadBytes() {
-        return this._downloadBytes.get();
+    public long inboundBytes() {
+        return this._inboundBytes.get();
     }
     
-    private void updateUploadBytes(final ByteBuf byteBuf) {
-        this._uploadBytes.addAndGet(byteBuf.readableBytes());
+    private void updateOutboundBytes(final ByteBuf byteBuf) {
+        this._outboundBytes.addAndGet(byteBuf.readableBytes());
     }
 
-    private void updateDownloadBytes(final ByteBuf byteBuf) {
-        this._downloadBytes.addAndGet(byteBuf.readableBytes());
+    private void updateInboundBytes(final ByteBuf byteBuf) {
+        this._inboundBytes.addAndGet(byteBuf.readableBytes());
     }
 
     @Override
     public void channelRead(final ChannelHandlerContext ctx, final Object msg)
             throws Exception {
         if (msg instanceof ByteBuf) {
-            updateDownloadBytes((ByteBuf) msg);
+            updateInboundBytes((ByteBuf) msg);
         } else if (msg instanceof ByteBufHolder) {
-            updateDownloadBytes(((ByteBufHolder) msg).content());
+            updateInboundBytes(((ByteBufHolder) msg).content());
         }
         ctx.fireChannelRead(msg);
     }
@@ -46,9 +46,9 @@ final public class TrafficCounterHandler extends ChannelDuplexHandler
     public void write(final ChannelHandlerContext ctx, Object msg,
             final ChannelPromise promise) throws Exception {
         if (msg instanceof ByteBuf) {
-            updateUploadBytes((ByteBuf) msg);
+            updateOutboundBytes((ByteBuf) msg);
         } else if (msg instanceof ByteBufHolder) {
-            updateUploadBytes(((ByteBufHolder) msg).content());
+            updateOutboundBytes(((ByteBufHolder) msg).content());
         }
         ctx.write(msg, promise);
     }
@@ -61,6 +61,6 @@ final public class TrafficCounterHandler extends ChannelDuplexHandler
         return "TrafficCounterHandler";
     }
 
-    private final AtomicLong _uploadBytes = new AtomicLong(0);
-    private final AtomicLong _downloadBytes = new AtomicLong(0);
+    private final AtomicLong _outboundBytes = new AtomicLong(0);
+    private final AtomicLong _inboundBytes = new AtomicLong(0);
 }

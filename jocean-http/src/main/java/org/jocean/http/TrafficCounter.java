@@ -2,7 +2,7 @@ package org.jocean.http;
 
 public interface TrafficCounter {
     
-    public long uploadBytes();
+    public long outboundBytes();
     
-    public long downloadBytes();
+    public long inboundBytes();
 }

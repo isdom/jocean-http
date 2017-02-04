@@ -27,28 +27,18 @@ public class HttpUtil {
             return "TRAFFIC_COUNTER";
         }
 
-        /*
-         * (non-Javadoc)
-         * 
-         * @see org.jocean.http.client.InteractionMeter#uploadBytes()
-         */
         @Override
-        public long uploadBytes() {
+        public long outboundBytes() {
             final TrafficCounter impl = this._ref.get();
 
-            return null != impl ? impl.uploadBytes() : 0;
+            return null != impl ? impl.outboundBytes() : 0;
         }
 
-        /*
-         * (non-Javadoc)
-         * 
-         * @see org.jocean.http.client.InteractionMeter#downloadBytes()
-         */
         @Override
-        public long downloadBytes() {
+        public long inboundBytes() {
             final TrafficCounter impl = this._ref.get();
 
-            return null != impl ? impl.downloadBytes() : 0;
+            return null != impl ? impl.inboundBytes() : 0;
         }
 
         public void setTrafficCounter(final TrafficCounter ref) {
