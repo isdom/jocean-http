@@ -10,9 +10,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.jocean.http.TrafficCounter;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
+import org.jocean.http.util.APPLY;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.RxNettys;
+import org.jocean.http.util.TrafficCounterHandler;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
@@ -91,6 +94,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
         final Observable<? extends HttpObject> requestObservable,
         final Action1<HttpTrade> ... oncloseds) {
         this._channel = channel;
+        this._trafficCounter = buildTrafficCounter(channel);
         this._reqmsgholder = new HttpMessageHolder(0);
         
         addCloseHook(RxActions.<HttpTrade>toAction1(this._reqmsgholder.release()));
@@ -118,9 +122,24 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
         closeTradeWhenChannelInactive();
     }
 
+    private TrafficCounter buildTrafficCounter(final Channel channel) {
+        final TrafficCounterHandler handler = 
+                (TrafficCounterHandler)APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
+        
+        addCloseHook(
+            RxActions.<HttpTrade>toAction1(
+                RxNettys.actionToRemoveHandler(channel, handler)));
+        return handler;
+    }
+    
     @Override
     public HttpMessageHolder inboundHolder() {
         return this._reqmsgholder;
+    }
+    
+    @Override
+    public TrafficCounter trafficCounter() {
+        return this._trafficCounter;
     }
     
     @Override
@@ -402,6 +421,7 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     private final HttpMessageHolder _reqmsgholder;
     private final Date _createTime = new Date();
     private final Channel _channel;
+    private final TrafficCounter _trafficCounter;
     private String _requestMethod;
     private String _requestUri;
     private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);

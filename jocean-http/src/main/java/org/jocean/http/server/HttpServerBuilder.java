@@ -7,6 +7,7 @@ import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
+import org.jocean.http.TrafficCounter;
 import org.jocean.http.util.HttpMessageHolder;
 
 import io.netty.handler.codec.http.HttpObject;
@@ -19,8 +20,6 @@ import rx.functions.Func0;
  * @author isdom
  *
  */
-//  TODO, rename this interface to creator or sth. else
-//  it's !NOT! server BUT server generator
 public interface HttpServerBuilder extends Closeable {
     
     public Observable<? extends HttpTrade> defineServer(
@@ -37,6 +36,7 @@ public interface HttpServerBuilder extends Closeable {
             final Feature ... features);
     
     public interface HttpTrade {
+        public TrafficCounter trafficCounter();
         public int retainedInboundMemory();
         public boolean isActive();
         public boolean isEndedWithKeepAlive();
