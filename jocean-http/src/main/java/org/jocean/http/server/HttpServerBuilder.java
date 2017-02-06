@@ -36,6 +36,7 @@ public interface HttpServerBuilder extends Closeable {
             final Feature ... features);
     
     public interface HttpTrade {
+        public void setInboundAutoRead(final boolean autoRead);
         public TrafficCounter trafficCounter();
         public int retainedInboundMemory();
         public boolean isActive();

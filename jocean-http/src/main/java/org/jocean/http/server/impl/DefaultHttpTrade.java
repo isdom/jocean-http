@@ -122,6 +122,22 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
         closeTradeWhenChannelInactive();
     }
 
+    @Override
+    public void setInboundAutoRead(final boolean autoRead) {
+        _actionSetInboundAutoRead.call(autoRead);
+    }
+    
+    private final Action1<Boolean> _actionSetInboundAutoRead = 
+        RxActions.toAction1(
+            this._funcSelector.submitWhenActive(
+                RxActions.<DefaultHttpTrade>toAction1_N(
+                    DefaultHttpTrade.class, "doSetInboundAutoRead")));
+            
+    @SuppressWarnings("unused")
+    private void doSetInboundAutoRead(final boolean autoRead) {
+        this._channel.config().setAutoRead(autoRead);
+    }
+    
     private TrafficCounter buildTrafficCounter(final Channel channel) {
         final TrafficCounterHandler handler = 
                 (TrafficCounterHandler)APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
