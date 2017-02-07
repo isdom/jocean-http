@@ -17,7 +17,7 @@ import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.jocean.idiom.rx.RxObservables;
-import org.jocean.idiom.store.BlobRepo.Blob;
+import org.jocean.netty.BlobRepo.Blob;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
