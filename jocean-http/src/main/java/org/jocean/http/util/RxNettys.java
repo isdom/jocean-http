@@ -18,6 +18,7 @@ import org.jocean.idiom.UnsafeOp;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.jocean.idiom.rx.RxObservables;
 import org.jocean.netty.BlobRepo.Blob;
+import org.jocean.netty.util.ReferenceCountedHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -622,16 +623,16 @@ public class RxNettys {
         return AS_HTTPRESP;
     }
         
-    public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob() {
-        return postRequest2Blob(null);
+    public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob(final ReferenceCountedHolder holder) {
+        return postRequest2Blob(null, holder);
     }
     
     public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob(
-            final String contentTypePrefix) {
+            final String contentTypePrefix, final ReferenceCountedHolder holder) {
         return new Observable.Transformer<HttpObject, Blob>() {
             @Override
             public Observable<Blob> call(final Observable<HttpObject> source) {
-                return source.flatMap(new AsBlob(contentTypePrefix))
+                return source.flatMap(new AsBlob(contentTypePrefix, holder))
                         .compose(RxObservables.<Blob>ensureSubscribeAtmostOnce())
                         ;
             }};
@@ -653,8 +654,83 @@ public class RxNettys {
         return CHANNELFUTURE_CHANNEL;
     }
 
+    private static Blob buildBlob(final FileUpload fileUpload,
+            final String contentType, final String filename,
+            final String name) {
+        return new Blob() {
+            @Override
+            public String toString() {
+                final StringBuilder builder = new StringBuilder();
+                builder.append("Blob [name=").append(name())
+                        .append(", filename=").append(filename())
+                        .append(", contentType=").append(contentType())
+                        .append(", content.size=").append(fileUpload.content().readableBytes())
+                        .append("]");
+                return builder.toString();
+            }
+            
+//            @Override
+//            public byte[] content() {
+//                return bytes;
+//            }
+            
+            @Override
+            public String contentType() {
+                return contentType;
+            }
+            @Override
+            public String name() {
+                return name;
+            }
+            @Override
+            public String filename() {
+                return filename;
+            }
+
+            @Override
+            public int refCnt() {
+                return fileUpload.refCnt();
+            }
+
+            @Override
+            public ReferenceCounted retain() {
+                return fileUpload.retain();
+            }
+
+            @Override
+            public ReferenceCounted retain(int increment) {
+                return fileUpload.retain(increment);
+            }
+
+            @Override
+            public ReferenceCounted touch() {
+                return fileUpload.touch();
+            }
+
+            @Override
+            public ReferenceCounted touch(Object hint) {
+                return fileUpload.touch(hint);
+            }
+
+            @Override
+            public boolean release() {
+                return fileUpload.release();
+            }
+
+            @Override
+            public boolean release(int decrement) {
+                return fileUpload.release(decrement);
+            }
+
+            @Override
+            public InputStream inputStream() {
+                return new ByteBufInputStream(fileUpload.content().slice(), false);
+            }};
+    }
+
     static class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
 
+        private final ReferenceCountedHolder _holder;
         private final String _contentTypePrefix;
         
         private boolean _isMultipart = false;
@@ -665,8 +741,9 @@ public class RxNettys {
         private static final HttpDataFactory HTTP_DATA_FACTORY =
                 new DefaultHttpDataFactory(false);  // DO NOT use Disk
         
-        public AsBlob(final String contentTypePrefix) {
+        public AsBlob(final String contentTypePrefix, final ReferenceCountedHolder holder) {
             this._contentTypePrefix = contentTypePrefix;
+            this._holder = holder;
         }
 
         @Override
@@ -706,7 +783,7 @@ public class RxNettys {
                     final InterfaceHttpData data = _postDecoder.next();
                     if (data != null) {
                         try {
-                            final Blob blob = processHttpData(data);
+                            final Blob blob = this._holder.hold(processHttpData(data));
                             if (null != blob) {
                                 blobs.add(blob);
                                 LOG.info("onNext4Multipart: add Blob {}", blob);
@@ -736,44 +813,11 @@ public class RxNettys {
                     return null;
                 }
                     
-                try {
-                    final byte[] bytes = Nettys.dumpByteBufAsBytes(fileUpload.content());
-                    final String contentType = fileUpload.getContentType();
-                    final String filename = fileUpload.getFilename();
-                    final String name = fileUpload.getName();
-                    return new Blob() {
-                        @Override
-                        public String toString() {
-                            final StringBuilder builder = new StringBuilder();
-                            builder.append("Blob [name=").append(name())
-                                    .append(", filename=").append(filename())
-                                    .append(", contentType=").append(contentType())
-                                    .append(", content.size=").append(content().length)
-                                    .append("]");
-                            return builder.toString();
-                        }
-                        
-                        @Override
-                        public byte[] content() {
-                            return bytes;
-                        }
-                        @Override
-                        public String contentType() {
-                            return contentType;
-                        }
-                        @Override
-                        public String name() {
-                            return name;
-                        }
-                        @Override
-                        public String filename() {
-                            return filename;
-                        }};
-                } catch (IOException e) {
-                    LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
-                            ExceptionUtils.exception2detail(e));
-                }
-                
+//                    final byte[] bytes = Nettys.dumpByteBufAsBytes(fileUpload.content());
+                final String contentType = fileUpload.getContentType();
+                final String filename = fileUpload.getFilename();
+                final String name = fileUpload.getName();
+                return buildBlob(fileUpload, contentType, filename, name);
             } else {
                 LOG.info("InterfaceHttpData ({}) is NOT fileUpload, so ignore", data);
             }
