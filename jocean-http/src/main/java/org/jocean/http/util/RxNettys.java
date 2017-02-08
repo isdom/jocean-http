@@ -657,6 +657,7 @@ public class RxNettys {
     private static Blob buildBlob(final FileUpload fileUpload,
             final String contentType, final String filename,
             final String name) {
+        final int length = fileUpload.content().readableBytes();
         return new Blob() {
             @Override
             public String toString() {
@@ -664,7 +665,7 @@ public class RxNettys {
                 builder.append("Blob [name=").append(name())
                         .append(", filename=").append(filename())
                         .append(", contentType=").append(contentType())
-                        .append(", content.size=").append(fileUpload.content().readableBytes())
+                        .append(", content.length=").append(length)
                         .append("]");
                 return builder.toString();
             }
@@ -725,6 +726,11 @@ public class RxNettys {
             @Override
             public InputStream inputStream() {
                 return new ByteBufInputStream(fileUpload.content().slice(), false);
+            }
+
+            @Override
+            public int contentLength() {
+                return length;
             }};
     }
 

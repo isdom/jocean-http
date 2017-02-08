@@ -10,6 +10,7 @@ public interface BlobRepo {
         public String name();
         public String filename();
         public String contentType();
+        public int contentLength();
 //        public byte[] content();
         public InputStream inputStream();
     }
