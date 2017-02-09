@@ -13,6 +13,18 @@ public interface BlobRepo {
         public int contentLength();
 //        public byte[] content();
         public InputStream inputStream();
+        
+        @Override
+        Blob retain();
+
+        @Override
+        Blob retain(int increment);
+
+        @Override
+        Blob touch();
+
+        @Override
+        Blob touch(Object hint);
     }
     
     public Observable<String> putBlob(

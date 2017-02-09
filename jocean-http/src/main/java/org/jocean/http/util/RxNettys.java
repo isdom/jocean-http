@@ -655,7 +655,8 @@ public class RxNettys {
     }
 
     private static Blob buildBlob(final FileUpload fileUpload,
-            final String contentType, final String filename,
+            final String contentType, 
+            final String filename,
             final String name) {
         final int length = fileUpload.content().readableBytes();
         return new Blob() {
@@ -669,11 +670,6 @@ public class RxNettys {
                         .append("]");
                 return builder.toString();
             }
-            
-//            @Override
-//            public byte[] content() {
-//                return bytes;
-//            }
             
             @Override
             public String contentType() {
@@ -694,23 +690,27 @@ public class RxNettys {
             }
 
             @Override
-            public ReferenceCounted retain() {
-                return fileUpload.retain();
+            public Blob retain() {
+                fileUpload.retain();
+                return this;
             }
 
             @Override
-            public ReferenceCounted retain(int increment) {
-                return fileUpload.retain(increment);
+            public Blob retain(int increment) {
+                fileUpload.retain(increment);
+                return this;
             }
 
             @Override
-            public ReferenceCounted touch() {
-                return fileUpload.touch();
+            public Blob touch() {
+                fileUpload.touch();
+                return this;
             }
 
             @Override
-            public ReferenceCounted touch(Object hint) {
-                return fileUpload.touch(hint);
+            public Blob touch(Object hint) {
+                fileUpload.touch(hint);
+                return this;
             }
 
             @Override
