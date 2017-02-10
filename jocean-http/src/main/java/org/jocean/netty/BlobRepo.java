@@ -12,7 +12,6 @@ public interface BlobRepo {
         public String filename();
         public String contentType();
         public int contentLength();
-//        public byte[] content();
         public InputStream inputStream();
         
         @Override
@@ -96,7 +95,12 @@ public interface BlobRepo {
         }
     }
     
-    public Observable<String> putBlob(
+    public interface PutResult {
+        public String key();
+        public Blob   blob();
+    }
+    
+    public Observable<PutResult> putBlob(
             final String key,
             final Blob blob);
     
