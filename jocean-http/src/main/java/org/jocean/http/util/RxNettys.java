@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.CompositeByteBuf;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -775,7 +776,7 @@ public class RxNettys {
                         final Field chunkField = _postDecoder.getClass().getDeclaredField("undecodedChunk");
                         if (null != chunkField) {
                             chunkField.setAccessible(true);
-                            chunkField.set(_postDecoder, null);
+                            chunkField.set(_postDecoder, PooledByteBufAllocator.DEFAULT.directBuffer());
                         } else {
                             LOG.warn("not found HttpPostMultipartRequestDecoder.undecodedChunk field");
                         }
