@@ -623,16 +623,20 @@ public class RxNettys {
         return AS_HTTPRESP;
     }
         
-    public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob(final ReferenceCountedHolder holder) {
-        return postRequest2Blob(null, holder);
+    public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob(
+            final ReferenceCountedHolder holder,
+            final HttpMessageHolder msgholder) {
+        return postRequest2Blob(null, holder, msgholder);
     }
     
     public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob(
-            final String contentTypePrefix, final ReferenceCountedHolder holder) {
+            final String contentTypePrefix, 
+            final ReferenceCountedHolder holder, 
+            final HttpMessageHolder msgholder) {
         return new Observable.Transformer<HttpObject, Blob>() {
             @Override
             public Observable<Blob> call(final Observable<HttpObject> source) {
-                return source.flatMap(new AsBlob(contentTypePrefix, holder))
+                return source.flatMap(new AsBlob(contentTypePrefix, holder, msgholder))
                         .compose(RxObservables.<Blob>ensureSubscribeAtmostOnce())
                         ;
             }};
@@ -737,6 +741,7 @@ public class RxNettys {
     static class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
 
         private final ReferenceCountedHolder _holder;
+        private final HttpMessageHolder _msgHolder;
         private final String _contentTypePrefix;
         
         private boolean _isMultipart = false;
@@ -747,9 +752,12 @@ public class RxNettys {
         private static final HttpDataFactory HTTP_DATA_FACTORY =
                 new DefaultHttpDataFactory(false);  // DO NOT use Disk
         
-        public AsBlob(final String contentTypePrefix, final ReferenceCountedHolder holder) {
+        public AsBlob(final String contentTypePrefix, 
+                final ReferenceCountedHolder holder,
+                final HttpMessageHolder msgHolder) {
             this._contentTypePrefix = contentTypePrefix;
             this._holder = holder;
+            this._msgHolder = msgHolder;
         }
 
         @Override
@@ -782,6 +790,10 @@ public class RxNettys {
             } catch (ErrorDataDecoderException e) {
                 LOG.warn("exception when postDecoder.offer, detail: {}", 
                         ExceptionUtils.exception2detail(e));
+            } finally {
+                if (null != this._msgHolder) {
+                    this._msgHolder.releaseHttpContent(content);
+                }
             }
             final List<Blob> blobs = new ArrayList<>();
             try {
