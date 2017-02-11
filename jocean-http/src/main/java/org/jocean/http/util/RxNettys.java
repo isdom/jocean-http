@@ -776,6 +776,8 @@ public class RxNettys {
                         if (null != chunkField) {
                             chunkField.setAccessible(true);
                             chunkField.set(_postDecoder, null);
+                        } else {
+                            LOG.warn("not found HttpPostMultipartRequestDecoder.undecodedChunk field");
                         }
                     } catch (Exception e) {
                         LOG.warn("exception when set undecodedChunk to null, detail: {}",
@@ -843,7 +845,7 @@ public class RxNettys {
                     return null;
                 }
                     
-//                    final byte[] bytes = Nettys.dumpByteBufAsBytes(fileUpload.content());
+                LOG.info("processHttpData: fileUpload's content is {}", Nettys.dumpByteBufHolder(fileUpload));
                 final String contentType = fileUpload.getContentType();
                 final String filename = fileUpload.getFilename();
                 final String name = fileUpload.getName();
