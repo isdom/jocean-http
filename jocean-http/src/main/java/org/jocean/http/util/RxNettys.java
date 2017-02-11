@@ -2,6 +2,7 @@ package org.jocean.http.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -48,6 +49,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.multipart.DefaultHttpDataFactory;
 import io.netty.handler.codec.http.multipart.FileUpload;
 import io.netty.handler.codec.http.multipart.HttpDataFactory;
+import io.netty.handler.codec.http.multipart.HttpPostMultipartRequestDecoder;
 import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder;
 import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder.EndOfDataDecoderException;
 import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder.ErrorDataDecoderException;
@@ -747,7 +749,7 @@ public class RxNettys {
         private boolean _isMultipart = false;
         
         //  TODO , at least call _postDecoder.destroy();
-        private HttpPostRequestDecoder _postDecoder = null;
+        private HttpPostMultipartRequestDecoder _postDecoder = null;
         
         private static final HttpDataFactory HTTP_DATA_FACTORY =
                 new DefaultHttpDataFactory(false);  // DO NOT use Disk
@@ -767,8 +769,18 @@ public class RxNettys {
                 if ( request.method().equals(HttpMethod.POST)
                         && HttpPostRequestDecoder.isMultipart(request)) {
                     _isMultipart = true;
-                    _postDecoder = new HttpPostRequestDecoder(
+                    _postDecoder = new HttpPostMultipartRequestDecoder(
                             HTTP_DATA_FACTORY, request);
+                    try {
+                        final Field chunkField = _postDecoder.getClass().getDeclaredField("undecodedChunk");
+                        if (null != chunkField) {
+                            chunkField.setAccessible(true);
+                            chunkField.set(_postDecoder, null);
+                        }
+                    } catch (Exception e) {
+                        LOG.warn("exception when set undecodedChunk to null, detail: {}",
+                                ExceptionUtils.exception2detail(e));
+                    }
                     
                     LOG.info("{} isMultipart", msg);
                 } else {
