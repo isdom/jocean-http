@@ -639,7 +639,13 @@ public class RxNettys {
         return new Observable.Transformer<HttpObject, Blob>() {
             @Override
             public Observable<Blob> call(final Observable<HttpObject> source) {
-                return source.flatMap(new AsBlob(contentTypePrefix, holder, msgholder))
+                final AsBlob asBlob = new AsBlob(contentTypePrefix, holder, msgholder);
+                return source.flatMap(asBlob)
+                        .doOnTerminate(new Action0() {
+                            @Override
+                            public void call() {
+                                asBlob.destroy();
+                            }})
                         .compose(RxObservables.<Blob>ensureSubscribeAtmostOnce())
                         ;
             }};
@@ -754,6 +760,15 @@ public class RxNettys {
         
         private static final HttpDataFactory HTTP_DATA_FACTORY =
                 new DefaultHttpDataFactory(false);  // DO NOT use Disk
+        
+        public void destroy() {
+            if (null!=this._postDecoder) {
+                // HttpPostRequestDecoder's destroy call HttpDataFactory.cleanRequestHttpDatas
+                //  so no need to cleanRequestHttpDatas outside
+                this._postDecoder.destroy();
+                this._postDecoder = null;
+            }
+        }
         
         public AsBlob(final String contentTypePrefix, 
                 final ReferenceCountedHolder holder,
