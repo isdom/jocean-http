@@ -14,9 +14,6 @@ import org.jocean.idiom.ProxyBuilder;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
-import org.jocean.idiom.rx.RxObservables;
-import org.jocean.netty.BlobRepo.Blob;
-import org.jocean.netty.util.ReferenceCountedHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -613,27 +610,6 @@ public class RxNettys {
         return AS_HTTPRESP;
     }
         
-    public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob(
-            final ReferenceCountedHolder holder,
-            final HttpMessageHolder msgholder) {
-        return postRequest2Blob(null, holder, msgholder);
-    }
-    
-    public static Observable.Transformer<? super HttpObject, ? extends Blob> postRequest2Blob(
-            final String contentTypePrefix, 
-            final ReferenceCountedHolder holder, 
-            final HttpMessageHolder msgholder) {
-        return new Observable.Transformer<HttpObject, Blob>() {
-            @Override
-            public Observable<Blob> call(final Observable<HttpObject> source) {
-                final AsBlob asBlob = new AsBlob(contentTypePrefix, holder, msgholder);
-                return source.flatMap(asBlob)
-                        .doOnTerminate(asBlob.destroy())
-                        .compose(RxObservables.<Blob>ensureSubscribeAtmostOnce())
-                        ;
-            }};
-    }
-    
     private final static Observable.Transformer<ChannelFuture, Channel> CHANNELFUTURE_CHANNEL = 
             new Observable.Transformer<ChannelFuture, Channel>() {
                 @Override
