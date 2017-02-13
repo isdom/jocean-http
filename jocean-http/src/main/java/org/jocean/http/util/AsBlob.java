@@ -40,6 +40,7 @@ public class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
     
     private boolean _isMultipart = false;
     
+    private int _discardThreshold = 128 * 1024;
     private HttpPostMultipartRequestDecoder _postDecoder = null;
     
     private static final HttpDataFactory HTTP_DATA_FACTORY =
@@ -68,6 +69,7 @@ public class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
     }
     
     public void setDiscardThreshold(final int discardThreshold) {
+        this._discardThreshold = discardThreshold;
         if (null != this._postDecoder) {
             this._postDecoder.setDiscardThreshold(discardThreshold);
         }
@@ -104,6 +106,7 @@ public class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
                 _isMultipart = true;
                 _postDecoder = new HttpPostMultipartRequestDecoder(
                         HTTP_DATA_FACTORY, request);
+                _postDecoder.setDiscardThreshold(_discardThreshold);
                 try {
                     final Field chunkField = _postDecoder.getClass().getDeclaredField("undecodedChunk");
                     if (null != chunkField) {
