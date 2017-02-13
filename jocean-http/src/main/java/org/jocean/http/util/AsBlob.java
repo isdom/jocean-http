@@ -11,6 +11,7 @@ import org.jocean.netty.util.ReferenceCountedHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.HttpContent;
@@ -39,7 +40,6 @@ public class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
     
     private boolean _isMultipart = false;
     
-    //  TODO , at least call _postDecoder.destroy();
     private HttpPostMultipartRequestDecoder _postDecoder = null;
     
     private static final HttpDataFactory HTTP_DATA_FACTORY =
@@ -65,6 +65,34 @@ public class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
         this._contentTypePrefix = contentTypePrefix;
         this._holder = holder;
         this._msgHolder = msgHolder;
+    }
+    
+    public void setDiscardThreshold(final int discardThreshold) {
+        if (null != this._postDecoder) {
+            this._postDecoder.setDiscardThreshold(discardThreshold);
+        }
+    }
+
+    public int currentUndecodedSize() {
+        final HttpPostMultipartRequestDecoder postDecoder = this._postDecoder;
+        if (null != postDecoder) {
+            try {
+                final Field chunkField = postDecoder.getClass().getDeclaredField("undecodedChunk");
+                if (null != chunkField) {
+                    chunkField.setAccessible(true);
+                    final ByteBuf undecodedChunk = (ByteBuf)chunkField.get(postDecoder);
+                    if (null != undecodedChunk) {
+                        return undecodedChunk.capacity();
+                    }
+                } else {
+                    LOG.warn("not found HttpPostMultipartRequestDecoder.undecodedChunk field");
+                }
+            } catch (Exception e) {
+                LOG.warn("exception when get undecodedChunk, detail: {}",
+                        ExceptionUtils.exception2detail(e));
+            }
+        }
+        return 0;
     }
 
     @Override
