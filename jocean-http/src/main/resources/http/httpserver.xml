@@ -8,6 +8,7 @@
         <constructor-arg value="${http.server.accept.thread.count:1}"/>
         <constructor-arg value="${http.server.work.thread.count:0}"/>
         <property name="inboundBlockSize" value="${in.blocksize:0}"/>
+        <property name="inboundRecvBufSize" value="${in.recvbuf:8192}"/>
     </bean>
     
     <bean class="org.springframework.jmx.export.MBeanExporter"

@@ -75,6 +75,14 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
         this._inboundBlockSize = inboundBlockSize;
     }
 
+    public int getInboundRecvBufSize() {
+        return this._inboundRecvBufSize;
+    }
+
+    public void setInboundRecvBufSize(final int inboundRecvBufSize) {
+        this._inboundRecvBufSize = inboundRecvBufSize;
+    }
+    
     @Override
     public int getCurrentInboundMemoryInBytes() {
         return this._currentInboundMemory.get();
@@ -169,8 +177,10 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                         @Override
                         protected void initChannel(final Channel channel) throws Exception {
                             if (LOG.isDebugEnabled()) {
-                                LOG.debug("dump inbound channel({})'s config: \n{}", channel, Nettys.dumpChannelConfig(channel.config()));
+                                LOG.debug("dump inbound channel({})'s config: \n{}", 
+                                        channel, Nettys.dumpChannelConfig(channel.config()));
                             }
+                            channel.config().setOption(ChannelOption.SO_RCVBUF, _inboundRecvBufSize);
                             final Feature[] actualFeatures = JOArrays.addFirst(Feature[].class, 
                                     featuresOf(featuresBuilder), features);
                             final Feature[] applyFeatures = 
@@ -390,6 +400,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private final BootstrapCreator _creator;
     private final Feature[] _defaultFeatures;
     
+    private int _inboundRecvBufSize = 8192;
     private int _inboundBlockSize = 0;
     
     private static final Class2ApplyBuilder _APPLY_BUILDER;
