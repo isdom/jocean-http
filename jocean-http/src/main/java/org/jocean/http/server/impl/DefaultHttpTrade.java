@@ -93,9 +93,18 @@ class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
         final Channel channel, 
         final Observable<? extends HttpObject> requestObservable,
         final Action1<HttpTrade> ... oncloseds) {
+        this(channel, requestObservable, 0, oncloseds);
+    }
+    
+    @SafeVarargs
+    DefaultHttpTrade(
+        final Channel channel, 
+        final Observable<? extends HttpObject> requestObservable,
+        final int inboundBlockSize,
+        final Action1<HttpTrade> ... oncloseds) {
         this._channel = channel;
         this._trafficCounter = buildTrafficCounter(channel);
-        this._reqmsgholder = new HttpMessageHolder(0);
+        this._reqmsgholder = new HttpMessageHolder(inboundBlockSize);
         
         addCloseHook(RxActions.<HttpTrade>toAction1(this._reqmsgholder.release()));
         

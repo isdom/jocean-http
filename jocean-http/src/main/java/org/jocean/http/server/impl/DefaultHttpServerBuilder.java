@@ -67,6 +67,14 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpServerBuilder.class);
     
+    public int getInboundBlockSize() {
+        return this._inboundBlockSize;
+    }
+
+    public void setInboundBlockSize(final int inboundBlockSize) {
+        this._inboundBlockSize = inboundBlockSize;
+    }
+
     @Override
     public int getCurrentInboundMemoryInBytes() {
         return this._currentInboundMemory.get();
@@ -254,7 +262,9 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     
     private HttpTrade httpTradeOf(final Channel channel) {
         this._numStartedTrades.incrementAndGet();
-        final DefaultHttpTrade trade = new DefaultHttpTrade(channel, httpobjObservable(channel));
+        final DefaultHttpTrade trade = new DefaultHttpTrade(channel, 
+                httpobjObservable(channel), 
+                this._inboundBlockSize);
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
         
         trade.inboundRequest().subscribe(new Action1<HttpObject>() {
@@ -379,6 +389,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
 
     private final BootstrapCreator _creator;
     private final Feature[] _defaultFeatures;
+    
+    private int _inboundBlockSize = 0;
     
     private static final Class2ApplyBuilder _APPLY_BUILDER;
     
