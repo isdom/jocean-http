@@ -159,22 +159,105 @@ class DefaultHttpTrade extends DefaultAttributeMap
         
         //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
         closeTradeWhenChannelInactive();
+        hookChannelReadComplete();
     }
 
-    @Override
-    public void setInboundAutoRead(final boolean autoRead) {
-        _actionSetInboundAutoRead.call(autoRead);
+    private void hookChannelReadComplete() {
+        final ChannelHandler readCompleteNotifier = new ReadCompleteNotifier();
+        this._channel.pipeline().addLast(readCompleteNotifier);
+        
+        addCloseHook(
+            RxActions.<HttpTrade>toAction1(
+                RxNettys.actionToRemoveHandler(_channel, readCompleteNotifier)));
+    }
+
+    final Action1<Action1<HttpTrade>> _readCompleteInvoker = new Action1<Action1<HttpTrade>>() {
+        @Override
+        public void call(final Action1<HttpTrade> onReadComplete) {
+            try {
+                onReadComplete.call(DefaultHttpTrade.this);
+            } catch (Exception e) {
+                LOG.warn("exception when trade({}) invoke onReadComplete({}), detail: {}",
+                        DefaultHttpTrade.this, onReadComplete, ExceptionUtils.exception2detail(e));
+            }
+        }};
+        
+    private final class ReadCompleteNotifier extends ChannelInboundHandlerAdapter implements Ordered {
+        @Override
+        public void channelReadComplete(final ChannelHandlerContext ctx) throws Exception {
+            _onReadCompletes.foreachComponent(_readCompleteInvoker);
+        }
+
+        @Override
+        public int ordinal() {
+            return 1001;
+        }
     }
     
-    private final Action1<Boolean> _actionSetInboundAutoRead = 
+    public HttpTrade addInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete) {
+        this._doAddInboundReadCompleteHook.call(onReadComplete);
+        return this;
+    }
+    
+    public void removeInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete) {
+        this._doRemoveInboundReadCompleteHook.call(onReadComplete);
+    }
+    
+    private final Action1<Action1<HttpTrade>> _doAddInboundReadCompleteHook = 
+        RxActions.toAction1(
+            this._funcSelector.submitWhenActive(
+                RxActions.toAction1_N(DefaultHttpTrade.class, "addInboundReadCompleteHook0"))
+        );
+    
+    @SuppressWarnings("unused")
+    private void addInboundReadCompleteHook0(final Action1<HttpTrade> onReadComplete) {
+        this._onReadCompletes.addComponent(onReadComplete);
+    }
+    
+    private final Action1<Action1<HttpTrade>> _doRemoveInboundReadCompleteHook = 
+        RxActions.toAction1(
+            this._funcSelector.submitWhenActive(
+                RxActions.toAction1_N(DefaultHttpTrade.class, "removeInboundReadCompleteHook0"))
+        );
+    
+    @SuppressWarnings("unused")
+    private void removeInboundReadCompleteHook0(final Action1<HttpTrade> onReadComplete) {
+        this._onReadCompletes.removeComponent(onReadComplete);
+    }
+    
+    private final COWCompositeSupport<Action1<HttpTrade>> _onReadCompletes = 
+            new COWCompositeSupport<>();
+    
+    @Override
+    public void setInboundAutoRead(final boolean autoRead) {
+        this._doSetInboundAutoRead.call(autoRead);
+    }
+    
+    private final Action1<Boolean> _doSetInboundAutoRead = 
         RxActions.toAction1(
             this._funcSelector.submitWhenActive(
                 RxActions.<DefaultHttpTrade>toAction1_N(
-                    DefaultHttpTrade.class, "doSetInboundAutoRead")));
+                    DefaultHttpTrade.class, "setInboundAutoRead0")));
             
     @SuppressWarnings("unused")
-    private void doSetInboundAutoRead(final boolean autoRead) {
+    private void setInboundAutoRead0(final boolean autoRead) {
         this._channel.config().setAutoRead(autoRead);
+    }
+    
+    @Override
+    public void readInbound() {
+        this._doReadInbound.call();
+    }
+    
+    private final Action0 _doReadInbound = 
+        RxActions.toAction0(
+            this._funcSelector.submitWhenActive(
+                RxActions.<DefaultHttpTrade>toAction1_N(
+                    DefaultHttpTrade.class, "readInbound0")));
+    
+    @SuppressWarnings("unused")
+    private void readInbound0() {
+        this._channel.read();
     }
     
     private TrafficCounter buildTrafficCounter(final Channel channel) {
@@ -215,14 +298,12 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
     
     private void closeTradeWhenChannelInactive() {
-        final ChannelHandler doCloseWhenChannelInactive = 
-            new TradeCloser();
-        this._channel.pipeline().addLast(doCloseWhenChannelInactive);
-        addCloseHook(new Action1<HttpTrade>() {
-            @Override
-            public void call(final HttpTrade trade) {
-                _channel.pipeline().remove(doCloseWhenChannelInactive);
-            }});
+        final ChannelHandler tradeCloser = new TradeCloser();
+        this._channel.pipeline().addLast(tradeCloser);
+        
+        addCloseHook(
+            RxActions.<HttpTrade>toAction1(
+                RxNettys.actionToRemoveHandler(_channel, tradeCloser)));
     }
 
     private Transformer<HttpObject, HttpObject> hookRequest() {
@@ -391,38 +472,38 @@ class DefaultHttpTrade extends DefaultAttributeMap
     
     @Override
     public HttpTrade addCloseHook(final Action1<HttpTrade> onClosed) {
-        this._actionAddCloseHook.call(onClosed);
+        this._doAddCloseHook.call(onClosed);
         return this;
     }
     
-    private final Action1<Action1<HttpTrade>> _actionAddCloseHook = RxActions.toAction1(
+    private final Action1<Action1<HttpTrade>> _doAddCloseHook = RxActions.toAction1(
             this._funcSelector.submitWhenActive(
-                RxActions.toAction1_N(DefaultHttpTrade.class, "internalAddCloseHook"))
+                RxActions.toAction1_N(DefaultHttpTrade.class, "addCloseHook0"))
             .submitWhenDestroyed(
-                RxActions.toAction1_N(DefaultHttpTrade.class, "invokeCloseHookNow")));
+                RxActions.toAction1_N(DefaultHttpTrade.class, "closeHookNow")));
     
     @SuppressWarnings("unused")
-    private void internalAddCloseHook(final Action1<HttpTrade> onClosed) {
-        this._onClosedActions.addComponent(onClosed);
+    private void addCloseHook0(final Action1<HttpTrade> onClosed) {
+        this._onCloseds.addComponent(onClosed);
     }
     
     @SuppressWarnings("unused")
-    private void invokeCloseHookNow(final Action1<HttpTrade> onClosed) {
+    private void closeHookNow(final Action1<HttpTrade> onClosed) {
         onClosed.call(this);
     }
     
     @Override
     public void removeCloseHook(final Action1<HttpTrade> onClosed) {
-        this._actionRemoveCloseHook.call(onClosed);
+        this._doRemoveCloseHook.call(onClosed);
     }
     
-    private final Action1<Action1<HttpTrade>> _actionRemoveCloseHook = RxActions.toAction1(
+    private final Action1<Action1<HttpTrade>> _doRemoveCloseHook = RxActions.toAction1(
             this._funcSelector.submitWhenActive(
-                RxActions.toAction1_N(DefaultHttpTrade.class, "internalRemoveCloseHook")));
+                RxActions.toAction1_N(DefaultHttpTrade.class, "removeCloseHook0")));
     
     @SuppressWarnings("unused")
-    private void internalRemoveCloseHook(final Action1<HttpTrade> onClosed) {
-        this._onClosedActions.removeComponent(onClosed);
+    private void removeCloseHook0(final Action1<HttpTrade> onClosed) {
+        this._onCloseds.removeComponent(onClosed);
     }
         
     private void doAbort() {
@@ -438,7 +519,18 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private void doClose() {
         this._funcSelector.destroy(RxActions.toAction1_N(DefaultHttpTrade.class, "fireDoOnClosed"));
     }
-            
+
+    private final Action1<Action1<HttpTrade>> _onClosedInvoker = new Action1<Action1<HttpTrade>>() {
+        @Override
+        public void call(final Action1<HttpTrade> onClosed) {
+            try {
+                onClosed.call(DefaultHttpTrade.this);
+            } catch (Exception e) {
+                LOG.warn("exception when trade({}) invoke onClosed({}), detail: {}",
+                        DefaultHttpTrade.this, onClosed, ExceptionUtils.exception2detail(e));
+            }
+        }};
+
     private void fireDoOnClosed() {
         if (LOG.isDebugEnabled()) {
             LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
@@ -458,20 +550,11 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 }
             }
         }
-        this._onClosedActions.foreachComponent(new Action1<Action1<HttpTrade>>() {
-            @Override
-            public void call(final Action1<HttpTrade> onClosed) {
-                try {
-                    onClosed.call(DefaultHttpTrade.this);
-                } catch (Exception e) {
-                    LOG.warn("exception when trade({}) invoke onClosed({}), detail: {}",
-                            DefaultHttpTrade.this, onClosed, ExceptionUtils.exception2detail(e));
-                }
-            }});
+        this._onCloseds.foreachComponent(_onClosedInvoker);
     }
 
-    private final COWCompositeSupport<Action1<HttpTrade>> _onClosedActions = 
-            new COWCompositeSupport<Action1<HttpTrade>>();
+    private final COWCompositeSupport<Action1<HttpTrade>> _onCloseds = 
+            new COWCompositeSupport<>();
     
     private final HttpMessageHolder _reqmsgholder;
     private final Date _createTime = new Date();

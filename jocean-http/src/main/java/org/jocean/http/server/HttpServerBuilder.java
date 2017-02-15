@@ -37,7 +37,6 @@ public interface HttpServerBuilder extends Closeable {
             final Feature ... features);
     
     public interface HttpTrade extends AttributeMap {
-        public void setInboundAutoRead(final boolean autoRead);
         public TrafficCounter trafficCounter();
         public int retainedInboundMemory();
         public boolean isActive();
@@ -51,5 +50,10 @@ public interface HttpServerBuilder extends Closeable {
         public Object transport();
         public HttpTrade addCloseHook(final Action1<HttpTrade> onClosed);
         public void removeCloseHook(final Action1<HttpTrade> onClosed);
+        
+        public void setInboundAutoRead(final boolean autoRead);
+        public void readInbound();
+        public HttpTrade addInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete);
+        public void removeInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete);
     }
 }
