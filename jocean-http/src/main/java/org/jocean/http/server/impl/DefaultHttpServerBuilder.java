@@ -229,6 +229,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             final Subscriber<? super HttpTrade> subscriber, 
             final List<Channel> awaitChannels) {
         awaitChannels.add(channel);
+        channel.config().setAutoRead(true);
         APPLY.ON_CHANNEL_READ.applyTo(channel.pipeline(), 
             new Action0() {
                 @Override
@@ -237,7 +238,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onNext(
                             addToTrades(httpTradeOf(channel))
-                            .addCloseHook(actionRecycleChannel(channel, subscriber, awaitChannels))
+                            .addCloseHook(doRecycleChannel(channel, subscriber, awaitChannels))
                             .addCloseHook(new Action1<HttpTrade>() {
                                 @Override
                                 public void call(HttpTrade t) {
@@ -319,7 +320,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
     }
     
-    private Action1<HttpTrade> actionRecycleChannel(
+    private Action1<HttpTrade> doRecycleChannel(
             final Channel channel,
             final Subscriber<? super HttpTrade> subscriber, 
             final List<Channel> awaitChannels) {
