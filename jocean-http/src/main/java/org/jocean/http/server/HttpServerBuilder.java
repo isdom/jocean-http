@@ -11,6 +11,7 @@ import org.jocean.http.TrafficCounter;
 import org.jocean.http.util.HttpMessageHolder;
 
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.util.AttributeMap;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
@@ -35,7 +36,7 @@ public interface HttpServerBuilder extends Closeable {
             final Func0<Feature[]> featuresBuilder,
             final Feature ... features);
     
-    public interface HttpTrade {
+    public interface HttpTrade extends AttributeMap {
         public void setInboundAutoRead(final boolean autoRead);
         public TrafficCounter trafficCounter();
         public int retainedInboundMemory();

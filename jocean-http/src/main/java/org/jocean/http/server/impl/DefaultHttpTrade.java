@@ -34,6 +34,7 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
+import io.netty.util.DefaultAttributeMap;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
@@ -50,7 +51,8 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpTrade implements HttpTrade,  Comparable<DefaultHttpTrade>  {
+class DefaultHttpTrade extends DefaultAttributeMap 
+    implements HttpTrade,  Comparable<DefaultHttpTrade>  {
     
     private static final AtomicInteger _IDSRC = new AtomicInteger(0);
     
