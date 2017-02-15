@@ -180,7 +180,13 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                                 LOG.debug("dump inbound channel({})'s config: \n{}", 
                                         channel, Nettys.dumpChannelConfig(channel.config()));
                             }
-                            channel.config().setOption(ChannelOption.SO_RCVBUF, _inboundRecvBufSize);
+                            if ( _inboundRecvBufSize > 0) {
+                                LOG.info("inbound channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
+                                        channel, 
+                                        channel.config().getOption(ChannelOption.SO_RCVBUF), 
+                                        _inboundRecvBufSize);
+                                channel.config().setOption(ChannelOption.SO_RCVBUF, _inboundRecvBufSize);
+                            }
                             final Feature[] actualFeatures = JOArrays.addFirst(Feature[].class, 
                                     featuresOf(featuresBuilder), features);
                             final Feature[] applyFeatures = 
@@ -401,7 +407,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private final BootstrapCreator _creator;
     private final Feature[] _defaultFeatures;
     
-    private int _inboundRecvBufSize = 8192;
+    private int _inboundRecvBufSize = -1;
     private int _inboundBlockSize = 0;
     
     private static final Class2ApplyBuilder _APPLY_BUILDER;
