@@ -95,7 +95,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     public String toString() {
         final StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpTrade [create at:")
-                .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(_createTime))
+                .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
                 .append(", request subscriber count=")
                 .append(_requestSubscribers.size())
                 .append(", isRequestReceived=").append(_isRequestReceived.get())
@@ -194,11 +194,18 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
     
+    @Override
+    public long timeToLive() {
+        return System.currentTimeMillis() - this._createTimeMillis;
+    }
+    
+    @Override
     public HttpTrade addInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete) {
         this._doAddInboundReadCompleteHook.call(onReadComplete);
         return this;
     }
     
+    @Override
     public void removeInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete) {
         this._doRemoveInboundReadCompleteHook.call(onReadComplete);
     }
@@ -557,7 +564,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
             new COWCompositeSupport<>();
     
     private final HttpMessageHolder _reqmsgholder;
-    private final Date _createTime = new Date();
+    private final long _createTimeMillis = System.currentTimeMillis();
     private final Channel _channel;
     private final TrafficCounter _trafficCounter;
     private String _requestMethod;

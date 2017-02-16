@@ -55,5 +55,7 @@ public interface HttpServerBuilder extends Closeable {
         public void readInbound();
         public HttpTrade addInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete);
         public void removeInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete);
+        
+        public long timeToLive();
     }
 }
