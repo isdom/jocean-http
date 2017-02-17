@@ -123,7 +123,7 @@ public class DefaultHttpTradeTestCase {
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         
-        trade.inboundRequest().subscribe(reqSubscriber);
+        trade.inbound().message().subscribe(reqSubscriber);
         
         trade.abort();
         assertFalse(trade.isActive());
@@ -147,7 +147,7 @@ public class DefaultHttpTradeTestCase {
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         
-        trade.inboundRequest().subscribe(reqSubscriber);
+        trade.inbound().message().subscribe(reqSubscriber);
         
         requestObservable.connect();
         
@@ -177,7 +177,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
-        trade.inboundRequest().subscribe(reqSubscriber);
+        trade.inbound().message().subscribe(reqSubscriber);
         
         reqSubscriber.assertTerminalEvent();
         reqSubscriber.assertError(Exception.class);
@@ -196,7 +196,7 @@ public class DefaultHttpTradeTestCase {
                 Observable.create(holder));
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
-        trade.inboundRequest().subscribe(reqSubscriber);
+        trade.inbound().message().subscribe(reqSubscriber);
         
         assertEquals(holder.getSubscriberCount(), 1);
         
@@ -224,17 +224,17 @@ public class DefaultHttpTradeTestCase {
                 Observable.create(holder));
         
         final TestSubscriber<HttpObject> reqSubscriber1 = new TestSubscriber<>();
-        trade.inboundRequest().subscribe(reqSubscriber1);
+        trade.inbound().message().subscribe(reqSubscriber1);
         
         assertEquals(holder.getSubscriberCount(), 1);
         
         final TestSubscriber<HttpObject> reqSubscriber2 = new TestSubscriber<>();
-        trade.inboundRequest().subscribe(reqSubscriber2);
+        trade.inbound().message().subscribe(reqSubscriber2);
         
         assertEquals(holder.getSubscriberCount(), 1);
         
         final TestSubscriber<HttpObject> reqSubscriber3 = new TestSubscriber<>();
-        trade.inboundRequest().subscribe(reqSubscriber3);
+        trade.inbound().message().subscribe(reqSubscriber3);
         
         assertEquals(holder.getSubscriberCount(), 1);
         
@@ -265,7 +265,7 @@ public class DefaultHttpTradeTestCase {
                 Observable.create(holder));
         
         final TestSubscriber<HttpObject> reqSubscriber1 = new TestSubscriber<>();
-        trade.inboundRequest().subscribe(reqSubscriber1);
+        trade.inbound().message().subscribe(reqSubscriber1);
         
         assertEquals(holder.getSubscriberCount(), 1);
         
@@ -275,7 +275,7 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber1.assertValues(request);
         
         final TestSubscriber<HttpObject> reqSubscriber2 = new TestSubscriber<>();
-        trade.inboundRequest().subscribe(reqSubscriber2);
+        trade.inbound().message().subscribe(reqSubscriber2);
         
         assertEquals(holder.getSubscriberCount(), 1);
         
@@ -288,7 +288,7 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber2.assertValues(req_contents[0]);
         
         final TestSubscriber<HttpObject> reqSubscriber3 = new TestSubscriber<>();
-        trade.inboundRequest().subscribe(reqSubscriber3);
+        trade.inbound().message().subscribe(reqSubscriber3);
         
         assertEquals(holder.getSubscriberCount(), 1);
         
@@ -377,7 +377,7 @@ public class DefaultHttpTradeTestCase {
                 requestObservable);
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
-        trade.inboundRequest().subscribe(reqSubscriber);
+        trade.inbound().message().subscribe(reqSubscriber);
         
         requestObservable.connect();
         
@@ -850,7 +850,8 @@ public class DefaultHttpTradeTestCase {
         final HttpMessageHolder holder = new HttpMessageHolder(0);
         final Observable<? extends HttpObject> inbound = 
             trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
-            .inboundRequest()
+            .inbound()
+            .message()
             .compose(holder.<HttpObject>assembleAndHold());
         
         final Observable<? extends HttpObject> cached = inbound.cache();
@@ -918,7 +919,8 @@ public class DefaultHttpTradeTestCase {
         final HttpMessageHolder holder = new HttpMessageHolder(0);
         final Observable<? extends HttpObject> inbound = 
             trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
-            .inboundRequest()
+            .inbound()
+            .message()
             .compose(holder.<HttpObject>assembleAndHold());
         
         inbound.subscribe(
@@ -952,7 +954,8 @@ public class DefaultHttpTradeTestCase {
         final HttpMessageHolder holder = new HttpMessageHolder(0);
         final Observable<? extends HttpObject> inbound = 
             trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
-            .inboundRequest()
+            .inbound()
+            .message()
             .compose(holder.<HttpObject>assembleAndHold());
         
         inbound.subscribe(
@@ -988,7 +991,8 @@ public class DefaultHttpTradeTestCase {
         final HttpMessageHolder holder = new HttpMessageHolder(0);
         final Observable<? extends HttpObject> inbound = 
             trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
-            .inboundRequest()
+            .inbound()
+            .message()
             .compose(holder.<HttpObject>assembleAndHold());
         
         inbound.subscribe(
@@ -1023,7 +1027,7 @@ public class DefaultHttpTradeTestCase {
         
         final AtomicReference<DefaultFullHttpRequest> ref1 = 
                 new AtomicReference<DefaultFullHttpRequest>();
-        trade.inboundRequest().subscribe(new Action1<HttpObject>() {
+        trade.inbound().message().subscribe(new Action1<HttpObject>() {
             @Override
             public void call(HttpObject httpobj) {
                 ref1.set((DefaultFullHttpRequest)httpobj);
@@ -1033,7 +1037,7 @@ public class DefaultHttpTradeTestCase {
         final AtomicReference<DefaultFullHttpRequest> ref2 = 
                 new AtomicReference<DefaultFullHttpRequest>();
             
-        trade.inboundRequest().subscribe(new Action1<HttpObject>() {
+        trade.inbound().message().subscribe(new Action1<HttpObject>() {
             @Override
             public void call(HttpObject httpobj) {
                 ref2.set((DefaultFullHttpRequest)httpobj);

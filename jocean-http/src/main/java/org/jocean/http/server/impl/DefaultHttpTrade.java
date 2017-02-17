@@ -10,6 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.jocean.http.InboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.APPLY;
@@ -171,11 +172,11 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 RxNettys.actionToRemoveHandler(_channel, readCompleteNotifier)));
     }
 
-    final Action1<Action1<HttpTrade>> _readCompleteInvoker = new Action1<Action1<HttpTrade>>() {
+    final Action1<Action1<InboundEndpoint>> _readCompleteInvoker = new Action1<Action1<InboundEndpoint>>() {
         @Override
-        public void call(final Action1<HttpTrade> onReadComplete) {
+        public void call(final Action1<InboundEndpoint> onReadComplete) {
             try {
-                onReadComplete.call(DefaultHttpTrade.this);
+                onReadComplete.call(_inboundEndpoint);
             } catch (Exception e) {
                 LOG.warn("exception when trade({}) invoke onReadComplete({}), detail: {}",
                         DefaultHttpTrade.this, onReadComplete, ExceptionUtils.exception2detail(e));
@@ -194,51 +195,85 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
     
+    final private InboundEndpoint _inboundEndpoint = new InboundEndpoint() {
+
+        @Override
+        public void setAutoRead(final boolean autoRead) {
+            _doSetInboundAutoRead.call(autoRead);
+        }
+
+        @Override
+        public void readMessage() {
+            _doReadInbound.call();
+        }
+
+        @Override
+        public InboundEndpoint addReadCompleteHook(
+                final Action1<InboundEndpoint> onReadComplete) {
+            _doAddInboundReadCompleteHook.call(onReadComplete);
+            return this;
+        }
+
+        @Override
+        public void removeReadCompleteHook(
+                final Action1<InboundEndpoint> onReadComplete) {
+            _doRemoveInboundReadCompleteHook.call(onReadComplete);
+        }
+
+        @Override
+        public long timeToLive() {
+            return System.currentTimeMillis() - _createTimeMillis;
+        }
+
+        @Override
+        public long inboundBytes() {
+            return _trafficCounter.inboundBytes();
+        }
+
+        @Override
+        public Observable<? extends HttpObject> message() {
+            return _funcGetInboundRequest.call();
+        }
+
+        @Override
+        public HttpMessageHolder messageHolder() {
+            return _reqmsgholder;
+        }
+
+        @Override
+        public int holdingMemorySize() {
+            return _reqmsgholder.retainedByteBufSize();
+        }};
+        
     @Override
-    public long timeToLive() {
-        return System.currentTimeMillis() - this._createTimeMillis;
+    public InboundEndpoint inbound() {
+        return this._inboundEndpoint;
     }
     
-    @Override
-    public HttpTrade addInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete) {
-        this._doAddInboundReadCompleteHook.call(onReadComplete);
-        return this;
-    }
-    
-    @Override
-    public void removeInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete) {
-        this._doRemoveInboundReadCompleteHook.call(onReadComplete);
-    }
-    
-    private final Action1<Action1<HttpTrade>> _doAddInboundReadCompleteHook = 
+    private final Action1<Action1<InboundEndpoint>> _doAddInboundReadCompleteHook = 
         RxActions.toAction1(
             this._funcSelector.submitWhenActive(
                 RxActions.toAction1_N(DefaultHttpTrade.class, "addInboundReadCompleteHook0"))
         );
     
     @SuppressWarnings("unused")
-    private void addInboundReadCompleteHook0(final Action1<HttpTrade> onReadComplete) {
+    private void addInboundReadCompleteHook0(final Action1<InboundEndpoint> onReadComplete) {
         this._onReadCompletes.addComponent(onReadComplete);
     }
     
-    private final Action1<Action1<HttpTrade>> _doRemoveInboundReadCompleteHook = 
+    private final Action1<Action1<InboundEndpoint>> _doRemoveInboundReadCompleteHook = 
         RxActions.toAction1(
             this._funcSelector.submitWhenActive(
                 RxActions.toAction1_N(DefaultHttpTrade.class, "removeInboundReadCompleteHook0"))
         );
     
     @SuppressWarnings("unused")
-    private void removeInboundReadCompleteHook0(final Action1<HttpTrade> onReadComplete) {
+    private void removeInboundReadCompleteHook0(final Action1<InboundEndpoint> onReadComplete) {
         this._onReadCompletes.removeComponent(onReadComplete);
     }
     
-    private final COWCompositeSupport<Action1<HttpTrade>> _onReadCompletes = 
+    private final COWCompositeSupport<Action1<InboundEndpoint>> _onReadCompletes = 
             new COWCompositeSupport<>();
-    
-    @Override
-    public void setInboundAutoRead(final boolean autoRead) {
-        this._doSetInboundAutoRead.call(autoRead);
-    }
     
     private final Action1<Boolean> _doSetInboundAutoRead = 
         RxActions.toAction1(
@@ -249,11 +284,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
     @SuppressWarnings("unused")
     private void setInboundAutoRead0(final boolean autoRead) {
         this._channel.config().setAutoRead(autoRead);
-    }
-    
-    @Override
-    public void readInbound() {
-        this._doReadInbound.call();
     }
     
     private final Action0 _doReadInbound = 
@@ -276,20 +306,10 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 RxNettys.actionToRemoveHandler(channel, handler)));
         return handler;
     }
-    
-    @Override
-    public HttpMessageHolder inboundHolder() {
-        return this._reqmsgholder;
-    }
-    
+        
     @Override
     public TrafficCounter trafficCounter() {
         return this._trafficCounter;
-    }
-    
-    @Override
-    public int retainedInboundMemory() {
-        return this._reqmsgholder.retainedByteBufSize();
     }
     
     private final class TradeCloser extends ChannelInboundHandlerAdapter implements Ordered {
@@ -365,11 +385,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return this._channel;
     }
     
-    @Override
-    public Observable<? extends HttpObject> inboundRequest() {
-        return this._funcGetInboundRequest.call();
-    }
-
     private final Func0<Observable<? extends HttpObject>> _funcGetInboundRequest = 
         RxFunctions.toFunc0(
             this._funcSelector.callWhenActive(

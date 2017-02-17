@@ -4,7 +4,7 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd">
         
-    <bean id="inboundSpeedController" class="org.jocean.http.server.InboundSpeedController">
+    <bean id="inboundSpeedController" class="org.jocean.http.util.InboundSpeedController">
         <property name="timer" ref="timer"/>
         <property name="maxBytesPerSecond" value="${in.maxBPS:1048576}"/>
         <property name="maxDelay" value="${in.maxdelay:500}"/>

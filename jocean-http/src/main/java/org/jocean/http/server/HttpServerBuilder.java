@@ -7,8 +7,8 @@ import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
+import org.jocean.http.InboundEndpoint;
 import org.jocean.http.TrafficCounter;
-import org.jocean.http.util.HttpMessageHolder;
 
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.AttributeMap;
@@ -38,24 +38,26 @@ public interface HttpServerBuilder extends Closeable {
     
     public interface HttpTrade extends AttributeMap {
         public TrafficCounter trafficCounter();
-        public int retainedInboundMemory();
         public boolean isActive();
         public boolean isEndedWithKeepAlive();
         //  try to abort trade explicit
         public void abort();
-        public Observable<? extends HttpObject> inboundRequest();
-        public HttpMessageHolder inboundHolder();
         public Subscription outboundResponse(final Observable<? extends HttpObject> response);
         public boolean readyforOutboundResponse();
         public Object transport();
         public HttpTrade addCloseHook(final Action1<HttpTrade> onClosed);
         public void removeCloseHook(final Action1<HttpTrade> onClosed);
         
-        public void setInboundAutoRead(final boolean autoRead);
-        public void readInbound();
-        public HttpTrade addInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete);
-        public void removeInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete);
+        public InboundEndpoint inbound();
         
-        public long timeToLive();
+//        public int retainedInboundMemory();
+//        public Observable<? extends HttpObject> inboundRequest();
+//        public HttpMessageHolder inboundHolder();
+//        public void setInboundAutoRead(final boolean autoRead);
+//        public void readInbound();
+//        public HttpTrade addInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete);
+//        public void removeInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete);
+//        
+//        public long timeToLive();
     }
 }

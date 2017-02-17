@@ -286,10 +286,10 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                 this._inboundBlockSize);
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
         
-        trade.inboundRequest().subscribe(new Action1<HttpObject>() {
+        trade.inbound().message().subscribe(new Action1<HttpObject>() {
             @Override
             public void call(final HttpObject msg) {
-                final int currentsize = trade.retainedInboundMemory();
+                final int currentsize = trade.inbound().holdingMemorySize();
                 final int lastsize = _lastAddedSize.getAndSet(currentsize);
                 if (lastsize >= 0) { // -1 means trade has closed
                     updateCurrentInboundMemory(currentsize - lastsize);

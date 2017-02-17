@@ -47,7 +47,8 @@ public class TestHttpUtil {
                 @Override
                 public void call(final HttpTrade trade) {
                     final HttpMessageHolder holder = new HttpMessageHolder(0);
-                    trade.inboundRequest()
+                    trade.inbound()
+                        .message()
                         .compose(holder.assembleAndHold())
                         .doOnCompleted(RxActions.bindParameter(onRequestCompleted,
                                 holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST), 
@@ -66,7 +67,8 @@ public class TestHttpUtil {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    trade.inboundRequest()
+                    trade.inbound()
+                        .message()
                         .doOnCompleted(RxActions.bindParameter(onRequestCompleted, trade))
                         .subscribe();
                 }});

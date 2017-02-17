@@ -76,7 +76,7 @@ public class HttpServerDemo {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    trade.inboundRequest().subscribe(new Subscriber<HttpObject>() {
+                    trade.inbound().message().subscribe(new Subscriber<HttpObject>() {
                         private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
                         
                         @Override

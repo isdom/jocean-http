@@ -45,7 +45,7 @@ public class HttpServerForCloopen {
                 @Override
                 public void call(final HttpTrade trade) {
                     final HttpMessageHolder holder = new HttpMessageHolder(0);
-                    trade.inboundRequest().compose(holder.<HttpObject>assembleAndHold()).subscribe(new Subscriber<HttpObject>() {
+                    trade.inbound().message().compose(holder.<HttpObject>assembleAndHold()).subscribe(new Subscriber<HttpObject>() {
                         @Override
                         public void onCompleted() {
                             final FullHttpRequest req = holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call();
