@@ -98,30 +98,29 @@ public class ReferenceCountedHolder {
         objs.clear();
     }
     
-    public void releaseUntil(final ReferenceCounted included) {
-        this._actionReleaseCached.call(included);
+    public void releaseReferenceCounted(final ReferenceCounted obj) {
+        this._doReleaseCached.call(obj);
     }
     
-    private final Action1<ReferenceCounted> _actionReleaseCached = 
+    private final Action1<ReferenceCounted> _doReleaseCached = 
             RxActions.toAction1(
                 this._selector.submitWhenActive(
-                    RxActions.toAction1_N(ReferenceCountedHolder.class, "doReleaseCached")));
+                    RxActions.toAction1_N(ReferenceCountedHolder.class, "releaseCached0")));
     
     @SuppressWarnings("unused")
-    private void doReleaseCached(final ReferenceCounted obj) {
+    private void releaseCached0(final ReferenceCounted obj) {
         int idx = 0;
         while (idx < this._cachedReferenceCounteds.size()) {
             final ReferenceCounted cached = this._cachedReferenceCounteds.get(idx);
             if ( cached == obj ) {
                 LOG.info("found ReferenceCounted {} to release ", obj);
                 this._fragmented.compareAndSet(false, true);
-                for (int i = 0; i<=idx; i++) {
-                    final ReferenceCounted removedObj = this._cachedReferenceCounteds.remove(0);
-                    ReferenceCountUtil.release(removedObj);
-                    if (LOG.isDebugEnabled()) {
-                        LOG.info("ReferenceCounted {} has been removed from holder({}) and released",
-                            removedObj, this);
-                    }
+                final ReferenceCounted removedObj = 
+                        this._cachedReferenceCounteds.remove(idx);
+                ReferenceCountUtil.release(removedObj);
+                if (LOG.isDebugEnabled()) {
+                    LOG.info("ReferenceCounted {} has been removed from holder({}) and released",
+                        removedObj, this);
                 }
                 break;
             }
