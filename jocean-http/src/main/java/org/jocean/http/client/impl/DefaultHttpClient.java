@@ -68,6 +68,12 @@ public class DefaultHttpClient implements HttpClient {
             LoggerFactory.getLogger(DefaultHttpClient.class);
     
     @Override
+    public Observable<? extends HttpInitiator> initiator(
+            final SocketAddress remoteAddress) {
+        return null;
+    }
+    
+    @Override
     public Observable<? extends HttpObject> defineInteraction(
             final SocketAddress remoteAddress,
             final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,

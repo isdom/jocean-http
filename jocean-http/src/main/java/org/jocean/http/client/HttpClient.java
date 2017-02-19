@@ -7,6 +7,7 @@ import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
+import org.jocean.http.InboundEndpoint;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
 
 import io.netty.handler.codec.http.HttpObject;
@@ -62,4 +63,10 @@ public interface HttpClient extends Closeable {
     }
     
     public InteractionBuilder interaction();
+    
+    public interface HttpInitiator {
+        public InboundEndpoint inbound();
+    }
+    
+    public Observable<? extends HttpInitiator> initiator(final SocketAddress remoteAddress);
 }
