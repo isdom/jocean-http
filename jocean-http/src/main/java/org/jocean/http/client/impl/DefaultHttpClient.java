@@ -67,10 +67,24 @@ public class DefaultHttpClient implements HttpClient {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
     
+    public int getInboundBlockSize() {
+        return this._inboundBlockSize;
+    }
+
+    public void setInboundBlockSize(final int inboundBlockSize) {
+        this._inboundBlockSize = inboundBlockSize;
+    }
+    
     @Override
     public Observable<? extends HttpInitiator> initiator(
             final SocketAddress remoteAddress) {
-        return null;
+        return this._channelPool.retainChannel(remoteAddress)
+            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, Feature.EMPTY_FEATURES))
+            .map(new Func1<Channel, HttpInitiator>() {
+                @Override
+                public HttpInitiator call(final Channel channel) {
+                    return new DefaultHttpInitiator(channel);
+                }});
     }
     
     @Override
@@ -467,6 +481,8 @@ public class DefaultHttpClient implements HttpClient {
         }
     }
 
+    private int _inboundBlockSize = 0;
+    
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
     private final Feature[] _defaultFeatures;

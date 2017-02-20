@@ -8,10 +8,14 @@ import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
 import org.jocean.http.InboundEndpoint;
+import org.jocean.http.OutboundEndpoint;
+import org.jocean.http.TrafficCounter;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
 
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.util.AttributeMap;
 import rx.Observable;
+import rx.functions.Action1;
 import rx.functions.Func1;
 
 /**
@@ -64,7 +68,17 @@ public interface HttpClient extends Closeable {
     
     public InteractionBuilder interaction();
     
-    public interface HttpInitiator {
+    public interface HttpInitiator extends AttributeMap {
+        public TrafficCounter trafficCounter();
+        public boolean isEndedWithKeepAlive();
+        
+        public Object transport();
+        public void abort();
+        public boolean isActive();
+        public HttpInitiator addCloseHook(final Action1<HttpInitiator> onClosed);
+        public void removeCloseHook(final Action1<HttpInitiator> onClosed);
+        
+        public OutboundEndpoint outbound();
         public InboundEndpoint inbound();
     }
     
