@@ -38,26 +38,17 @@ public interface HttpServerBuilder extends Closeable {
     
     public interface HttpTrade extends AttributeMap {
         public TrafficCounter trafficCounter();
-        public boolean isActive();
         public boolean isEndedWithKeepAlive();
-        //  try to abort trade explicit
-        public void abort();
         public Subscription outboundResponse(final Observable<? extends HttpObject> response);
         public boolean readyforOutboundResponse();
         public Object transport();
+        
+        //  try to abort trade explicit
+        public void abort();
+        public boolean isActive();
         public HttpTrade addCloseHook(final Action1<HttpTrade> onClosed);
         public void removeCloseHook(final Action1<HttpTrade> onClosed);
         
         public InboundEndpoint inbound();
-        
-//        public int retainedInboundMemory();
-//        public Observable<? extends HttpObject> inboundRequest();
-//        public HttpMessageHolder inboundHolder();
-//        public void setInboundAutoRead(final boolean autoRead);
-//        public void readInbound();
-//        public HttpTrade addInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete);
-//        public void removeInboundReadCompleteHook(final Action1<HttpTrade> onReadComplete);
-//        
-//        public long timeToLive();
     }
 }

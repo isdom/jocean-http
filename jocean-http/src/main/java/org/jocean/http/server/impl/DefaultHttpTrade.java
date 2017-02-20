@@ -135,12 +135,12 @@ class DefaultHttpTrade extends DefaultAttributeMap
         final Action1<HttpTrade> ... oncloseds) {
         this._channel = channel;
         this._trafficCounter = buildTrafficCounter(channel);
-        this._reqmsgholder = new HttpMessageHolder(inboundBlockSize);
+        this._inmsgholder = new HttpMessageHolder(inboundBlockSize);
         
-        addCloseHook(RxActions.<HttpTrade>toAction1(this._reqmsgholder.release()));
+        addCloseHook(RxActions.<HttpTrade>toAction1(this._inmsgholder.release()));
         
         this._requestObservable = requestObservable
-                .compose(this._reqmsgholder.<HttpObject>assembleAndHold())
+                .compose(this._inmsgholder.<HttpObject>assembleAndHold())
                 .compose(hookRequest())
                 .cache()
                 .compose(RxNettys.duplicateHttpContent())
@@ -232,17 +232,17 @@ class DefaultHttpTrade extends DefaultAttributeMap
 
         @Override
         public Observable<? extends HttpObject> message() {
-            return _funcGetInboundRequest.call();
+            return _doGetInboundRequest.call();
         }
 
         @Override
         public HttpMessageHolder messageHolder() {
-            return _reqmsgholder;
+            return _inmsgholder;
         }
 
         @Override
         public int holdingMemorySize() {
-            return _reqmsgholder.retainedByteBufSize();
+            return _inmsgholder.retainedByteBufSize();
         }};
         
     @Override
@@ -385,7 +385,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return this._channel;
     }
     
-    private final Func0<Observable<? extends HttpObject>> _funcGetInboundRequest = 
+    private final Func0<Observable<? extends HttpObject>> _doGetInboundRequest = 
         RxFunctions.toFunc0(
             this._funcSelector.callWhenActive(
                 RxFunctions.<DefaultHttpTrade,Observable<? extends HttpObject>>toFunc1_N(
@@ -418,15 +418,14 @@ class DefaultHttpTrade extends DefaultAttributeMap
             public Observable<? extends HttpObject> call(final DefaultHttpTrade trade,final Object... args) {
                 return Observable.error(new RuntimeException("trade unactived"));
             }};
-            
 
     @Override
     public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
-        return this._funcSetOutboundResponse.call(response);
+        return this._doSetOutboundResponse.call(response);
     }
     
     private final Func1<Observable<? extends HttpObject>, Subscription> 
-        _funcSetOutboundResponse = 
+        _doSetOutboundResponse = 
             RxFunctions.toFunc1(
                 this._funcSelector.callWhenActive(RxFunctions.<DefaultHttpTrade,Subscription>toFunc1_N(
                         DefaultHttpTrade.class, "doSetOutboundResponse"))
@@ -578,7 +577,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final COWCompositeSupport<Action1<HttpTrade>> _onCloseds = 
             new COWCompositeSupport<>();
     
-    private final HttpMessageHolder _reqmsgholder;
+    private final HttpMessageHolder _inmsgholder;
     private final long _createTimeMillis = System.currentTimeMillis();
     private final Channel _channel;
     private final TrafficCounter _trafficCounter;
