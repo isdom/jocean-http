@@ -25,7 +25,6 @@ import org.jocean.idiom.Ordered;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
-import org.jocean.idiom.rx.RxObservables;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,8 +100,8 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
                 .append(", inbound subscriber count=").append(_inboundSubscribers.size())
                 .append(", isInboundReceived=").append(_isInboundReceived.get())
-                .append(", requestMethod=").append(_requestMethod)
-                .append(", requestUri=").append(_requestUri)
+//                .append(", requestMethod=").append(_requestMethod)
+//                .append(", requestUri=").append(_requestUri)
                 .append(", isInboundCompleted=").append(_isInboundCompleted.get())
                 .append(", isOutboundSetted=").append(_isOutboundSetted.get())
                 .append(", isOutboundSended=").append(_isOutboundSended.get())
@@ -119,28 +118,6 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     
     private final FuncSelector<DefaultHttpInitiator> _funcSelector = 
             new FuncSelector<>(this);
-    
-    private Observable<? extends HttpObject> channel2HttpobjObservable(final Channel channel) {
-        return Observable.create(new Observable.OnSubscribe<HttpObject>() {
-            @Override
-            public void call(final Subscriber<? super HttpObject> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    if (null != channel.pipeline().get(APPLY.HTTPOBJ_SUBSCRIBER.name()) ) {
-                        // already add HTTPOBJ_SUBSCRIBER Handler, so throw exception
-                        LOG.warn("channel ({}) already add HTTPOBJ_SUBSCRIBER handler, internal error",
-                                channel);
-                        throw new RuntimeException("Channel[" + channel + "]already add HTTPOBJ_SUBSCRIBER handler.");
-                    }
-                    addCloseHook(
-                        RxActions.<HttpInitiator>toAction1(
-                            RxNettys.actionToRemoveHandler(channel, 
-                                APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
-                } else {
-                    LOG.warn("subscriber {} isUnsubscribed, can't used as HTTPOBJ_SUBSCRIBER ", subscriber);
-                }
-            }} )
-            .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
-    }
     
     @SafeVarargs
     DefaultHttpInitiator(
@@ -160,7 +137,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         
         addCloseHook(RxActions.<HttpInitiator>toAction1(this._inboundHolder.release()));
         
-        this._inboundObservable = channel2HttpobjObservable(channel)
+        this._inboundObservable = RxNettys.inboundFromChannel(channel, doOnTerminate())
                 .compose(this._inboundHolder.<HttpObject>assembleAndHold())
                 .compose(hookRequest())
                 .cache()
@@ -184,6 +161,14 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         hookChannelReadComplete();
     }
 
+    public Action1<Action0> doOnTerminate() {
+        return new Action1<Action0>() {
+            @Override
+            public void call(final Action0 action) {
+                addCloseHook(RxActions.<HttpInitiator>toAction1(action));
+            }};
+    }
+    
     @Override
     public OutboundEndpoint outbound() {
         return new OutboundEndpoint() {
