@@ -100,8 +100,8 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
                 .append(", inbound subscriber count=").append(_inboundSubscribers.size())
                 .append(", isInboundReceived=").append(_isInboundReceived.get())
-//                .append(", requestMethod=").append(_requestMethod)
-//                .append(", requestUri=").append(_requestUri)
+                .append(", requestMethod=").append(_requestMethod)
+                .append(", requestUri=").append(_requestUri)
                 .append(", isInboundCompleted=").append(_isInboundCompleted.get())
                 .append(", isOutboundSetted=").append(_isOutboundSetted.get())
                 .append(", isOutboundSended=").append(_isOutboundSended.get())
@@ -139,7 +139,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         
         this._inboundObservable = RxNettys.inboundFromChannel(channel, doOnTerminate())
                 .compose(this._inboundHolder.<HttpObject>assembleAndHold())
-                .compose(hookRequest())
+                .compose(hookInbound())
                 .cache()
                 .compose(RxNettys.duplicateHttpContent())
                 ;
@@ -214,6 +214,13 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     
     @SuppressWarnings("unused")
     private void outboundOnNext0(final Object msg) {
+        if (msg instanceof HttpRequest) {
+            final HttpRequest req = (HttpRequest)msg;
+            
+            _requestMethod = req.method().name();
+            _requestUri = req.uri();
+            _isKeepAlive.set(HttpUtil.isKeepAlive(req));
+        }
         this._isOutboundSended.compareAndSet(false, true);
         this._channel.write(ReferenceCountUtil.retain(msg));
     }
@@ -421,22 +428,14 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 RxNettys.actionToRemoveHandler(this._channel, closer)));
     }
 
-    private Transformer<HttpObject, HttpObject> hookRequest() {
+    private Transformer<HttpObject, HttpObject> hookInbound() {
         return new Transformer<HttpObject, HttpObject>() {
             @Override
             public Observable<HttpObject> call(final Observable<HttpObject> src) {
                 return src.doOnNext(new Action1<HttpObject>() {
                     @Override
                     public void call(final HttpObject msg) {
-                        if (msg instanceof HttpRequest) {
-                            _requestMethod = ((HttpRequest)msg).method().name();
-                            _requestUri = ((HttpRequest)msg).uri();
-                            _isInboundReceived.compareAndSet(false, true);
-                            _isKeepAlive.set(HttpUtil.isKeepAlive((HttpRequest)msg));
-                        } else if (!_isInboundReceived.get()) {
-                            LOG.warn("trade {} missing http request and recv httpobj {}", 
-                                DefaultHttpInitiator.this, msg);
-                        }
+                        _isInboundReceived.compareAndSet(false, true);
                     }})
                 .doOnCompleted(new Action0() {
                     @Override
@@ -456,7 +455,6 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         return this._funcSelector.isActive();
     }
 
-    @Override
     public boolean isEndedWithKeepAlive() {
         return (this._isInboundCompleted.get() 
             && this._isOutboundCompleted.get()

@@ -393,7 +393,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return this._funcSelector.isActive();
     }
 
-    @Override
     public boolean isEndedWithKeepAlive() {
         return (this._isRequestCompleted.get() 
             && this._isResponseCompleted.get()

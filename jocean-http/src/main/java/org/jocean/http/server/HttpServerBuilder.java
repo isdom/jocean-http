@@ -38,7 +38,6 @@ public interface HttpServerBuilder extends Closeable {
     
     public interface HttpTrade extends AttributeMap {
         public TrafficCounter trafficCounter();
-        public boolean isEndedWithKeepAlive();
         public Subscription outboundResponse(final Observable<? extends HttpObject> response);
         public boolean readyforOutboundResponse();
         public Object transport();

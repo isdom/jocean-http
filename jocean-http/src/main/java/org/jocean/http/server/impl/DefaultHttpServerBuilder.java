@@ -339,7 +339,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                 RxNettys.installDoOnUnsubscribe(channel, 
                         DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
                 if (channel.isActive()
-                    && trade.isEndedWithKeepAlive()
+                    && ((DefaultHttpTrade)trade).isEndedWithKeepAlive()
                     && !subscriber.isUnsubscribed()) {
                     channel.flush();
                     awaitInboundRequest(channel, subscriber, awaitChannels);

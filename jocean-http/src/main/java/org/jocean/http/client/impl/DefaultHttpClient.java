@@ -77,9 +77,16 @@ public class DefaultHttpClient implements HttpClient {
     
     @Override
     public Observable<? extends HttpInitiator> initiator(
-            final SocketAddress remoteAddress) {
+            final SocketAddress remoteAddress,
+            final Feature... features) {
+        final Feature[] fullFeatures = 
+                Feature.Util.union(cloneFeatures(Feature.Util.union(this._defaultFeatures, features)),
+                    HttpClientConstants.APPLY_HTTPCLIENT);
         return this._channelPool.retainChannel(remoteAddress)
-            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, Feature.EMPTY_FEATURES))
+            .doOnNext(RxNettys.actionUndoableApplyFeatures(
+                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
+            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
+            .doOnNext(hookFeatures(fullFeatures))
             .map(new Func1<Channel, HttpInitiator>() {
                 @Override
                 public HttpInitiator call(final Channel channel) {

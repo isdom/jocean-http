@@ -70,7 +70,6 @@ public interface HttpClient extends Closeable {
     
     public interface HttpInitiator extends AttributeMap {
         public TrafficCounter trafficCounter();
-        public boolean isEndedWithKeepAlive();
         
         public Object transport();
         public void abort();
@@ -82,5 +81,7 @@ public interface HttpClient extends Closeable {
         public InboundEndpoint inbound();
     }
     
-    public Observable<? extends HttpInitiator> initiator(final SocketAddress remoteAddress);
+    public Observable<? extends HttpInitiator> initiator(
+            final SocketAddress remoteAddress, 
+            final Feature... features);
 }
