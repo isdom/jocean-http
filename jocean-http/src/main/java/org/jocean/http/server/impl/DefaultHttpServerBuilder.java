@@ -27,7 +27,6 @@ import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
-import org.jocean.idiom.rx.RxObservables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -282,7 +281,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private HttpTrade httpTradeOf(final Channel channel) {
         this._numStartedTrades.incrementAndGet();
         final DefaultHttpTrade trade = new DefaultHttpTrade(channel, 
-                httpobjObservable(channel), 
+//                httpobjObservable(channel), 
                 this._inboundBlockSize);
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
         
@@ -305,6 +304,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
         return trade;
     }
     
+    /*
     private static Observable<? extends HttpObject> httpobjObservable(final Channel channel) {
         return Observable.create(new Observable.OnSubscribe<HttpObject>() {
             @Override
@@ -326,7 +326,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                 }
             }} )
             .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
-    }
+    }*/
     
     private Action1<HttpTrade> doRecycleChannel(
             final Channel channel,

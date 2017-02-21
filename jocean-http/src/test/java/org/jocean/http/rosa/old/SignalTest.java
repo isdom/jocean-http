@@ -158,23 +158,6 @@ public class SignalTest {
                 public void onNext(final AddMultiMediasToJourneyResponse resp) {
                     LOG.debug("AddMultiMediasToJourneyRequest: onNext: {}", resp);
                 }}
-    
-                /*
-                @Override
-                public void onUploadProgress(long progress, long total) {
-                    LOG.debug("AddMultiMediasToJourneyRequest->onUploadProgress: {}/{}", progress, total);
-                }
-
-                @Override
-                public void onDownloadProgress(long progress, long total) {
-                    LOG.debug("AddMultiMediasToJourneyRequest->onDownloadProgress: {}/{}", progress, total);
-                }
-
-                @Override
-                public void onResponse(AddMultiMediasToJourneyResponse response) {
-                    LOG.debug("AddMultiMediasToJourneyRequest: onNext: {}", response);
-                }
-                */
                 );
 //            subscription.unsubscribe();
             //  TODO, why invoke onCompleted Event? not onError, check

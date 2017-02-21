@@ -6,11 +6,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
-import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -18,12 +16,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys4Test;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.rx.RxActions;
-import org.jocean.idiom.rx.RxSubscribers;
 import org.jocean.idiom.rx.SubscriberHolder;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -31,17 +26,9 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufHolder;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelId;
-import io.netty.channel.ChannelMetadata;
-import io.netty.channel.ChannelPipeline;
-import io.netty.channel.ChannelProgressivePromise;
-import io.netty.channel.ChannelPromise;
-import io.netty.channel.EventLoop;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -53,13 +40,11 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.Attribute;
-import io.netty.util.AttributeKey;
+import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
 import rx.functions.Func0;
-import rx.observables.ConnectableObservable;
 import rx.observers.TestSubscriber;
 
 public class DefaultHttpTradeTestCase {
@@ -72,10 +57,22 @@ public class DefaultHttpTradeTestCase {
     
     private final String REQ_CONTENT = "testcontent";
     
+    private static ChannelFuture writeToInboundAndFlush(
+            final EmbeddedChannel channel,
+            final Object msg) {
+        ChannelFuture future = null;
+        try {
+            future = channel.writeOneInbound(ReferenceCountUtil.retain(msg));
+            channel.flushInbound();
+        } catch (Exception  e) {
+        }
+        
+        return future;
+    }
+    
     @Test
     public final void testDoOnClosedBeforeAndAfterOutboundResponse() {
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.<HttpObject>empty());
+        final HttpTrade trade = new DefaultHttpTrade(new EmbeddedChannel());
         
         final AtomicBoolean onClosed = new AtomicBoolean(false);
         trade.addCloseHook(new Action1<HttpTrade>(){
@@ -95,8 +92,9 @@ public class DefaultHttpTradeTestCase {
 
     @Test
     public final void testInvokeDoOnClosedWhenUnactive() {
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.<HttpObject>error(new RuntimeException("RequestError")));
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel);
+        channel.disconnect().syncUninterruptibly();
         
         assertFalse(trade.isActive());
         
@@ -113,13 +111,11 @@ public class DefaultHttpTradeTestCase {
     @Test
     public final void testTradeForCallAbortBeforeRequestPublish() {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("testcontent"));
+            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, 
+                "/", Nettys4Test.buildByteBuf("testcontent"));
         
-        final ConnectableObservable<HttpObject> requestObservable = 
-                Observable.<HttpObject>just(request).publish();
-        
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel);
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         
@@ -130,26 +126,25 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber.assertTerminalEvent();
         reqSubscriber.assertError(Exception.class);
         
-        requestObservable.connect();
+        writeToInboundAndFlush(channel, request);
+        
         reqSubscriber.assertValueCount(0);
     }
 
     @Test
     public final void testTradeForCallAbortAfterRequestPublish() {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("testcontent"));
+            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, 
+                "/", Nettys4Test.buildByteBuf("testcontent"));
         
-        final ConnectableObservable<HttpObject> requestObservable = 
-                Observable.<HttpObject>just(request).publish();
-        
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel);
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         
         trade.inbound().message().subscribe(reqSubscriber);
         
-        requestObservable.connect();
+        writeToInboundAndFlush(channel, request);
         
         trade.abort();
         assertFalse(trade.isActive());
@@ -158,21 +153,19 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber.assertValues(request);
         reqSubscriber.assertCompleted();
         reqSubscriber.assertNoErrors();
-        
     }
-    
+
     @Test
     public final void testTradeForCallAbortAndUseInboundRequest() {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("testcontent"));
+            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, 
+                "/", Nettys4Test.buildByteBuf("testcontent"));
         
-        final ConnectableObservable<HttpObject> requestObservable = 
-                Observable.<HttpObject>just(request).publish();
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel);
         
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
+        writeToInboundAndFlush(channel, request);
         
-        requestObservable.connect();
         trade.abort();
         assertFalse(trade.isActive());
         
@@ -188,20 +181,17 @@ public class DefaultHttpTradeTestCase {
     public final void testTradeForCallAbortAfterPartRequestThenPushError() {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = 
+                Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
-        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
-        
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.create(holder));
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel, -1);
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber);
         
-        assertEquals(holder.getSubscriberCount(), 1);
-        
-        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
-        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents[0]);
+        writeToInboundAndFlush(channel, request);
+        writeToInboundAndFlush(channel, req_contents[0]);
         
         trade.abort();
         assertFalse(trade.isActive());
@@ -216,30 +206,23 @@ public class DefaultHttpTradeTestCase {
     public final void testTradeForMultiSubscribeRequestOnlyOneToSource() {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = 
+                Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
-        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
-        
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.create(holder));
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel, -1);
         
         final TestSubscriber<HttpObject> reqSubscriber1 = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber1);
         
-        assertEquals(holder.getSubscriberCount(), 1);
-        
         final TestSubscriber<HttpObject> reqSubscriber2 = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber2);
-        
-        assertEquals(holder.getSubscriberCount(), 1);
         
         final TestSubscriber<HttpObject> reqSubscriber3 = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber3);
         
-        assertEquals(holder.getSubscriberCount(), 1);
-        
-        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
-        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents[0]);
+        writeToInboundAndFlush(channel, request);
+        writeToInboundAndFlush(channel, req_contents[0]);
         
         reqSubscriber1.assertValueCount(2);
         reqSubscriber1.assertValues(request, req_contents[0]);
@@ -257,19 +240,16 @@ public class DefaultHttpTradeTestCase {
     public final void testTradeForMultiSubscribeRequestOnlyOneToSource2() {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = 
+                Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
-        final SubscriberHolder<HttpObject> holder = new SubscriberHolder<>();
-        
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.create(holder));
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel, -1);
         
         final TestSubscriber<HttpObject> reqSubscriber1 = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber1);
         
-        assertEquals(holder.getSubscriberCount(), 1);
-        
-        Nettys4Test.emitHttpObjects(holder.getAt(0), request);
+        writeToInboundAndFlush(channel, request);
         
         reqSubscriber1.assertValueCount(1);
         reqSubscriber1.assertValues(request);
@@ -277,42 +257,37 @@ public class DefaultHttpTradeTestCase {
         final TestSubscriber<HttpObject> reqSubscriber2 = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber2);
         
-        assertEquals(holder.getSubscriberCount(), 1);
-        
-        Nettys4Test.emitHttpObjects(holder.getAt(0), req_contents[0]);
+        writeToInboundAndFlush(channel, req_contents[0]);
         
         reqSubscriber1.assertValueCount(2);
         reqSubscriber1.assertValues(request, req_contents[0]);
         
-        reqSubscriber2.assertValueCount(1);
-        reqSubscriber2.assertValues(req_contents[0]);
+        reqSubscriber2.assertValueCount(2);
+        reqSubscriber2.assertValues(request, req_contents[0]);
         
         final TestSubscriber<HttpObject> reqSubscriber3 = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber3);
         
-        assertEquals(holder.getSubscriberCount(), 1);
-        
         reqSubscriber1.assertValueCount(2);
         reqSubscriber1.assertValues(request, req_contents[0]);
         
-        reqSubscriber2.assertValueCount(1);
-        reqSubscriber2.assertValues(req_contents[0]);
+        reqSubscriber2.assertValueCount(2);
+        reqSubscriber2.assertValues(request, req_contents[0]);
         
-        reqSubscriber3.assertValueCount(0);
+        reqSubscriber3.assertValueCount(2);
+        reqSubscriber3.assertValues(request, req_contents[0]);
     }
     
     @Test
     public final void testTradeForCompleteRound() {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf("test content"));
+            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, 
+                HttpMethod.POST, "/", Nettys4Test.buildByteBuf("test content"));
         
-        final ConnectableObservable<HttpObject> requestObservable = 
-                Observable.<HttpObject>just(request).publish();
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel, -1);
         
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
-        
-        requestObservable.connect();
+        writeToInboundAndFlush(channel, request);
         
         assertTrue(trade.isActive());
         
@@ -327,21 +302,23 @@ public class DefaultHttpTradeTestCase {
     public final void testTradeForCompleteRoundWithMultiContentRequest() {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = 
+                Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
-        final ConnectableObservable<HttpObject> requestObservable = 
-                Observable.<HttpObject>from(new ArrayList<HttpObject>() {
-                    private static final long serialVersionUID = 1L;
-                {
-                    this.add(request);
-                    this.addAll(Arrays.asList(req_contents));
-                    this.add(LastHttpContent.EMPTY_LAST_CONTENT);
-                }}).publish();
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel);
         
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
-        
-        requestObservable.connect();
+        Observable.<HttpObject>concat(
+            Observable.<HttpObject>just(request),
+            Observable.<HttpObject>from(req_contents),
+            Observable.<HttpObject>just(LastHttpContent.EMPTY_LAST_CONTENT)
+        ).subscribe(obj -> writeToInboundAndFlush(channel, obj));
+
+//        new Action1<HttpObject>() {
+//        @Override
+//        public void call(final HttpObject obj) {
+//            writeToInboundAndFlush(channel, obj);
+//        }}
         
         assertTrue(trade.isActive());
         
@@ -356,7 +333,8 @@ public class DefaultHttpTradeTestCase {
     public final void testTradeForRequestPartError() {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = 
+                Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         final List<HttpObject> part_req = new ArrayList<HttpObject>() {
             private static final long serialVersionUID = 1L;
@@ -366,20 +344,27 @@ public class DefaultHttpTradeTestCase {
                 this.add(req_contents[idx]);
             }
         }};
-        final RuntimeException error = new RuntimeException("RequestPartError");
-        final ConnectableObservable<HttpObject> requestObservable = 
-                Observable.concat(
-                    Observable.<HttpObject>from(part_req),
-                    Observable.<HttpObject>error(error)
-                ).publish();
         
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel, -1);
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber);
         
-        requestObservable.connect();
+        Observable.<HttpObject>concat(
+            Observable.<HttpObject>just(request),
+            Observable.<HttpObject>just(req_contents[0]),
+            Observable.<HttpObject>just(req_contents[1]),
+            Observable.<HttpObject>just(req_contents[2]),
+            Observable.<HttpObject>just(req_contents[3]),
+            Observable.<HttpObject>just(req_contents[4])
+        ).map(obj -> writeToInboundAndFlush(channel, obj))
+        .last()
+        .toBlocking()
+        .single()
+        .syncUninterruptibly();
+        
+        channel.disconnect().syncUninterruptibly();
         
         assertFalse(trade.isActive());
         reqSubscriber.assertTerminalEvent();
@@ -426,6 +411,7 @@ public class DefaultHttpTradeTestCase {
     }
     */
     
+    /*
     public static Channel dummyChannel(final AtomicReference<Object> output) {
         return new Channel() {
 
@@ -653,9 +639,12 @@ public class DefaultHttpTradeTestCase {
                 return 0;
             }};
     }
+    */
     
+    /* Not Support Response Replace
     @Test
     public final void testTradeForReplaceResponseSuccess() {
+        
         final AtomicReference<Object> output = new AtomicReference<>();
         final HttpTrade trade = new DefaultHttpTrade(dummyChannel(output), 
                 Observable.<HttpObject>empty());
@@ -770,11 +759,11 @@ public class DefaultHttpTradeTestCase {
         subsholder2.getAt(0).onError(new RuntimeException());
         assertFalse(trade.isActive());
     }
+    */
     
     @Test
     public final void testTradeForResponseAfterAbort() {
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.<HttpObject>empty());
+        final HttpTrade trade = new DefaultHttpTrade(new EmbeddedChannel());
         
         trade.abort();
         assertFalse(trade.isActive());
@@ -788,8 +777,7 @@ public class DefaultHttpTradeTestCase {
     
     @Test
     public final void testTradeForReadyOutboundResponseAfterResponseOnNext() {
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.<HttpObject>empty());
+        final HttpTrade trade = new DefaultHttpTrade(new EmbeddedChannel());
         
         assertTrue(trade.isActive());
         
@@ -799,7 +787,7 @@ public class DefaultHttpTradeTestCase {
         final Subscription subscription1 = trade.outboundResponse(Observable.create(subsholder1));
     
         assertNotNull(subscription1);
-        assertTrue(trade.readyforOutboundResponse());
+        assertFalse(trade.readyforOutboundResponse());
         
         final DefaultHttpRequest req1 = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -810,8 +798,7 @@ public class DefaultHttpTradeTestCase {
     
     @Test
     public final void testTradeForReadyOutboundResponseAfterResponseOnCompleted() {
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                Observable.<HttpObject>empty());
+        final HttpTrade trade = new DefaultHttpTrade(new EmbeddedChannel());
         
         assertTrue(trade.isActive());
         
@@ -821,7 +808,7 @@ public class DefaultHttpTradeTestCase {
         final Subscription subscription1 = trade.outboundResponse(Observable.create(subsholder1));
     
         assertNotNull(subscription1);
-        assertTrue(trade.readyforOutboundResponse());
+        assertFalse(trade.readyforOutboundResponse());
         
         subsholder1.getAt(0).onCompleted();
         
@@ -833,42 +820,29 @@ public class DefaultHttpTradeTestCase {
     public final void testTradeForCompleteRoundAndWithCacheOperator() {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = 
+                Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
-        final ConnectableObservable<HttpObject> requestObservable = 
-                Observable.<HttpObject>from(new ArrayList<HttpObject>() {
-                    private static final long serialVersionUID = 1L;
-                {
-                    this.add(request);
-                    this.addAll(Arrays.asList(req_contents));
-                    this.add(LastHttpContent.EMPTY_LAST_CONTENT);
-                }}).publish();
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel);
         
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
-        
-        final HttpMessageHolder holder = new HttpMessageHolder(0);
-        final Observable<? extends HttpObject> inbound = 
-            trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
-            .inbound()
-            .message()
-            .compose(holder.<HttpObject>assembleAndHold());
-        
-        final Observable<? extends HttpObject> cached = inbound.cache();
-        //  force cached to subscribe upstream
-        cached.subscribe(
-                RxSubscribers.ignoreNext(),
-                RxSubscribers.ignoreError()
-                );
+        Observable.<HttpObject>concat(
+            Observable.<HttpObject>just(request),
+            Observable.<HttpObject>from(req_contents),
+            Observable.<HttpObject>just(LastHttpContent.EMPTY_LAST_CONTENT)
+        ).map(obj -> writeToInboundAndFlush(channel, obj))
+        .last()
+        .toBlocking()
+        .single()
+        .syncUninterruptibly();
         
         //  Error, will cause : exception when invoke visitor(org.jocean.http.util.RxNettys$2@722c517b), detail: 
         //      java.lang.ClassCastException: io.netty.handler.codec.http.DefaultHttpRequest cannot be cast to 
         //      io.netty.handler.codec.http.HttpContent
         //  inbound.subscribe();    double subscribe holder.assembleAndHold()
         
-        requestObservable.connect();
-        
-        final FullHttpRequest recvreq = holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call();
+        final FullHttpRequest recvreq = trade.inbound().messageHolder()
+                .httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call();
         
         try {
             assertNotNull(recvreq);
@@ -902,36 +876,24 @@ public class DefaultHttpTradeTestCase {
     public final void testTradeForRequestAndContentsSourceAndDumpFullRequests() throws IOException {
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final HttpContent[] req_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        final HttpContent[] req_contents = 
+                Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
-        final ConnectableObservable<HttpObject> requestObservable = 
-                Observable.<HttpObject>from(new ArrayList<HttpObject>() {
-                    private static final long serialVersionUID = 1L;
-                {
-                    this.add(request);
-                    this.addAll(Arrays.asList(req_contents));
-                    this.add(LastHttpContent.EMPTY_LAST_CONTENT);
-                }}).publish();
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel);
         
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
-        
-        final HttpMessageHolder holder = new HttpMessageHolder(0);
-        final Observable<? extends HttpObject> inbound = 
-            trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
-            .inbound()
-            .message()
-            .compose(holder.<HttpObject>assembleAndHold());
-        
-        inbound.subscribe(
-                RxSubscribers.ignoreNext(),
-                RxSubscribers.ignoreError()
-                );
-        
-        requestObservable.connect();
+        Observable.<HttpObject>concat(
+            Observable.<HttpObject>just(request),
+            Observable.<HttpObject>from(req_contents),
+            Observable.<HttpObject>just(LastHttpContent.EMPTY_LAST_CONTENT)
+        ).map(obj -> writeToInboundAndFlush(channel, obj))
+        .last()
+        .toBlocking()
+        .single()
+        .syncUninterruptibly();
         
         final Func0<FullHttpRequest> fullRequestBuilder = 
-                holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST);
+            trade.inbound().messageHolder().httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST);
         
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
             fullRequestBuilder, REQ_CONTENT.getBytes(Charsets.UTF_8), 0);
@@ -942,31 +904,16 @@ public class DefaultHttpTradeTestCase {
     @Test
     public final void testTradeForFullRequestSourceAndDumpFullRequests() throws IOException {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", 
-                    Nettys4Test.buildByteBuf(REQ_CONTENT));
+            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/",
+                Nettys4Test.buildByteBuf(REQ_CONTENT));
         
-        final ConnectableObservable<HttpObject> requestObservable = 
-                Observable.<HttpObject>just(request).publish();
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel);
         
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
-        
-        final HttpMessageHolder holder = new HttpMessageHolder(0);
-        final Observable<? extends HttpObject> inbound = 
-            trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
-            .inbound()
-            .message()
-            .compose(holder.<HttpObject>assembleAndHold());
-        
-        inbound.subscribe(
-                RxSubscribers.ignoreNext(),
-                RxSubscribers.ignoreError()
-                );
-        
-        requestObservable.connect();
+        writeToInboundAndFlush(channel, request);
         
         final Func0<FullHttpRequest> fullRequestBuilder = 
-                holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST);
+            trade.inbound().messageHolder().httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST);
         
         //  expected refCnt, request -- 1 + HttpMessageHolder -- 1, total refcnt is 2
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
@@ -979,31 +926,19 @@ public class DefaultHttpTradeTestCase {
     @Test
     public final void testTradeForRequestAndLastContentSourceAndDumpFullRequests() throws IOException {
         final DefaultHttpRequest request = 
-                new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
-        final LastHttpContent lastcontent = new DefaultLastHttpContent(Nettys4Test.buildByteBuf(REQ_CONTENT));
+            new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
         
-        final ConnectableObservable<HttpObject> requestObservable = 
-                Observable.<HttpObject>just(request, lastcontent).publish();
+        final LastHttpContent lastcontent = 
+            new DefaultLastHttpContent(Nettys4Test.buildByteBuf(REQ_CONTENT));
         
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel);
         
-        final HttpMessageHolder holder = new HttpMessageHolder(0);
-        final Observable<? extends HttpObject> inbound = 
-            trade.addCloseHook(RxActions.<HttpTrade>toAction1(holder.release()))
-            .inbound()
-            .message()
-            .compose(holder.<HttpObject>assembleAndHold());
-        
-        inbound.subscribe(
-                RxSubscribers.ignoreNext(),
-                RxSubscribers.ignoreError()
-                );
-        
-        requestObservable.connect();
+        writeToInboundAndFlush(channel, request);
+        writeToInboundAndFlush(channel, lastcontent);
         
         final Func0<FullHttpRequest> fullRequestBuilder = 
-                holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST);
+            trade.inbound().messageHolder().httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST);
         
         //  expected refCnt, request -- 1 + HttpMessageHolder -- 1, total refcnt is 2
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
@@ -1016,14 +951,11 @@ public class DefaultHttpTradeTestCase {
     @Test
     public final void testTradeForFullRequestSourceAndMultiInboundThenDumpFullRequestContent() throws IOException {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", 
-                    Nettys4Test.buildByteBuf(REQ_CONTENT));
+            new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", 
+                Nettys4Test.buildByteBuf(REQ_CONTENT));
         
-        final ConnectableObservable<HttpObject> requestObservable = 
-                Observable.<HttpObject>just(request).publish();
-        
-        final HttpTrade trade = new DefaultHttpTrade(Nettys4Test.dummyChannel(), 
-                requestObservable);
+        final EmbeddedChannel channel = new EmbeddedChannel();
+        final HttpTrade trade = new DefaultHttpTrade(channel);
         
         final AtomicReference<DefaultFullHttpRequest> ref1 = 
                 new AtomicReference<DefaultFullHttpRequest>();
@@ -1044,7 +976,7 @@ public class DefaultHttpTradeTestCase {
             }
         });
         
-        requestObservable.connect();
+        writeToInboundAndFlush(channel, request);
         
         final byte[] firstReadBytes = Nettys.dumpByteBufAsBytes(ref1.get().content());
         
