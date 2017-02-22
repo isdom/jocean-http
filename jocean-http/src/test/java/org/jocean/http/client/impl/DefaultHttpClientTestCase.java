@@ -18,6 +18,7 @@ import javax.net.ssl.SSLException;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TestHttpUtil;
+import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.HttpUtil;
@@ -50,6 +51,7 @@ import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
+import rx.functions.Func1;
 import rx.observers.TestSubscriber;
 import rx.schedulers.Schedulers;
 
@@ -94,6 +96,35 @@ public class DefaultHttpClientTestCase {
             public void call(final HttpTrade trade) {
                 trade.outboundResponse(TestHttpUtil.buildBytesResponse(contentType, bodyAsBytes));
             }};
+    }
+    
+    @Test
+    public void testHttpHappyPathOnce0() throws Exception {
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", CONTENT),
+                ENABLE_LOGGING);
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
+        try {
+        
+            final Iterator<HttpObject> itr = 
+                client.initiator(new LocalAddress(testAddr))
+                .flatMap(new Func1<HttpInitiator, Observable<HttpObject>>() {
+                    @Override
+                    public Observable<HttpObject> call(HttpInitiator t) {
+                        t.outbound().message(Observable.just(fullHttpRequest()));
+                        return (Observable<HttpObject>) t.inbound().message();
+                    }})
+                .map(RxNettys.<HttpObject>retainer())
+                .toBlocking().toIterable().iterator();
+            
+            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
+            
+            assertTrue(Arrays.equals(bytes, CONTENT));
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
     }
     
     //  TODO, add more multi-call for same interaction define

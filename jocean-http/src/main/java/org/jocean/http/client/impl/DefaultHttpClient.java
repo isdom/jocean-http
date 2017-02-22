@@ -75,6 +75,17 @@ public class DefaultHttpClient implements HttpClient {
         this._inboundBlockSize = inboundBlockSize;
     }
     
+    private final Action1<HttpInitiator> _doRecycleChannel = new Action1<HttpInitiator>() {
+        @Override
+        public void call(final HttpInitiator initiator) {
+            final Channel channel = (Channel)initiator.transport();
+            if (((DefaultHttpInitiator)initiator).isEndedWithKeepAlive()) {
+                _channelPool.recycleChannel(channel);
+            } else {
+                channel.close();
+            }
+        }};
+        
     @Override
     public Observable<? extends HttpInitiator> initiator(
             final SocketAddress remoteAddress,
@@ -90,7 +101,12 @@ public class DefaultHttpClient implements HttpClient {
             .map(new Func1<Channel, HttpInitiator>() {
                 @Override
                 public HttpInitiator call(final Channel channel) {
-                    return new DefaultHttpInitiator(channel);
+                    Nettys.setReleaseAction(channel, new Action1<Channel>() {
+                        @Override
+                        public void call(Channel t) {
+                            //  DO nothing
+                        }});
+                    return new DefaultHttpInitiator(channel, _inboundBlockSize, _doRecycleChannel);
                 }});
     }
     

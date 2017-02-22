@@ -501,7 +501,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     private final static Func1_N<DefaultHttpInitiator,Observable<? extends HttpObject>> GET_INBOUND_REQ_ABOUT_ERROR = 
         new Func1_N<DefaultHttpInitiator,Observable<? extends HttpObject>>() {
             @Override
-            public Observable<? extends HttpObject> call(final DefaultHttpInitiator trade,final Object... args) {
+            public Observable<? extends HttpObject> call(final DefaultHttpInitiator initiator,final Object... args) {
                 return Observable.error(new RuntimeException("initiator unactived"));
             }};
             
@@ -582,7 +582,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
 
     private void fireOnClosed0() {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("closing active initiator[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
+            LOG.debug("closing active initiator[channel: {}] with isOutboundCompleted({})/isEndedWithKeepAlive({})", 
                     this._channel, this._isOutboundCompleted.get(), this.isEndedWithKeepAlive());
         }
         //  fire all pending subscribers onError with unactived exception
