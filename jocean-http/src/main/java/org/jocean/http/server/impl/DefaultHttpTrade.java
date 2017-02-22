@@ -28,7 +28,10 @@ import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -460,13 +463,19 @@ class DefaultHttpTrade extends DefaultAttributeMap
     @SuppressWarnings("unused")
     private void respOnCompleted() {
         this._isResponseCompleted.compareAndSet(false, true);
-        this._channel.flush();
-        try {
-            this.doClose();
-        } catch (Exception e) {
-            LOG.warn("exception when ({}).doClose, detail:{}",
-                    this, ExceptionUtils.exception2detail(e));
-        }
+        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
+        .addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(final ChannelFuture future)
+                    throws Exception {
+                //  TODO, flush success or failed
+                try {
+                    doClose();
+                } catch (Exception e) {
+                    LOG.warn("exception when ({}).doClose, detail:{}",
+                            this, ExceptionUtils.exception2detail(e));
+                }
+            }});
     }
 
     private final Action1<HttpObject> actionResponseOnNext() {

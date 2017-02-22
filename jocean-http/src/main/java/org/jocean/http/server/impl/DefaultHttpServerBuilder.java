@@ -281,7 +281,6 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private HttpTrade httpTradeOf(final Channel channel) {
         this._numStartedTrades.incrementAndGet();
         final DefaultHttpTrade trade = new DefaultHttpTrade(channel, 
-//                httpobjObservable(channel), 
                 this._inboundBlockSize);
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
         
@@ -303,30 +302,6 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             }});
         return trade;
     }
-    
-    /*
-    private static Observable<? extends HttpObject> httpobjObservable(final Channel channel) {
-        return Observable.create(new Observable.OnSubscribe<HttpObject>() {
-            @Override
-            public void call(final Subscriber<? super HttpObject> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    if (null != channel.pipeline().get(APPLY.HTTPOBJ_SUBSCRIBER.name()) ) {
-                        // already add HTTPOBJ_SUBSCRIBER Handler, so throw exception
-                        LOG.warn("channel ({}) already add HTTPOBJ_SUBSCRIBER handler, internal error",
-                                channel);
-                        throw new RuntimeException("Channel already add HTTPOBJ_SUBSCRIBER handler.");
-                    }
-                    RxNettys.installDoOnUnsubscribe(channel, 
-                            DoOnUnsubscribe.Util.from(subscriber));
-                    subscriber.add(Subscriptions.create(
-                        RxNettys.actionToRemoveHandler(channel, 
-                            APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
-                } else {
-                    LOG.warn("subscriber {} isUnsubscribed, can't used as HTTPOBJ_SUBSCRIBER ", subscriber);
-                }
-            }} )
-            .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
-    }*/
     
     private Action1<HttpTrade> doRecycleChannel(
             final Channel channel,
