@@ -24,7 +24,6 @@ import org.jocean.idiom.Ordered;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
-import org.jocean.idiom.rx.RxObservables;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -120,31 +119,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final FuncSelector<DefaultHttpTrade> _funcSelector = 
             new FuncSelector<>(this);
     
-    private Observable<? extends HttpObject> channel2HttpobjObservable(final Channel channel) {
-        return Observable.create(new Observable.OnSubscribe<HttpObject>() {
-            @Override
-            public void call(final Subscriber<? super HttpObject> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    if (null != channel.pipeline().get(APPLY.HTTPOBJ_SUBSCRIBER.name()) ) {
-                        // already add HTTPOBJ_SUBSCRIBER Handler, so throw exception
-                        LOG.warn("channel ({}) already add HTTPOBJ_SUBSCRIBER handler, internal error",
-                                channel);
-                        throw new RuntimeException("Channel already add HTTPOBJ_SUBSCRIBER handler.");
-                    }
-//                    RxNettys.installDoOnUnsubscribe(channel, 
-//                            DoOnUnsubscribe.Util.from(subscriber));
-//                    subscriber.add(Subscriptions.create(
-                    addCloseHook(
-                        RxActions.<HttpTrade>toAction1(
-                            RxNettys.actionToRemoveHandler(channel, 
-                                APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
-                } else {
-                    LOG.warn("subscriber {} isUnsubscribed, can't used as HTTPOBJ_SUBSCRIBER ", subscriber);
-                }
-            }} )
-            .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
-    }
-    
     @SafeVarargs
     DefaultHttpTrade(
         final Channel channel, 
@@ -164,7 +138,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         
         addCloseHook(RxActions.<HttpTrade>toAction1(this._inmsgholder.release()));
         
-        this._requestObservable = channel2HttpobjObservable(channel)
+        this._requestObservable = RxNettys.inboundFromChannel(channel, doOnTerminate())
                 .compose(this._inmsgholder.<HttpObject>assembleAndHold())
                 .compose(hookRequest())
                 .cache()
@@ -188,6 +162,14 @@ class DefaultHttpTrade extends DefaultAttributeMap
         hookChannelReadComplete();
     }
 
+    public Action1<Action0> doOnTerminate() {
+        return new Action1<Action0>() {
+            @Override
+            public void call(final Action0 action) {
+                addCloseHook(RxActions.<HttpTrade>toAction1(action));
+            }};
+    }
+    
     private void hookChannelReadComplete() {
         final ChannelHandler readCompleteNotifier = new ReadCompleteNotifier();
         this._channel.pipeline().addLast(readCompleteNotifier);
