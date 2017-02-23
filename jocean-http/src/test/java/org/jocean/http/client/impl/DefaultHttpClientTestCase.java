@@ -51,7 +51,6 @@ import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
-import rx.functions.Func1;
 import rx.observers.TestSubscriber;
 import rx.schedulers.Schedulers;
 
@@ -99,27 +98,25 @@ public class DefaultHttpClientTestCase {
     }
     
     @Test
-    public void testHttpHappyPathOnce0() throws Exception {
+    public void testHttpHappyPathOnce0() 
+        throws Exception
+    {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", CONTENT),
                 ENABLE_LOGGING);
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
-        try {
-        
-            final Iterator<HttpObject> itr = 
-                client.initiator(new LocalAddress(testAddr))
-                .flatMap(new Func1<HttpInitiator, Observable<HttpObject>>() {
-                    @Override
-                    public Observable<HttpObject> call(HttpInitiator t) {
-                        t.outbound().message(Observable.just(fullHttpRequest()));
-                        return (Observable<HttpObject>) t.inbound().message();
-                    }})
-                .map(RxNettys.<HttpObject>retainer())
-                .toBlocking().toIterable().iterator();
-            
-            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-            
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
+        try ( final HttpInitiator initiator = 
+            client.initiator(new LocalAddress(testAddr))
+            .toBlocking().single()) {
+            initiator.outbound().message(Observable.just(fullHttpRequest()));
+            initiator.inbound().message().toCompletable().await();
+            final FullHttpResponse resp = initiator.inbound().messageHolder()
+                .httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE)
+                .call();
+            final byte[] bytes = Nettys.dumpByteBufAsBytes(resp.content());
+            resp.release();
             assertTrue(Arrays.equals(bytes, CONTENT));
         } finally {
             client.close();

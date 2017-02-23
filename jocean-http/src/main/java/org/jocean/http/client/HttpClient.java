@@ -69,11 +69,12 @@ public interface HttpClient extends Closeable {
     public InteractionBuilder interaction();
     
     public interface HttpInitiator 
-        extends TerminateAware<HttpInitiator>, AttributeMap {
+        extends AutoCloseable, TerminateAware<HttpInitiator>, AttributeMap {
+        public void close();
+        
         public TrafficCounter trafficCounter();
         
         public Object transport();
-        public void close();
         public boolean isActive();
         
         public OutboundEndpoint outbound();
