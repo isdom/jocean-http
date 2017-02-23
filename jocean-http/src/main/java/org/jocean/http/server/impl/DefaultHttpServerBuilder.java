@@ -244,13 +244,14 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                     awaitChannels.remove(channel);
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onNext(
-                            addToTrades(httpTradeOf(channel))
-                            .addCloseHook(doRecycleChannel(channel, subscriber, awaitChannels))
-                            .addCloseHook(new Action1<HttpTrade>() {
-                                @Override
-                                public void call(HttpTrade t) {
-                                    _numCompletedTrades.incrementAndGet();
-                                }})
+                            addToTrades(httpTradeOf(channel, 
+                                doRecycleChannel(channel, subscriber, awaitChannels),
+                                new Action1<HttpTrade>() {
+                                    @Override
+                                    public void call(HttpTrade t) {
+                                        _numCompletedTrades.incrementAndGet();
+                                    }}
+                                ))
                             )
                         ;
                     } else {
@@ -278,10 +279,13 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
         }
     }
     
-    private HttpTrade httpTradeOf(final Channel channel) {
+    @SafeVarargs
+    private final HttpTrade httpTradeOf(final Channel channel, 
+        final Action1<HttpTrade> ... onTerminates) {
         this._numStartedTrades.incrementAndGet();
         final DefaultHttpTrade trade = new DefaultHttpTrade(channel, 
-                this._inboundBlockSize);
+                this._inboundBlockSize,
+                onTerminates);
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
         
         trade.inbound().message().subscribe(new Action1<HttpObject>() {
@@ -295,7 +299,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                     //  TODO? set lastsize (== -1) back to _lastAddedSize ?
                 }
             }});
-        trade.addCloseHook(new Action1<HttpTrade>() {
+        trade.doOnTerminate(new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade t) {
                 updateCurrentInboundMemory(-_lastAddedSize.getAndSet(-1));

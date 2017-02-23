@@ -29,7 +29,7 @@ public class InboundSpeedController {
     
     public void applyTo(final InboundEndpoint inbound) {
         inbound.setAutoRead(false);
-        inbound.addReadCompleteHook(this._ctrlInboundSpeed);
+        inbound.doOnReadComplete(this._ctrlInboundSpeed);
         inbound.readMessage();
     }
     

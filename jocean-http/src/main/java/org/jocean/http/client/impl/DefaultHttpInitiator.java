@@ -21,6 +21,7 @@ import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.TerminateAwareSupport;
+import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
@@ -295,6 +296,15 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             }
         }};
         
+    private static final Action1_N<DefaultHttpInitiator> REMOVE_READCOMPLETE = 
+        new Action1_N<DefaultHttpInitiator>() {
+            @SuppressWarnings("unchecked")
+            @Override
+            public void call(final DefaultHttpInitiator t,
+                    final Object... args) {
+                t._onReadCompletes.removeComponent((Action1<InboundEndpoint>)args[0]);
+            }};
+                
     final private InboundEndpoint _inboundEndpoint = new InboundEndpoint() {
 
         @Override
@@ -308,16 +318,14 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         }
 
         @Override
-        public InboundEndpoint addReadCompleteHook(
+        public Action0 doOnReadComplete(
                 final Action1<InboundEndpoint> onReadComplete) {
-            _doAddInboundReadCompleteHook.call(onReadComplete);
-            return this;
-        }
-
-        @Override
-        public void removeReadCompleteHook(
-                final Action1<InboundEndpoint> onReadComplete) {
-            _doRemoveInboundReadCompleteHook.call(onReadComplete);
+            _doAddReadComplete.call(onReadComplete);
+            return new Action0() {
+                @Override
+                public void call() {
+                    _funcSelector.submitWhenActive(REMOVE_READCOMPLETE).call(onReadComplete);
+                }};
         }
 
         @Override
@@ -350,26 +358,15 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         return this._inboundEndpoint;
     }
     
-    private final Action1<Action1<InboundEndpoint>> _doAddInboundReadCompleteHook = 
+    private final Action1<Action1<InboundEndpoint>> _doAddReadComplete = 
         RxActions.toAction1(
             this._funcSelector.submitWhenActive(
-                RxActions.toAction1_N(DefaultHttpInitiator.class, "addInboundReadCompleteHook0"))
+                RxActions.toAction1_N(DefaultHttpInitiator.class, "addReadComplete0"))
         );
     
     @SuppressWarnings("unused")
-    private void addInboundReadCompleteHook0(final Action1<InboundEndpoint> onReadComplete) {
+    private void addReadComplete0(final Action1<InboundEndpoint> onReadComplete) {
         this._onReadCompletes.addComponent(onReadComplete);
-    }
-    
-    private final Action1<Action1<InboundEndpoint>> _doRemoveInboundReadCompleteHook = 
-        RxActions.toAction1(
-            this._funcSelector.submitWhenActive(
-                RxActions.toAction1_N(DefaultHttpInitiator.class, "removeInboundReadCompleteHook0"))
-        );
-    
-    @SuppressWarnings("unused")
-    private void removeInboundReadCompleteHook0(final Action1<InboundEndpoint> onReadComplete) {
-        this._onReadCompletes.removeComponent(onReadComplete);
     }
     
     private final COWCompositeSupport<Action1<InboundEndpoint>> _onReadCompletes = 

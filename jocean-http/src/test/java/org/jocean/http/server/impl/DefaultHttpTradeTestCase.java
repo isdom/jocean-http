@@ -75,7 +75,7 @@ public class DefaultHttpTradeTestCase {
         final HttpTrade trade = new DefaultHttpTrade(new EmbeddedChannel());
         
         final AtomicBoolean onClosed = new AtomicBoolean(false);
-        trade.addCloseHook(new Action1<HttpTrade>(){
+        trade.doOnTerminate(new Action1<HttpTrade>(){
             @Override
             public void call(final HttpTrade trade) {
                 onClosed.set(true);
@@ -99,7 +99,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
         
         final AtomicBoolean onClosed = new AtomicBoolean(false);
-        trade.addCloseHook(new Action1<HttpTrade>(){
+        trade.doOnTerminate(new Action1<HttpTrade>(){
             @Override
             public void call(final HttpTrade trade) {
                 onClosed.set(true);
