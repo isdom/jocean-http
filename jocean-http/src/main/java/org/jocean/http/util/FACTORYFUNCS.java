@@ -172,9 +172,53 @@ class FACTORYFUNCS {
                     }
                     try {
                         onChannelRead.call();
-                        ctx.fireChannelRead(msg);
                     } finally {
+                        ctx.fireChannelRead(msg);
                         RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
+                    }
+                }
+            };
+        }
+    };
+    
+    static final Func1<Action0, ChannelHandler> ON_CHANNEL_INACTIVE_FUNC1 = 
+            new Func1<Action0, ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Action0 onChannelInactive) {
+            return new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelInactive(final ChannelHandlerContext ctx)
+                        throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("ON_CHANNEL_INACTIVE_FUNC1: channel({})/handler({}): channelInactive.", 
+                                ctx.channel(), ctx.name());
+                    }
+                    try {
+                        onChannelInactive.call();
+                    } finally {
+                        ctx.fireChannelInactive();
+                    }
+                }
+            };
+        }
+    };
+    
+    static final Func1<Action0, ChannelHandler> ON_CHANNEL_READCOMPLETE_FUNC1 = 
+            new Func1<Action0, ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Action0 onChannelReadComplete) {
+            return new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelReadComplete(final ChannelHandlerContext ctx)
+                        throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("ON_CHANNEL_READCOMPLETE_FUNC1: channel({})/handler({}): channelReadComplete.", 
+                                ctx.channel(), ctx.name());
+                    }
+                    try {
+                        onChannelReadComplete.call();
+                    } finally {
+                        ctx.fireChannelReadComplete();
                     }
                 }
             };

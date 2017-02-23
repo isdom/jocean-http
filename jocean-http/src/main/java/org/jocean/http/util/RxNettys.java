@@ -649,4 +649,17 @@ public class RxNettys {
             }} )
             .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
     }
+    
+    @SuppressWarnings("unchecked")
+    public static <T extends ChannelHandler> T applyToChannelWithUninstall(
+            final Channel channel, 
+            final Action1<Action0> onTerminate,
+            final APPLY apply, 
+            final Object... args) {
+        final ChannelHandler handler = 
+            apply.applyTo(channel.pipeline(), args);
+        
+        onTerminate.call(RxNettys.actionToRemoveHandler(channel, handler));
+        return (T)handler;
+    }
 }

@@ -17,11 +17,9 @@ import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.RxNettys;
-import org.jocean.http.util.TrafficCounterHandler;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
-import org.jocean.idiom.Ordered;
 import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
@@ -31,9 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -138,7 +133,6 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             new TerminateAwareSupport<HttpInitiator, DefaultHttpInitiator>(
                 this, _funcSelector);
         this._channel = channel;
-        this._trafficCounter = buildTrafficCounter(channel);
         this._inboundHolder = new HttpMessageHolder(inboundBlockSize);
         
         doOnTerminate(this._inboundHolder.release());
@@ -162,30 +156,27 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         for (Action1<HttpInitiator> onTerminate : onTerminates) {
             doOnTerminate(onTerminate);
         }
-        //  TODO, test for channel already inactive
-        closeWhenChannelInactive();
-        hookChannelReadComplete();
-    }
-
-    private final class Closer extends ChannelInboundHandlerAdapter implements Ordered {
-        @Override
-        public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
-            fireClosed();
-        }
-
-        @Override
-        public int ordinal() {
-            return 1000;
-        }
-    }
-    
-    //  TODO, exract to util
-    private void closeWhenChannelInactive() {
-        final ChannelHandler closer = new Closer();
-        this._channel.pipeline().addLast(closer);
         
-        doOnTerminate(
-            RxNettys.actionToRemoveHandler(this._channel, closer));
+        this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
+                onTerminate(), 
+                APPLY.TRAFFICCOUNTER);
+        //  TODO, test for channel already inactive
+        RxNettys.applyToChannelWithUninstall(channel, 
+                onTerminate(), 
+                APPLY.ON_CHANNEL_INACTIVE,
+                new Action0() {
+                    @Override
+                    public void call() {
+                        fireClosed();
+                    }});
+        RxNettys.applyToChannelWithUninstall(channel, 
+                onTerminate(), 
+                APPLY.ON_CHANNEL_READCOMPLETE,
+                new Action0() {
+                    @Override
+                    public void call() {
+                        _onReadCompletes.foreachComponent(_callReadComplete);
+                    }});
     }
 
     private Transformer<HttpObject, HttpObject> markInboundStateAndCloseOnError() {
@@ -210,15 +201,6 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             }};
     }
     
-    //  TODO, exract to util
-    private void hookChannelReadComplete() {
-        final ChannelHandler readCompleteNotifier = new ReadCompleteNotifier();
-        this._channel.pipeline().addLast(readCompleteNotifier);
-        
-        doOnTerminate(
-            RxNettys.actionToRemoveHandler(this._channel, readCompleteNotifier));
-    }
-
     @Override
     public OutboundEndpoint outbound() {
         return new OutboundEndpoint() {
@@ -313,18 +295,6 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             }
         }};
         
-    private final class ReadCompleteNotifier extends ChannelInboundHandlerAdapter implements Ordered {
-        @Override
-        public void channelReadComplete(final ChannelHandlerContext ctx) throws Exception {
-            _onReadCompletes.foreachComponent(_callReadComplete);
-        }
-
-        @Override
-        public int ordinal() {
-            return 1001;
-        }
-    }
-    
     final private InboundEndpoint _inboundEndpoint = new InboundEndpoint() {
 
         @Override
@@ -427,15 +397,6 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         this._channel.read();
     }
     
-    //  TODO, exract to util
-    private TrafficCounter buildTrafficCounter(final Channel channel) {
-        final TrafficCounterHandler handler = 
-                (TrafficCounterHandler)APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
-        
-        doOnTerminate(RxNettys.actionToRemoveHandler(channel, handler));
-        return handler;
-    }
-        
     @Override
     public TrafficCounter trafficCounter() {
         return this._trafficCounter;
