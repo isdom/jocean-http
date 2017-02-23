@@ -22,6 +22,7 @@ import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.Ordered;
+import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
@@ -122,53 +123,102 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     @SafeVarargs
     DefaultHttpInitiator(
         final Channel channel, 
-        final Action1<HttpInitiator> ... oncloseds) {
-        this(channel, 0, oncloseds);
+        final Action1<HttpInitiator> ... onTerminates) {
+        this(channel, 0, onTerminates);
     }
     
     @SafeVarargs
     DefaultHttpInitiator(
         final Channel channel, 
         final int inboundBlockSize,
-        final Action1<HttpInitiator> ... oncloseds) {
+        final Action1<HttpInitiator> ... onTerminates) {
+        // TODO if channel.isActive() == false ?
+        
+        this._terminateAwareSupport = 
+            new TerminateAwareSupport<HttpInitiator, DefaultHttpInitiator>(
+                this, _funcSelector);
         this._channel = channel;
         this._trafficCounter = buildTrafficCounter(channel);
         this._inboundHolder = new HttpMessageHolder(inboundBlockSize);
         
-        addCloseHook(RxActions.<HttpInitiator>toAction1(this._inboundHolder.release()));
+        doOnTerminate(this._inboundHolder.release());
         
-        this._inboundObservable = RxNettys.inboundFromChannel(channel, doOnTerminate())
+        this._cachedInbound = RxNettys.inboundFromChannel(channel, onTerminate())
                 .compose(this._inboundHolder.<HttpObject>assembleAndHold())
-                .compose(hookInbound())
+                .compose(markInboundStateAndCloseOnError())
                 .cache()
                 .compose(RxNettys.duplicateHttpContent())
                 ;
-        for (Action1<HttpInitiator> hook : oncloseds) {
-            addCloseHook(hook);
+        
+        this._cachedInbound.subscribe(
+            RxSubscribers.ignoreNext(),
+            new Action1<Throwable>() {
+                @Override
+                public void call(final Throwable e) {
+                    LOG.warn("initiator({})'s internal request subscriber invoke with onError {}", 
+                            DefaultHttpInitiator.this, ExceptionUtils.exception2detail(e));
+                }});
+        
+        for (Action1<HttpInitiator> onTerminate : onTerminates) {
+            doOnTerminate(onTerminate);
         }
-        
-        this._inboundObservable.subscribe(
-                RxSubscribers.ignoreNext(),
-                new Action1<Throwable>() {
-                    @Override
-                    public void call(final Throwable e) {
-                        LOG.warn("initiator({})'s internal request subscriber invoke with onError {}", 
-                                DefaultHttpInitiator.this, ExceptionUtils.exception2detail(e));
-                    }});
-        
         //  TODO, test for channel already inactive
-        closeInitiatorWhenChannelInactive();
+        closeWhenChannelInactive();
         hookChannelReadComplete();
     }
 
-    public Action1<Action0> doOnTerminate() {
-        return new Action1<Action0>() {
+    private final class Closer extends ChannelInboundHandlerAdapter implements Ordered {
+        @Override
+        public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
+            fireClosed();
+        }
+
+        @Override
+        public int ordinal() {
+            return 1000;
+        }
+    }
+    
+    //  TODO, exract to util
+    private void closeWhenChannelInactive() {
+        final ChannelHandler closer = new Closer();
+        this._channel.pipeline().addLast(closer);
+        
+        doOnTerminate(
+            RxNettys.actionToRemoveHandler(this._channel, closer));
+    }
+
+    private Transformer<HttpObject, HttpObject> markInboundStateAndCloseOnError() {
+        return new Transformer<HttpObject, HttpObject>() {
             @Override
-            public void call(final Action0 action) {
-                addCloseHook(RxActions.<HttpInitiator>toAction1(action));
+            public Observable<HttpObject> call(final Observable<HttpObject> inbound) {
+                return inbound.doOnNext(new Action1<HttpObject>() {
+                    @Override
+                    public void call(final HttpObject msg) {
+                        _isInboundReceived.compareAndSet(false, true);
+                    }})
+                .doOnCompleted(new Action0() {
+                    @Override
+                    public void call() {
+                        _isInboundCompleted.set(true);
+                    }})
+                .doOnError(new Action1<Throwable>() {
+                    @Override
+                    public void call(Throwable e) {
+                        fireClosed();
+                    }});
             }};
     }
     
+    //  TODO, exract to util
+    private void hookChannelReadComplete() {
+        final ChannelHandler readCompleteNotifier = new ReadCompleteNotifier();
+        this._channel.pipeline().addLast(readCompleteNotifier);
+        
+        doOnTerminate(
+            RxNettys.actionToRemoveHandler(this._channel, readCompleteNotifier));
+    }
+
     @Override
     public OutboundEndpoint outbound() {
         return new OutboundEndpoint() {
@@ -188,25 +238,25 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             RxFunctions.toFunc1(
             this._funcSelector.callWhenActive(
                 RxFunctions.<DefaultHttpInitiator,Subscription>toFunc1_N(
-                    DefaultHttpInitiator.class, "doSetOutboundMessage0"))
+                    DefaultHttpInitiator.class, "setOutboundMessage0"))
             .callWhenDestroyed(Func1_N.Util.<DefaultHttpInitiator,Subscription>returnNull()));
 
     @SuppressWarnings("unused")
-    private Subscription doSetOutboundMessage0(
+    private Subscription setOutboundMessage0(
         final Observable<? extends Object> message) {
         if (this._isOutboundSetted.compareAndSet(false, true)) {
             return message.subscribe(
-                    doOutboundOnNext(),
+                    outboundOnNext(),
                     doOutboundOnError(),
-                    doOutboundOnCompleted());
+                    outboundOnCompleted());
         } else {
-            LOG.warn("initiator({}) 's outbound message has setted, ignore new message({})",
+            LOG.warn("initiator({}) 's outbound message has setted, ignore this message({})",
                     this, message);
             return null;
         }
     }
     
-    private final Action1<Object> doOutboundOnNext() {
+    private final Action1<Object> outboundOnNext() {
         return RxActions.<Object>toAction1(
             this._funcSelector.submitWhenActive(
                 RxActions.toAction1_N(DefaultHttpInitiator.class, "outboundOnNext0")));
@@ -225,26 +275,6 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         this._channel.write(ReferenceCountUtil.retain(msg));
     }
 
-    private final Action0 doOutboundOnCompleted() {
-        return RxActions.toAction0(
-            this._funcSelector.submitWhenActive(
-                RxActions.toAction1_N(DefaultHttpInitiator.class, "outboundOnCompleted0")));
-    }
-
-    @SuppressWarnings("unused")
-    private void outboundOnCompleted0() {
-        this._isOutboundCompleted.compareAndSet(false, true);
-        this._channel.flush();
-        
-        //  for initiator outbound is request
-//        try {
-//            this.fireOnClosed();
-//        } catch (Exception e) {
-//            LOG.warn("exception when ({}).doClose, detail:{}",
-//                    this, ExceptionUtils.exception2detail(e));
-//        }
-    }
-
     private final Action1<Throwable> doOutboundOnError() {
         return RxActions.<Throwable>toAction1(
             this._funcSelector.submitWhenActive(
@@ -258,30 +288,35 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         doAbort();
     }
 
-    private void hookChannelReadComplete() {
-        final ChannelHandler readCompleteNotifier = new ReadCompleteNotifier();
-        this._channel.pipeline().addLast(readCompleteNotifier);
-        
-        addCloseHook(
-            RxActions.<HttpInitiator>toAction1(
-                RxNettys.actionToRemoveHandler(this._channel, readCompleteNotifier)));
+    private final Action0 outboundOnCompleted() {
+        return RxActions.toAction0(
+            this._funcSelector.submitWhenActive(
+                RxActions.toAction1_N(DefaultHttpInitiator.class, "outboundOnCompleted0")));
     }
 
-    final Action1<Action1<InboundEndpoint>> _readCompleteInvoker = new Action1<Action1<InboundEndpoint>>() {
+    @SuppressWarnings("unused")
+    private void outboundOnCompleted0() {
+        this._isOutboundCompleted.compareAndSet(false, true);
+        this._channel.flush();
+    }
+
+    final Action1<Action1<InboundEndpoint>> _callReadComplete = new Action1<Action1<InboundEndpoint>>() {
         @Override
         public void call(final Action1<InboundEndpoint> onReadComplete) {
             try {
                 onReadComplete.call(_inboundEndpoint);
             } catch (Exception e) {
                 LOG.warn("exception when initiator({}) invoke onReadComplete({}), detail: {}",
-                        DefaultHttpInitiator.this, onReadComplete, ExceptionUtils.exception2detail(e));
+                        DefaultHttpInitiator.this, 
+                        onReadComplete, 
+                        ExceptionUtils.exception2detail(e));
             }
         }};
         
     private final class ReadCompleteNotifier extends ChannelInboundHandlerAdapter implements Ordered {
         @Override
         public void channelReadComplete(final ChannelHandlerContext ctx) throws Exception {
-            _onReadCompletes.foreachComponent(_readCompleteInvoker);
+            _onReadCompletes.foreachComponent(_callReadComplete);
         }
 
         @Override
@@ -392,62 +427,18 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         this._channel.read();
     }
     
+    //  TODO, exract to util
     private TrafficCounter buildTrafficCounter(final Channel channel) {
         final TrafficCounterHandler handler = 
                 (TrafficCounterHandler)APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
         
-        addCloseHook(
-            RxActions.<HttpInitiator>toAction1(
-                RxNettys.actionToRemoveHandler(channel, handler)));
+        doOnTerminate(RxNettys.actionToRemoveHandler(channel, handler));
         return handler;
     }
         
     @Override
     public TrafficCounter trafficCounter() {
         return this._trafficCounter;
-    }
-    
-    private final class Closer extends ChannelInboundHandlerAdapter implements Ordered {
-        @Override
-        public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
-            fireOnClosed();
-        }
-
-        @Override
-        public int ordinal() {
-            return 1000;
-        }
-    }
-    
-    private void closeInitiatorWhenChannelInactive() {
-        final ChannelHandler closer = new Closer();
-        this._channel.pipeline().addLast(closer);
-        
-        addCloseHook(
-            RxActions.<HttpInitiator>toAction1(
-                RxNettys.actionToRemoveHandler(this._channel, closer)));
-    }
-
-    private Transformer<HttpObject, HttpObject> hookInbound() {
-        return new Transformer<HttpObject, HttpObject>() {
-            @Override
-            public Observable<HttpObject> call(final Observable<HttpObject> src) {
-                return src.doOnNext(new Action1<HttpObject>() {
-                    @Override
-                    public void call(final HttpObject msg) {
-                        _isInboundReceived.compareAndSet(false, true);
-                    }})
-                .doOnCompleted(new Action0() {
-                    @Override
-                    public void call() {
-                        _isInboundCompleted.set(true);
-                    }})
-                .doOnError(new Action1<Throwable>() {
-                    @Override
-                    public void call(Throwable e) {
-                        fireOnClosed();
-                    }});
-            }};
     }
     
     @Override
@@ -462,8 +453,8 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     }
 
     @Override
-    public void abort() {
-        doAbort();
+    public void close() {
+        fireClosed();
     }
 
     @Override
@@ -494,7 +485,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                     public void call() {
                         _inboundSubscribers.remove(serializedSubscriber);
                     }}));
-                _inboundObservable.subscribe(serializedSubscriber);
+                _cachedInbound.subscribe(serializedSubscriber);
             }
         }});
             
@@ -505,84 +496,45 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 return Observable.error(new RuntimeException("initiator unactived"));
             }};
             
+    @Override
+    public Action1<Action0> onTerminate() {
+        return this._terminateAwareSupport.onTerminate();
+    }
+            
+    @Override
+    public Action1<Action1<HttpInitiator>> onTerminateOf() {
+        return this._terminateAwareSupport.onTerminateOf();
+    }
 
-//    @Override
-//    public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
-//        return this._doSetOutboundMessage.call(response);
-//    }
-    
-//    @Override
-//    public boolean readyforOutboundResponse() {
-//        return this._funcSelector.isActive() && !this._isOutboundSetted.get();
-//    }
-    
     @Override
-    public HttpInitiator addCloseHook(final Action1<HttpInitiator> onClosed) {
-        this._doAddCloseHook.call(onClosed);
-        return this;
+    public Action0 doOnTerminate(Action0 onTerminate) {
+        return this._terminateAwareSupport.doOnTerminate(onTerminate);
     }
-    
-    private final Action1<Action1<HttpInitiator>> _doAddCloseHook = RxActions.toAction1(
-            this._funcSelector.submitWhenActive(
-                RxActions.toAction1_N(DefaultHttpInitiator.class, "addCloseHook0"))
-            .submitWhenDestroyed(
-                RxActions.toAction1_N(DefaultHttpInitiator.class, "closeHookNow")));
-    
-    @SuppressWarnings("unused")
-    private void addCloseHook0(final Action1<HttpInitiator> onClosed) {
-        this._onCloseds.addComponent(onClosed);
-    }
-    
-    @SuppressWarnings("unused")
-    private void closeHookNow(final Action1<HttpInitiator> onClosed) {
-        onClosed.call(this);
-    }
-    
+                
     @Override
-    public void removeCloseHook(final Action1<HttpInitiator> onClosed) {
-        this._doRemoveCloseHook.call(onClosed);
+    public Action0 doOnTerminate(final Action1<HttpInitiator> onTerminate) {
+        return this._terminateAwareSupport.doOnTerminate(onTerminate);
     }
     
-    private final Action1<Action1<HttpInitiator>> _doRemoveCloseHook = RxActions.toAction1(
-            this._funcSelector.submitWhenActive(
-                RxActions.toAction1_N(DefaultHttpInitiator.class, "removeCloseHook0")));
-    
-    @SuppressWarnings("unused")
-    private void removeCloseHook0(final Action1<HttpInitiator> onClosed) {
-        this._onCloseds.removeComponent(onClosed);
-    }
-        
     private void doAbort() {
         this._funcSelector.destroy(
-            RxActions.toAction1_N(DefaultHttpInitiator.class, "closeChannelAndFireDoOnClosed"));
+            RxActions.toAction1_N(DefaultHttpInitiator.class, "closeChannelAndFireClosed"));
     }
     
     @SuppressWarnings("unused")
-    private void closeChannelAndFireDoOnClosed() {
+    private void closeChannelAndFireClosed() {
         this._channel.close();
-        fireOnClosed0();
+        fireClosed0();
     }
     
-    private void fireOnClosed() {
+    private void fireClosed() {
         this._funcSelector.destroy(
-            RxActions.toAction1_N(DefaultHttpInitiator.class, "fireOnClosed0"));
+            RxActions.toAction1_N(DefaultHttpInitiator.class, "fireClosed0"));
     }
 
-    private final Action1<Action1<HttpInitiator>> _onClosedInvoker = 
-        new Action1<Action1<HttpInitiator>>() {
-        @Override
-        public void call(final Action1<HttpInitiator> onClosed) {
-            try {
-                onClosed.call(DefaultHttpInitiator.this);
-            } catch (Exception e) {
-                LOG.warn("exception when initiator({}) invoke onClosed({}), detail: {}",
-                    DefaultHttpInitiator.this, onClosed, ExceptionUtils.exception2detail(e));
-            }
-        }};
-
-    private void fireOnClosed0() {
+    private void fireClosed0() {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("closing active initiator[channel: {}] with isOutboundCompleted({})/isEndedWithKeepAlive({})", 
+            LOG.debug("close active initiator[channel: {}] with isOutboundCompleted({})/isEndedWithKeepAlive({})", 
                     this._channel, this._isOutboundCompleted.get(), this.isEndedWithKeepAlive());
         }
         //  fire all pending subscribers onError with unactived exception
@@ -599,15 +551,14 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 }
             }
         }
-        this._onCloseds.foreachComponent(_onClosedInvoker);
+        this._terminateAwareSupport.fireAllTerminates();
     }
 
-    private final COWCompositeSupport<Action1<HttpInitiator>> _onCloseds = 
-            new COWCompositeSupport<>();
-    
+    private final TerminateAwareSupport<HttpInitiator, DefaultHttpInitiator> 
+        _terminateAwareSupport;
+    private final Channel _channel;
     private final HttpMessageHolder _inboundHolder;
     private final long _createTimeMillis = System.currentTimeMillis();
-    private final Channel _channel;
     private final TrafficCounter _trafficCounter;
     private String _requestMethod;
     private String _requestUri;
@@ -617,7 +568,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     private final AtomicBoolean _isOutboundSended = new AtomicBoolean(false);
     private final AtomicBoolean _isOutboundCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
-    private final Observable<? extends HttpObject> _inboundObservable;
+    private final Observable<? extends HttpObject> _cachedInbound;
     private final List<Subscriber<? super HttpObject>> _inboundSubscribers = 
             new CopyOnWriteArrayList<>();
 }

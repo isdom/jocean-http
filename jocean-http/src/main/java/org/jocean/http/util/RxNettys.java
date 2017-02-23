@@ -629,7 +629,7 @@ public class RxNettys {
     
     public static Observable<? extends HttpObject> inboundFromChannel(
         final Channel channel,
-        final Action1<Action0> doOnTerminate) {
+        final Action1<Action0> onTerminate) {
         return Observable.create(new Observable.OnSubscribe<HttpObject>() {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
@@ -640,7 +640,7 @@ public class RxNettys {
                                 channel);
                         throw new RuntimeException("Channel[" + channel + "]already add HTTPOBJ_SUBSCRIBER handler.");
                     }
-                    doOnTerminate.call(
+                    onTerminate.call(
                         RxNettys.actionToRemoveHandler(channel, 
                         APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber)));
                 } else {
