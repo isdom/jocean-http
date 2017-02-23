@@ -5,8 +5,6 @@ package org.jocean.http.client.impl;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -16,12 +14,11 @@ import org.jocean.http.TrafficCounter;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.HttpMessageHolder;
+import org.jocean.http.util.InboundEndpointSupport;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.TerminateAwareSupport;
-import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
@@ -36,15 +33,11 @@ import io.netty.handler.codec.http.HttpUtil;
 import io.netty.util.DefaultAttributeMap;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
-import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
-import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Func0;
 import rx.functions.Func1;
-import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -95,7 +88,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         final StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpInitiator [create at:")
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
-                .append(", inbound subscriber count=").append(_inboundSubscribers.size())
+                .append(", inbound subscriber count=").append(_inboundSupport.subscribersCount())
                 .append(", isInboundReceived=").append(_isInboundReceived.get())
                 .append(", requestMethod=").append(_requestMethod)
                 .append(", requestUri=").append(_requestUri)
@@ -134,18 +127,19 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             new TerminateAwareSupport<HttpInitiator, DefaultHttpInitiator>(
                 this, _funcSelector);
         this._channel = channel;
-        this._inboundHolder = new HttpMessageHolder(inboundBlockSize);
         
-        doOnTerminate(this._inboundHolder.release());
+        final HttpMessageHolder holder = new HttpMessageHolder(inboundBlockSize);
         
-        this._cachedInbound = RxNettys.inboundFromChannel(channel, onTerminate())
-                .compose(this._inboundHolder.<HttpObject>assembleAndHold())
+        doOnTerminate(holder.release());
+        final Observable<? extends HttpObject> cachedInbound = 
+                RxNettys.inboundFromChannel(channel, onTerminate())
+                .compose(holder.<HttpObject>assembleAndHold())
                 .compose(markInboundStateAndCloseOnError())
                 .cache()
                 .compose(RxNettys.duplicateHttpContent())
                 ;
         
-        this._cachedInbound.subscribe(
+        cachedInbound.subscribe(
             RxSubscribers.ignoreNext(),
             new Action1<Throwable>() {
                 @Override
@@ -161,6 +155,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
                 APPLY.TRAFFICCOUNTER);
+        
         //  TODO, test for channel already inactive
         RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
@@ -170,14 +165,15 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                     public void call() {
                         fireClosed();
                     }});
-        RxNettys.applyToChannelWithUninstall(channel, 
-                onTerminate(), 
-                APPLY.ON_CHANNEL_READCOMPLETE,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        _onReadCompletes.foreachComponent(_callReadComplete);
-                    }});
+        
+        this._inboundSupport = 
+            new InboundEndpointSupport<DefaultHttpInitiator>(
+                _funcSelector,
+                channel,
+                cachedInbound,
+                holder,
+                _trafficCounter,
+                onTerminate());
     }
 
     private Transformer<HttpObject, HttpObject> markInboundStateAndCloseOnError() {
@@ -200,6 +196,32 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                         fireClosed();
                     }});
             }};
+    }
+    
+    @Override
+    public TrafficCounter trafficCounter() {
+        return this._trafficCounter;
+    }
+    
+    @Override
+    public boolean isActive() {
+        return this._funcSelector.isActive();
+    }
+
+    public boolean isEndedWithKeepAlive() {
+        return (this._isInboundCompleted.get() 
+            && this._isOutboundCompleted.get()
+            && this._isKeepAlive.get());
+    }
+
+    @Override
+    public void close() {
+        fireClosed();
+    }
+
+    @Override
+    public Object transport() {
+        return this._channel;
     }
     
     @Override
@@ -283,7 +305,13 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         this._channel.flush();
     }
 
-    final Action1<Action1<InboundEndpoint>> _callReadComplete = new Action1<Action1<InboundEndpoint>>() {
+    @Override
+    public InboundEndpoint inbound() {
+        return this._inboundSupport;
+    }
+    
+    /*
+    private final Action1<Action1<InboundEndpoint>> _callReadComplete = new Action1<Action1<InboundEndpoint>>() {
         @Override
         public void call(final Action1<InboundEndpoint> onReadComplete) {
             try {
@@ -352,11 +380,6 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         public int holdingMemorySize() {
             return _inboundHolder.retainedByteBufSize();
         }};
-        
-    @Override
-    public InboundEndpoint inbound() {
-        return this._inboundEndpoint;
-    }
     
     private final Action1<Action1<InboundEndpoint>> _doAddReadComplete = 
         RxActions.toAction1(
@@ -394,32 +417,14 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         this._channel.read();
     }
     
-    @Override
-    public TrafficCounter trafficCounter() {
-        return this._trafficCounter;
-    }
-    
-    @Override
-    public boolean isActive() {
-        return this._funcSelector.isActive();
-    }
-
-    public boolean isEndedWithKeepAlive() {
-        return (this._isInboundCompleted.get() 
-            && this._isOutboundCompleted.get()
-            && this._isKeepAlive.get());
-    }
-
-    @Override
-    public void close() {
-        fireClosed();
-    }
-
-    @Override
-    public Object transport() {
-        return this._channel;
-    }
-    
+    private final static Func1_N<DefaultHttpInitiator,Observable<? extends HttpObject>> 
+        GET_INBOUND_REQ_ABOUT_ERROR = 
+        new Func1_N<DefaultHttpInitiator,Observable<? extends HttpObject>>() {
+            @Override
+            public Observable<? extends HttpObject> call(final DefaultHttpInitiator initiator,final Object... args) {
+                return Observable.error(new RuntimeException("initiator unactived"));
+            }};
+                
     private final Func0<Observable<? extends HttpObject>> _doGetInboundRequest = 
         RxFunctions.toFunc0(
             this._funcSelector.callWhenActive(
@@ -447,13 +452,27 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             }
         }});
             
-    private final static Func1_N<DefaultHttpInitiator,Observable<? extends HttpObject>> GET_INBOUND_REQ_ABOUT_ERROR = 
-        new Func1_N<DefaultHttpInitiator,Observable<? extends HttpObject>>() {
-            @Override
-            public Observable<? extends HttpObject> call(final DefaultHttpInitiator initiator,final Object... args) {
-                return Observable.error(new RuntimeException("initiator unactived"));
-            }};
-            
+    private void fireAllSubscriberUnactive() {
+        @SuppressWarnings("unchecked")
+        final Subscriber<? super HttpObject>[] subscribers = 
+            (Subscriber<? super HttpObject>[])this._inboundSubscribers.toArray(new Subscriber[0]);
+        for (Subscriber<? super HttpObject> subscriber : subscribers) {
+            if (!subscriber.isUnsubscribed()) {
+                try {
+                    subscriber.onError(new RuntimeException("initiator unactived"));
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke ({}).onError, detail: {}",
+                            subscriber, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }
+    }
+    
+    private final Observable<? extends HttpObject> _cachedInbound;
+    private final List<Subscriber<? super HttpObject>> _inboundSubscribers = 
+            new CopyOnWriteArrayList<>();
+    */
+    
     @Override
     public Action1<Action0> onTerminate() {
         return this._terminateAwareSupport.onTerminate();
@@ -496,26 +515,18 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                     this._channel, this._isOutboundCompleted.get(), this.isEndedWithKeepAlive());
         }
         //  fire all pending subscribers onError with unactived exception
-        @SuppressWarnings("unchecked")
-        final Subscriber<? super HttpObject>[] subscribers = 
-            (Subscriber<? super HttpObject>[])this._inboundSubscribers.toArray(new Subscriber[0]);
-        for (Subscriber<? super HttpObject> subscriber : subscribers) {
-            if (!subscriber.isUnsubscribed()) {
-                try {
-                    subscriber.onError(new RuntimeException("initiator unactived"));
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke ({}).onError, detail: {}",
-                            subscriber, ExceptionUtils.exception2detail(e));
-                }
-            }
-        }
+        this._inboundSupport.fireAllSubscriberUnactive();
         this._terminateAwareSupport.fireAllTerminates();
     }
 
     private final TerminateAwareSupport<HttpInitiator, DefaultHttpInitiator> 
         _terminateAwareSupport;
+    
+    private final InboundEndpointSupport<DefaultHttpInitiator> 
+        _inboundSupport;
+    
     private final Channel _channel;
-    private final HttpMessageHolder _inboundHolder;
+//    private final HttpMessageHolder _inboundHolder;
     private final long _createTimeMillis = System.currentTimeMillis();
     private final TrafficCounter _trafficCounter;
     private String _requestMethod;
@@ -526,7 +537,4 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     private final AtomicBoolean _isOutboundSended = new AtomicBoolean(false);
     private final AtomicBoolean _isOutboundCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
-    private final Observable<? extends HttpObject> _cachedInbound;
-    private final List<Subscriber<? super HttpObject>> _inboundSubscribers = 
-            new CopyOnWriteArrayList<>();
 }

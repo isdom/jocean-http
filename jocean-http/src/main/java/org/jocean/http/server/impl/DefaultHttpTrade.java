@@ -5,8 +5,6 @@ package org.jocean.http.server.impl;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -15,12 +13,11 @@ import org.jocean.http.TrafficCounter;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.HttpMessageHolder;
+import org.jocean.http.util.InboundEndpointSupport;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.TerminateAwareSupport;
-import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
@@ -38,15 +35,11 @@ import io.netty.handler.codec.http.HttpUtil;
 import io.netty.util.DefaultAttributeMap;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
-import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
-import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Func0;
 import rx.functions.Func1;
-import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -97,8 +90,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         final StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpTrade [create at:")
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
-                .append(", request subscriber count=")
-                .append(_requestSubscribers.size())
+                .append(", request subscriber count=").append(_inboundSupport.subscribersCount())
                 .append(", isRequestReceived=").append(_isRequestReceived.get())
                 .append(", requestMethod=").append(_requestMethod)
                 .append(", requestUri=").append(_requestUri)
@@ -136,32 +128,34 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 new TerminateAwareSupport<HttpTrade, DefaultHttpTrade>(
                     this, _funcSelector);
         this._channel = channel;
-        this._inmsgholder = new HttpMessageHolder(inboundBlockSize);
         
-        doOnTerminate(this._inmsgholder.release());
+        final HttpMessageHolder holder = new HttpMessageHolder(inboundBlockSize);
+//        this._inmsgholder = new HttpMessageHolder(inboundBlockSize);
+        doOnTerminate(holder.release());
+//        doOnTerminate(this._inmsgholder.release());
         
-        this._requestObservable = RxNettys.inboundFromChannel(channel, onTerminate())
-                .compose(this._inmsgholder.<HttpObject>assembleAndHold())
+        final Observable<? extends HttpObject> cachedInbound = 
+                RxNettys.inboundFromChannel(channel, onTerminate())
+                .compose(holder.<HttpObject>assembleAndHold())
                 .compose(markInboundStateAndCloseOnError())
                 .cache()
                 .compose(RxNettys.duplicateHttpContent())
                 ;
+        
+        cachedInbound.subscribe(
+            RxSubscribers.ignoreNext(),
+            new Action1<Throwable>() {
+                @Override
+                public void call(final Throwable e) {
+                    LOG.warn("Trade({})'s internal request subscriber invoke with onError {}", 
+                            DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
+                }});
+        
         for (Action1<HttpTrade> onTerminate : onTerminates) {
             doOnTerminate(onTerminate);
         }
         
-        this._requestObservable.subscribe(
-                RxSubscribers.ignoreNext(),
-                new Action1<Throwable>() {
-                    @Override
-                    public void call(final Throwable e) {
-                        LOG.warn("Trade({})'s internal request subscriber invoke with onError {}", 
-                                DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-                    }});
-        
         //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
-//        closeTradeWhenChannelInactive();
-//        hookChannelReadComplete();
         this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
                 APPLY.TRAFFICCOUNTER);
@@ -174,14 +168,15 @@ class DefaultHttpTrade extends DefaultAttributeMap
                     public void call() {
                         doClose();
                     }});
-        RxNettys.applyToChannelWithUninstall(channel, 
-                onTerminate(), 
-                APPLY.ON_CHANNEL_READCOMPLETE,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        _onReadCompletes.foreachComponent(_callReadComplete);
-                    }});
+        
+        this._inboundSupport = 
+            new InboundEndpointSupport<DefaultHttpTrade>(
+                _funcSelector,
+                channel,
+                cachedInbound,
+                holder,
+                _trafficCounter,
+                onTerminate());
     }
 
     private Transformer<HttpObject, HttpObject> markInboundStateAndCloseOnError() {
@@ -214,16 +209,39 @@ class DefaultHttpTrade extends DefaultAttributeMap
             }};
     }
     
-//    private void hookChannelReadComplete() {
-//        final ChannelHandler readCompleteNotifier = new ReadCompleteNotifier();
-//        this._channel.pipeline().addLast(readCompleteNotifier);
-//        
-//        addCloseHook(
-//            RxActions.<HttpTrade>toAction1(
-//                RxNettys.actionToRemoveHandler(_channel, readCompleteNotifier)));
-//    }
+    @Override
+    public TrafficCounter trafficCounter() {
+        return this._trafficCounter;
+    }
+    
+    @Override
+    public boolean isActive() {
+        return this._funcSelector.isActive();
+    }
 
-    final Action1<Action1<InboundEndpoint>> _callReadComplete = new Action1<Action1<InboundEndpoint>>() {
+    public boolean isEndedWithKeepAlive() {
+        return (this._isRequestCompleted.get() 
+            && this._isResponseCompleted.get()
+            && this._isKeepAlive.get());
+    }
+
+    @Override
+    public void abort() {
+        doAbort();
+    }
+
+    @Override
+    public Object transport() {
+        return this._channel;
+    }
+    
+    @Override
+    public InboundEndpoint inbound() {
+        return this._inboundSupport;
+    }
+    
+    /*
+    private final Action1<Action1<InboundEndpoint>> _callReadComplete = new Action1<Action1<InboundEndpoint>>() {
         @Override
         public void call(final Action1<InboundEndpoint> onReadComplete) {
             try {
@@ -234,18 +252,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
             }
         }};
         
-//    private final class ReadCompleteNotifier extends ChannelInboundHandlerAdapter implements Ordered {
-//        @Override
-//        public void channelReadComplete(final ChannelHandlerContext ctx) throws Exception {
-//            _onReadCompletes.foreachComponent(_readCompleteInvoker);
-//        }
-//
-//        @Override
-//        public int ordinal() {
-//            return 1001;
-//        }
-//    }
-    
     private static final Action1_N<DefaultHttpTrade> REMOVE_READCOMPLETE = 
             new Action1_N<DefaultHttpTrade>() {
                 @SuppressWarnings("unchecked")
@@ -344,63 +350,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         this._channel.read();
     }
     
-//    private TrafficCounter buildTrafficCounter(final Channel channel) {
-//        final TrafficCounterHandler handler = 
-//                (TrafficCounterHandler)APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
-//        
-//        addCloseHook(
-//            RxActions.<HttpTrade>toAction1(
-//                RxNettys.actionToRemoveHandler(channel, handler)));
-//        return handler;
-//    }
-        
-    @Override
-    public TrafficCounter trafficCounter() {
-        return this._trafficCounter;
-    }
-    
-//    private final class TradeCloser extends ChannelInboundHandlerAdapter implements Ordered {
-//        @Override
-//        public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
-//            doClose();
-//        }
-//
-//        @Override
-//        public int ordinal() {
-//            return 1000;
-//        }
-//    }
-    
-//    private void closeTradeWhenChannelInactive() {
-//        final ChannelHandler tradeCloser = new TradeCloser();
-//        this._channel.pipeline().addLast(tradeCloser);
-//        
-//        addCloseHook(
-//            RxActions.<HttpTrade>toAction1(
-//                RxNettys.actionToRemoveHandler(_channel, tradeCloser)));
-//    }
-
-    @Override
-    public boolean isActive() {
-        return this._funcSelector.isActive();
-    }
-
-    public boolean isEndedWithKeepAlive() {
-        return (this._isRequestCompleted.get() 
-            && this._isResponseCompleted.get()
-            && this._isKeepAlive.get());
-    }
-
-    @Override
-    public void abort() {
-        doAbort();
-    }
-
-    @Override
-    public Object transport() {
-        return this._channel;
-    }
-    
     private final Func0<Observable<? extends HttpObject>> _doGetInboundRequest = 
         RxFunctions.toFunc0(
             this._funcSelector.callWhenActive(
@@ -434,6 +383,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
             public Observable<? extends HttpObject> call(final DefaultHttpTrade trade,final Object... args) {
                 return Observable.error(new RuntimeException("trade unactived"));
             }};
+    */
 
     @Override
     public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
@@ -552,27 +502,30 @@ class DefaultHttpTrade extends DefaultAttributeMap
             LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
                     this._channel, this._isResponseCompleted.get(), this.isEndedWithKeepAlive());
         }
-        //  fire all pending subscribers onError with unactived exception
-        @SuppressWarnings("unchecked")
-        final Subscriber<? super HttpObject>[] subscribers = 
-            (Subscriber<? super HttpObject>[])this._requestSubscribers.toArray(new Subscriber[0]);
-        for (Subscriber<? super HttpObject> subscriber : subscribers) {
-            if (!subscriber.isUnsubscribed()) {
-                try {
-                    subscriber.onError(new RuntimeException("trade unactived"));
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke ({}).onError, detail: {}",
-                            subscriber, ExceptionUtils.exception2detail(e));
-                }
-            }
-        }
+//        //  fire all pending subscribers onError with unactived exception
+//        @SuppressWarnings("unchecked")
+//        final Subscriber<? super HttpObject>[] subscribers = 
+//            (Subscriber<? super HttpObject>[])this._requestSubscribers.toArray(new Subscriber[0]);
+//        for (Subscriber<? super HttpObject> subscriber : subscribers) {
+//            if (!subscriber.isUnsubscribed()) {
+//                try {
+//                    subscriber.onError(new RuntimeException("trade unactived"));
+//                } catch (Exception e) {
+//                    LOG.warn("exception when invoke ({}).onError, detail: {}",
+//                            subscriber, ExceptionUtils.exception2detail(e));
+//                }
+//            }
+//        }
+        this._inboundSupport.fireAllSubscriberUnactive();
         this._terminateAwareSupport.fireAllTerminates();
     }
 
     private final TerminateAwareSupport<HttpTrade, DefaultHttpTrade> 
         _terminateAwareSupport;
+    private final InboundEndpointSupport<DefaultHttpTrade> 
+        _inboundSupport;
     
-    private final HttpMessageHolder _inmsgholder;
+//    private final HttpMessageHolder _inmsgholder;
     private final long _createTimeMillis = System.currentTimeMillis();
     private final Channel _channel;
     private final TrafficCounter _trafficCounter;
@@ -584,7 +537,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
-    private final Observable<? extends HttpObject> _requestObservable;
-    private final List<Subscriber<? super HttpObject>> _requestSubscribers = 
-            new CopyOnWriteArrayList<>();
+    
+//    private final Observable<? extends HttpObject> _requestObservable;
+//    private final List<Subscriber<? super HttpObject>> _requestSubscribers = 
+//            new CopyOnWriteArrayList<>();
 }
