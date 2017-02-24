@@ -225,6 +225,28 @@ class FACTORYFUNCS {
         }
     };
     
+    static final Func1<Action0, ChannelHandler> ON_CHANNEL_WRITABILITYCHANGED_FUNC1 = 
+            new Func1<Action0, ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Action0 onChannelWritabilityChanged) {
+            return new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelWritabilityChanged(final ChannelHandlerContext ctx)
+                        throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("ON_CHANNEL_WRITABILITYCHANGED_FUNC1: channel({})/handler({}): channelWritabilityChanged.", 
+                                ctx.channel(), ctx.name());
+                    }
+                    try {
+                        onChannelWritabilityChanged.call();
+                    } finally {
+                        ctx.fireChannelWritabilityChanged();
+                    }
+                }
+            };
+        }
+    };
+    
     static final Func1<Subscriber<? super HttpObject>, ChannelHandler> HTTPOBJ_SUBSCRIBER_FUNC1 = 
             new Func1<Subscriber<? super HttpObject>, ChannelHandler>() {
         @Override

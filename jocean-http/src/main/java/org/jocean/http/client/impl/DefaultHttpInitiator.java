@@ -16,9 +16,11 @@ import org.jocean.http.util.APPLY;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.InboundEndpointSupport;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.FuncSelector;
 import org.jocean.idiom.TerminateAwareSupport;
+import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.Func1_N;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxFunctions;
@@ -27,6 +29,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -227,6 +231,25 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     @Override
     public OutboundEndpoint outbound() {
         return new OutboundEndpoint() {
+            public void setFlushPerWrite(final boolean isFlushPerWrite) {
+                _isFlushPerWrite = isFlushPerWrite;
+            }
+            
+            @Override
+            public Action0 doOnWritabilityChanged(final Action1<OutboundEndpoint> onWritabilityChanged) {
+                _doAddWritabilityChanged.call(onWritabilityChanged);
+                return new Action0() {
+                    @Override
+                    public void call() {
+                        _funcSelector.submitWhenActive(REMOVE_WRITABILITYCHANGED).call(onWritabilityChanged);
+                    }};
+            }
+            
+            @Override
+            public Action0 doOnSended(final Action1<Object> onSended) {
+                return _doAddOnSended.call(onSended);
+            }
+            
             @Override
             public long outboundBytes() {
                 return _trafficCounter.outboundBytes();
@@ -237,6 +260,53 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 return _doSetOutboundMessage.call(message);
             }};
     }
+    
+    private volatile boolean _isFlushPerWrite = false;
+    
+    private final COWCompositeSupport<Action1<Object>> _onSendeds = 
+            new COWCompositeSupport<>();
+        
+    private final Func1<Action1<Object>, Action0> _doAddOnSended = 
+        RxFunctions.toFunc1(
+            _funcSelector.callWhenActive(
+                new Func1_N<DefaultHttpInitiator, Action0>() {
+                    @SuppressWarnings("unchecked")
+                    @Override
+                    public Action0 call(final DefaultHttpInitiator t,
+                            final Object... args) {
+                        final Action1<Object> onSended = (Action1<Object>)args[0];
+                        t._onSendeds.addComponent(onSended);
+                        return new Action0() {
+                            @Override
+                            public void call() {
+                                t._onSendeds.removeComponent(onSended);
+                            }};
+                    }})
+        );
+    
+    private final Action1_N<DefaultHttpInitiator> REMOVE_WRITABILITYCHANGED = 
+            new Action1_N<DefaultHttpInitiator>() {
+                @SuppressWarnings("unchecked")
+                @Override
+                public void call(final DefaultHttpInitiator t,
+                        final Object... args) {
+                    _onWritabilityChangeds.removeComponent((Action1<OutboundEndpoint>)args[0]);
+                }};
+                
+    private final COWCompositeSupport<Action1<OutboundEndpoint>> _onWritabilityChangeds = 
+            new COWCompositeSupport<>();
+        
+    private final Action1<Action1<OutboundEndpoint>> _doAddWritabilityChanged = 
+        RxActions.toAction1(
+            _funcSelector.submitWhenActive(
+                new Action1_N<DefaultHttpInitiator>() {
+                    @SuppressWarnings("unchecked")
+                    @Override
+                    public void call(final DefaultHttpInitiator t,
+                            final Object... args) {
+                        t._onWritabilityChangeds.addComponent((Action1<OutboundEndpoint>)args[0]);
+                    }})
+        );
     
     private final Func1<Observable<? extends Object>, Subscription> 
         _doSetOutboundMessage = 
@@ -267,6 +337,12 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 RxActions.toAction1_N(DefaultHttpInitiator.class, "outboundOnNext0")));
     }
     
+    private static final Action1_N<Action1<Object>> _callOnSended = new Action1_N<Action1<Object>>() {
+        @Override
+        public void call(final Action1<Object> onSended,final Object... args) {
+            onSended.call(args[0]);
+        }};
+        
     @SuppressWarnings("unused")
     private void outboundOnNext0(final Object msg) {
         if (msg instanceof HttpRequest) {
@@ -277,7 +353,17 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             _isKeepAlive.set(HttpUtil.isKeepAlive(req));
         }
         this._isOutboundSended.compareAndSet(false, true);
-        this._channel.write(ReferenceCountUtil.retain(msg));
+        
+        final ChannelFuture future = this._isFlushPerWrite
+            ? this._channel.writeAndFlush(ReferenceCountUtil.retain(msg))
+            : this._channel.write(ReferenceCountUtil.retain(msg))
+            ;
+        future.addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(final ChannelFuture future)
+                    throws Exception {
+                _onSendeds.foreachComponent(_callOnSended, msg);
+            }});
     }
 
     private final Action1<Throwable> doOutboundOnError() {
