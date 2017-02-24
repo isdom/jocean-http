@@ -87,7 +87,40 @@ public class DefaultHttpClient implements HttpClient {
         }};
         
     @Override
-    public Observable<? extends HttpInitiator> initiator(
+    public InitiatorBuilder initiator() {
+        final AtomicReference<SocketAddress> _remoteAddress 
+            = new AtomicReference<>();
+        final List<Feature> _features = new ArrayList<>();
+        
+        return new InitiatorBuilder() {
+            @Override
+            public InitiatorBuilder remoteAddress(
+                    final SocketAddress remoteAddress) {
+                _remoteAddress.set(remoteAddress);
+                return this;
+            }
+
+            @Override
+            public InitiatorBuilder feature(final Feature... features) {
+                for (Feature f : features) {
+                    if (null != f) {
+                        _features.add(f);
+                    }
+                }
+                return this;
+            }
+
+            @Override
+            public Observable<? extends HttpInitiator> build() {
+                if (null == _remoteAddress.get()) {
+                    throw new RuntimeException("remoteAddress not set");
+                }
+                return initiator0(_remoteAddress.get(), 
+                        _features.toArray(Feature.EMPTY_FEATURES));
+            }};
+    }
+    
+    public Observable<? extends HttpInitiator> initiator0(
             final SocketAddress remoteAddress,
             final Feature... features) {
         final Feature[] fullFeatures = 

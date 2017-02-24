@@ -130,9 +130,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         this._channel = channel;
         
         final HttpMessageHolder holder = new HttpMessageHolder(inboundBlockSize);
-//        this._inmsgholder = new HttpMessageHolder(inboundBlockSize);
         doOnTerminate(holder.release());
-//        doOnTerminate(this._inmsgholder.release());
         
         final Observable<? extends HttpObject> cachedInbound = 
                 RxNettys.inboundFromChannel(channel, onTerminate())
@@ -239,151 +237,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
     public InboundEndpoint inbound() {
         return this._inboundSupport;
     }
-    
-    /*
-    private final Action1<Action1<InboundEndpoint>> _callReadComplete = new Action1<Action1<InboundEndpoint>>() {
-        @Override
-        public void call(final Action1<InboundEndpoint> onReadComplete) {
-            try {
-                onReadComplete.call(_inboundEndpoint);
-            } catch (Exception e) {
-                LOG.warn("exception when trade({}) invoke onReadComplete({}), detail: {}",
-                        DefaultHttpTrade.this, onReadComplete, ExceptionUtils.exception2detail(e));
-            }
-        }};
-        
-    private static final Action1_N<DefaultHttpTrade> REMOVE_READCOMPLETE = 
-            new Action1_N<DefaultHttpTrade>() {
-                @SuppressWarnings("unchecked")
-                @Override
-                public void call(final DefaultHttpTrade t,
-                        final Object... args) {
-                    t._onReadCompletes.removeComponent((Action1<InboundEndpoint>)args[0]);
-                }};
-                
-    final private InboundEndpoint _inboundEndpoint = new InboundEndpoint() {
-
-        @Override
-        public void setAutoRead(final boolean autoRead) {
-            _doSetInboundAutoRead.call(autoRead);
-        }
-
-        @Override
-        public void readMessage() {
-            _doReadInbound.call();
-        }
-
-        @Override
-        public Action0 doOnReadComplete(
-                final Action1<InboundEndpoint> onReadComplete) {
-            _doAddReadComplete.call(onReadComplete);
-            return new Action0() {
-                @Override
-                public void call() {
-                    _funcSelector.submitWhenActive(REMOVE_READCOMPLETE).call(onReadComplete);
-                }};
-        }
-
-        @Override
-        public long timeToLive() {
-            return System.currentTimeMillis() - _createTimeMillis;
-        }
-
-        @Override
-        public long inboundBytes() {
-            return _trafficCounter.inboundBytes();
-        }
-
-        @Override
-        public Observable<? extends HttpObject> message() {
-            return _doGetInboundRequest.call();
-        }
-
-        @Override
-        public HttpMessageHolder messageHolder() {
-            return _inmsgholder;
-        }
-
-        @Override
-        public int holdingMemorySize() {
-            return _inmsgholder.retainedByteBufSize();
-        }};
-        
-    @Override
-    public InboundEndpoint inbound() {
-        return this._inboundEndpoint;
-    }
-    
-    private final Action1<Action1<InboundEndpoint>> _doAddReadComplete = 
-        RxActions.toAction1(
-            this._funcSelector.submitWhenActive(
-                RxActions.toAction1_N(DefaultHttpTrade.class, "addReadComplete0"))
-        );
-    
-    @SuppressWarnings("unused")
-    private void addReadComplete0(final Action1<InboundEndpoint> onReadComplete) {
-        this._onReadCompletes.addComponent(onReadComplete);
-    }
-    
-    private final COWCompositeSupport<Action1<InboundEndpoint>> _onReadCompletes = 
-            new COWCompositeSupport<>();
-    
-    private final Action1<Boolean> _doSetInboundAutoRead = 
-        RxActions.toAction1(
-            this._funcSelector.submitWhenActive(
-                RxActions.<DefaultHttpTrade>toAction1_N(
-                    DefaultHttpTrade.class, "setInboundAutoRead0")));
-            
-    @SuppressWarnings("unused")
-    private void setInboundAutoRead0(final boolean autoRead) {
-        this._channel.config().setAutoRead(autoRead);
-    }
-    
-    private final Action0 _doReadInbound = 
-        RxActions.toAction0(
-            this._funcSelector.submitWhenActive(
-                RxActions.<DefaultHttpTrade>toAction1_N(
-                    DefaultHttpTrade.class, "readInbound0")));
-    
-    @SuppressWarnings("unused")
-    private void readInbound0() {
-        this._channel.read();
-    }
-    
-    private final Func0<Observable<? extends HttpObject>> _doGetInboundRequest = 
-        RxFunctions.toFunc0(
-            this._funcSelector.callWhenActive(
-                RxFunctions.<DefaultHttpTrade,Observable<? extends HttpObject>>toFunc1_N(
-                    DefaultHttpTrade.class, "doGetRequest"))
-                .callWhenDestroyed(GET_INBOUND_REQ_ABOUT_ERROR));
-    
-    @SuppressWarnings("unused")
-    private Observable<? extends HttpObject> doGetRequest() {
-        return this._requestObservableProxy;
-    }
-    
-    private final Observable<HttpObject> _requestObservableProxy = Observable.create(new OnSubscribe<HttpObject>() {
-        @Override
-        public void call(final Subscriber<? super HttpObject> subscriber) {
-            final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
-            if (!serializedSubscriber.isUnsubscribed()) {
-                _requestSubscribers.add(serializedSubscriber);
-                serializedSubscriber.add(Subscriptions.create(new Action0() {
-                    @Override
-                    public void call() {
-                        _requestSubscribers.remove(serializedSubscriber);
-                    }}));
-                _requestObservable.subscribe(serializedSubscriber);
-            }
-        }});
-            
-    private final static Func1_N<DefaultHttpTrade,Observable<? extends HttpObject>> GET_INBOUND_REQ_ABOUT_ERROR = 
-        new Func1_N<DefaultHttpTrade,Observable<? extends HttpObject>>() {
-            @Override
-            public Observable<? extends HttpObject> call(final DefaultHttpTrade trade,final Object... args) {
-                return Observable.error(new RuntimeException("trade unactived"));
-            }};
-    */
 
     @Override
     public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
@@ -502,20 +355,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
             LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
                     this._channel, this._isResponseCompleted.get(), this.isEndedWithKeepAlive());
         }
-//        //  fire all pending subscribers onError with unactived exception
-//        @SuppressWarnings("unchecked")
-//        final Subscriber<? super HttpObject>[] subscribers = 
-//            (Subscriber<? super HttpObject>[])this._requestSubscribers.toArray(new Subscriber[0]);
-//        for (Subscriber<? super HttpObject> subscriber : subscribers) {
-//            if (!subscriber.isUnsubscribed()) {
-//                try {
-//                    subscriber.onError(new RuntimeException("trade unactived"));
-//                } catch (Exception e) {
-//                    LOG.warn("exception when invoke ({}).onError, detail: {}",
-//                            subscriber, ExceptionUtils.exception2detail(e));
-//                }
-//            }
-//        }
         this._inboundSupport.fireAllSubscriberUnactive();
         this._terminateAwareSupport.fireAllTerminates();
     }
@@ -525,7 +364,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final InboundEndpointSupport<DefaultHttpTrade> 
         _inboundSupport;
     
-//    private final HttpMessageHolder _inmsgholder;
     private final long _createTimeMillis = System.currentTimeMillis();
     private final Channel _channel;
     private final TrafficCounter _trafficCounter;
@@ -537,8 +375,4 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
-    
-//    private final Observable<? extends HttpObject> _requestObservable;
-//    private final List<Subscriber<? super HttpObject>> _requestSubscribers = 
-//            new CopyOnWriteArrayList<>();
 }

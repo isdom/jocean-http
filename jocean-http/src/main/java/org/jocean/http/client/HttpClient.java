@@ -81,7 +81,14 @@ public interface HttpClient extends Closeable {
         public InboundEndpoint inbound();
     }
     
-    public Observable<? extends HttpInitiator> initiator(
-            final SocketAddress remoteAddress, 
-            final Feature... features);
+    public interface InitiatorBuilder {
+        
+        public InitiatorBuilder remoteAddress(final SocketAddress remoteAddress);
+        
+        public InitiatorBuilder feature(final Feature... features);
+        
+        public Observable<? extends HttpInitiator> build();
+    }
+    
+    public InitiatorBuilder initiator();
 }

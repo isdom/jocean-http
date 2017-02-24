@@ -98,7 +98,7 @@ public class DefaultHttpClientTestCase {
     }
     
     @Test
-    public void testHttpHappyPathOnce0() 
+    public void tesHttpInitiatorHappyPathOnce() 
         throws Exception
     {
         final String testAddr = UUID.randomUUID().toString();
@@ -108,7 +108,7 @@ public class DefaultHttpClientTestCase {
         final DefaultHttpClient client = 
                 new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
         try ( final HttpInitiator initiator = 
-            client.initiator(new LocalAddress(testAddr))
+            client.initiator().remoteAddress(new LocalAddress(testAddr)).build()
             .toBlocking().single()) {
             initiator.outbound().message(Observable.just(fullHttpRequest()));
             initiator.inbound().message().toCompletable().await();
