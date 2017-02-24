@@ -128,8 +128,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         // TODO if channel.isActive() == false ?
         
         this._terminateAwareSupport = 
-            new TerminateAwareSupport<HttpInitiator, DefaultHttpInitiator>(
-                this, _funcSelector);
+            new TerminateAwareSupport<HttpInitiator, DefaultHttpInitiator>(_funcSelector);
         this._channel = channel;
         
         final HttpMessageHolder holder = new HttpMessageHolder(inboundBlockSize);
@@ -439,7 +438,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         }
         //  fire all pending subscribers onError with unactived exception
         this._inboundSupport.fireAllSubscriberUnactive();
-        this._terminateAwareSupport.fireAllTerminates();
+        this._terminateAwareSupport.fireAllTerminates(this);
     }
 
     private final TerminateAwareSupport<HttpInitiator, DefaultHttpInitiator> 

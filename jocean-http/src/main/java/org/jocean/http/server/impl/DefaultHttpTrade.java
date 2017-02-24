@@ -125,8 +125,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         final Action1<HttpTrade> ... onTerminates) {
         
         this._terminateAwareSupport = 
-                new TerminateAwareSupport<HttpTrade, DefaultHttpTrade>(
-                    this, _funcSelector);
+                new TerminateAwareSupport<HttpTrade, DefaultHttpTrade>(_funcSelector);
         this._channel = channel;
         
         final HttpMessageHolder holder = new HttpMessageHolder(inboundBlockSize);
@@ -356,7 +355,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                     this._channel, this._isResponseCompleted.get(), this.isEndedWithKeepAlive());
         }
         this._inboundSupport.fireAllSubscriberUnactive();
-        this._terminateAwareSupport.fireAllTerminates();
+        this._terminateAwareSupport.fireAllTerminates(this);
     }
 
     private final TerminateAwareSupport<HttpTrade, DefaultHttpTrade> 
