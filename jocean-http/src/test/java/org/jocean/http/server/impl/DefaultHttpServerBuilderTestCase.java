@@ -74,7 +74,7 @@ public class DefaultHttpServerBuilderTestCase {
                                                 Unpooled.wrappedBuffer(bytes));
                                         response.headers().set(CONTENT_TYPE, "text/plain");
                                         response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                                        trade.outboundResponse(Observable.<HttpObject>just(response));
+                                        trade.outbound().message(Observable.<HttpObject>just(response));
                                     }
                                 } catch (IOException e) {
                                     e.printStackTrace();

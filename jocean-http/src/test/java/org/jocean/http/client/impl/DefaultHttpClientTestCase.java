@@ -93,7 +93,7 @@ public class DefaultHttpClientTestCase {
         return new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade trade) {
-                trade.outboundResponse(TestHttpUtil.buildBytesResponse(contentType, bodyAsBytes));
+                trade.outbound().message(TestHttpUtil.buildBytesResponse(contentType, bodyAsBytes));
             }};
     }
     
@@ -834,7 +834,7 @@ public class DefaultHttpClientTestCase {
                 new Action1<HttpTrade>() {
                     @Override
                     public void call(final HttpTrade trade) {
-                        trade.abort();
+                        trade.close();
                     }},
                 ENABLE_LOGGING);
         
@@ -880,7 +880,7 @@ public class DefaultHttpClientTestCase {
                 new Action1<HttpTrade>() {
                     @Override
                     public void call(final HttpTrade trade) {
-                        trade.abort();
+                        trade.close();
                     }},
                 enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);
@@ -1444,7 +1444,7 @@ public class DefaultHttpClientTestCase {
                         //  missing Content-Length
 //                        response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
                         response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-                        trade.outboundResponse(Observable.just(response));
+                        trade.outbound().message(Observable.just(response));
                     }
             
             },
@@ -1491,7 +1491,7 @@ public class DefaultHttpClientTestCase {
                         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
                                 response.content().readableBytes() + 1);
                         response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-                        trade.outboundResponse(Observable.just(response));
+                        trade.outbound().message(Observable.just(response));
                     }
             
             },
@@ -1541,7 +1541,7 @@ public class DefaultHttpClientTestCase {
                         //  missing Content-Length
 //                        response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
                         response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-                        trade.outboundResponse(Observable.just(response));
+                        trade.outbound().message(Observable.just(response));
                     }
             
             },
@@ -1590,7 +1590,7 @@ public class DefaultHttpClientTestCase {
                         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
                                 response.content().readableBytes() + 1);
                         response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-                        trade.outboundResponse(Observable.just(response));
+                        trade.outbound().message(Observable.just(response));
                     }},
                 enableSSL4ServerWithSelfSigned(),
                 ENABLE_LOGGING_OVER_SSL);

@@ -9,11 +9,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.InboundEndpoint;
+import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.InboundEndpointSupport;
+import org.jocean.http.util.OutboundEndpointSupport;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
@@ -30,10 +32,8 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.util.DefaultAttributeMap;
-import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.Transformer;
-import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.ActionN;
@@ -43,7 +43,7 @@ import rx.functions.ActionN;
  *
  */
 class DefaultHttpTrade extends DefaultAttributeMap 
-    implements HttpTrade,  Comparable<DefaultHttpTrade>  {
+    implements HttpTrade,  Comparable<DefaultHttpTrade>, Transformer<Object, Object>  {
     
     private static final AtomicInteger _IDSRC = new AtomicInteger(0);
     
@@ -170,8 +170,50 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 holder,
                 _trafficCounter,
                 onTerminate());
+        
+        this._outboundSupport = 
+            new OutboundEndpointSupport(
+                _selector,
+                channel,
+                this,
+                _trafficCounter,
+                onTerminate());
     }
 
+    @Override
+    public Observable<Object> call(final Observable<Object> outboundMessage) {
+        return outboundMessage.doOnNext(new Action1<Object>() {
+            @Override
+            public void call(final Object msg) {
+                _isResponseSended.compareAndSet(false, true);
+            }})
+            .doOnCompleted(new Action0() {
+                @Override
+                public void call() {
+                    _isResponseCompleted.compareAndSet(false, true);
+                    _channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
+                    .addListener(new ChannelFutureListener() {
+                        @Override
+                        public void operationComplete(final ChannelFuture future)
+                                throws Exception {
+                            //  TODO, flush success or failed
+                            try {
+                                doClose();
+                            } catch (Exception e) {
+                                LOG.warn("exception when ({}).doClose, detail:{}",
+                                        this, ExceptionUtils.exception2detail(e));
+                            }
+                        }});
+                }})
+            .doOnError(new Action1<Throwable>() {
+                @Override
+                public void call(Throwable e) {
+                    LOG.warn("trade({})'s responseObserver.onError, default action is invoke doAbort() and detail:{}",
+                            DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
+                    doClose();
+                }});
+    }
+    
     private Transformer<HttpObject, HttpObject> markInboundStateAndCloseOnError() {
         return new Transformer<HttpObject, HttpObject>() {
             @Override
@@ -219,8 +261,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
 
     @Override
-    public void abort() {
-        doAbort();
+    public void close() {
+        doClose();
     }
 
     @Override
@@ -229,125 +271,15 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
     
     @Override
+    public OutboundEndpoint outbound() {
+        return this._outboundSupport;
+    }
+    
+    @Override
     public InboundEndpoint inbound() {
         return this._inboundSupport;
     }
 
-    @Override
-    public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
-        return this._op.setMessage(this, response);
-    }
-    
-    private final Op _op = _selector.build(Op.class, OP_WHEN_ACTIVE, OP_WHEN_UNACTIVE);
-    
-    private static final Op OP_WHEN_ACTIVE = new Op() {
-        @Override
-        public Subscription setMessage(final DefaultHttpTrade support,
-                final Observable<? extends HttpObject> message) {
-            if (support._isResponseSetted.compareAndSet(false, true)) {
-                return message.subscribe(
-                    new Action1<HttpObject>() {
-                        @Override
-                        public void call(final HttpObject msg) {
-                            support._op.messageOnNext(support, msg);
-                        }},
-                    new Action1<Throwable>() {
-                        @Override
-                        public void call(final Throwable e) {
-                            support._op.messageOnError(support, e);
-                        }},
-                    new Action0() {
-                        @Override
-                        public void call() {
-                            support._op.messageOnCompleted(support);
-                        }});
-            } else {
-                LOG.warn("trade({}) 's outboundResponse has setted, ignore new response({})",
-                        this, message);
-                return null;
-            }
-        }
-
-        @Override
-        public void messageOnNext(final DefaultHttpTrade support, final HttpObject msg) {
-            support.respOnNext(msg);
-        }
-
-        @Override
-        public void messageOnError(final DefaultHttpTrade support, final Throwable e) {
-            support.respOnError(e);
-        }
-
-        @Override
-        public void messageOnCompleted(final DefaultHttpTrade support) {
-            support.respOnCompleted();
-        }
-        
-    };
-
-    private static final Op OP_WHEN_UNACTIVE = new Op() {
-        @Override
-        public Subscription setMessage(final DefaultHttpTrade support,
-                final Observable<? extends HttpObject> message) {
-            return null;
-        }
-
-        @Override
-        public void messageOnNext(final DefaultHttpTrade support, final HttpObject msg) {
-        }
-
-        @Override
-        public void messageOnError(DefaultHttpTrade support, final Throwable e) {
-        }
-
-        @Override
-        public void messageOnCompleted(DefaultHttpTrade support) {
-        }
-    };
-    
-    protected interface Op {
-        public Subscription setMessage(final DefaultHttpTrade support,
-                final Observable<? extends HttpObject> message); 
-        public void messageOnNext(final DefaultHttpTrade support, 
-                final HttpObject msg);
-        public void messageOnError(final DefaultHttpTrade support, 
-                final Throwable e);
-        public void messageOnCompleted(final DefaultHttpTrade support);
-    }
-    
-    private void respOnCompleted() {
-        this._isResponseCompleted.compareAndSet(false, true);
-        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
-        .addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(final ChannelFuture future)
-                    throws Exception {
-                //  TODO, flush success or failed
-                try {
-                    doClose();
-                } catch (Exception e) {
-                    LOG.warn("exception when ({}).doClose, detail:{}",
-                            this, ExceptionUtils.exception2detail(e));
-                }
-            }});
-    }
-
-    private void respOnNext(final HttpObject msg) {
-        this._isResponseSended.compareAndSet(false, true);
-        this._channel.write(ReferenceCountUtil.retain(msg));
-    }
-
-    private void respOnError(final Throwable e) {
-        LOG.warn("trade({})'s responseObserver.onError, default action is invoke doAbort() and detail:{}",
-                DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-        doAbort();
-    }
-        
-    @Override
-    public boolean readyforOutboundResponse() {
-        return this._selector.isActive() && !this._isResponseSetted.get();
-    }
-    
     @Override
     public Action1<Action0> onTerminate() {
         return this._terminateAwareSupport.onTerminate(this);
@@ -366,21 +298,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
     @Override
     public Action0 doOnTerminate(Action1<HttpTrade> onTerminate) {
         return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
-    }
-    
-    private static final ActionN ABORT = new ActionN() {
-        @Override
-        public void call(final Object... args) {
-            ((DefaultHttpTrade)args[0]).closeChannelAndFireDoOnClosed();
-        }};
-        
-    private void closeChannelAndFireDoOnClosed() {
-        this._channel.close();
-        fireDoOnClosed();
-    }
-        
-    private void doAbort() {
-        this._selector.destroy(ABORT, this);
     }
     
     private static final ActionN FIRE_CLOSED = new ActionN() {
@@ -404,6 +321,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
 
     private final TerminateAwareSupport<HttpTrade> _terminateAwareSupport;
     private final InboundEndpointSupport _inboundSupport;
+    private final OutboundEndpointSupport _outboundSupport;
     
     private final long _createTimeMillis = System.currentTimeMillis();
     private final Channel _channel;

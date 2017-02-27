@@ -84,7 +84,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(onClosed.get());
         assertTrue(trade.isActive());
         
-        trade.outboundResponse(Observable.<HttpObject>error(new RuntimeException("ResponseError")));
+        trade.outbound().message(Observable.<HttpObject>error(new RuntimeException("ResponseError")));
         
         assertFalse(trade.isActive());
         assertTrue(onClosed.get());
@@ -121,7 +121,7 @@ public class DefaultHttpTradeTestCase {
         
         trade.inbound().message().subscribe(reqSubscriber);
         
-        trade.abort();
+        trade.close();
         assertFalse(trade.isActive());
         reqSubscriber.assertTerminalEvent();
         reqSubscriber.assertError(Exception.class);
@@ -146,7 +146,7 @@ public class DefaultHttpTradeTestCase {
         
         writeToInboundAndFlush(channel, request);
         
-        trade.abort();
+        trade.close();
         assertFalse(trade.isActive());
         
         reqSubscriber.assertValueCount(1);
@@ -166,7 +166,7 @@ public class DefaultHttpTradeTestCase {
         
         writeToInboundAndFlush(channel, request);
         
-        trade.abort();
+        trade.close();
         assertFalse(trade.isActive());
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
@@ -193,7 +193,7 @@ public class DefaultHttpTradeTestCase {
         writeToInboundAndFlush(channel, request);
         writeToInboundAndFlush(channel, req_contents[0]);
         
-        trade.abort();
+        trade.close();
         assertFalse(trade.isActive());
         
         reqSubscriber.assertTerminalEvent();
@@ -293,7 +293,7 @@ public class DefaultHttpTradeTestCase {
         
         final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
         
-        trade.outboundResponse(Observable.<HttpObject>just(response));
+        trade.outbound().message(Observable.<HttpObject>just(response));
         
         assertFalse(trade.isActive());
     }
@@ -324,7 +324,7 @@ public class DefaultHttpTradeTestCase {
         
         final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
         
-        trade.outboundResponse(Observable.<HttpObject>just(response));
+        trade.outbound().message(Observable.<HttpObject>just(response));
         
         assertFalse(trade.isActive());
     }
@@ -765,11 +765,11 @@ public class DefaultHttpTradeTestCase {
     public final void testTradeForResponseAfterAbort() {
         final HttpTrade trade = new DefaultHttpTrade(new EmbeddedChannel());
         
-        trade.abort();
+        trade.close();
         assertFalse(trade.isActive());
         
         final SubscriberHolder<HttpObject> subsholder = new SubscriberHolder<>();
-        final Subscription subscription = trade.outboundResponse(Observable.create(subsholder));
+        final Subscription subscription = trade.outbound().message(Observable.create(subsholder));
         
         assertNull(subscription);
         assertEquals(0, subsholder.getSubscriberCount());
@@ -781,19 +781,14 @@ public class DefaultHttpTradeTestCase {
         
         assertTrue(trade.isActive());
         
-        assertTrue(trade.readyforOutboundResponse());
-        
         final SubscriberHolder<HttpObject> subsholder1 = new SubscriberHolder<>();
-        final Subscription subscription1 = trade.outboundResponse(Observable.create(subsholder1));
+        final Subscription subscription1 = trade.outbound().message(Observable.create(subsholder1));
     
         assertNotNull(subscription1);
-        assertFalse(trade.readyforOutboundResponse());
         
         final DefaultHttpRequest req1 = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
         Nettys4Test.emitHttpObjects(subsholder1.getAt(0), req1);
-        
-        assertFalse(trade.readyforOutboundResponse());
     }
     
     @Test
@@ -802,17 +797,12 @@ public class DefaultHttpTradeTestCase {
         
         assertTrue(trade.isActive());
         
-        assertTrue(trade.readyforOutboundResponse());
-        
         final SubscriberHolder<HttpObject> subsholder1 = new SubscriberHolder<>();
-        final Subscription subscription1 = trade.outboundResponse(Observable.create(subsholder1));
+        final Subscription subscription1 = trade.outbound().message(Observable.create(subsholder1));
     
         assertNotNull(subscription1);
-        assertFalse(trade.readyforOutboundResponse());
         
         subsholder1.getAt(0).onCompleted();
-        
-        assertFalse(trade.readyforOutboundResponse());
     }
     
     

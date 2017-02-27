@@ -389,7 +389,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outboundResponse(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -504,7 +504,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outboundResponse(buildBytesResponse(respToSendback));
+                trade.outbound().message(buildBytesResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -562,7 +562,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outboundResponse(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -626,7 +626,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outboundResponse(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -689,7 +689,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outboundResponse(buildBytesResponse(respToSendback));
+                trade.outbound().message(buildBytesResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -753,7 +753,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outboundResponse(buildBytesResponse(respToSendback));
+                trade.outbound().message(buildBytesResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -814,7 +814,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outboundResponse(buildBytesResponse(respToSendback));
+                trade.outbound().message(buildBytesResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -875,7 +875,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outboundResponse(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -1010,7 +1010,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outboundResponse(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -1144,7 +1144,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outboundResponse(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -1222,7 +1222,7 @@ public class DefaultSignalClientTestCase {
                             }
                         }
                     }
-                    trade.outboundResponse(buildResponse(respToSendback));
+                    trade.outbound().message(buildResponse(respToSendback));
                 } finally {
                     req.release();
                 }

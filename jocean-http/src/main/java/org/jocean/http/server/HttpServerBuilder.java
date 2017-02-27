@@ -8,13 +8,12 @@ import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
 import org.jocean.http.InboundEndpoint;
+import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.idiom.TerminateAware;
 
-import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.AttributeMap;
 import rx.Observable;
-import rx.Subscription;
 import rx.functions.Func0;
 
 /**
@@ -37,16 +36,17 @@ public interface HttpServerBuilder extends Closeable {
             final Feature ... features);
     
     public interface HttpTrade 
-        extends TerminateAware<HttpTrade>, AttributeMap {
-        public TrafficCounter trafficCounter();
-        public Subscription outboundResponse(final Observable<? extends HttpObject> response);
-        public boolean readyforOutboundResponse();
-        public Object transport();
-        
+        extends AutoCloseable, TerminateAware<HttpTrade>, AttributeMap {
         //  try to abort trade explicit
-        public void abort();
+        public void close();
+        
+        public TrafficCounter trafficCounter();
+//        public Subscription outboundResponse(final Observable<? extends HttpObject> response);
+//        public boolean readyforOutboundResponse();
+        public Object transport();
         public boolean isActive();
         
+        public OutboundEndpoint outbound();
         public InboundEndpoint inbound();
     }
 }

@@ -68,7 +68,7 @@ public class HttpServerForCloopen {
                                     Unpooled.wrappedBuffer(bytes));
                             response.headers().set(CONTENT_TYPE, "text/plain");
                             response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                            trade.outboundResponse(Observable.<HttpObject>just(response));
+                            trade.outbound().message(Observable.<HttpObject>just(response));
                         }
                         @Override
                         public void onError(Throwable e) {
