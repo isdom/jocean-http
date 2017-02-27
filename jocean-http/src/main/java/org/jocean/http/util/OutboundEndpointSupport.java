@@ -8,6 +8,7 @@ import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.rx.Action1_N;
+import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -139,12 +140,7 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
                         public void call(final Object msg) {
                             support._op.messageOnNext(support, msg);
                         }},
-                    Actions.empty(),
-//                    new Action1<Throwable>() {
-//                        @Override
-//                        public void call(final Throwable e) {
-//                            support._op.messageOnError(support, e);
-//                        }},
+                    RxSubscribers.ignoreError(),
                     new Action0() {
                         @Override
                         public void call() {
