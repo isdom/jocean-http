@@ -162,6 +162,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
         }
     }
     
+    @SuppressWarnings("deprecation")
     public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress, 
             final Func0<Feature[]> featuresBuilder,

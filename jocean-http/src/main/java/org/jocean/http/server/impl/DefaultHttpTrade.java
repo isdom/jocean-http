@@ -16,11 +16,8 @@ import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.InboundEndpointSupport;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.FuncSelector;
+import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
-import org.jocean.idiom.rx.Func1_N;
-import org.jocean.idiom.rx.RxActions;
-import org.jocean.idiom.rx.RxFunctions;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +36,7 @@ import rx.Observable.Transformer;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Func1;
+import rx.functions.ActionN;
 
 /**
  * @author isdom
@@ -108,8 +105,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
-    private final FuncSelector<DefaultHttpTrade> _funcSelector = 
-            new FuncSelector<>(this);
+    private final InterfaceSelector _selector = new InterfaceSelector();
     
     @SafeVarargs
     DefaultHttpTrade(
@@ -125,7 +121,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         final Action1<HttpTrade> ... onTerminates) {
         
         this._terminateAwareSupport = 
-                new TerminateAwareSupport<HttpTrade, DefaultHttpTrade>(_funcSelector);
+                new TerminateAwareSupport<HttpTrade>(_selector);
         this._channel = channel;
         
         final HttpMessageHolder holder = new HttpMessageHolder(inboundBlockSize);
@@ -167,8 +163,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
                     }});
         
         this._inboundSupport = 
-            new InboundEndpointSupport<DefaultHttpTrade>(
-                _funcSelector,
+            new InboundEndpointSupport(
+                _selector,
                 channel,
                 cachedInbound,
                 holder,
@@ -213,7 +209,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     
     @Override
     public boolean isActive() {
-        return this._funcSelector.isActive();
+        return this._selector.isActive();
     }
 
     public boolean isEndedWithKeepAlive() {
@@ -239,37 +235,86 @@ class DefaultHttpTrade extends DefaultAttributeMap
 
     @Override
     public Subscription outboundResponse(final Observable<? extends HttpObject> response) {
-        return this._doSetOutboundResponse.call(response);
+        return this._op.setMessage(this, response);
     }
     
-    private final Func1<Observable<? extends HttpObject>, Subscription> 
-        _doSetOutboundResponse = 
-            RxFunctions.toFunc1(
-                this._funcSelector.callWhenActive(RxFunctions.<DefaultHttpTrade,Subscription>toFunc1_N(
-                        DefaultHttpTrade.class, "doSetOutboundResponse"))
-                .callWhenDestroyed(Func1_N.Util.<DefaultHttpTrade,Subscription>returnNull()));
+    private final Op _op = _selector.build(Op.class, OP_WHEN_ACTIVE, OP_WHEN_UNACTIVE);
     
-    @SuppressWarnings("unused")
-    private Subscription doSetOutboundResponse(
-        final Observable<? extends HttpObject> response) {
-        if (this._isResponseSetted.compareAndSet(false, true)) {
-            return response.subscribe(
-                    actionResponseOnNext(),
-                    actionResponseOnError(),
-                    actionResponseOnCompleted());
-        } else {
-            LOG.warn("trade({}) 's outboundResponse has setted, ignore new response({})",
-                    this, response);
+    private static final Op OP_WHEN_ACTIVE = new Op() {
+        @Override
+        public Subscription setMessage(final DefaultHttpTrade support,
+                final Observable<? extends HttpObject> message) {
+            if (support._isResponseSetted.compareAndSet(false, true)) {
+                return message.subscribe(
+                    new Action1<HttpObject>() {
+                        @Override
+                        public void call(final HttpObject msg) {
+                            support._op.messageOnNext(support, msg);
+                        }},
+                    new Action1<Throwable>() {
+                        @Override
+                        public void call(final Throwable e) {
+                            support._op.messageOnError(support, e);
+                        }},
+                    new Action0() {
+                        @Override
+                        public void call() {
+                            support._op.messageOnCompleted(support);
+                        }});
+            } else {
+                LOG.warn("trade({}) 's outboundResponse has setted, ignore new response({})",
+                        this, message);
+                return null;
+            }
+        }
+
+        @Override
+        public void messageOnNext(final DefaultHttpTrade support, final HttpObject msg) {
+            support.respOnNext(msg);
+        }
+
+        @Override
+        public void messageOnError(final DefaultHttpTrade support, final Throwable e) {
+            support.respOnError(e);
+        }
+
+        @Override
+        public void messageOnCompleted(final DefaultHttpTrade support) {
+            support.respOnCompleted();
+        }
+        
+    };
+
+    private static final Op OP_WHEN_UNACTIVE = new Op() {
+        @Override
+        public Subscription setMessage(final DefaultHttpTrade support,
+                final Observable<? extends HttpObject> message) {
             return null;
         }
-    }
 
-    private final Action0 actionResponseOnCompleted() {
-        return RxActions.toAction0(
-            this._funcSelector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnCompleted")));
-    }
+        @Override
+        public void messageOnNext(final DefaultHttpTrade support, final HttpObject msg) {
+        }
 
-    @SuppressWarnings("unused")
+        @Override
+        public void messageOnError(DefaultHttpTrade support, final Throwable e) {
+        }
+
+        @Override
+        public void messageOnCompleted(DefaultHttpTrade support) {
+        }
+    };
+    
+    protected interface Op {
+        public Subscription setMessage(final DefaultHttpTrade support,
+                final Observable<? extends HttpObject> message); 
+        public void messageOnNext(final DefaultHttpTrade support, 
+                final HttpObject msg);
+        public void messageOnError(final DefaultHttpTrade support, 
+                final Throwable e);
+        public void messageOnCompleted(final DefaultHttpTrade support);
+    }
+    
     private void respOnCompleted() {
         this._isResponseCompleted.compareAndSet(false, true);
         this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
@@ -287,23 +332,11 @@ class DefaultHttpTrade extends DefaultAttributeMap
             }});
     }
 
-    private final Action1<HttpObject> actionResponseOnNext() {
-        return RxActions.<HttpObject>toAction1(
-            this._funcSelector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnNext")));
-    }
-    
-    @SuppressWarnings("unused")
     private void respOnNext(final HttpObject msg) {
         this._isResponseSended.compareAndSet(false, true);
         this._channel.write(ReferenceCountUtil.retain(msg));
     }
 
-    private final Action1<Throwable> actionResponseOnError() {
-        return RxActions.<Throwable>toAction1(
-            this._funcSelector.submitWhenActive(RxActions.toAction1_N(DefaultHttpTrade.class, "respOnError")));
-    }
-    
-    @SuppressWarnings("unused")
     private void respOnError(final Throwable e) {
         LOG.warn("trade({})'s responseObserver.onError, default action is invoke doAbort() and detail:{}",
                 DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
@@ -312,41 +345,52 @@ class DefaultHttpTrade extends DefaultAttributeMap
         
     @Override
     public boolean readyforOutboundResponse() {
-        return this._funcSelector.isActive() && !this._isResponseSetted.get();
+        return this._selector.isActive() && !this._isResponseSetted.get();
     }
     
     @Override
     public Action1<Action0> onTerminate() {
-        return this._terminateAwareSupport.onTerminate();
+        return this._terminateAwareSupport.onTerminate(this);
     }
 
     @Override
     public Action1<Action1<HttpTrade>> onTerminateOf() {
-        return this._terminateAwareSupport.onTerminateOf();
+        return this._terminateAwareSupport.onTerminateOf(this);
     }
 
     @Override
     public Action0 doOnTerminate(Action0 onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(onTerminate);
+        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
     }
 
     @Override
     public Action0 doOnTerminate(Action1<HttpTrade> onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(onTerminate);
+        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
     }
     
-    private void doAbort() {
-        this._funcSelector.destroy(RxActions.toAction1_N(DefaultHttpTrade.class, "closeChannelAndFireDoOnClosed"));
-    }
-    
-    @SuppressWarnings("unused")
+    private static final ActionN ABORT = new ActionN() {
+        @Override
+        public void call(final Object... args) {
+            ((DefaultHttpTrade)args[0]).closeChannelAndFireDoOnClosed();
+        }};
+        
     private void closeChannelAndFireDoOnClosed() {
         this._channel.close();
         fireDoOnClosed();
     }
+        
+    private void doAbort() {
+        this._selector.destroy(ABORT, this);
+    }
     
+    private static final ActionN FIRE_CLOSED = new ActionN() {
+        @Override
+        public void call(final Object... args) {
+            ((DefaultHttpTrade)args[0]).fireDoOnClosed();
+        }};
+        
     private void doClose() {
-        this._funcSelector.destroy(RxActions.toAction1_N(DefaultHttpTrade.class, "fireDoOnClosed"));
+        this._selector.destroy(FIRE_CLOSED, this);
     }
 
     private void fireDoOnClosed() {
@@ -358,10 +402,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
         this._terminateAwareSupport.fireAllTerminates(this);
     }
 
-    private final TerminateAwareSupport<HttpTrade, DefaultHttpTrade> 
-        _terminateAwareSupport;
-    private final InboundEndpointSupport<DefaultHttpTrade> 
-        _inboundSupport;
+    private final TerminateAwareSupport<HttpTrade> _terminateAwareSupport;
+    private final InboundEndpointSupport _inboundSupport;
     
     private final long _createTimeMillis = System.currentTimeMillis();
     private final Channel _channel;

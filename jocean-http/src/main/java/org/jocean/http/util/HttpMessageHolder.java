@@ -6,10 +6,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.FuncSelector;
-import org.jocean.idiom.rx.Func1_N;
-import org.jocean.idiom.rx.RxActions;
-import org.jocean.idiom.rx.RxFunctions;
+import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.rx.RxObservables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +22,7 @@ import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.Transformer;
 import rx.functions.Action0;
-import rx.functions.Action1;
+import rx.functions.ActionN;
 import rx.functions.Func0;
 import rx.functions.Func1;
 
@@ -40,7 +37,8 @@ public class HttpMessageHolder {
             try {
                 _block_size = Integer.parseInt(sizeFromProperty);
             } catch (Exception e) {
-                System.err.println("Failed to set 'org.jocean.http.msgholder.blocksize' with value " + sizeFromProperty + " => " + e.getMessage());
+                System.err.println("Failed to set 'org.jocean.http.msgholder.blocksize' with value " 
+                        + sizeFromProperty + " => " + e.getMessage());
             }
         }
     }
@@ -50,8 +48,10 @@ public class HttpMessageHolder {
     private static final Logger LOG = LoggerFactory
             .getLogger(HttpMessageHolder.class);
     
-    private final FuncSelector<HttpMessageHolder> _selector = 
-            new FuncSelector<>(this);
+    private final InterfaceSelector _selector = new InterfaceSelector();
+    private final HolderOp _holderOp = _selector.build(HolderOp.class, 
+            OP_WHEN_ACTIVE, 
+            OP_WHEN_UNACTIVE);
     
     public HttpMessageHolder(final int maxBlockSize) {
         //  0 : using _MAX_BLOCK_SIZE 
@@ -60,12 +60,13 @@ public class HttpMessageHolder {
         this._maxBlockSize = maxBlockSize > 0 ? maxBlockSize : _MAX_BLOCK_SIZE;
     }
     
-    @SuppressWarnings("unchecked")
     public <R> Func0<R> httpMessageBuilder(final Func1<HttpObject[], R> visitor) {
         return new Func0<R>() {
+            @SuppressWarnings("unchecked")
             @Override
             public R call() {
-                return (R)_funcVisitHttpObjects.call((Func1<HttpObject[], Object>) visitor);
+                return (R)_holderOp.visitHttpObjects(HttpMessageHolder.this, 
+                        (Func1<HttpObject[], Object>)visitor);
             }};
     }
     
@@ -73,42 +74,171 @@ public class HttpMessageHolder {
         return this._fragmented.get();
     }
     
-    private final Func1<Func1<HttpObject[], Object>,Object> _funcVisitHttpObjects = 
-        RxFunctions.toFunc1(
-            this._selector.callWhenActive(
-                RxFunctions.<HttpMessageHolder, Object>toFunc1_N(
-                    HttpMessageHolder.class, "doVisitHttpObjects"))
-            .callWhenDestroyed(new Func1_N<HttpMessageHolder, Object>() {
-                @Override
-                public Object call(final HttpMessageHolder holder, final Object... args) {
-                    return null;
-                }}));
-    
-    @SuppressWarnings("unused")
-    private Object doVisitHttpObjects(final Func1<HttpObject[], Object> visitor) {
-        if (this._fragmented.get()) {
-            //  some httpobj has been released
-            //  TODO, need throw Exception
-            return null;
-        }
-        try {
-            return visitor.call(this._cachedHttpObjects.toArray(__ZERO_HTTPOBJS));
-        } catch (Exception e) {
-            LOG.warn("exception when invoke visitor({}), detail: {}",
-                    visitor, ExceptionUtils.exception2detail(e));
-            return null;
-        }
+    protected interface HolderOp {
+        public Object visitHttpObjects(final HttpMessageHolder holder, 
+                final Func1<HttpObject[], Object> visitor);
+        public void releaseHttpContent(final HttpMessageHolder holder, 
+                final HttpContent content);
+        public int currentBlockCount(final HttpMessageHolder holder); 
+        public int cachedHttpObjectCount(final HttpMessageHolder holder);
+        public void retainAndUpdateCurrentBlock(final HttpMessageHolder holder, 
+                final HttpContent content);
+        public HttpObject retainAndHoldHttpObject(final HttpMessageHolder holder, 
+                final HttpObject httpobj);
+        public HttpContent buildCurrentBlockAndReset(final HttpMessageHolder holder);
     }
     
+    private static final HolderOp OP_WHEN_ACTIVE = new HolderOp() {
+        @Override
+        public Object visitHttpObjects(final HttpMessageHolder holder, final Func1<HttpObject[], Object> visitor) {
+            if (holder._fragmented.get()) {
+                //  some httpobj has been released
+                //  TODO, need throw Exception
+                return null;
+            }
+            try {
+                return visitor.call(holder._cachedHttpObjects.toArray(__ZERO_HTTPOBJS));
+            } catch (Exception e) {
+                LOG.warn("exception when invoke visitor({}), detail: {}",
+                        visitor, ExceptionUtils.exception2detail(e));
+                return null;
+            }
+        }
+        
+        @Override
+        public void releaseHttpContent(final HttpMessageHolder holder,
+                final HttpContent content) {
+            int idx = 0;
+            while (idx < holder._cachedHttpObjects.size()) {
+                final HttpObject obj = holder._cachedHttpObjects.get(idx);
+                if (obj instanceof HttpContent) {
+                    if ( Nettys.isSameByteBuf(((HttpContent)obj).content(), content.content()) ) {
+                        LOG.info("found HttpContent {} to release ", obj);
+                        holder._fragmented.compareAndSet(false, true);
+                        for (int i = 0; i<=idx; i++) {
+                            final HttpObject removedObj = holder._cachedHttpObjects.remove(0);
+                            holder.reduceRetainedSize(removedObj);
+                            ReferenceCountUtil.release(removedObj);
+                            if (LOG.isDebugEnabled()) {
+                                LOG.info("httpobj {} has been removed from holder({}) and released",
+                                    removedObj, this);
+                            }
+                        }
+                        break;
+                    }
+                }
+                idx++;
+            }
+        }
+
+        @Override
+        public int currentBlockCount(final HttpMessageHolder holder) {
+            return holder._currentBlock.size();
+        }
+
+        @Override
+        public int cachedHttpObjectCount(final HttpMessageHolder holder) {
+            return holder._cachedHttpObjects.size();
+        }
+
+        @Override
+        public void retainAndUpdateCurrentBlock(final HttpMessageHolder holder,
+                final HttpContent content) {
+            if (null != content) {
+                holder._currentBlock.add(ReferenceCountUtil.retain(content));
+                holder._currentBlockSize += content.content().readableBytes();
+            }
+        }
+
+        @Override
+        public HttpObject retainAndHoldHttpObject(final HttpMessageHolder holder,
+                final HttpObject httpobj) {
+            if (null != httpobj) {
+                holder._cachedHttpObjects.add(ReferenceCountUtil.retain(httpobj));
+                holder.addRetainedSize(httpobj);
+            }
+            return httpobj;
+        }
+
+        @Override
+        public HttpContent buildCurrentBlockAndReset(final HttpMessageHolder holder) {
+            try {
+                if (holder._currentBlock.size()>1) {
+                    final ByteBuf[] bufs = new ByteBuf[holder._currentBlock.size()];
+                    for (int idx = 0; idx<holder._currentBlock.size(); idx++) {
+                        bufs[idx] = holder._currentBlock.get(idx).content();
+                    }
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("build block: assemble {} HttpContent to composite content with size {} KB",
+                                bufs.length, (float)holder._currentBlockSize / 1024f);
+                    }
+                    return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs.length, bufs));
+                } else {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("build block: only one HttpContent with {} KB to build block, so pass through",
+                                (float)holder._currentBlockSize / 1024f);
+                    }
+                    return holder._currentBlock.get(0);
+                }
+            } finally {
+                holder._currentBlock.clear();
+                holder._currentBlockSize = 0;
+            }
+        }};
+    
+    private static final HolderOp OP_WHEN_UNACTIVE = new HolderOp() {
+        @Override
+        public Object visitHttpObjects(final HttpMessageHolder holder, 
+                final Func1<HttpObject[], Object> visitor) {
+            return null;
+        }
+        
+        @Override
+        public void releaseHttpContent(HttpMessageHolder holder,
+                HttpContent content) {
+        }
+
+        @Override
+        public int currentBlockCount(HttpMessageHolder holder) {
+            return 0;
+        }
+
+        @Override
+        public int cachedHttpObjectCount(HttpMessageHolder holder) {
+            return 0;
+        }
+
+        @Override
+        public void retainAndUpdateCurrentBlock(HttpMessageHolder holder,
+                HttpContent content) {
+        }
+
+        @Override
+        public HttpObject retainAndHoldHttpObject(HttpMessageHolder holder,
+                HttpObject httpobj) {
+            return null;
+        }
+
+        @Override
+        public HttpContent buildCurrentBlockAndReset(HttpMessageHolder holder) {
+            return null;
+        }
+    };
+    
+    private final static ActionN DO_RELEASE = new ActionN() {
+        @Override
+        public void call(final Object... args) {
+            ((HttpMessageHolder)args[0]).doRelease();
+        }};
+        
     public Action0 release() {
         return new Action0() {
         @Override
         public void call() {
-            _selector.destroy(RxActions.toAction1_N(HttpMessageHolder.class, "doRelease"));
+            _selector.destroy(DO_RELEASE, HttpMessageHolder.this);
         }};
     }
     
-    @SuppressWarnings("unused")
     private void doRelease() {
         releaseReferenceCountedList(this._currentBlock);
         releaseReferenceCountedList(this._cachedHttpObjects);
@@ -131,37 +261,7 @@ public class HttpMessageHolder {
     }
     
     public void releaseHttpContent(final HttpContent content) {
-        this._actionReleaseHttpContent.call(content);
-    }
-    
-    private final Action1<HttpContent> _actionReleaseHttpContent = 
-            RxActions.toAction1(
-                this._selector.submitWhenActive(
-                    RxActions.toAction1_N(HttpMessageHolder.class, "doReleaseHttpContent")));
-    
-    @SuppressWarnings("unused")
-    private void doReleaseHttpContent(final HttpContent content) {
-        int idx = 0;
-        while (idx < this._cachedHttpObjects.size()) {
-            final HttpObject obj = this._cachedHttpObjects.get(idx);
-            if (obj instanceof HttpContent) {
-                if ( Nettys.isSameByteBuf(((HttpContent)obj).content(), content.content()) ) {
-                    LOG.info("found HttpContent {} to release ", obj);
-                    this._fragmented.compareAndSet(false, true);
-                    for (int i = 0; i<=idx; i++) {
-                        final HttpObject removedObj = this._cachedHttpObjects.remove(0);
-                        reduceRetainedSize(removedObj);
-                        ReferenceCountUtil.release(removedObj);
-                        if (LOG.isDebugEnabled()) {
-                            LOG.info("httpobj {} has been removed from holder({}) and released",
-                                removedObj, this);
-                        }
-                    }
-                    break;
-                }
-            }
-            idx++;
-        }
+        this._holderOp.releaseHttpContent(this, content);
     }
     
     public int currentBlockSize() {
@@ -169,27 +269,11 @@ public class HttpMessageHolder {
     }
     
     public int currentBlockCount() {
-        return this._selector.callWhenActive(new Func1_N<HttpMessageHolder, Integer>() {
-            @Override
-            public Integer call(final HttpMessageHolder holder, final Object... args) {
-                return holder._currentBlock.size();
-            }}).callWhenDestroyed(new Func1_N<HttpMessageHolder, Integer>() {
-            @Override
-            public Integer call(final HttpMessageHolder holder, final Object... args) {
-                return 0;
-            }}).call();
+        return this._holderOp.currentBlockCount(this);
     }
     
     public int cachedHttpObjectCount() {
-        return this._selector.callWhenActive(new Func1_N<HttpMessageHolder, Integer>() {
-            @Override
-            public Integer call(final HttpMessageHolder holder, final Object... args) {
-                return holder._cachedHttpObjects.size();
-            }}).callWhenDestroyed(new Func1_N<HttpMessageHolder, Integer>() {
-            @Override
-            public Integer call(final HttpMessageHolder holder, final Object... args) {
-                return 0;
-            }}).call();
+        return this._holderOp.cachedHttpObjectCount(this);
     }
     
     private final Func1<Object, Observable<? extends Object>> _ASSEMBLE_AND_HOLD = 
@@ -256,41 +340,13 @@ public class HttpMessageHolder {
     }
 
     private void retainAndUpdateCurrentBlock(final HttpContent content) {
-        this._actionRetainAndUpdateCurrentBlock.call(content);
+        this._holderOp.retainAndUpdateCurrentBlock(this, content);
     }
 
-    private final Action1<HttpContent> _actionRetainAndUpdateCurrentBlock = 
-        RxActions.toAction1(
-            this._selector.submitWhenActive(
-                RxActions.toAction1_N(HttpMessageHolder.class, "doRetainAndUpdateCurrentBlock")));
-
-    @SuppressWarnings("unused")
-    private void doRetainAndUpdateCurrentBlock(final HttpContent content) {
-        if (null != content) {
-            this._currentBlock.add(ReferenceCountUtil.retain(content));
-            this._currentBlockSize += content.content().readableBytes();
-        }
-    }
-    
     private HttpObject retainAndHoldHttpObject(final HttpObject httpobj) {
-        return this._funcRetainAndHoldHttpObject.call(httpobj);
+        return this._holderOp.retainAndHoldHttpObject(this, httpobj);
     }
     
-    private final Func1<HttpObject, HttpObject> _funcRetainAndHoldHttpObject = 
-        RxFunctions.toFunc1(
-            this._selector.callWhenActive(
-                RxFunctions.<HttpMessageHolder, HttpObject>toFunc1_N(
-                        HttpMessageHolder.class, "doRetainAndHoldHttpObject")));
-    
-    @SuppressWarnings("unused")
-    private HttpObject doRetainAndHoldHttpObject(final HttpObject httpobj) {
-        if (null != httpobj) {
-            this._cachedHttpObjects.add(ReferenceCountUtil.retain(httpobj));
-            addRetainedSize(httpobj);
-        }
-        return httpobj;
-    }
-
     private void addRetainedSize(final HttpObject httpobj) {
         if (httpobj instanceof ByteBufHolder) {
             this._retainedByteBufSize.addAndGet(
@@ -306,7 +362,7 @@ public class HttpMessageHolder {
     }
     
     private HttpObject retainCurrentBlockAndReset() {
-        final HttpContent content = this._funcBuildCurrentBlockAndReset.call();
+        final HttpContent content = this._holderOp.buildCurrentBlockAndReset(this);
         try {
             return retainAndHoldHttpObject(content);
         } finally {
@@ -316,45 +372,12 @@ public class HttpMessageHolder {
         }
     }
 
-    private final Func0<HttpContent> _funcBuildCurrentBlockAndReset = 
-        RxFunctions.toFunc0(
-            this._selector.callWhenActive(
-                    RxFunctions.<HttpMessageHolder, HttpContent>toFunc1_N(
-                            HttpMessageHolder.class, "doBuildCurrentBlockAndReset")));
-
-    @SuppressWarnings("unused")
-    private HttpContent doBuildCurrentBlockAndReset() {
-        try {
-            if (this._currentBlock.size()>1) {
-                final ByteBuf[] bufs = new ByteBuf[this._currentBlock.size()];
-                for (int idx = 0; idx<this._currentBlock.size(); idx++) {
-                    bufs[idx] = this._currentBlock.get(idx).content();
-                }
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("build block: assemble {} HttpContent to composite content with size {} KB",
-                            bufs.length, (float)this._currentBlockSize / 1024f);
-                }
-                return new DefaultHttpContent(Unpooled.wrappedBuffer(bufs.length, bufs));
-            } else {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("build block: only one HttpContent with {} KB to build block, so pass through",
-                            (float)this._currentBlockSize / 1024f);
-                }
-                return this._currentBlock.get(0);
-            }
-        } finally {
-            this._currentBlock.clear();
-            this._currentBlockSize = 0;
-        }
-    }
-    
     public int retainedByteBufSize() {
         return this._retainedByteBufSize.get();
     }
     
     private final AtomicInteger _retainedByteBufSize = new AtomicInteger(0);
     
-    //  TODO
     //  if any httpobj has release from holder when it active, then fragmented is true
     private final AtomicBoolean _fragmented = new AtomicBoolean(false);
     

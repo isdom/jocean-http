@@ -302,6 +302,7 @@ public class DefaultHttpClient implements HttpClient {
         return new Func1<Channel, Observable<? extends Object>>() {
             @Override
             public Observable<? extends Object> call(final Channel channel) {
+                @SuppressWarnings("deprecation")
                 Observable<? extends Object> channelAndRespStream = 
                         Observable.create(new Observable.OnSubscribe<Object>() {
                     @Override

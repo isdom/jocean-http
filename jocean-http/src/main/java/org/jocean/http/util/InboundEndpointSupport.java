@@ -7,11 +7,8 @@ import org.jocean.http.InboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.FuncSelector;
+import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.rx.Action1_N;
-import org.jocean.idiom.rx.Func1_N;
-import org.jocean.idiom.rx.RxActions;
-import org.jocean.idiom.rx.RxFunctions;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,22 +20,21 @@ import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Func0;
+import rx.functions.Actions;
 import rx.subscriptions.Subscriptions;
 
-public class InboundEndpointSupport<T> implements InboundEndpoint {
+public class InboundEndpointSupport implements InboundEndpoint {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(InboundEndpointSupport.class);
     
     public InboundEndpointSupport(
-            final FuncSelector<T> selector,
+            final InterfaceSelector selector,
             final Channel channel,
             final Observable<? extends HttpObject> message,
             final HttpMessageHolder holder,
             final TrafficCounter trafficCounter,
             final Action1<Action0> onTerminate) {
-        this._selector = selector;
         this._channel = channel;
         this._message = message;
         this._holder = holder;
@@ -51,63 +47,89 @@ public class InboundEndpointSupport<T> implements InboundEndpoint {
             new Action0() {
                 @Override
                 public void call() {
-                    _onReadCompletes.foreachComponent(_callReadComplete);
+                    _onReadCompletes.foreachComponent(_CALL_READCOMPLETE, InboundEndpointSupport.this);
                 }});
-        
-        this._doAddReadComplete = 
-            RxActions.toAction1(
-                this._selector.submitWhenActive(
-                    new Action1_N<T>() {
-                        @SuppressWarnings("unchecked")
-                        @Override
-                        public void call(final T t,
-                                final Object... args) {
-                            _onReadCompletes.addComponent((Action1<InboundEndpoint>)args[0]);
-                        }})
-            );
-        
-        this._doSetInboundAutoRead = 
-            RxActions.toAction1(
-                this._selector.submitWhenActive(
-                    new Action1_N<T>() {
-                        @Override
-                        public void call(final T t,
-                                final Object... args) {
-                            _channel.config().setAutoRead((Boolean)args[0]);
-                        }})
-            );
-        
-        this._doReadInbound = 
-            RxActions.toAction0(
-                this._selector.submitWhenActive(
-                    new Action1_N<T>() {
-                        @Override
-                        public void call(final T t,
-                                final Object... args) {
-                            _channel.read();
-                        }})
-            );
-        
-        this._doGetMessage = 
-            RxFunctions.toFunc0(
-                this._selector
-                .callWhenActive(
-                    new Func1_N<T,Observable<? extends HttpObject>>() {
-                        @Override
-                        public Observable<? extends HttpObject> call(final T t,
-                                final Object... args) {
-                            return _inboundProxy;
-                        }})
-                .callWhenDestroyed(
-                    new Func1_N<T,Observable<? extends HttpObject>>() {
-                        @Override
-                        public Observable<? extends HttpObject> call(final T t,
-                                final Object... args) {
-                            return Observable.error(new RuntimeException("inbound unactived"));
-                        }})
-            );
+        this._op = selector.build(Op.class, OP_WHEN_ACTIVE, OP_WHEN_UNACTIVE);
     }
     
+    private final Op _op;
+    
+    protected interface Op {
+        public Action0 addReadComplete(final InboundEndpointSupport support, 
+                final Action1<InboundEndpoint> onReadComplete);
+        public void setAutoRead(final InboundEndpointSupport support,
+                final boolean autoRead);
+        public void readMessage(final InboundEndpointSupport support); 
+        public Observable<? extends HttpObject> message(final InboundEndpointSupport support);
+    }
+    
+    private static final Op OP_WHEN_ACTIVE = new Op() {
+        @Override
+        public Action0 addReadComplete(final InboundEndpointSupport support,
+                final Action1<InboundEndpoint> onReadComplete) {
+            support._onReadCompletes.addComponent(onReadComplete);
+            return new Action0() {
+                @Override
+                public void call() {
+                    support._onReadCompletes.removeComponent(onReadComplete);
+                }};
+        }
+
+        @Override
+        public void setAutoRead(final InboundEndpointSupport support,
+                final boolean autoRead) {
+            support._channel.config().setAutoRead(autoRead);
+        }
+
+        @Override
+        public void readMessage(final InboundEndpointSupport support) {
+            support._channel.read();
+        }
+
+        @Override
+        public Observable<? extends HttpObject> message(
+                final InboundEndpointSupport support) {
+            return support._inboundProxy;
+        }
+    };
+    
+    private static final Op OP_WHEN_UNACTIVE = new Op() {
+        @Override
+        public Action0 addReadComplete(InboundEndpointSupport support,
+                Action1<InboundEndpoint> onReadComplete) {
+            return Actions.empty();
+        }
+
+        @Override
+        public void setAutoRead(InboundEndpointSupport support,
+                boolean autoRead) {
+        }
+
+        @Override
+        public void readMessage(InboundEndpointSupport support) {
+        }
+
+        @Override
+        public Observable<? extends HttpObject> message(
+                InboundEndpointSupport support) {
+            return Observable.error(new RuntimeException("inbound unactived"));
+        }
+    };
+    
+    private static final Action1_N<Action1<InboundEndpoint>> _CALL_READCOMPLETE = 
+    new Action1_N<Action1<InboundEndpoint>>() {
+        @Override
+        public void call(final Action1<InboundEndpoint> onReadComplete, final Object...args) {
+            try {
+                onReadComplete.call((InboundEndpoint)args[0]);
+            } catch (Exception e) {
+                LOG.warn("exception when inbound({}) invoke onReadComplete({}), detail: {}",
+                    args[0], 
+                    onReadComplete, 
+                    ExceptionUtils.exception2detail(e));
+            }
+        }};
+            
     public void fireAllSubscriberUnactive() {
         @SuppressWarnings("unchecked")
         final Subscriber<? super HttpObject>[] subscribers = 
@@ -130,23 +152,18 @@ public class InboundEndpointSupport<T> implements InboundEndpoint {
     
     @Override
     public void setAutoRead(final boolean autoRead) {
-        _doSetInboundAutoRead.call(autoRead);
+        _op.setAutoRead(this, autoRead);
     }
 
     @Override
     public void readMessage() {
-        _doReadInbound.call();
+        _op.readMessage(this);
     }
 
     @Override
     public Action0 doOnReadComplete(
             final Action1<InboundEndpoint> onReadComplete) {
-        _doAddReadComplete.call(onReadComplete);
-        return new Action0() {
-            @Override
-            public void call() {
-                _selector.submitWhenActive(REMOVE_READCOMPLETE).call(onReadComplete);
-            }};
+        return _op.addReadComplete(this, onReadComplete);
     }
 
     @Override
@@ -161,7 +178,7 @@ public class InboundEndpointSupport<T> implements InboundEndpoint {
 
     @Override
     public Observable<? extends HttpObject> message() {
-        return _doGetMessage.call();
+        return _op.message(this);
     }
 
     @Override
@@ -174,36 +191,10 @@ public class InboundEndpointSupport<T> implements InboundEndpoint {
         return _holder.retainedByteBufSize();
     }
     
-    private final Action1<Action1<InboundEndpoint>> _callReadComplete = new Action1<Action1<InboundEndpoint>>() {
-        @Override
-        public void call(final Action1<InboundEndpoint> onReadComplete) {
-            try {
-                onReadComplete.call(InboundEndpointSupport.this);
-            } catch (Exception e) {
-                LOG.warn("exception when inbound({}) invoke onReadComplete({}), detail: {}",
-                    InboundEndpointSupport.this, 
-                    onReadComplete, 
-                    ExceptionUtils.exception2detail(e));
-            }
-        }};
-        
-    private final Action1_N<T> REMOVE_READCOMPLETE = 
-        new Action1_N<T>() {
-            @SuppressWarnings("unchecked")
-            @Override
-            public void call(final T t,
-                    final Object... args) {
-                _onReadCompletes.removeComponent((Action1<InboundEndpoint>)args[0]);
-            }};
-            
     private final COWCompositeSupport<Action1<InboundEndpoint>> _onReadCompletes = 
             new COWCompositeSupport<>();
     
-    private final Action1<Action1<InboundEndpoint>> _doAddReadComplete;
-    private final Action1<Boolean> _doSetInboundAutoRead;
-    private final Action0 _doReadInbound;
-    private final Func0<Observable<? extends HttpObject>> _doGetMessage;
-    
+    @SuppressWarnings("deprecation")
     private final Observable<HttpObject> _inboundProxy = Observable.create(new OnSubscribe<HttpObject>() {
         @Override
         public void call(final Subscriber<? super HttpObject> subscriber) {
@@ -219,7 +210,6 @@ public class InboundEndpointSupport<T> implements InboundEndpoint {
             }
         }});
 
-    private final FuncSelector<T> _selector;
     private final Observable<? extends HttpObject> _message;
     private final List<Subscriber<? super HttpObject>> _subscribers = 
             new CopyOnWriteArrayList<>();
