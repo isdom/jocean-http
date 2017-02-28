@@ -121,12 +121,14 @@ public class HttpMessageHolder {
                             holder._fragmented.compareAndSet(false, true);
                             for (;;) {
                                 final HttpObject removedObj = holder._cachedHttpObjects.poll();
-                                final boolean stop = 
-                                    Nettys.isSameByteBuf(((HttpContent)removedObj).content(), content.content());
+                                final boolean stop = (removedObj instanceof HttpContent)
+                                    ? Nettys.isSameByteBuf(((HttpContent)removedObj).content(), content.content())
+                                    : false
+                                    ;
                                 holder.reduceRetainedSize(removedObj);
                                 ReferenceCountUtil.release(removedObj);
                                 if (LOG.isDebugEnabled()) {
-                                    LOG.info("httpobj {} has been removed from holder({}) and released",
+                                    LOG.debug("httpobj {} has been removed from holder({}) and released",
                                         removedObj, holder);
                                 }
                                 if (stop) {
