@@ -1,7 +1,10 @@
 package org.jocean.http.util;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -49,7 +52,7 @@ public class HttpMessageHolder {
             .getLogger(HttpMessageHolder.class);
     
     private final InterfaceSelector _selector = new InterfaceSelector();
-    private final HolderOp _holderOp = _selector.build(HolderOp.class, 
+    private final Op _op = _selector.build(Op.class, 
             OP_WHEN_ACTIVE, 
             OP_WHEN_UNACTIVE);
     
@@ -65,7 +68,7 @@ public class HttpMessageHolder {
             @SuppressWarnings("unchecked")
             @Override
             public R call() {
-                return (R)_holderOp.visitHttpObjects(HttpMessageHolder.this, 
+                return (R)_op.visitHttpObjects(HttpMessageHolder.this, 
                         (Func1<HttpObject[], Object>)visitor);
             }};
     }
@@ -74,7 +77,7 @@ public class HttpMessageHolder {
         return this._fragmented.get();
     }
     
-    protected interface HolderOp {
+    protected interface Op {
         public Object visitHttpObjects(final HttpMessageHolder holder, 
                 final Func1<HttpObject[], Object> visitor);
         public void releaseHttpContent(final HttpMessageHolder holder, 
@@ -88,7 +91,7 @@ public class HttpMessageHolder {
         public HttpContent buildCurrentBlockAndReset(final HttpMessageHolder holder);
     }
     
-    private static final HolderOp OP_WHEN_ACTIVE = new HolderOp() {
+    private static final Op OP_WHEN_ACTIVE = new Op() {
         @Override
         public Object visitHttpObjects(final HttpMessageHolder holder, final Func1<HttpObject[], Object> visitor) {
             if (holder._fragmented.get()) {
@@ -108,26 +111,33 @@ public class HttpMessageHolder {
         @Override
         public void releaseHttpContent(final HttpMessageHolder holder,
                 final HttpContent content) {
-            int idx = 0;
-            while (idx < holder._cachedHttpObjects.size()) {
-                final HttpObject obj = holder._cachedHttpObjects.get(idx);
-                if (obj instanceof HttpContent) {
-                    if ( Nettys.isSameByteBuf(((HttpContent)obj).content(), content.content()) ) {
-                        LOG.info("found HttpContent {} to release ", obj);
-                        holder._fragmented.compareAndSet(false, true);
-                        for (int i = 0; i<=idx; i++) {
-                            final HttpObject removedObj = holder._cachedHttpObjects.remove(0);
-                            holder.reduceRetainedSize(removedObj);
-                            ReferenceCountUtil.release(removedObj);
-                            if (LOG.isDebugEnabled()) {
-                                LOG.info("httpobj {} has been removed from holder({}) and released",
-                                    removedObj, this);
+            synchronized(holder) {
+                final Iterator<HttpObject> iter = holder._cachedHttpObjects.iterator();
+                while (iter.hasNext()) {
+                    final HttpObject obj = iter.next();
+                    if (obj instanceof HttpContent) {
+                        if ( Nettys.isSameByteBuf(((HttpContent)obj).content(), content.content()) ) {
+                            LOG.info("found HttpContent {} to release ", obj);
+                            holder._fragmented.compareAndSet(false, true);
+                            for (;;) {
+                                final HttpObject removedObj = holder._cachedHttpObjects.poll();
+                                final boolean stop = 
+                                    Nettys.isSameByteBuf(((HttpContent)removedObj).content(), content.content());
+                                holder.reduceRetainedSize(removedObj);
+                                ReferenceCountUtil.release(removedObj);
+                                if (LOG.isDebugEnabled()) {
+                                    LOG.info("httpobj {} has been removed from holder({}) and released",
+                                        removedObj, holder);
+                                }
+                                if (stop) {
+                                    break;
+                                }
                             }
+                            return;
                         }
-                        break;
                     }
                 }
-                idx++;
+                LOG.info("COULD NOT found HttpContent {} to release ", content);
             }
         }
 
@@ -186,7 +196,7 @@ public class HttpMessageHolder {
             }
         }};
     
-    private static final HolderOp OP_WHEN_UNACTIVE = new HolderOp() {
+    private static final Op OP_WHEN_UNACTIVE = new Op() {
         @Override
         public Object visitHttpObjects(final HttpMessageHolder holder, 
                 final Func1<HttpObject[], Object> visitor) {
@@ -241,7 +251,7 @@ public class HttpMessageHolder {
     
     private void doRelease() {
         releaseReferenceCountedList(this._currentBlock);
-        releaseReferenceCountedList(this._cachedHttpObjects);
+        releaseReferenceCountedQueue(this._cachedHttpObjects);
         this._currentBlockSize = 0;
         this._retainedByteBufSize.set(0);
     }
@@ -260,8 +270,22 @@ public class HttpMessageHolder {
         objs.clear();
     }
     
+    private static <T> void releaseReferenceCountedQueue(final Queue<T> objs) {
+        for (;;) {
+            T obj = objs.poll();
+            if (null == obj) {
+                break;
+            }
+            final boolean released = ReferenceCountUtil.release(obj);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Obj({}) released({}) from releaseReferenceCountedQueue", 
+                        obj, released);
+            }
+        }
+    }
+    
     public void releaseHttpContent(final HttpContent content) {
-        this._holderOp.releaseHttpContent(this, content);
+        this._op.releaseHttpContent(this, content);
     }
     
     public int currentBlockSize() {
@@ -269,11 +293,11 @@ public class HttpMessageHolder {
     }
     
     public int currentBlockCount() {
-        return this._holderOp.currentBlockCount(this);
+        return this._op.currentBlockCount(this);
     }
     
     public int cachedHttpObjectCount() {
-        return this._holderOp.cachedHttpObjectCount(this);
+        return this._op.cachedHttpObjectCount(this);
     }
     
     private final Func1<Object, Observable<? extends Object>> _ASSEMBLE_AND_HOLD = 
@@ -340,11 +364,11 @@ public class HttpMessageHolder {
     }
 
     private void retainAndUpdateCurrentBlock(final HttpContent content) {
-        this._holderOp.retainAndUpdateCurrentBlock(this, content);
+        this._op.retainAndUpdateCurrentBlock(this, content);
     }
 
     private HttpObject retainAndHoldHttpObject(final HttpObject httpobj) {
-        return this._holderOp.retainAndHoldHttpObject(this, httpobj);
+        return this._op.retainAndHoldHttpObject(this, httpobj);
     }
     
     private void addRetainedSize(final HttpObject httpobj) {
@@ -362,7 +386,7 @@ public class HttpMessageHolder {
     }
     
     private HttpObject retainCurrentBlockAndReset() {
-        final HttpContent content = this._holderOp.buildCurrentBlockAndReset(this);
+        final HttpContent content = this._op.buildCurrentBlockAndReset(this);
         try {
             return retainAndHoldHttpObject(content);
         } finally {
@@ -385,9 +409,9 @@ public class HttpMessageHolder {
     
     private final int _maxBlockSize;
     
-    private final List<HttpContent> _currentBlock = new ArrayList<HttpContent>();
+    private final List<HttpContent> _currentBlock = new ArrayList<>();
     
     private volatile int _currentBlockSize = 0;
 
-    private final List<HttpObject> _cachedHttpObjects = new ArrayList<>();
+    private final Queue<HttpObject> _cachedHttpObjects = new ConcurrentLinkedQueue<>();
 }
