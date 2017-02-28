@@ -307,7 +307,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }};
         
     private void doClose() {
-        this._selector.destroy(FIRE_CLOSED, this);
+        this._selector.destroyAndSubmit(FIRE_CLOSED, this);
     }
 
     private void fireDoOnClosed() {

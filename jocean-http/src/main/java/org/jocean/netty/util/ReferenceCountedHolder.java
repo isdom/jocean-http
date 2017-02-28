@@ -58,7 +58,7 @@ public class ReferenceCountedHolder {
         return new Action0() {
         @Override
         public void call() {
-            _selector.destroy(DO_RELEASE, ReferenceCountedHolder.this);
+            _selector.destroyAndSubmit(DO_RELEASE, ReferenceCountedHolder.this);
         }};
     }
     

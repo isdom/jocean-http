@@ -235,7 +235,7 @@ public class HttpMessageHolder {
         return new Action0() {
         @Override
         public void call() {
-            _selector.destroy(DO_RELEASE, HttpMessageHolder.this);
+            _selector.destroyAndSubmit(DO_RELEASE, HttpMessageHolder.this);
         }};
     }
     

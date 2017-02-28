@@ -291,7 +291,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         }};
         
     private void fireClosed() {
-        this._selector.destroy(FIRE_CLOSED, this);
+        this._selector.destroyAndSubmit(FIRE_CLOSED, this);
     }
 
     private void fireClosed0() {
