@@ -200,7 +200,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             .doOnError(new Action1<Throwable>() {
                 @Override
                 public void call(Throwable e) {
-                    LOG.warn("initiator({})'s outbound.onError, invoke doAbort() and detail:{}",
+                    LOG.warn("initiator({})'s outbound.onError, invoke fireClosed() and detail:{}",
                             DefaultHttpInitiator.this, ExceptionUtils.exception2detail(e));
                     fireClosed();
                 }});
@@ -223,6 +223,8 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 .doOnError(new Action1<Throwable>() {
                     @Override
                     public void call(Throwable e) {
+                        LOG.warn("initiator({})'s inbound.onError, invoke fireClosed() and detail:{}",
+                                DefaultHttpInitiator.this, ExceptionUtils.exception2detail(e));
                         fireClosed();
                     }});
             }};

@@ -115,28 +115,12 @@ public class HttpMessageHolder {
                 final Iterator<HttpObject> iter = holder._cachedHttpObjects.iterator();
                 while (iter.hasNext()) {
                     final HttpObject obj = iter.next();
-                    if (obj instanceof HttpContent) {
-                        if ( Nettys.isSameByteBuf(((HttpContent)obj).content(), content.content()) ) {
-                            LOG.info("found HttpContent {} to release ", obj);
-                            holder._fragmented.compareAndSet(false, true);
-                            for (;;) {
-                                final HttpObject removedObj = holder._cachedHttpObjects.poll();
-                                final boolean stop = (removedObj instanceof HttpContent)
-                                    ? Nettys.isSameByteBuf(((HttpContent)removedObj).content(), content.content())
-                                    : false
-                                    ;
-                                holder.reduceRetainedSize(removedObj);
-                                ReferenceCountUtil.release(removedObj);
-                                if (LOG.isDebugEnabled()) {
-                                    LOG.debug("httpobj {} has been removed from holder({}) and released",
-                                        removedObj, holder);
-                                }
-                                if (stop) {
-                                    break;
-                                }
-                            }
-                            return;
-                        }
+                    if ((obj instanceof HttpContent)
+                        && Nettys.isSameByteBuf(((HttpContent)obj).content(), content.content()) ) {
+                        LOG.info("found HttpContent {} to release ", obj);
+                        holder._fragmented.compareAndSet(false, true);
+                        holder.releaseUntil0(content);
+                        return;
                     }
                 }
                 LOG.info("COULD NOT found HttpContent {} to release ", content);
@@ -197,6 +181,7 @@ public class HttpMessageHolder {
                 holder._currentBlockSize = 0;
             }
         }};
+
     
     private static final Op OP_WHEN_UNACTIVE = new Op() {
         @Override
@@ -236,6 +221,23 @@ public class HttpMessageHolder {
             return null;
         }
     };
+    
+    private void releaseUntil0(final HttpContent content) {
+        boolean run = true;
+        while (run) {
+            final HttpObject removedObj = this._cachedHttpObjects.poll();
+            run = (removedObj instanceof HttpContent)
+                ? !Nettys.isSameByteBuf(((HttpContent)removedObj).content(), content.content())
+                : true
+                ;
+            this.reduceRetainedSize(removedObj);
+            ReferenceCountUtil.release(removedObj);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("httpobj {} has been removed from holder({}) and released",
+                    removedObj, this);
+            }
+        }
+    }
     
     private final static ActionN DO_RELEASE = new ActionN() {
         @Override

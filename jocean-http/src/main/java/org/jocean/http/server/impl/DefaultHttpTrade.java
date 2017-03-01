@@ -159,7 +159,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 new Action0() {
                     @Override
                     public void call() {
-                        doClose();
+                        fireClosed();
                     }});
         
         this._inboundSupport = 
@@ -198,7 +198,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                                 throws Exception {
                             //  TODO, flush success or failed
                             try {
-                                doClose();
+                                fireClosed();
                             } catch (Exception e) {
                                 LOG.warn("exception when ({}).doClose, detail:{}",
                                         this, ExceptionUtils.exception2detail(e));
@@ -208,9 +208,9 @@ class DefaultHttpTrade extends DefaultAttributeMap
             .doOnError(new Action1<Throwable>() {
                 @Override
                 public void call(Throwable e) {
-                    LOG.warn("trade({})'s responseObserver.onError, default action is invoke doAbort() and detail:{}",
+                    LOG.warn("trade({})'s outbound.onError, invoke fireClosed() and detail:{}",
                             DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-                    doClose();
+                    fireClosed();
                 }});
     }
     
@@ -239,7 +239,9 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 .doOnError(new Action1<Throwable>() {
                     @Override
                     public void call(Throwable e) {
-                        doClose();
+                        LOG.warn("trade({})'s inbound.onError, invoke fireClosed() and detail:{}",
+                                DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
+                        fireClosed();
                     }});
             }};
     }
@@ -262,7 +264,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
 
     @Override
     public void close() {
-        doClose();
+        fireClosed();
     }
 
     @Override
@@ -303,14 +305,14 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private static final ActionN FIRE_CLOSED = new ActionN() {
         @Override
         public void call(final Object... args) {
-            ((DefaultHttpTrade)args[0]).fireDoOnClosed();
+            ((DefaultHttpTrade)args[0]).fireClosed0();
         }};
         
-    private void doClose() {
+    private void fireClosed() {
         this._selector.destroyAndSubmit(FIRE_CLOSED, this);
     }
 
-    private void fireDoOnClosed() {
+    private void fireClosed0() {
         if (LOG.isDebugEnabled()) {
             LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
                     this._channel, this._isResponseCompleted.get(), this.isEndedWithKeepAlive());
@@ -323,8 +325,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final InboundEndpointSupport _inboundSupport;
     private final OutboundEndpointSupport _outboundSupport;
     
-    private final long _createTimeMillis = System.currentTimeMillis();
     private final Channel _channel;
+    private final long _createTimeMillis = System.currentTimeMillis();
     private final TrafficCounter _trafficCounter;
     private String _requestMethod;
     private String _requestUri;

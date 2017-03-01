@@ -1,7 +1,10 @@
 package org.jocean.netty.util;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.idiom.ExceptionUtils;
@@ -63,21 +66,21 @@ public class ReferenceCountedHolder {
     }
     
     private void doRelease() {
-        releaseReferenceCountedList(this._cachedReferenceCounteds);
+        releaseReferenceCountedQueue(this._cachedReferenceCounteds);
     }
 
-    private static <T> void releaseReferenceCountedList(final List<T> objs) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("release {} contain {} element.", objs, objs.size());
-        }
-        for (T obj : objs) {
+    private static <T> void releaseReferenceCountedQueue(final Queue<T> objs) {
+        for (;;) {
+            final T obj = objs.poll();
+            if (null == obj) {
+                break;
+            }
             final boolean released = ReferenceCountUtil.release(obj);
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Obj({}) released({}) from releaseReferenceCountedList", 
-                        obj, released);
+                LOG.debug("Obj({}) released({}) from releaseReferenceCountedQueue", 
+                    obj, released);
             }
         }
-        objs.clear();
     }
     
     private final InterfaceSelector _selector = new InterfaceSelector();
@@ -162,22 +165,24 @@ public class ReferenceCountedHolder {
     };
     
     private void releaseCached0(final ReferenceCounted obj) {
-        int idx = 0;
-        while (idx < this._cachedReferenceCounteds.size()) {
-            final ReferenceCounted cached = this._cachedReferenceCounteds.get(idx);
-            if ( cached == obj ) {
-                LOG.info("found ReferenceCounted {} to release ", obj);
-                this._fragmented.compareAndSet(false, true);
-                final ReferenceCounted removedObj = 
-                        this._cachedReferenceCounteds.remove(idx);
-                ReferenceCountUtil.release(removedObj);
-                if (LOG.isDebugEnabled()) {
-                    LOG.info("ReferenceCounted {} has been removed from holder({}) and released",
-                        removedObj, this);
+        synchronized(this) {
+            final Iterator<ReferenceCounted> iter = 
+                    this._cachedReferenceCounteds.iterator();
+            while (iter.hasNext()) {
+                final ReferenceCounted cached = iter.next();
+                if (cached == obj) {
+                    LOG.info("found ReferenceCounted {} to release ", obj);
+                    this._fragmented.compareAndSet(false, true);
+                    iter.remove();
+                    ReferenceCountUtil.release(cached);
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("ReferenceCounted {} has been removed from holder({}) and released",
+                                cached, this);
+                    }
+                    return;
                 }
-                break;
             }
-            idx++;
+            LOG.info("COULD NOT found ReferenceCounted {} to release ", obj);
         }
     }
     
@@ -218,5 +223,5 @@ public class ReferenceCountedHolder {
 
     private final AtomicBoolean _fragmented = new AtomicBoolean(false);
     
-    private final List<ReferenceCounted> _cachedReferenceCounteds = new ArrayList<>();
+    private final Queue<ReferenceCounted> _cachedReferenceCounteds = new ConcurrentLinkedQueue<>();
 }
