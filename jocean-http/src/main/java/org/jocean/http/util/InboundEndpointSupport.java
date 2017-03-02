@@ -39,6 +39,7 @@ public class InboundEndpointSupport implements InboundEndpoint {
             final Action1<Action0> onTerminate) {
         // disable auto read
         channel.config().setAutoRead(false);
+        channel.read();
         
         this._channel = channel;
         this._message = message;
