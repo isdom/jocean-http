@@ -28,41 +28,42 @@ public class InboundSpeedController {
     }
     
     public void applyTo(final InboundEndpoint inbound) {
-        inbound.setAutoRead(false);
-        inbound.doOnReadComplete(this._ctrlInboundSpeed);
+        inbound.setReadPolicy(this._ctrlInboundSpeed);
         inbound.readMessage();
     }
     
     private final Action1<InboundEndpoint> _ctrlInboundSpeed = new Action1<InboundEndpoint>() {
         @Override
         public void call(final InboundEndpoint inbound) {
+            if (inbound.unreadDurationInMs() > _maxDelay - 50) {
+                LOG.info("inbound {} read inbound for ISC wait {} MILLISECONDS", 
+                        inbound, inbound.unreadDurationInMs());
+                inbound.readMessage();
+                return;
+            }
             final long currentSpeed = (long) (inbound.inboundBytes() 
                     / (inbound.timeToLive() / 1000.0F));
-            if (currentSpeed > _maxBytesPerSecond) {
-                // calculate next read time to wait, and max time to delay is 500ms
-                final long timeoutToRead = Math.min(
-                        (long) (((float)inbound.inboundBytes() / _maxBytesPerSecond) * 1000L
-                        - inbound.timeToLive())
-                        , _maxDelay);
-                if (timeoutToRead > 0) {
-                    final TimerTask readInboundTask = new TimerTask() {
-                        @Override
-                        public void run(final Timeout timeout) throws Exception {
-                            LOG.info("trade {} read inbound for ISC wait {} MILLISECONDS", 
-                                    inbound, timeoutToRead);
-                            inbound.readMessage();
-                        }};
-                    LOG.info("inbound bytes:{} bytes/cost time:{} MILLISECONDS\ncurrent inbound speed: {} Bytes/Second more than MAX ISC: {} Bytes/Second, "
-                            + "so trade {} read inbound will be delay {} MILLISECONDS for ISC", 
-                            inbound.inboundBytes(), inbound.timeToLive(),
-                            currentSpeed, _maxBytesPerSecond, inbound, timeoutToRead);
-                    _timer.newTimeout(readInboundTask, timeoutToRead, TimeUnit.MILLISECONDS);
-                    return;
-                }
+            if (currentSpeed <= _maxBytesPerSecond) {
+                LOG.info("current inbound speed: {} Bytes/Second less than MAX ISC: {} Bytes/Second, so inbound {} read inbound right now", 
+                        currentSpeed, _maxBytesPerSecond, inbound);
+                inbound.readMessage();
+                return;
             }
-            LOG.info("current inbound speed: {} Bytes/Second less than MAX ISC: {} Bytes/Second, so trade {} read inbound right now", 
-                    currentSpeed, _maxBytesPerSecond, inbound);
-            inbound.readMessage();
+            // calculate next read time to wait, and max time to delay is 500ms
+            final long timeoutToRead = Math.max(Math.min(
+                    (long) (((float)inbound.inboundBytes() / _maxBytesPerSecond) * 1000L
+                    - inbound.timeToLive())
+                    , _maxDelay), 1);
+            final TimerTask readInboundTask = new TimerTask() {
+                @Override
+                public void run(final Timeout timeout) throws Exception {
+                    _ctrlInboundSpeed.call(inbound);
+                }};
+            LOG.info("inbound bytes:{} bytes/cost time:{} MILLISECONDS\ncurrent inbound speed: {} Bytes/Second more than MAX ISC: {} Bytes/Second, "
+                    + "so trade {} read inbound will be delay {} MILLISECONDS for ISC", 
+                    inbound.inboundBytes(), inbound.timeToLive(),
+                    currentSpeed, _maxBytesPerSecond, inbound, timeoutToRead);
+            _timer.newTimeout(readInboundTask, timeoutToRead, TimeUnit.MILLISECONDS);
         }};
         
     private long _maxBytesPerSecond = 8192L;

@@ -2,6 +2,8 @@ package org.jocean.http.util;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.InboundEndpoint;
 import org.jocean.http.TrafficCounter;
@@ -35,6 +37,9 @@ public class InboundEndpointSupport implements InboundEndpoint {
             final HttpMessageHolder holder,
             final TrafficCounter trafficCounter,
             final Action1<Action0> onTerminate) {
+        // disable auto read
+        channel.config().setAutoRead(false);
+        
         this._channel = channel;
         this._message = message;
         this._holder = holder;
@@ -47,7 +52,14 @@ public class InboundEndpointSupport implements InboundEndpoint {
             new Action0() {
                 @Override
                 public void call() {
-                    _onReadCompletes.foreachComponent(_CALL_READCOMPLETE, InboundEndpointSupport.this);
+                    unreadBeginUpdater.set(InboundEndpointSupport.this, System.currentTimeMillis());
+                    @SuppressWarnings("unchecked")
+                    final Action1<InboundEndpoint> readPolicy = 
+                            readPolicyUpdater.get(InboundEndpointSupport.this);
+                    if (null != readPolicy) {
+                        readPolicy.call(InboundEndpointSupport.this);
+                    }
+                    // _onReadCompletes.foreachComponent(_CALL_READCOMPLETE, InboundEndpointSupport.this);
                 }});
         this._op = selector.build(Op.class, OP_WHEN_ACTIVE, OP_WHEN_UNACTIVE);
     }
@@ -83,7 +95,7 @@ public class InboundEndpointSupport implements InboundEndpoint {
 
         @Override
         public void readMessage(final InboundEndpointSupport support) {
-            support._channel.read();
+            support.doChannelRead();
         }
 
         @Override
@@ -150,10 +162,21 @@ public class InboundEndpointSupport implements InboundEndpoint {
         return this._subscribers.size();
     }
     
-    @Override
-    public void setAutoRead(final boolean autoRead) {
-        _op.setAutoRead(this, autoRead);
+    private void doChannelRead() {
+        this._channel.read();
+        unreadBeginUpdater.set(this, 0);
     }
+
+    @Override
+    public long unreadDurationInMs() {
+        final long begin = unreadBeginUpdater.get(this);
+        return 0 == begin ? 0 : System.currentTimeMillis() - begin;
+    }
+    
+//    @Override
+//    public void setAutoRead(final boolean autoRead) {
+//        _op.setAutoRead(this, autoRead);
+//    }
 
     @Override
     public void readMessage() {
@@ -161,10 +184,15 @@ public class InboundEndpointSupport implements InboundEndpoint {
     }
 
     @Override
-    public Action0 doOnReadComplete(
-            final Action1<InboundEndpoint> onReadComplete) {
-        return _op.addReadComplete(this, onReadComplete);
+    public void setReadPolicy(final Action1<InboundEndpoint> readPolicy) {
+        readPolicyUpdater.set(this, readPolicy);
     }
+    
+//    @Override
+//    public Action0 doOnReadComplete(
+//            final Action1<InboundEndpoint> onReadComplete) {
+//        return _op.addReadComplete(this, onReadComplete);
+//    }
 
     @Override
     public long timeToLive() {
@@ -210,6 +238,19 @@ public class InboundEndpointSupport implements InboundEndpoint {
             }
         }});
 
+    @SuppressWarnings("rawtypes")
+    private static final AtomicReferenceFieldUpdater<InboundEndpointSupport, Action1> readPolicyUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(InboundEndpointSupport.class, Action1.class, "_readPolicy");
+    
+    @SuppressWarnings("unused")
+    private volatile Action1<InboundEndpoint> _readPolicy = CONST.ALWAYS;
+    
+    private static final AtomicLongFieldUpdater<InboundEndpointSupport> unreadBeginUpdater =
+            AtomicLongFieldUpdater.newUpdater(InboundEndpointSupport.class, "_unreadBegin");
+    
+    @SuppressWarnings("unused")
+    private volatile long _unreadBegin = 0;
+    
     private final Observable<? extends HttpObject> _message;
     private final List<Subscriber<? super HttpObject>> _subscribers = 
             new CopyOnWriteArrayList<>();

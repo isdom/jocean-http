@@ -4,13 +4,13 @@ import org.jocean.http.util.HttpMessageHolder;
 
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
-import rx.functions.Action0;
 import rx.functions.Action1;
 
 public interface InboundEndpoint {
-    public void setAutoRead(final boolean autoRead);
+//    public void setAutoRead(final boolean autoRead);
     public void readMessage();
-    public Action0 doOnReadComplete(final Action1<InboundEndpoint> onReadComplete);
+    public long unreadDurationInMs();
+    public void setReadPolicy(final Action1<InboundEndpoint> readPolicy);
     
     public long timeToLive();
     public long inboundBytes();
@@ -18,4 +18,12 @@ public interface InboundEndpoint {
     public Observable<? extends HttpObject> message();
     public HttpMessageHolder messageHolder();
     public int holdingMemorySize();
+    
+    public static class CONST {
+        public static Action1<InboundEndpoint> ALWAYS = new Action1<InboundEndpoint>() {
+            @Override
+            public void call(final InboundEndpoint inbound) {
+                inbound.readMessage();
+            }};
+    }
 }
