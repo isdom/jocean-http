@@ -13,14 +13,12 @@ import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.APPLY;
-import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.InboundEndpointSupport;
 import org.jocean.http.util.OutboundEndpointSupport;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
-import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -111,38 +109,10 @@ class DefaultHttpTrade extends DefaultAttributeMap
     DefaultHttpTrade(
         final Channel channel, 
         final Action1<HttpTrade> ... onTerminates) {
-        this(channel, 0, onTerminates);
-    }
-    
-    @SafeVarargs
-    DefaultHttpTrade(
-        final Channel channel, 
-        final int inboundBlockSize,
-        final Action1<HttpTrade> ... onTerminates) {
         
         this._terminateAwareSupport = 
                 new TerminateAwareSupport<HttpTrade>(_selector);
         this._channel = channel;
-        
-        final HttpMessageHolder holder = new HttpMessageHolder(inboundBlockSize);
-        doOnTerminate(holder.release());
-        
-        final Observable<? extends HttpObject> cachedInbound = 
-                RxNettys.inboundFromChannel(channel, onTerminate())
-                .compose(holder.<HttpObject>assembleAndHold())
-                .compose(markInboundStateAndCloseOnError())
-                .cache()
-                .compose(RxNettys.duplicateHttpContent())
-                ;
-        
-        cachedInbound.subscribe(
-            RxSubscribers.ignoreNext(),
-            new Action1<Throwable>() {
-                @Override
-                public void call(final Throwable e) {
-                    LOG.warn("Trade({})'s internal request subscriber invoke with onError {}", 
-                            DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-                }});
         
         for (Action1<HttpTrade> onTerminate : onTerminates) {
             doOnTerminate(onTerminate);
@@ -166,8 +136,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
             new InboundEndpointSupport(
                 _selector,
                 channel,
-                cachedInbound,
-                holder,
+                markInboundStateAndCloseOnError(),
                 _trafficCounter,
                 onTerminate());
         

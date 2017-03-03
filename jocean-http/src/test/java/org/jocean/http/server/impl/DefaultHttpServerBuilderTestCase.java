@@ -57,7 +57,7 @@ public class DefaultHttpServerBuilderTestCase {
                 if (null!=transportRef) {
                     transportRef.set(trade.transport());
                 }
-                final HttpMessageHolder holder = new HttpMessageHolder(0);
+                final HttpMessageHolder holder = new HttpMessageHolder();
                 trade.inbound().message().compose(holder.assembleAndHold()).subscribe(
                     RxSubscribers.ignoreNext(),
                     RxSubscribers.ignoreError(),

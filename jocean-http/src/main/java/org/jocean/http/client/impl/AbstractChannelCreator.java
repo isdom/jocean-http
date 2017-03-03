@@ -60,7 +60,7 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
         close();
         this._bootstrap = new Bootstrap()
                 .handler(new Initializer());
-            initializeBootstrap(this._bootstrap);
+        initializeBootstrap(this._bootstrap);
     }
     
     protected AbstractChannelCreator() {

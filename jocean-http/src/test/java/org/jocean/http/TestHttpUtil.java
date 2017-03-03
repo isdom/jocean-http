@@ -46,7 +46,7 @@ public class TestHttpUtil {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    final HttpMessageHolder holder = new HttpMessageHolder(0);
+                    final HttpMessageHolder holder = new HttpMessageHolder();
                     trade.inbound()
                         .message()
                         .compose(holder.assembleAndHold())

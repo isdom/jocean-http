@@ -40,7 +40,8 @@ public class HttpMessageHolderTestCase {
     @Test(expected = RuntimeException.class)
     public final void testHttpMessageHolderForMultiSubscribe() {
         // max block size == -1 means disable assemble
-        final HttpMessageHolder holder = new HttpMessageHolder(-1);
+        final HttpMessageHolder holder = new HttpMessageHolder();
+        holder.setMaxBlockSize(-1);
         
         final FullHttpRequest request = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", 
@@ -61,7 +62,8 @@ public class HttpMessageHolderTestCase {
     @Test
     public final void testHttpMessageHolderForDisableAssembleOnlyCached() {
         // max block size == -1 means disable assemble
-        final HttpMessageHolder holder = new HttpMessageHolder(-1);
+        final HttpMessageHolder holder = new HttpMessageHolder();
+        holder.setMaxBlockSize(-1);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -95,7 +97,8 @@ public class HttpMessageHolderTestCase {
     @Test
     public final void testHttpMessageHolderForFragmentedFeature() {
         // max block size == -1 means disable assemble
-        final HttpMessageHolder holder = new HttpMessageHolder(-1);
+        final HttpMessageHolder holder = new HttpMessageHolder();
+        holder.setMaxBlockSize(-1);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -122,7 +125,8 @@ public class HttpMessageHolderTestCase {
     
     @Test
     public final void testHttpMessageHolderForPushFullRequestAfterRelease() {
-        final HttpMessageHolder holder = new HttpMessageHolder(-1);
+        final HttpMessageHolder holder = new HttpMessageHolder();
+        holder.setMaxBlockSize(-1);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -151,7 +155,8 @@ public class HttpMessageHolderTestCase {
     
     @Test
     public final void testHttpMessageHolderForRequestPartError() {
-        final HttpMessageHolder holder = new HttpMessageHolder(-1);
+        final HttpMessageHolder holder = new HttpMessageHolder();
+        holder.setMaxBlockSize(-1);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -184,7 +189,9 @@ public class HttpMessageHolderTestCase {
     
     @Test
     public final void testHttpMessageHolderForDisableAssembleAndInvokeBindHttpObjsSuccess() {
-        final HttpMessageHolder holder = new HttpMessageHolder(-1);
+        final HttpMessageHolder holder = new HttpMessageHolder();
+        holder.setMaxBlockSize(-1);
+        
         final AtomicReference<HttpObject[]> objsRef = new AtomicReference<>();
         final Func1<HttpObject[], Void> visitorHttpObjs = new Func1<HttpObject[], Void>() {
             @Override
@@ -217,7 +224,9 @@ public class HttpMessageHolderTestCase {
     
     @Test
     public final void testHttpMessageHolderForDisableAssembleInvokeBindHttpObjsAfterRelease() {
-        final HttpMessageHolder holder = new HttpMessageHolder(-1);
+        final HttpMessageHolder holder = new HttpMessageHolder();
+        holder.setMaxBlockSize(-1);
+        
         final AtomicReference<HttpObject[]> objsRef = new AtomicReference<>();
         final Func1<HttpObject[], Void> visitorHttpObjs = new Func1<HttpObject[], Void>() {
             @Override
@@ -250,7 +259,8 @@ public class HttpMessageHolderTestCase {
     
     @Test
     public final void testHttpMessageHolderForDisableAssembleGetAndInvokeBindHttpObjsAfterRelease() {
-        final HttpMessageHolder holder = new HttpMessageHolder(-1);
+        final HttpMessageHolder holder = new HttpMessageHolder();
+        holder.setMaxBlockSize(-1);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -290,7 +300,8 @@ public class HttpMessageHolderTestCase {
     }
     
     public final void testHttpMessageHolderForAssembleFor(final int MAX_BLOCK_SIZE, final int PIECE_SIZE) {
-        final HttpMessageHolder holder = new HttpMessageHolder(MAX_BLOCK_SIZE);
+        final HttpMessageHolder holder = new HttpMessageHolder();
+        holder.setMaxBlockSize(MAX_BLOCK_SIZE);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");

@@ -160,7 +160,7 @@ public class DefaultHttpClientTestCase {
                 ENABLE_LOGGING);
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
         try {
-            final HttpMessageHolder holder = new HttpMessageHolder(0);
+            final HttpMessageHolder holder = new HttpMessageHolder();
         
             client.defineInteraction(
                 new LocalAddress(testAddr), 

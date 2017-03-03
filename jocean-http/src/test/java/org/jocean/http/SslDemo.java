@@ -72,7 +72,8 @@ public class SslDemo {
 
                 LOG.debug("send request:{}", request);
               
-                final HttpMessageHolder holder = new HttpMessageHolder(-1);
+                final HttpMessageHolder holder = new HttpMessageHolder();
+                holder.setMaxBlockSize(-1);
                 
                 client.defineInteraction(
                     new InetSocketAddress(host, 443), 
@@ -110,7 +111,8 @@ public class SslDemo {
 
                 LOG.debug("send request:{}", request);
               
-                final HttpMessageHolder holder = new HttpMessageHolder(-1);
+                final HttpMessageHolder holder = new HttpMessageHolder();
+                holder.setMaxBlockSize(-1);
                 
                 client.defineInteraction(
                     new InetSocketAddress(host, 443), 

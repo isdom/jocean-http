@@ -7,6 +7,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
@@ -56,11 +57,9 @@ public class HttpMessageHolder {
             OP_WHEN_ACTIVE, 
             OP_WHEN_UNACTIVE);
     
-    public HttpMessageHolder(final int maxBlockSize) {
-        //  0 : using _MAX_BLOCK_SIZE 
-        //  -1 : disable assemble piece to a big block feature
-        this._enableAssemble = maxBlockSize >= 0;
-        this._maxBlockSize = maxBlockSize > 0 ? maxBlockSize : _MAX_BLOCK_SIZE;
+    public void setMaxBlockSize(final int maxBlockSize) {
+        blockSizeUpdater.set(this, maxBlockSize);
+        //  TODO, check if left block and drain to cached http objs
     }
     
     public <R> Func0<R> httpMessageBuilder(final Func1<HttpObject[], R> visitor) {
@@ -318,7 +317,7 @@ public class HttpMessageHolder {
                         LOG.debug("HttpMessageHolder: receive HttpObject: {}", msg);
                     }
                 }
-                if (_enableAssemble && (msg instanceof HttpContent)) {
+                if (isAssemble() && (msg instanceof HttpContent)) {
                     if (msg instanceof LastHttpContent) {
                         return asObservable(retainAnyBlockLeft(), retainAndHoldHttpObject(msg));
                     } else {
@@ -352,7 +351,7 @@ public class HttpMessageHolder {
     private Observable<? extends HttpObject> assembleAndReturnObservable(
             final HttpContent msg) {
         retainAndUpdateCurrentBlock(msg);
-        return (this._currentBlockSize >= this._maxBlockSize) 
+        return (this._currentBlockSize >= blockSizeUpdater.get(this)) 
                 ? asObservable(retainCurrentBlockAndReset())
                 : Observable.<HttpObject>empty();
     }
@@ -404,14 +403,20 @@ public class HttpMessageHolder {
         return this._retainedByteBufSize.get();
     }
     
+    private boolean isAssemble() {
+        return blockSizeUpdater.get(this) > 0;
+    }
+
     private final AtomicInteger _retainedByteBufSize = new AtomicInteger(0);
     
     //  if any httpobj has release from holder when it active, then fragmented is true
     private final AtomicBoolean _fragmented = new AtomicBoolean(false);
     
-    private final boolean _enableAssemble;
+    private static final AtomicIntegerFieldUpdater<HttpMessageHolder> blockSizeUpdater =
+            AtomicIntegerFieldUpdater.newUpdater(HttpMessageHolder.class, "_maxBlockSize");
     
-    private final int _maxBlockSize;
+    @SuppressWarnings("unused")
+    private volatile int _maxBlockSize = _MAX_BLOCK_SIZE;
     
     private final List<HttpContent> _currentBlock = new ArrayList<>();
     

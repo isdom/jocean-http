@@ -7,7 +7,6 @@ import rx.Observable;
 import rx.functions.Action1;
 
 public interface InboundEndpoint {
-//    public void setAutoRead(final boolean autoRead);
     public void readMessage();
     public long unreadDurationInMs();
     public void setReadPolicy(final Action1<InboundEndpoint> readPolicy);

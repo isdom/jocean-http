@@ -44,7 +44,7 @@ public class HttpServerForCloopen {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    final HttpMessageHolder holder = new HttpMessageHolder(0);
+                    final HttpMessageHolder holder = new HttpMessageHolder();
                     trade.inbound().message().compose(holder.<HttpObject>assembleAndHold()).subscribe(new Subscriber<HttpObject>() {
                         @Override
                         public void onCompleted() {

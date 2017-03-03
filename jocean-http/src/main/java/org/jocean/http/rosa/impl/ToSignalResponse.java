@@ -57,7 +57,7 @@ public class ToSignalResponse<RESP> implements Transformer<HttpObject, RESP> {
     
     @Override
     public Observable<RESP> call(final Observable<HttpObject> source) {
-        final HttpMessageHolder holder = new HttpMessageHolder(0);
+        final HttpMessageHolder holder = new HttpMessageHolder();
         
         return source.compose(holder.<HttpObject>assembleAndHold())
                 .flatMap(buildOnNext(), 

@@ -13,14 +13,12 @@ import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.APPLY;
-import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.InboundEndpointSupport;
 import org.jocean.http.util.OutboundEndpointSupport;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
-import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,39 +106,11 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     DefaultHttpInitiator(
         final Channel channel, 
         final Action1<HttpInitiator> ... onTerminates) {
-        this(channel, 0, onTerminates);
-    }
-    
-    @SafeVarargs
-    DefaultHttpInitiator(
-        final Channel channel, 
-        final int inboundBlockSize,
-        final Action1<HttpInitiator> ... onTerminates) {
         // TODO if channel.isActive() == false ?
         
         this._terminateAwareSupport = 
             new TerminateAwareSupport<HttpInitiator>(_selector);
         this._channel = channel;
-        
-        final HttpMessageHolder holder = new HttpMessageHolder(inboundBlockSize);
-        
-        doOnTerminate(holder.release());
-        final Observable<? extends HttpObject> cachedInbound = 
-                RxNettys.inboundFromChannel(channel, onTerminate())
-                .compose(holder.<HttpObject>assembleAndHold())
-                .compose(markInboundStateAndCloseOnError())
-                .cache()
-                .compose(RxNettys.duplicateHttpContent())
-                ;
-        
-        cachedInbound.subscribe(
-            RxSubscribers.ignoreNext(),
-            new Action1<Throwable>() {
-                @Override
-                public void call(final Throwable e) {
-                    LOG.warn("initiator({})'s internal request subscriber invoke with onError {}", 
-                            DefaultHttpInitiator.this, ExceptionUtils.exception2detail(e));
-                }});
         
         for (Action1<HttpInitiator> onTerminate : onTerminates) {
             doOnTerminate(onTerminate);
@@ -164,8 +134,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             new InboundEndpointSupport(
                 _selector,
                 channel,
-                cachedInbound,
-                holder,
+                markInboundStateAndCloseOnError(),
                 _trafficCounter,
                 onTerminate());
         

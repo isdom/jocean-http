@@ -185,7 +185,8 @@ public class DefaultHttpTradeTestCase {
                 Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         final EmbeddedChannel channel = new EmbeddedChannel();
-        final HttpTrade trade = new DefaultHttpTrade(channel, -1);
+        final HttpTrade trade = new DefaultHttpTrade(channel);
+        trade.inbound().messageHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber);
@@ -210,7 +211,8 @@ public class DefaultHttpTradeTestCase {
                 Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         final EmbeddedChannel channel = new EmbeddedChannel();
-        final HttpTrade trade = new DefaultHttpTrade(channel, -1);
+        final HttpTrade trade = new DefaultHttpTrade(channel);
+        trade.inbound().messageHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<HttpObject> reqSubscriber1 = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber1);
@@ -244,7 +246,8 @@ public class DefaultHttpTradeTestCase {
                 Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         
         final EmbeddedChannel channel = new EmbeddedChannel();
-        final HttpTrade trade = new DefaultHttpTrade(channel, -1);
+        final HttpTrade trade = new DefaultHttpTrade(channel);
+        trade.inbound().messageHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<HttpObject> reqSubscriber1 = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber1);
@@ -285,7 +288,8 @@ public class DefaultHttpTradeTestCase {
                 HttpMethod.POST, "/", Nettys4Test.buildByteBuf("test content"));
         
         final EmbeddedChannel channel = new EmbeddedChannel();
-        final HttpTrade trade = new DefaultHttpTrade(channel, -1);
+        final HttpTrade trade = new DefaultHttpTrade(channel);
+        trade.inbound().messageHolder().setMaxBlockSize(-1);
         
         writeToInboundAndFlush(channel, request);
         
@@ -346,7 +350,8 @@ public class DefaultHttpTradeTestCase {
         }};
         
         final EmbeddedChannel channel = new EmbeddedChannel();
-        final HttpTrade trade = new DefaultHttpTrade(channel, -1);
+        final HttpTrade trade = new DefaultHttpTrade(channel);
+        trade.inbound().messageHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         trade.inbound().message().subscribe(reqSubscriber);

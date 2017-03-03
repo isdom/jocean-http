@@ -2,15 +2,14 @@ package org.jocean.http.util;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.InboundEndpoint;
 import org.jocean.http.TrafficCounter;
-import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
-import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,10 +18,10 @@ import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
+import rx.Observable.Transformer;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Actions;
 import rx.subscriptions.Subscriptions;
 
 public class InboundEndpointSupport implements InboundEndpoint {
@@ -33,18 +32,41 @@ public class InboundEndpointSupport implements InboundEndpoint {
     public InboundEndpointSupport(
             final InterfaceSelector selector,
             final Channel channel,
-            final Observable<? extends HttpObject> message,
-            final HttpMessageHolder holder,
+            final Transformer<HttpObject, HttpObject> transform,
             final TrafficCounter trafficCounter,
             final Action1<Action0> onTerminate) {
+        
+        this._holder = new HttpMessageHolder();
+        onTerminate.call(_holder.release());
+        
+        final Observable<? extends HttpObject> message = 
+                RxNettys.inboundFromChannel(channel, onTerminate)
+                .compose(_holder.<HttpObject>assembleAndHold())
+                .compose(transform)
+                .doOnCompleted(new Action0() {
+                    @Override
+                    public void call() {
+                        setMessageCompleted();
+                    }})
+                .cache()
+                .compose(RxNettys.duplicateHttpContent())
+                ;
+        
+        message.subscribe(
+            RxSubscribers.ignoreNext(),
+            new Action1<Throwable>() {
+                @Override
+                public void call(final Throwable e) {
+                    LOG.warn("inbound({})'s internal request subscriber invoke with onError {}", 
+                            this, ExceptionUtils.exception2detail(e));
+                }});
+        
         // disable auto read
-        channel.config().setAutoRead(false);
         channel.read();
         
         this._channel = channel;
-        this._message = message;
-        this._holder = holder;
         this._trafficCounter = trafficCounter;
+        this._inboundProxy = buildProxy(message);
         
         RxNettys.applyToChannelWithUninstall(
             channel, 
@@ -54,46 +76,59 @@ public class InboundEndpointSupport implements InboundEndpoint {
                 @Override
                 public void call() {
                     unreadBeginUpdater.set(InboundEndpointSupport.this, System.currentTimeMillis());
-                    @SuppressWarnings("unchecked")
-                    final Action1<InboundEndpoint> readPolicy = 
-                            readPolicyUpdater.get(InboundEndpointSupport.this);
-                    if (null != readPolicy) {
-                        readPolicy.call(InboundEndpointSupport.this);
+                    if (!isMessageCompleted()) {
+                        //  if inbound message not completed, continue to read inbound
+                        @SuppressWarnings("unchecked")
+                        final Action1<InboundEndpoint> readPolicy = 
+                                readPolicyUpdater.get(InboundEndpointSupport.this);
+                        if (null != readPolicy) {
+                            try {
+                                readPolicy.call(InboundEndpointSupport.this);
+                            } catch (Exception e) {
+                                LOG.warn("exception when invoke read policy({}), detail: {}",
+                                    readPolicy, ExceptionUtils.exception2detail(e));
+                            }
+                        }
                     }
-                    // _onReadCompletes.foreachComponent(_CALL_READCOMPLETE, InboundEndpointSupport.this);
                 }});
         this._op = selector.build(Op.class, OP_WHEN_ACTIVE, OP_WHEN_UNACTIVE);
+    }
+
+    private void setMessageCompleted() {
+        completedUpdater.set(this, 1);
+    }
+
+    private boolean isMessageCompleted() {
+        return 1 == completedUpdater.get(this);
+    }
+
+    @SuppressWarnings("deprecation")
+    private Observable<HttpObject> buildProxy(
+            final Observable<? extends HttpObject> message) {
+        return Observable.create(new OnSubscribe<HttpObject>() {
+            @Override
+            public void call(final Subscriber<? super HttpObject> subscriber) {
+                final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
+                if (!serializedSubscriber.isUnsubscribed()) {
+                    _subscribers.add(serializedSubscriber);
+                    serializedSubscriber.add(Subscriptions.create(new Action0() {
+                        @Override
+                        public void call() {
+                            _subscribers.remove(serializedSubscriber);
+                        }}));
+                    message.subscribe(serializedSubscriber);
+                }
+            }});
     }
     
     private final Op _op;
     
     protected interface Op {
-        public Action0 addReadComplete(final InboundEndpointSupport support, 
-                final Action1<InboundEndpoint> onReadComplete);
-        public void setAutoRead(final InboundEndpointSupport support,
-                final boolean autoRead);
         public void readMessage(final InboundEndpointSupport support); 
         public Observable<? extends HttpObject> message(final InboundEndpointSupport support);
     }
     
     private static final Op OP_WHEN_ACTIVE = new Op() {
-        @Override
-        public Action0 addReadComplete(final InboundEndpointSupport support,
-                final Action1<InboundEndpoint> onReadComplete) {
-            support._onReadCompletes.addComponent(onReadComplete);
-            return new Action0() {
-                @Override
-                public void call() {
-                    support._onReadCompletes.removeComponent(onReadComplete);
-                }};
-        }
-
-        @Override
-        public void setAutoRead(final InboundEndpointSupport support,
-                final boolean autoRead) {
-            support._channel.config().setAutoRead(autoRead);
-        }
-
         @Override
         public void readMessage(final InboundEndpointSupport support) {
             support.doChannelRead();
@@ -108,17 +143,6 @@ public class InboundEndpointSupport implements InboundEndpoint {
     
     private static final Op OP_WHEN_UNACTIVE = new Op() {
         @Override
-        public Action0 addReadComplete(InboundEndpointSupport support,
-                Action1<InboundEndpoint> onReadComplete) {
-            return Actions.empty();
-        }
-
-        @Override
-        public void setAutoRead(InboundEndpointSupport support,
-                boolean autoRead) {
-        }
-
-        @Override
         public void readMessage(InboundEndpointSupport support) {
         }
 
@@ -129,20 +153,6 @@ public class InboundEndpointSupport implements InboundEndpoint {
         }
     };
     
-    private static final Action1_N<Action1<InboundEndpoint>> _CALL_READCOMPLETE = 
-    new Action1_N<Action1<InboundEndpoint>>() {
-        @Override
-        public void call(final Action1<InboundEndpoint> onReadComplete, final Object...args) {
-            try {
-                onReadComplete.call((InboundEndpoint)args[0]);
-            } catch (Exception e) {
-                LOG.warn("exception when inbound({}) invoke onReadComplete({}), detail: {}",
-                    args[0], 
-                    onReadComplete, 
-                    ExceptionUtils.exception2detail(e));
-            }
-        }};
-            
     public void fireAllSubscriberUnactive() {
         @SuppressWarnings("unchecked")
         final Subscriber<? super HttpObject>[] subscribers = 
@@ -173,11 +183,6 @@ public class InboundEndpointSupport implements InboundEndpoint {
         final long begin = unreadBeginUpdater.get(this);
         return 0 == begin ? 0 : System.currentTimeMillis() - begin;
     }
-    
-//    @Override
-//    public void setAutoRead(final boolean autoRead) {
-//        _op.setAutoRead(this, autoRead);
-//    }
 
     @Override
     public void readMessage() {
@@ -189,12 +194,6 @@ public class InboundEndpointSupport implements InboundEndpoint {
         readPolicyUpdater.set(this, readPolicy);
     }
     
-//    @Override
-//    public Action0 doOnReadComplete(
-//            final Action1<InboundEndpoint> onReadComplete) {
-//        return _op.addReadComplete(this, onReadComplete);
-//    }
-
     @Override
     public long timeToLive() {
         return System.currentTimeMillis() - _createTimeMillis;
@@ -220,24 +219,13 @@ public class InboundEndpointSupport implements InboundEndpoint {
         return _holder.retainedByteBufSize();
     }
     
-    private final COWCompositeSupport<Action1<InboundEndpoint>> _onReadCompletes = 
-            new COWCompositeSupport<>();
+    private final Observable<HttpObject> _inboundProxy;
     
-    @SuppressWarnings("deprecation")
-    private final Observable<HttpObject> _inboundProxy = Observable.create(new OnSubscribe<HttpObject>() {
-        @Override
-        public void call(final Subscriber<? super HttpObject> subscriber) {
-            final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
-            if (!serializedSubscriber.isUnsubscribed()) {
-                _subscribers.add(serializedSubscriber);
-                serializedSubscriber.add(Subscriptions.create(new Action0() {
-                    @Override
-                    public void call() {
-                        _subscribers.remove(serializedSubscriber);
-                    }}));
-                _message.subscribe(serializedSubscriber);
-            }
-        }});
+    private static final AtomicIntegerFieldUpdater<InboundEndpointSupport> completedUpdater =
+            AtomicIntegerFieldUpdater.newUpdater(InboundEndpointSupport.class, "_isCompleted");
+    
+    @SuppressWarnings("unused")
+    private volatile int _isCompleted = 0;
 
     @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<InboundEndpointSupport, Action1> readPolicyUpdater =
@@ -252,7 +240,6 @@ public class InboundEndpointSupport implements InboundEndpoint {
     @SuppressWarnings("unused")
     private volatile long _unreadBegin = 0;
     
-    private final Observable<? extends HttpObject> _message;
     private final List<Subscriber<? super HttpObject>> _subscribers = 
             new CopyOnWriteArrayList<>();
     private final Channel _channel;

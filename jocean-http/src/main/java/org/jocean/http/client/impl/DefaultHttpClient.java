@@ -134,12 +134,13 @@ public class DefaultHttpClient implements HttpClient {
             .map(new Func1<Channel, HttpInitiator>() {
                 @Override
                 public HttpInitiator call(final Channel channel) {
+                    channel.config().setAutoRead(false);
                     Nettys.setReleaseAction(channel, new Action1<Channel>() {
                         @Override
                         public void call(Channel t) {
                             //  DO nothing
                         }});
-                    return new DefaultHttpInitiator(channel, _inboundBlockSize, _doRecycleChannel);
+                    return new DefaultHttpInitiator(channel, _doRecycleChannel);
                 }});
     }
     

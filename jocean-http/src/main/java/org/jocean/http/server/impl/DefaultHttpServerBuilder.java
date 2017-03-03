@@ -176,6 +176,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                     bootstrap.childHandler(new Initializer() {
                         @Override
                         protected void initChannel(final Channel channel) throws Exception {
+                            channel.config().setAutoRead(false);
                             if (LOG.isDebugEnabled()) {
                                 LOG.debug("dump inbound channel({})'s config: \n{}", 
                                         channel, Nettys.dumpChannelConfig(channel.config()));
@@ -237,7 +238,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             final Subscriber<? super HttpTrade> subscriber, 
             final List<Channel> awaitChannels) {
         awaitChannels.add(channel);
-        channel.config().setAutoRead(true);
+        channel.read();
         APPLY.ON_CHANNEL_READ.applyTo(channel.pipeline(), 
             new Action0() {
                 @Override
@@ -284,9 +285,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private final HttpTrade httpTradeOf(final Channel channel, 
         final Action1<HttpTrade> ... onTerminates) {
         this._numStartedTrades.incrementAndGet();
-        final DefaultHttpTrade trade = new DefaultHttpTrade(channel, 
-                this._inboundBlockSize,
-                onTerminates);
+        final DefaultHttpTrade trade = new DefaultHttpTrade(channel, onTerminates);
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
         
         trade.inbound().message().subscribe(new Action1<HttpObject>() {
