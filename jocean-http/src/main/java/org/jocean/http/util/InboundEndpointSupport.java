@@ -181,9 +181,11 @@ public class InboundEndpointSupport implements InboundEndpoint {
     }
     
     private void doChannelRead() {
-        this._channel.read();
-        unreadBeginUpdater.set(this, 0);
-        readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
+        if (!isMessageCompleted()) {
+            this._channel.read();
+            unreadBeginUpdater.set(this, 0);
+            readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
+        }
     }
 
     @Override
