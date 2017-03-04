@@ -165,7 +165,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 @Override
                 public void call() {
                     _isOutboundCompleted.compareAndSet(false, true);
-                    _channel.read();
+                    _inboundSupport.readMessage();
                 }})
             .doOnError(new Action1<Throwable>() {
                 @Override

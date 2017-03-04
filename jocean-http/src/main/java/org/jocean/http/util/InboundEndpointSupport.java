@@ -35,7 +35,17 @@ public class InboundEndpointSupport implements InboundEndpoint {
             final Transformer<HttpObject, HttpObject> transform,
             final TrafficCounter trafficCounter,
             final Action1<Action0> onTerminate) {
-        
+        this(0, selector, channel, transform, trafficCounter, onTerminate);
+    }
+
+    public InboundEndpointSupport(
+            final long readBegin,
+            final InterfaceSelector selector,
+            final Channel channel,
+            final Transformer<HttpObject, HttpObject> transform,
+            final TrafficCounter trafficCounter,
+            final Action1<Action0> onTerminate) {
+        this._readBegin = readBegin;
         this._holder = new HttpMessageHolder();
         onTerminate.call(_holder.release());
         
@@ -90,7 +100,7 @@ public class InboundEndpointSupport implements InboundEndpoint {
                 }});
         this._op = selector.build(Op.class, OP_WHEN_ACTIVE, OP_WHEN_UNACTIVE);
     }
-
+    
     private void setMessageCompleted() {
         completedUpdater.set(this, 1);
     }
@@ -173,6 +183,7 @@ public class InboundEndpointSupport implements InboundEndpoint {
     private void doChannelRead() {
         this._channel.read();
         unreadBeginUpdater.set(this, 0);
+        readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
     }
 
     @Override
@@ -193,7 +204,7 @@ public class InboundEndpointSupport implements InboundEndpoint {
     
     @Override
     public long timeToLive() {
-        return System.currentTimeMillis() - _createTimeMillis;
+        return Math.max(System.currentTimeMillis() - readBeginUpdater.get(this), 1L);
     }
 
     @Override
@@ -218,6 +229,12 @@ public class InboundEndpointSupport implements InboundEndpoint {
     
     private final Observable<HttpObject> _inboundProxy;
     
+    private static final AtomicLongFieldUpdater<InboundEndpointSupport> readBeginUpdater =
+            AtomicLongFieldUpdater.newUpdater(InboundEndpointSupport.class, "_readBegin");
+    
+    @SuppressWarnings("unused")
+    private volatile long _readBegin;
+    
     private static final AtomicIntegerFieldUpdater<InboundEndpointSupport> completedUpdater =
             AtomicIntegerFieldUpdater.newUpdater(InboundEndpointSupport.class, "_isCompleted");
     
@@ -241,6 +258,5 @@ public class InboundEndpointSupport implements InboundEndpoint {
             new CopyOnWriteArrayList<>();
     private final Channel _channel;
     private final HttpMessageHolder _holder;
-    private final long _createTimeMillis = System.currentTimeMillis();
     private final TrafficCounter _trafficCounter;
 }

@@ -29,7 +29,7 @@ import rx.functions.Action2;
 import rx.functions.Func0;
 
 public class TestHttpUtil {
-    private final static HttpServerBuilder TEST_SERVER_BUILDER = new DefaultHttpServerBuilder(
+    public final static HttpServerBuilder TEST_SERVER_BUILDER = new DefaultHttpServerBuilder(
             new AbstractBootstrapCreator(
             new DefaultEventLoopGroup(1), new DefaultEventLoopGroup()) {
         @Override

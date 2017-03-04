@@ -1,19 +1,23 @@
 package org.jocean.http.server.impl;
 
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
+import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.client.impl.TestChannelPool;
@@ -29,6 +33,7 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.DefaultEventLoopGroup;
 import io.netty.channel.local.LocalAddress;
@@ -37,9 +42,10 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import rx.Observable;
 import rx.Subscription;
@@ -72,8 +78,9 @@ public class DefaultHttpServerBuilderTestCase {
                                         is.read(bytes);
                                         final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
                                                 Unpooled.wrappedBuffer(bytes));
-                                        response.headers().set(CONTENT_TYPE, "text/plain");
-                                        response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                                        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+                                        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
+                                                response.content().readableBytes());
                                         trade.outbound().message(Observable.<HttpObject>just(response));
                                     }
                                 } catch (IOException e) {
@@ -91,12 +98,13 @@ public class DefaultHttpServerBuilderTestCase {
         content.writeBytes(bytes);
         final DefaultFullHttpRequest request = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
-        HttpHeaders.setContentLength(request, content.readableBytes());
+        HttpUtil.setContentLength(request, content.readableBytes());
         return request;
     }
     
     @Test
     public void testHttpHappyPathOnce() throws Exception {
+        final String testAddr = UUID.randomUUID().toString();
         final HttpServerBuilder server = new DefaultHttpServerBuilder(
                 new AbstractBootstrapCreator(
                 new DefaultEventLoopGroup(1), new DefaultEventLoopGroup()) {
@@ -107,7 +115,7 @@ public class DefaultHttpServerBuilderTestCase {
             }});
         
         final Subscription testServer = 
-                server.defineServer(new LocalAddress("test"),
+                server.defineServer(new LocalAddress(testAddr),
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR)
             .subscribe(echoReactor(null));
@@ -115,7 +123,7 @@ public class DefaultHttpServerBuilderTestCase {
         try {
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.just(buildFullRequest(CONTENT)),
                     Feature.ENABLE_LOGGING)
                 .map(RxNettys.<HttpObject>retainer())
@@ -133,6 +141,7 @@ public class DefaultHttpServerBuilderTestCase {
 
     @Test
     public void testHttpHappyPathTwice() throws Exception {
+        final String testAddr = UUID.randomUUID().toString();
         final HttpServerBuilder server = new DefaultHttpServerBuilder(
                 new AbstractBootstrapCreator(
                 new DefaultEventLoopGroup(1), new DefaultEventLoopGroup()) {
@@ -144,7 +153,7 @@ public class DefaultHttpServerBuilderTestCase {
         final AtomicReference<Object> transportRef = new AtomicReference<Object>();
         
         final Subscription testServer = 
-                server.defineServer(new LocalAddress("test"),
+                server.defineServer(new LocalAddress(testAddr),
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR)
             .subscribe(echoReactor(transportRef));
@@ -156,7 +165,7 @@ public class DefaultHttpServerBuilderTestCase {
             
             final Iterator<HttpObject> itr = 
                 client.defineInteraction(
-                    new LocalAddress("test"), 
+                    new LocalAddress(testAddr), 
                     Observable.just(buildFullRequest(CONTENT)),
                     Feature.ENABLE_LOGGING)
                 .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
@@ -178,7 +187,7 @@ public class DefaultHttpServerBuilderTestCase {
             //  so ensure client channel will be reused
             final Iterator<HttpObject> itr2 = 
                     client.defineInteraction(
-                        new LocalAddress("test"), 
+                        new LocalAddress(testAddr), 
                         Observable.just(buildFullRequest(CONTENT)),
                         Feature.ENABLE_LOGGING)
                     .map(RxNettys.<HttpObject>retainer())
@@ -191,6 +200,80 @@ public class DefaultHttpServerBuilderTestCase {
                 final Object channel2 = transportRef.get();
                 assertTrue(channel1 == channel2);
                 
+        } finally {
+            client.close();
+            testServer.unsubscribe();
+            server.close();
+        }
+    }
+
+    @Test
+    public void testTradeReadControl() throws Exception {
+        final String testAddr = UUID.randomUUID().toString();
+        final HttpServerBuilder server = new DefaultHttpServerBuilder(
+                new AbstractBootstrapCreator(
+                new DefaultEventLoopGroup(1), new DefaultEventLoopGroup()) {
+            @Override
+            protected void initializeBootstrap(final ServerBootstrap bootstrap) {
+                bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
+                bootstrap.channel(LocalServerChannel.class);
+            }});
+
+        final BlockingQueue<HttpTrade> trades = new SynchronousQueue<>();
+        
+        final Subscription testServer = 
+                server.defineServer(new LocalAddress(testAddr),
+                Feature.ENABLE_LOGGING,
+                Feature.ENABLE_COMPRESSOR)
+            .subscribe(new Action1<HttpTrade>() {
+                @Override
+                public void call(final HttpTrade trade) {
+                    trades.offer(trade);
+                }});
+        
+        final TestChannelPool pool = new TestChannelPool(1);
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), pool);
+        try ( final HttpInitiator initiator = 
+                client.initiator().remoteAddress(new LocalAddress(testAddr)).build()
+                .toBlocking().single()) {
+            final FullHttpRequest reqToSend1 = 
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+            initiator.outbound().message(Observable.just(reqToSend1));
+            final HttpTrade trade1 = trades.take();
+            //  receive all inbound msg
+            trade1.inbound().message().toCompletable().await();
+            
+            final FullHttpRequest reqReceived1 = trade1.inbound().messageHolder().
+                    httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call();
+            assertEquals(reqToSend1, reqReceived1);
+            
+            final Channel channel = (Channel)initiator.transport();
+            final FullHttpRequest reqToSend2 = 
+                    new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, 
+                    HttpMethod.GET, "/2nd");
+            
+            channel.writeAndFlush(reqToSend2).sync();
+            
+            assertTrue(null == trades.poll(1L, TimeUnit.SECONDS));
+            
+            // after send other interaction req, then first trade send response
+            final FullHttpResponse responseToSend1 = new DefaultFullHttpResponse(HTTP_1_1, OK, 
+                    Unpooled.wrappedBuffer(CONTENT));
+            
+            trade1.outbound().message(Observable.<HttpObject>just(responseToSend1));
+            
+//            initiator.inbound().message().toCompletable().await();
+//            final FullHttpResponse resp = initiator.inbound().messageHolder().
+//                    httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();
+//            assertEquals(responseToSend1, resp);
+            final HttpTrade trade2 = trades.take();
+            
+            //  receive all inbound msg
+            trade2.inbound().message().toCompletable().await();
+            
+            final FullHttpRequest reqReceived2 = trade2.inbound().messageHolder().
+                    httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call();
+            assertEquals(reqToSend2, reqReceived2);
         } finally {
             client.close();
             testServer.unsubscribe();
