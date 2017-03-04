@@ -238,7 +238,6 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             final Subscriber<? super HttpTrade> subscriber, 
             final List<Channel> awaitChannels) {
         awaitChannels.add(channel);
-        channel.read();
         APPLY.ON_CHANNEL_READ.applyTo(channel.pipeline(), 
             new Action0() {
                 @Override
@@ -262,6 +261,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                         channel.close();
                     }
                 }});
+        channel.read();
     }
 
     private void updateCurrentInboundMemory(final int delta) {

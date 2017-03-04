@@ -61,9 +61,6 @@ public class InboundEndpointSupport implements InboundEndpoint {
                             this, ExceptionUtils.exception2detail(e));
                 }});
         
-        // disable auto read
-        channel.read();
-        
         this._channel = channel;
         this._trafficCounter = trafficCounter;
         this._inboundProxy = buildProxy(message);
