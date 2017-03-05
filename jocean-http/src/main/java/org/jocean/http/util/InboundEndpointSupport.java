@@ -28,7 +28,7 @@ public class InboundEndpointSupport implements InboundEndpoint {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(InboundEndpointSupport.class);
-    
+
     public InboundEndpointSupport(
             final InterfaceSelector selector,
             final Channel channel,
@@ -45,6 +45,7 @@ public class InboundEndpointSupport implements InboundEndpoint {
             final Transformer<HttpObject, HttpObject> transform,
             final TrafficCounter trafficCounter,
             final Action1<Action0> onTerminate) {
+        this._selector = selector;
         this._readBegin = readBegin;
         this._holder = new HttpMessageHolder();
         onTerminate.call(_holder.release());
@@ -189,6 +190,11 @@ public class InboundEndpointSupport implements InboundEndpoint {
     }
 
     @Override
+    public boolean isActive() {
+        return this._selector.isActive();
+    }
+    
+    @Override
     public long unreadDurationInMs() {
         final long begin = unreadBeginUpdater.get(this);
         return 0 == begin ? 0 : System.currentTimeMillis() - begin;
@@ -228,6 +234,8 @@ public class InboundEndpointSupport implements InboundEndpoint {
     public int holdingMemorySize() {
         return _holder.retainedByteBufSize();
     }
+    
+    private final InterfaceSelector _selector;
     
     private final Observable<HttpObject> _inboundProxy;
     

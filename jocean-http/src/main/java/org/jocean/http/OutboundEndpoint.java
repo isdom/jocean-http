@@ -6,6 +6,7 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 
 public interface OutboundEndpoint {
+    public boolean isWritable();
     
     public void setFlushPerWrite(final boolean isFlushPerWrite);
     public Action0 doOnWritabilityChanged(final Action1<OutboundEndpoint> onWritabilityChanged);

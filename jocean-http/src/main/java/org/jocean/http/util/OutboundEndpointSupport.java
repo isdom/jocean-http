@@ -50,10 +50,20 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
         this._op = selector.build(Op.class, OP_WHEN_ACTIVE, OP_WHEN_UNACTIVE);
     }
     
+    @Override
     public void setFlushPerWrite(final boolean isFlushPerWrite) {
         this._isFlushPerWrite = isFlushPerWrite;
     }
     
+    private boolean queryWritable() {
+        return _channel.isWritable();
+    }
+
+    @Override
+    public boolean isWritable() {
+        return _op.isWritable(this);
+    }
+
     @Override
     public Action0 doOnWritabilityChanged(final Action1<OutboundEndpoint> onWritabilityChanged) {
         return _op.addWritabilityChanged(this, onWritabilityChanged);
@@ -105,6 +115,11 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
     private final Op _op;
     
     private static final Op OP_WHEN_ACTIVE = new Op() {
+        @Override
+        public boolean isWritable(final OutboundEndpointSupport support) {
+            return support.queryWritable();
+        }
+        
         @Override
         public Action0 addOnSended(final OutboundEndpointSupport support,
                 final Action1<Object> onSended) {
@@ -170,6 +185,11 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
     
     private static final Op OP_WHEN_UNACTIVE = new Op() {
         @Override
+        public boolean isWritable(final OutboundEndpointSupport support) {
+            return false;
+        }
+        
+        @Override
         public Action0 addOnSended(OutboundEndpointSupport support,
                 Action1<Object> onSended) {
             return Actions.empty();
@@ -202,6 +222,7 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
     };
     
     protected interface Op {
+        public boolean isWritable(final OutboundEndpointSupport support);
         public Action0 addOnSended(final OutboundEndpointSupport support, 
                 final Action1<Object> onSended);
         public Action0 addWritabilityChanged(final OutboundEndpointSupport support,
@@ -242,7 +263,6 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
         
     private final Channel _channel;
     private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
-    private final long _createTimeMillis = System.currentTimeMillis();
     private final TrafficCounter _trafficCounter;
     private final Transformer<Object, Object> _transformer;
 }

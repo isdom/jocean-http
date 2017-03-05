@@ -7,6 +7,8 @@ import rx.Observable;
 import rx.functions.Action1;
 
 public interface InboundEndpoint {
+    public boolean isActive();
+    
     public void readMessage();
     public long unreadDurationInMs();
     public void setReadPolicy(final Action1<InboundEndpoint> readPolicy);
@@ -22,7 +24,9 @@ public interface InboundEndpoint {
         public static Action1<InboundEndpoint> ALWAYS = new Action1<InboundEndpoint>() {
             @Override
             public void call(final InboundEndpoint inbound) {
-                inbound.readMessage();
+                if (inbound.isActive()) {
+                    inbound.readMessage();
+                }
             }};
     }
 }
