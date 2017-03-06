@@ -355,42 +355,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             ReferenceCountUtil.release(body);
         }
     }
-    
-    /*
-    private Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProviderOf(
-            final Object signalBean, 
-            final HttpRequest request, 
-            final Feature[] features) {
-        return new Func1<DoOnUnsubscribe, Observable<? extends Object>>() {
-            @Override
-            public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
-                //  first, apply to request
-                applyRequestPreprocessors(
-                        signalBean, 
-                        request, 
-                        features);
-                
-                //  second, build body
-                final BodyForm body = buildBody(
-                        signalBean, 
-                        request, 
-                        features);
-                try {
-                    final Outgoing outgoing = assembleOutgoing(
-                            request, 
-                            body,
-                            filterAttachments(features));
-                    doOnUnsubscribe.call(outgoing.toRelease());
-                    hookPayloadCounter(outgoing.requestSizeInBytes(), features);
-                    return outgoing.request();
-                } catch (Exception e) {
-                    return Observable.error(e);
-                } finally {
-                    ReferenceCountUtil.release(body);
-                }
-            }};
-    }
-    */
 
     private static Attachment[] filterAttachments(final Feature[] features) {
         final Attachment[] attachments = 
