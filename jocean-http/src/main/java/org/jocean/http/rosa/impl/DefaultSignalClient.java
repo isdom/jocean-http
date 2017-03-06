@@ -1,6 +1,9 @@
 package org.jocean.http.rosa.impl;
 
+import java.beans.PropertyEditor;
+import java.beans.PropertyEditorManager;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.URI;
@@ -12,10 +15,15 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javax.ws.rs.BeanParam;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.HeaderParam;
+
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeaturesAware;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.impl.internal.Facades.ResponseBodyTypeSource;
@@ -23,6 +31,7 @@ import org.jocean.http.rosa.impl.internal.Facades.ResponseTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.UriSource;
 import org.jocean.http.rosa.impl.internal.RosaProfiles;
 import org.jocean.http.util.FeaturesBuilder;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.PayloadCounterAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.BeanHolder;
@@ -30,14 +39,19 @@ import org.jocean.idiom.BeanHolderAware;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.Ordered;
-import org.jocean.idiom.rx.DoOnUnsubscribe;
+import org.jocean.idiom.ReflectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.alibaba.fastjson.JSON;
+
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.DefaultLastHttpContent;
+import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
@@ -52,13 +66,10 @@ import io.netty.handler.codec.http.multipart.MemoryFileUpload;
 import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
-import rx.Observable.OnSubscribe;
-import rx.Subscriber;
-import rx.Subscription;
 import rx.functions.Action0;
+import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
-import rx.subscriptions.Subscriptions;
 
 public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
@@ -257,24 +268,36 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final Object signalBean, 
             final Feature... features) {
         final Feature[] fullfeatures = Feature.Util.union(RosaProfiles._DEFAULT_PROFILE, features);
-        return Observable.create(new OnSubscribe<RESP>() {
+        final URI uri = req2uri(signalBean, fullfeatures);
+        return _httpClient.initiator()
+        .remoteAddress(safeGetAddress(signalBean, uri))
+        .feature(genFeatures4HttpClient(signalBean, fullfeatures))
+        .build()
+        .flatMap(new Func1<HttpInitiator, Observable<RESP>>() {
             @Override
-            public void call(final Subscriber<? super RESP> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    final URI uri = req2uri(signalBean, fullfeatures);
-                    _httpClient.defineInteraction(
-                            safeGetAddress(signalBean, uri), 
-                            requestProviderOf(signalBean, 
-                                initRequestOf(uri), 
-                                fullfeatures),
-                            genFeatures4HttpClient(signalBean, fullfeatures))
-                    .compose(new ToSignalResponse<RESP>(
-                            safeGetResponseType(fullfeatures),
-                            safeGetResponseBodyType(signalBean, fullfeatures)))
-                    .subscribe(subscriber);
-                }
-            }
-        });
+            public Observable<RESP> call(final HttpInitiator initiator) {
+                initiator.outbound().message(
+                    outboundMessageOf(signalBean, 
+                            initRequestOf(uri),
+                            fullfeatures,
+                            initiator.onTerminate()));
+                
+                return initiator.inbound().message().last()
+                    .flatMap(new Func1<HttpObject, Observable<RESP>>() {
+                        @Override
+                        public Observable<RESP> call(HttpObject t) {
+                            return toRESP(initiator.inbound()
+                                .messageHolder()
+                                .httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE),
+                                safeGetResponseType(fullfeatures),
+                                safeGetResponseBodyType(signalBean, fullfeatures));
+                        }})
+                    .doAfterTerminate(new Action0() {
+                        @Override
+                        public void call() {
+                            initiator.close();
+                        }});
+            }});
     }
     
     private Feature[] genFeatures4HttpClient(final Object signalBean,
@@ -302,6 +325,38 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         return request;
     }
 
+    private Observable<? extends Object> outboundMessageOf(
+            final Object signalBean, 
+            final HttpRequest request, 
+            final Feature[] features, 
+            final Action1<Action0> onTerminate) {
+        //  first, apply to request
+        applyRequestPreprocessors(
+                signalBean, 
+                request, 
+                features);
+        
+        //  second, build body
+        final BodyForm body = buildBody(
+                signalBean, 
+                request, 
+                features);
+        try {
+            final Outgoing outgoing = assembleOutgoing(
+                    request, 
+                    body,
+                    filterAttachments(features));
+            onTerminate.call(outgoing.toRelease());
+            hookPayloadCounter(outgoing.requestSizeInBytes(), features);
+            return outgoing.request();
+        } catch (Exception e) {
+            return Observable.error(e);
+        } finally {
+            ReferenceCountUtil.release(body);
+        }
+    }
+    
+    /*
     private Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProviderOf(
             final Object signalBean, 
             final HttpRequest request, 
@@ -335,6 +390,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 }
             }};
     }
+    */
 
     private static Attachment[] filterAttachments(final Feature[] features) {
         final Attachment[] attachments = 
@@ -372,9 +428,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         
         final Observable<Object> _requestObservable;
         final long _requestSizeInBytes;
-        final Subscription _torelease;
+        final Action0 _torelease;
         
-        Outgoing(final Observable<Object> request, final long size, final Subscription torelease) {
+        Outgoing(final Observable<Object> request, final long size, final Action0 torelease) {
             this._requestObservable = request;
             this._requestSizeInBytes = size;
             this._torelease = torelease;
@@ -388,7 +444,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             return this._requestSizeInBytes;
         }
         
-        Subscription toRelease() {
+        Action0 toRelease() {
             return this._torelease;
         }
     }
@@ -401,12 +457,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final LastHttpContent lastContent = buildLastContent(request, body);
             return new Outgoing(Observable.<Object>just(request, lastContent), 
                     lastContent.content().readableBytes(), 
-                    Subscriptions.create(new Action0() {
-                                @Override
-                                public void call() {
-                                    ReferenceCountUtil.release(request);
-                                    ReferenceCountUtil.release(lastContent);
-                                }}));
+                    new Action0() {
+                        @Override
+                        public void call() {
+                            ReferenceCountUtil.release(request);
+                            ReferenceCountUtil.release(lastContent);
+                        }});
         } else {
             // Use the PostBody encoder
             final HttpPostRequestEncoder postRequestEncoder =
@@ -420,13 +476,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             // finalize request
             final HttpRequest request4send = postRequestEncoder.finalizeRequest();
 
-            final Subscription toRelease = Subscriptions.create(
-                    new Action0() {
-                        @Override
-                        public void call() {
-                            ReferenceCountUtil.release(request4send);
-                            RxNettys.releaseObjects(postRequestEncoder.getBodyListAttributes());
-                        }});
+            final Action0 toRelease = new Action0() {
+                @Override
+                public void call() {
+                    ReferenceCountUtil.release(request4send);
+                    RxNettys.releaseObjects(postRequestEncoder.getBodyListAttributes());
+                }};
          
             return postRequestEncoder.isChunked() 
                 ? new Outgoing(Observable.<Object>just(request4send, postRequestEncoder), 
@@ -628,6 +683,187 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     @Override
     public void setBeanHolder(final BeanHolder beanHolder) {
         this._beanHolder = beanHolder;
+    }
+    
+    private <RESP> Observable<RESP> toRESP(
+            final Func0<FullHttpResponse> messageBuilder,
+            final Class<?> respType,
+            final Class<?> bodyType
+            ) {
+        final FullHttpResponse fullresp = messageBuilder.call();
+        if (null!=fullresp) {
+            try {
+                final byte[] bytes = Nettys.dumpByteBufAsBytes(fullresp.content());
+                if (LOG.isTraceEnabled()) {
+                    try {
+                        LOG.trace("receive signal response: {}",
+                                new String(bytes, CharsetUtil.UTF_8));
+                    } catch (Exception e) 
+                    { // decode bytes as UTF-8 error, just ignore 
+                    }
+                }
+                if (null != respType) {
+                    return Observable.just(DefaultSignalClient.<RESP>convertResponseTo(fullresp, bytes, respType));
+                }
+                if (null != bodyType) {
+                    return Observable.just(JSON.<RESP>parseObject(bytes, bodyType));
+                } else {
+                    @SuppressWarnings("unchecked")
+                    final RESP respObj = (RESP)bytes;
+                    return Observable.just(respObj);
+                }
+            } catch (Exception e) {
+                LOG.warn("exception when parse response {}, detail:{}",
+                        fullresp, ExceptionUtils.exception2detail(e));
+                return Observable.error(e);
+            } finally {
+                final boolean released = fullresp.release();
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("HttpResponse({}) released({}) after toRESP", 
+                        fullresp, released);
+                }
+            }
+        }
+        return Observable.error(new RuntimeException("invalid response"));
+    }
+
+    private static <RESP> RESP convertResponseTo(
+            final FullHttpResponse fullresp, 
+            final byte[] bodyBytes,
+            final Class<?> respType) {
+        try {
+            @SuppressWarnings("unchecked")
+            final RESP respBean = (RESP)respType.newInstance();
+            
+            assignAllParams(respBean, fullresp, bodyBytes);
+            
+            return respBean;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static void assignAllParams(
+            final Object bean,
+            final HttpMessage httpmsg, 
+            final byte[] bodyBytes) {
+        assignHeaderParams(bean, httpmsg);
+        assignBeanParams(bean, httpmsg, bodyBytes);
+    }
+
+    private static void assignBeanParams(
+            final Object bean,
+            final HttpMessage httpmsg, 
+            final byte[] bodyBytes) {
+        final String contentType = httpmsg.headers().get(HttpHeaderNames.CONTENT_TYPE);
+        final Field[] beanfields = 
+                ReflectUtils.getAnnotationFieldsOf(bean.getClass(), BeanParam.class);
+        if (null != beanfields && beanfields.length > 0) {
+            for (Field field : beanfields) {
+                try {
+                    final Object value = createBeanValue(bodyBytes, contentType, field);
+                    if (null != value) {
+                        field.set(bean, value);
+                        assignAllParams(value, httpmsg, bodyBytes);
+                    }
+                } catch (Exception e) {
+                    LOG.warn("exception when set bean value for field({}), detail:{}",
+                            field.getName(), ExceptionUtils.exception2detail(e));
+                }
+            }
+        }
+    }
+
+    private static Object createBeanValue(final byte[] bodyBytes, final String contentType, final Field beanField) {
+        if ( !isMatchMediatype(contentType, beanField) ) {
+            return null;
+        }
+        if (null != bodyBytes) {
+            if (beanField.getType().equals(byte[].class)) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("assign byte array with: {}", new String(bodyBytes, CharsetUtil.UTF_8));
+                }
+                return bodyBytes;
+            } else {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("createBeanValue: {}", new String(bodyBytes, CharsetUtil.UTF_8));
+                }
+                return JSON.parseObject(bodyBytes, beanField.getType());
+            }
+        }
+        try {
+            return beanField.getType().newInstance();
+        } catch (Throwable e) {
+            LOG.warn("exception when create instance for type:{}, detail:{}",
+                    beanField.getType(), ExceptionUtils.exception2detail(e));
+            return null;
+        }
+    }
+
+    private static boolean isMatchMediatype(final String contentType,
+            final Field beanField) {
+        if (null == contentType) {
+            return true;
+        }
+        final Consumes consumes = beanField.getType().getAnnotation(Consumes.class);
+        if (null == consumes) {
+            return true;
+        }
+        for (String mediaType : consumes.value()) {
+            if ( "*/*".equals(mediaType)) {
+                return true;
+            }
+            if (contentType.startsWith(mediaType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    private static void assignHeaderParams(final Object bean, final HttpMessage httpmsg) {
+        final Field[] headerfields = 
+                ReflectUtils.getAnnotationFieldsOf(bean.getClass(), HeaderParam.class);
+        if (null != headerfields && headerfields.length > 0) {
+            for (Field field : headerfields) {
+                injectValuesToField(
+                    httpmsg.headers().getAll(field.getAnnotation(HeaderParam.class).value()), 
+                    bean,
+                    field);
+            }
+        }
+    }
+
+    private static void injectValuesToField(
+            final List<String> values,
+            final Object obj,
+            final Field field) {
+        //  TODO, if field is Collection or Array type, then assign all values to field
+        if (null != values && values.size() > 0) {
+            injectValueToField(values.get(0), obj, field);
+        }
+    }
+
+    private static void injectValueToField(
+            final String value,
+            final Object obj,
+            final Field field) {
+        if (null != value) {
+            try {
+                // just check String field
+                if (field.getType().equals(String.class)) {
+                    field.set(obj, value);
+                } else {
+                    final PropertyEditor editor = PropertyEditorManager.findEditor(field.getType());
+                    if (null != editor) {
+                        editor.setAsText(value);
+                        field.set(obj, editor.getValue());
+                    }
+                }
+            } catch (Exception e) {
+                LOG.warn("exception when set obj({}).{} with value({}), detail:{} ",
+                        obj, field.getName(), value, ExceptionUtils.exception2detail(e));
+            }
+        }
     }
     
     private BeanHolder _beanHolder;
