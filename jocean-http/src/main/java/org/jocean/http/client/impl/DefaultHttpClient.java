@@ -11,45 +11,29 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
-import org.jocean.http.TrafficCounter;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound.ApplyToRequest;
-import org.jocean.http.util.APPLY;
-import org.jocean.http.util.ComposeSource;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
-import org.jocean.http.util.SendedMessageAware;
 import org.jocean.http.util.TrafficCounterAware;
-import org.jocean.http.util.TrafficCounterHandler;
-import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.ReflectUtils;
-import org.jocean.idiom.rx.DoOnUnsubscribe;
-import org.jocean.idiom.rx.RxObservables;
-import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFactory;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
-import rx.Subscriber;
-import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func1;
-import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -206,138 +190,7 @@ public class DefaultHttpClient implements HttpClient {
         }
         return false;
     }
-
-    private Func1<Channel, Observable<? extends Object>> prepareRecvResponse(final Feature[] features) {
-        final ComposeSource[] composeSources = 
-                InterfaceUtils.selectIncludeType(
-                        ComposeSource.class, (Object[])features);;
-        
-        return new Func1<Channel, Observable<? extends Object>>() {
-            @Override
-            public Observable<? extends Object> call(final Channel channel) {
-                @SuppressWarnings("deprecation")
-                Observable<? extends Object> channelAndRespStream = 
-                        Observable.create(new Observable.OnSubscribe<Object>() {
-                    @Override
-                    public void call(final Subscriber<? super Object> subscriber) {
-                        RxNettys.doOnUnsubscribe(channel, 
-                            Subscriptions.create(RxNettys.actionToRemoveHandler(channel, 
-                                APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber))));
-                        if ( !subscriber.isUnsubscribed()) {
-                            subscriber.onNext(channel);
-                        }
-                    }});
-                
-                if (null != composeSources) {
-                    channelAndRespStream = channelAndRespStream.compose(composeSources[0].transformer(channel));
-                }
-                
-                return channelAndRespStream
-                    .compose(ChannelPool.Util.hookPostReceiveLastContent(channel))
-                    ;
-            }};
-    }
     
-    private Func1<Object, Observable<? extends HttpObject>> buildAndSendRequest(
-            final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
-            final Feature[] features) {
-        return new Func1<Object, Observable<? extends HttpObject>>() {
-            @Override
-            public Observable<? extends HttpObject> call(final Object obj) {
-                if (obj instanceof Channel) {
-                    final Channel channel = (Channel)obj;
-                    return safeBuildRequestByProvider(requestProvider, channel)
-                        .doOnNext(doOnRequest(features))
-                        .compose(ChannelPool.Util.hookPreSendHttpRequest(channel))
-                        .doOnCompleted(flushWhenCompleted(channel))
-                        .flatMap(sendRequest(channel, features));
-                } else if (obj instanceof HttpObject) {
-                    return Observable.<HttpObject>just((HttpObject)obj);
-                } else {
-                    return Observable.<HttpObject>error(new RuntimeException("unknowm obj:" + obj));
-                }
-            }
-        };
-    }
-    
-    private Observable<? extends Object> safeBuildRequestByProvider(
-            final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
-            final Channel channel) {
-        final Observable<? extends Object> requestObservable = 
-                requestProvider.call(RxNettys.queryDoOnUnsubscribe(channel));
-        return null != requestObservable 
-                ? requestObservable 
-                : Observable.error(new RuntimeException("Can't build request observable"));
-    }
-
-    private Action1<Object> doOnRequest(final Feature[] features) {
-        final ApplyToRequest applyToRequest = 
-                InterfaceUtils.compositeIncludeType(
-                    ApplyToRequest.class,
-                    InterfaceUtils.compositeBySource(
-                        ApplyToRequest.class, HttpClientConstants._CLS_TO_APPLY2REQ, features),
-                    InterfaceUtils.compositeIncludeType(
-                        ApplyToRequest.class, (Object[])features));
-        return new Action1<Object> () {
-            @Override
-            public void call(final Object msg) {
-                if (msg instanceof HttpRequest) {
-                    if (null!=applyToRequest) {
-                        try {
-                            applyToRequest.call((HttpRequest)msg);
-                        } catch (Exception e) {
-                            LOG.warn("exception when invoke applyToRequest.call, detail: {}",
-                                    ExceptionUtils.exception2detail(e));
-                        }
-                    }
-                }
-            }
-        };
-    }
-    
-    private Action0 flushWhenCompleted(final Channel channel) {
-        return new Action0() {
-            @Override
-            public void call() {
-                channel.flush();
-            }};
-    }
-
-    private Func1<Object, Observable<? extends HttpObject>> sendRequest(
-            final Channel channel, final Feature[] features) {
-        
-        final boolean flushAfterWrite = 
-                InterfaceUtils.selectIncludeType(
-                        Feature.FLUSH_PER_WRITE.getClass(), (Object[])features) != null;
-        
-        final Subscriber<Object> subscriber = subscriberOfSendedMessage(features);
-        
-        return new Func1<Object, Observable<? extends HttpObject>>() {
-            @Override
-            public Observable<? extends HttpObject> call(final Object reqmsg) {
-                final ChannelFuture future = flushAfterWrite 
-                        ? channel.writeAndFlush(ReferenceCountUtil.retain(reqmsg))
-                        : channel.write(ReferenceCountUtil.retain(reqmsg))
-                        ;
-                
-                if (null != subscriber) {
-                    RxNettys.channelObservableFromFuture(future).map(new Func1<Channel, Object>() {
-                        @Override
-                        public Object call(final Channel c) {
-                            return reqmsg;
-                        }})
-                    .concatWith(Observable.never()) // ensure NOT push onCompleted
-                    .subscribe(subscriber);
-                }
-                
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("send http request msg :{}", reqmsg);
-                }
-                RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
-                return RxNettys.observableFromFuture(future);
-            }};
-    }
-
     private Observable<? extends Channel> createChannelAndConnectTo(
             final SocketAddress remoteAddress, 
             final Feature[] features) {
@@ -436,19 +289,6 @@ public class DefaultHttpClient implements HttpClient {
         this._channelCreator.close();
     }
     
-    private Subscriber<Object> subscriberOfSendedMessage(final Feature[] features) {
-        final SendedMessageAware sendedMessageAware = 
-                InterfaceUtils.compositeIncludeType(SendedMessageAware.class, (Object[])features);
-        if (null != sendedMessageAware) {
-            final COWCompositeSupport<Subscriber<Object>> composite = 
-                    new COWCompositeSupport<>();
-            sendedMessageAware.setSendedMessage(RxObservables.asObservable(composite));
-            return RxSubscribers.asSubscriber(composite);
-        } else {
-            return null;
-        }
-    }
-
     private int _inboundBlockSize = 0;
     
     private final ChannelPool _channelPool;
