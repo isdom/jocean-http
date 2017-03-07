@@ -114,10 +114,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 new TerminateAwareSupport<HttpTrade>(_selector);
         this._channel = channel;
         
-        for (Action1<HttpTrade> onTerminate : onTerminates) {
-            doOnTerminate(onTerminate);
-        }
-        
         //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
         this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
@@ -148,6 +144,10 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 this,
                 _trafficCounter,
                 onTerminate());
+        
+        for (Action1<HttpTrade> onTerminate : onTerminates) {
+            doOnTerminate(onTerminate);
+        }
     }
 
     @Override

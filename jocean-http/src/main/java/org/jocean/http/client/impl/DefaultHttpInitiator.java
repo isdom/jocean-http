@@ -113,10 +113,6 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             new TerminateAwareSupport<HttpInitiator>(_selector);
         this._channel = channel;
         
-        for (Action1<HttpInitiator> onTerminate : onTerminates) {
-            doOnTerminate(onTerminate);
-        }
-        
         this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
                 APPLY.TRAFFICCOUNTER);
@@ -146,6 +142,10 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 this,
                 _trafficCounter,
                 onTerminate());
+        
+        for (Action1<HttpInitiator> onTerminate : onTerminates) {
+            doOnTerminate(onTerminate);
+        }
     }
 
     public void setApplyToRequest(final ApplyToRequest applyToRequest) {

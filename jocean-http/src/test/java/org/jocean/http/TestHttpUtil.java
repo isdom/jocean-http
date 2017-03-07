@@ -6,9 +6,9 @@ import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.impl.AbstractBootstrapCreator;
 import org.jocean.http.server.impl.DefaultHttpServerBuilder;
-import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.RxActions;
+import org.jocean.idiom.rx.RxSubscribers;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
@@ -46,16 +46,14 @@ public class TestHttpUtil {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    final HttpMessageHolder holder = new HttpMessageHolder();
                     trade.inbound()
                         .message()
-                        .compose(holder.assembleAndHold())
-                        .doOnCompleted(RxActions.bindParameter(onRequestCompleted,
-                                holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST), 
-                                trade))
-                        .doAfterTerminate(holder.release())
-                        .doOnUnsubscribe(holder.release())
-                        .subscribe();
+                        .subscribe(RxSubscribers.ignoreNext(),
+                            RxSubscribers.ignoreError(),
+                            RxActions.bindParameter(onRequestCompleted,
+                                trade.inbound().messageHolder()
+                                    .httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST), 
+                                trade));
                 }});
     }
     

@@ -308,10 +308,13 @@ public class HttpMessageHolder {
                 final HttpObject msg = (HttpObject)obj;
                 if (LOG.isDebugEnabled()) {
                     if (msg instanceof ByteBufHolder) {
-                        LOG.debug("HttpMessageHolder: receive ByteBufHolder's content: {}", 
+                        LOG.debug("HttpMessageHolder: {} receive ByteBufHolder's content: {}", 
+                                HttpMessageHolder.this,
                                 Nettys.dumpByteBufHolder((ByteBufHolder)msg));
                     } else {
-                        LOG.debug("HttpMessageHolder: receive HttpObject: {}", msg);
+                        LOG.debug("HttpMessageHolder: {} receive HttpObject: {}", 
+                                HttpMessageHolder.this,
+                                msg);
                     }
                 }
                 if (isAssemble() && (msg instanceof HttpContent)) {
