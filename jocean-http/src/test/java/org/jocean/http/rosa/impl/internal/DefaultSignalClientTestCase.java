@@ -61,6 +61,8 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import rx.Observable;
 import rx.Subscription;
+import rx.functions.Action0;
+import rx.functions.Action1;
 import rx.functions.Action2;
 import rx.functions.Func0;
 import rx.functions.Func1;
@@ -85,20 +87,43 @@ public class DefaultSignalClientTestCase {
     
     final HttpDataFactory HTTP_DATA_FACTORY = new DefaultHttpDataFactory(false);
     
-    private static Observable<HttpObject> buildResponse(final Object responseBean) {
+    private static Observable<HttpObject> buildResponse(final Object responseBean,
+            final Action1<Action0> onTerminate) {
         final byte[] responseBytes = JSON.toJSONBytes(responseBean);
         final FullHttpResponse response = new DefaultFullHttpResponse(
                 HttpVersion.HTTP_1_1, OK, 
                 Unpooled.wrappedBuffer(responseBytes));
+        
+        onTerminate.call(new Action0() {
+            @Override
+            public void call() {
+                final boolean released = response.release();
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("buildBytesResponse release {} released({})", 
+                        response, released);
+                }
+            }});
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
         return  Observable.<HttpObject>just(response);
     }
     
-    private static Observable<HttpObject> buildBytesResponse(final byte[] bodyAsBytes) {
+    private static Observable<HttpObject> buildBytesResponse(final byte[] bodyAsBytes, 
+            final Action1<Action0> onTerminate) {
         final FullHttpResponse response = new DefaultFullHttpResponse(
                 HttpVersion.HTTP_1_1, OK, 
                 Unpooled.wrappedBuffer(bodyAsBytes));
+        
+        onTerminate.call(new Action0() {
+            @Override
+            public void call() {
+                final boolean released = response.release();
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("buildBytesResponse release {} released({})", 
+                        response, released);
+                }
+            }});
+        
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
         return  Observable.<HttpObject>just(response);
@@ -389,7 +414,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outbound().message(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -413,7 +438,9 @@ public class DefaultSignalClientTestCase {
             
             final TestRequest reqToSend = new TestRequest("1");
             final TestResponse respReceived = 
-                ((SignalClient)signalClient).<TestResponse>defineInteraction(reqToSend)
+                ((SignalClient)signalClient).interaction()
+                .request(reqToSend)
+                .<TestResponse>build()
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             
@@ -504,7 +531,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outbound().message(buildBytesResponse(respToSendback));
+                trade.outbound().message(buildBytesResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -525,9 +552,12 @@ public class DefaultSignalClientTestCase {
             
             final CommonRequest reqToSend = new CommonRequest("1");
             final byte[] bytesReceived = 
-                ((SignalClient)signalClient).<byte[]>defineInteraction(reqToSend, 
+                ((SignalClient)signalClient).interaction()
+                .request(reqToSend)
+                .feature(
                     new SignalClient.UsingPath("/test/simpleRequest"),
                     new SignalClient.UsingMethod(GET.class))
+                .<byte[]>build()
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             
@@ -562,7 +592,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outbound().message(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -587,7 +617,9 @@ public class DefaultSignalClientTestCase {
             
             final TestRequest reqToSend = new TestRequest("1");
             final TestResponse respReceived = 
-                ((SignalClient)signalClient).<TestResponse>defineInteraction(reqToSend)
+                ((SignalClient)signalClient).interaction()
+                .request(reqToSend)
+                .<TestResponse>build()
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             
@@ -626,7 +658,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outbound().message(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -650,7 +682,9 @@ public class DefaultSignalClientTestCase {
             
             final TestRequestByPost reqToSend = new TestRequestByPost("1", null);
             final TestResponse respReceived = 
-                ((SignalClient)signalClient).<TestResponse>defineInteraction(reqToSend)
+                ((SignalClient)signalClient).interaction()
+                .request(reqToSend)
+                .<TestResponse>build()
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             
@@ -689,7 +723,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outbound().message(buildBytesResponse(respToSendback));
+                trade.outbound().message(buildBytesResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -708,11 +742,13 @@ public class DefaultSignalClientTestCase {
             
             final TestRequestByPost reqToSend = new TestRequestByPost("1", null);
             final byte[] bytesReceived = 
-                ((SignalClient)signalClient).<byte[]>defineInteraction(reqToSend, 
-                        new SignalClient.UsingPath("/test/simpleRequest"),
+                ((SignalClient)signalClient).interaction()
+                .request(reqToSend)
+                .feature(new SignalClient.UsingPath("/test/simpleRequest"),
                         new SignalClient.UsingMethod(POST.class),
                         new SignalClient.JSONContent("{\"code\": \"added\"}"))
-                .timeout(1, TimeUnit.SECONDS)
+                .<byte[]>build()
+//                .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             
             assertEquals(HttpMethod.POST, reqMethodReceivedRef.get());
@@ -753,7 +789,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outbound().message(buildBytesResponse(respToSendback));
+                trade.outbound().message(buildBytesResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -771,11 +807,12 @@ public class DefaultSignalClientTestCase {
                     buildUri2Addr(testAddr), httpclient);
             
             final byte[] bytesReceived = 
-                ((SignalClient)signalClient).<byte[]>defineInteraction( 
-                        new Object(),
-                        new SignalClient.UsingPath("/test/raw"),
+                ((SignalClient)signalClient).interaction()
+                .request(new Object())
+                .feature(new SignalClient.UsingPath("/test/raw"),
                         new SignalClient.UsingMethod(POST.class),
                         new SignalClient.JSONContent("{\"code\": \"added\"}"))
+                .<byte[]>build()
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             
@@ -814,7 +851,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outbound().message(buildBytesResponse(respToSendback));
+                trade.outbound().message(buildBytesResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -831,12 +868,13 @@ public class DefaultSignalClientTestCase {
             final DefaultSignalClient signalClient = new DefaultSignalClient(buildUri2Addr(testAddr), httpclient);
             
             final byte[] bytesReceived = 
-                ((SignalClient)signalClient).<byte[]>defineInteraction( 
-                        new Object(),
-                        new SignalClient.UsingUri(new URI("http://test")),
+                ((SignalClient)signalClient).interaction()
+                .request(new Object())
+                .feature(new SignalClient.UsingUri(new URI("http://test")),
                         new SignalClient.UsingPath("/test/raw"),
                         new SignalClient.UsingMethod(POST.class),
                         new SignalClient.JSONContent("{\"code\": \"added\"}"))
+                .<byte[]>build()
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             
@@ -875,7 +913,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outbound().message(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -892,13 +930,14 @@ public class DefaultSignalClientTestCase {
             final DefaultSignalClient signalClient = new DefaultSignalClient(buildUri2Addr(testAddr), httpclient);
             
             final TestResponse respReceived = 
-                ((SignalClient)signalClient).<TestResponse>defineInteraction( 
-                        new Object(),
-                        new SignalClient.UsingUri(new URI("http://test")),
+                ((SignalClient)signalClient).interaction()
+                .request(new Object())
+                .feature(new SignalClient.UsingUri(new URI("http://test")),
                         new SignalClient.UsingPath("/test/raw"),
                         new SignalClient.UsingMethod(POST.class),
                         new SignalClient.JSONContent("{\"code\": \"added\"}"),
                         new SignalClient.DecodeResponseBodyAs(TestResponse.class))
+                .<TestResponse>build()
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             
@@ -1010,7 +1049,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outbound().message(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -1034,7 +1073,9 @@ public class DefaultSignalClientTestCase {
             
             final TestRequestByPostWithQueryParam reqToSend = new TestRequestByPostWithQueryParam("1", "test");
             final TestResponse respReceived = 
-                ((SignalClient)signalClient).<TestResponse>defineInteraction(reqToSend)
+                ((SignalClient)signalClient).interaction()
+                .request(reqToSend)
+                .<TestResponse>build()
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             
@@ -1144,7 +1185,7 @@ public class DefaultSignalClientTestCase {
                 } finally {
                     req.release();
                 }
-                trade.outbound().message(buildResponse(respToSendback));
+                trade.outbound().message(buildResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
@@ -1168,7 +1209,9 @@ public class DefaultSignalClientTestCase {
             
             final TestRequestByPostWithHeaderParam reqToSend = new TestRequestByPostWithHeaderParam("1", "test");
             final TestResponse respReceived = 
-                ((SignalClient)signalClient).<TestResponse>defineInteraction(reqToSend)
+                ((SignalClient)signalClient).interaction()
+                .request(reqToSend)
+                .<TestResponse>build()
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             
@@ -1222,7 +1265,7 @@ public class DefaultSignalClientTestCase {
                             }
                         }
                     }
-                    trade.outbound().message(buildResponse(respToSendback));
+                    trade.outbound().message(buildResponse(respToSendback, trade.onTerminate()));
                 } finally {
                     req.release();
                 }
@@ -1256,9 +1299,10 @@ public class DefaultSignalClientTestCase {
             };
             
             final TestRequestByPost reqToSend = new TestRequestByPost("1", null);
-            final TestResponse respReceived = ((SignalClient)signalClient).<TestResponse>defineInteraction(
-                    reqToSend, 
-                    attachsToSend)
+            final TestResponse respReceived = ((SignalClient)signalClient).interaction()
+                .request(reqToSend)
+                .feature(attachsToSend)
+                .<TestResponse>build()
                 .timeout(1, TimeUnit.SECONDS)
                 .toBlocking().single();
             

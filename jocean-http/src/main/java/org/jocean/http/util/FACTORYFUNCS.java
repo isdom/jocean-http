@@ -30,6 +30,7 @@ import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.AttributeKey;
+import io.netty.util.ReferenceCountUtil;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
@@ -251,7 +252,7 @@ class FACTORYFUNCS {
             new Func1<Subscriber<? super HttpObject>, ChannelHandler>() {
         @Override
         public ChannelHandler call(final Subscriber<? super HttpObject> subscriber) {
-            return new SimpleChannelInboundHandler<HttpObject>(true) {
+            return new SimpleChannelInboundHandler<HttpObject>(false) {
                 @Override
                 public void exceptionCaught(final ChannelHandlerContext ctx,
                         final Throwable cause) throws Exception {
@@ -265,11 +266,6 @@ class FACTORYFUNCS {
                     }
                     ctx.close();
                 }
-
-                // @Override
-                // public void channelReadComplete(ChannelHandlerContext ctx) {
-                // ctx.flush();
-                // }
 
                 @Override
                 public void channelInactive(final ChannelHandlerContext ctx)
@@ -288,36 +284,43 @@ class FACTORYFUNCS {
                 @Override
                 protected void channelRead0(final ChannelHandlerContext ctx,
                         final HttpObject msg) throws Exception {
-                    if (LOG.isDebugEnabled()) {
-                        if (msg instanceof ByteBufHolder) {
-                            LOG.debug("channelRead0: channel({})/handler({}), call ({}).onNext with ByteBufHolder's content: {}.", 
-                                    ctx.channel(), ctx.name(), subscriber, Nettys.dumpByteBufHolder((ByteBufHolder)msg));
-                        } else {
-                            LOG.debug("channelRead0: channel({})/handler({}), call ({}).onNext with HttpObject: {}.", 
-                                    ctx.channel(), ctx.name(), subscriber, msg);
+                    try {
+                        if (LOG.isDebugEnabled()) {
+                            if (msg instanceof ByteBufHolder) {
+                                LOG.debug("channelRead0: channel({})/handler({}), call ({}).onNext with ByteBufHolder's content: {}.", 
+                                        ctx.channel(), ctx.name(), subscriber, Nettys.dumpByteBufHolder((ByteBufHolder)msg));
+                            } else {
+                                LOG.debug("channelRead0: channel({})/handler({}), call ({}).onNext with HttpObject: {}.", 
+                                        ctx.channel(), ctx.name(), subscriber, msg);
+                            }
                         }
-                    }
-                    
-                    if (msg instanceof HttpRequest) {
-                        initTouchableWithRequest(ctx.channel(), (HttpRequest)msg);
-                    } else if (msg instanceof HttpResponse) {
-                        initTouchableWithResponse(ctx.channel(), (HttpResponse)msg);
-                    }
-                    
-                    if (msg instanceof HttpContent) {
-                        touchAndHoldContent(ctx.channel(), (HttpContent)msg);
-                    }
-                    
-                    if (!subscriber.isUnsubscribed()) {
-                        try {
-                            subscriber.onNext(msg);
-                        } catch (Exception e) {
-                            LOG.warn("exception when invoke onNext for channel({})/msg ({}), detail: {}.", 
-                                    ctx.channel(), msg, ExceptionUtils.exception2detail(e));
+                        
+                        if (msg instanceof HttpRequest) {
+                            initTouchableWithRequest(ctx.channel(), (HttpRequest)msg);
+                        } else if (msg instanceof HttpResponse) {
+                            initTouchableWithResponse(ctx.channel(), (HttpResponse)msg);
                         }
+                        
+                        if (msg instanceof HttpContent) {
+                            touchAndHoldContent(ctx.channel(), (HttpContent)msg);
+                        }
+                        
+                        if (!subscriber.isUnsubscribed()) {
+                            try {
+                                subscriber.onNext(msg);
+                            } catch (Exception e) {
+                                LOG.warn("exception when invoke onNext for channel({})/msg ({}), detail: {}.", 
+                                        ctx.channel(), msg, ExceptionUtils.exception2detail(e));
+                            }
+                        }
+                    } finally {
+                        ReferenceCountUtil.release(msg);
                     }
                     
                     if (msg instanceof LastHttpContent) {
+                        //  remove handler itself
+                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
+                        
                         /*
                          * netty 参考代码: https://github.com/netty/netty/blob/netty-
                          * 4.0.26.Final /codec/src /main/java/io/netty/handler/codec
@@ -330,8 +333,6 @@ class FACTORYFUNCS {
                          * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
                          * 因此，无需在channelInactive处，针对该情况做特殊处理
                          */
-                        //  remove handler itself
-                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
                         try {
                             if (!subscriber.isUnsubscribed()) {
                                 subscriber.onCompleted();
@@ -342,11 +343,6 @@ class FACTORYFUNCS {
                         }
                     }
                 }
-
-                // @Override
-                // public void channelActive(final ChannelHandlerContext ctx)
-                // throws Exception {
-                // }
             };
         }
     };

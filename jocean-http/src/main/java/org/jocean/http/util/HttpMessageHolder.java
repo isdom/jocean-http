@@ -260,9 +260,6 @@ public class HttpMessageHolder {
     }
 
     private static <T> void releaseReferenceCountedList(final List<T> objs) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("release {} contain {} element.", objs, objs.size());
-        }
         for (T obj : objs) {
             final boolean released = ReferenceCountUtil.release(obj);
             if (LOG.isDebugEnabled()) {

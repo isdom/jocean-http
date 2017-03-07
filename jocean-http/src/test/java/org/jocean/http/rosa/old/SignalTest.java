@@ -75,7 +75,8 @@ public class SignalTest {
             final QueryMyPatientsForDoctorRequest req = new QueryMyPatientsForDoctorRequest();
             req.setDoctorId("8510");
             
-            ((SignalClient)client).<QueryMyPatientsForDoctorResponse>defineInteraction(req)
+            ((SignalClient)client).interaction().request(req)
+                .<QueryMyPatientsForDoctorResponse>build()
                 .subscribe(new Subscriber<QueryMyPatientsForDoctorResponse>() {
     
                 @Override
@@ -135,12 +136,13 @@ public class SignalTest {
             req.setJourneyId("1");
             
             final Subscription subscription = 
-            client.<AddMultiMediasToJourneyResponse>defineInteraction(req, 
-//                    new Attachment("/Users/isdom/Desktop/997df3df73797e91dea4853c228fcbdee36ceb8a38cc8-1vxyhE_fw236.jpeg", "image/jpeg"))
-                    ENABLE_LOGGING, trafficCounter, payloadCounter,
-                    new Attachment("/Users/isdom/Pictures/IMG_3492.JPG", "image/jpeg"))
-                .subscribe(new Subscriber<AddMultiMediasToJourneyResponse>() {
-    
+            client.interaction().request(req)
+            .feature(
+//                  new Attachment("/Users/isdom/Desktop/997df3df73797e91dea4853c228fcbdee36ceb8a38cc8-1vxyhE_fw236.jpeg", "image/jpeg"))
+                  ENABLE_LOGGING, trafficCounter, payloadCounter,
+                  new Attachment("/Users/isdom/Pictures/IMG_3492.JPG", "image/jpeg"))
+            .<AddMultiMediasToJourneyResponse>build()
+            .subscribe(new Subscriber<AddMultiMediasToJourneyResponse>() {
                 @Override
                 public void onCompleted() {
                     LOG.debug("AddMultiMediasToJourneyRequest: onCompleted.");

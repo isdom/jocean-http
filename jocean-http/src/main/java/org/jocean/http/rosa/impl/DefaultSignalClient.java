@@ -258,13 +258,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }};
     }
     
-    @Override
-    public <RESP> Observable<RESP> rawDefineInteraction(final Feature... features) {
-        return defineInteraction(null, features);
-    }
-    
-    @Override
-    public <RESP> Observable<RESP> defineInteraction(
+    private <RESP> Observable<RESP> defineInteraction(
             final Object signalBean, 
             final Feature... features) {
         final Feature[] fullfeatures = Feature.Util.union(RosaProfiles._DEFAULT_PROFILE, features);
@@ -287,8 +281,8 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                         @Override
                         public Observable<RESP> call(HttpObject t) {
                             return toRESP(initiator.inbound()
-                                .messageHolder()
-                                .httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE),
+                                    .messageHolder()
+                                    .httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE),
                                 safeGetResponseType(fullfeatures),
                                 safeGetResponseBodyType(signalBean, fullfeatures));
                         }})

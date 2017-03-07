@@ -21,13 +21,14 @@ public class JolokiaApiDemo {
         
         final ReadAttrResponse resp = 
                 
-        signal.<ReadAttrResponse>defineInteraction(req, 
+        signal.interaction().request(req).feature( 
                 Feature.ENABLE_LOGGING,
                 Feature.ENABLE_COMPRESSOR,
                 new SignalClient.UsingUri(jolokiauri),
                 new SignalClient.UsingMethod(POST.class),
                 new SignalClient.DecodeResponseBodyAs(ReadAttrResponse.class)
                 )
+        .<ReadAttrResponse>build()
         .timeout(10, TimeUnit.SECONDS)
         .toBlocking().single();
         return resp;
