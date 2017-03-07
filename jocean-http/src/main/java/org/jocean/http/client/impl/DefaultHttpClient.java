@@ -3,7 +3,6 @@
  */
 package org.jocean.http.client.impl;
 
-import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
@@ -145,7 +144,7 @@ public class DefaultHttpClient implements HttpClient {
                 }});
     }
     
-    private ApplyToRequest buildApplyToRequest(final Feature[] features) {
+    private static ApplyToRequest buildApplyToRequest(final Feature[] features) {
         return InterfaceUtils.compositeIncludeType(
             ApplyToRequest.class,
             InterfaceUtils.compositeBySource(
@@ -154,7 +153,7 @@ public class DefaultHttpClient implements HttpClient {
                 ApplyToRequest.class, (Object[])features));
     }
     
-    private Action1<? super Channel> hookFeatures(final Feature[] features) {
+    private static Action1<? super Channel> hookFeatures(final Feature[] features) {
         final ChannelAware channelAware = 
                 InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
         
@@ -168,7 +167,7 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
 
-    private void fillChannelAware(final Channel channel, ChannelAware channelAware) {
+    private static void fillChannelAware(final Channel channel, ChannelAware channelAware) {
         if (null!=channelAware) {
             try {
                 channelAware.setChannel(channel);
@@ -202,7 +201,7 @@ public class DefaultHttpClient implements HttpClient {
             .compose(RxNettys.markAndPushChannelWhenReady(isSSLEnabled(features)));
     }
     
-    private Feature[] cloneFeatures(final Feature[] features) {
+    private static Feature[] cloneFeatures(final Feature[] features) {
         final Feature[] cloned = new Feature[features.length];
         for (int idx = 0; idx < cloned.length; idx++) {
             if (features[idx] instanceof Cloneable) {
@@ -280,11 +279,8 @@ public class DefaultHttpClient implements HttpClient {
         this._defaultFeatures = (null != defaultFeatures) ? defaultFeatures : Feature.EMPTY_FEATURES;
     }
     
-    /* (non-Javadoc)
-     * @see java.io.Closeable#close()
-     */
     @Override
-    public void close() throws IOException {
+    public void close() {
         // Shut down executor threads to exit.
         this._channelCreator.close();
     }

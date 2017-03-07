@@ -3,7 +3,6 @@
  */
 package org.jocean.redis;
 
-import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.idiom.rx.DoOnUnsubscribe;
@@ -16,7 +15,8 @@ import rx.functions.Func1;
  * @author isdom
  *
  */
-public interface RedisClient extends Closeable {
+public interface RedisClient extends AutoCloseable {
+    public void close();
     
     public interface RedisConnection {
         /**

@@ -3,7 +3,6 @@
  */
 package org.jocean.http.client;
 
-import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
@@ -19,7 +18,9 @@ import rx.Observable;
  * @author isdom
  *
  */
-public interface HttpClient extends Closeable {
+public interface HttpClient extends AutoCloseable {
+    public void close();
+    
     public interface HttpInitiator 
         extends AutoCloseable, TerminateAware<HttpInitiator>, AttributeMap {
         public void close();

@@ -3,7 +3,6 @@
  */
 package org.jocean.redis.impl;
 
-import java.io.IOException;
 import java.net.SocketAddress;
 
 import org.jocean.http.TransportException;
@@ -329,11 +328,8 @@ public class DefaultRedisClient implements RedisClient {
         this._channelPool = channelPool;
     }
     
-    /* (non-Javadoc)
-     * @see java.io.Closeable#close()
-     */
     @Override
-    public void close() throws IOException {
+    public void close() {
         // Shut down executor threads to exit.
         this._channelCreator.close();
     }
@@ -342,8 +338,8 @@ public class DefaultRedisClient implements RedisClient {
         this._fornew = fornew;
     }
     
-    public void setDefaultRedisServer(final SocketAddress _defaultRedisServerAddr) {
-        this._defaultRemoteAddress = _defaultRedisServerAddr;
+    public void setDefaultRedisServer(final SocketAddress defaultRedisServerAddr) {
+        this._defaultRemoteAddress = defaultRedisServerAddr;
     }
     
     private final ChannelPool _channelPool;
