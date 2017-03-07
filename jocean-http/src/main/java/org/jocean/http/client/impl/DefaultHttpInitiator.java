@@ -12,6 +12,7 @@ import org.jocean.http.InboundEndpoint;
 import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.client.HttpClient.HttpInitiator;
+import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.InboundEndpointSupport;
 import org.jocean.http.util.OutboundEndpointSupport;
@@ -147,6 +148,10 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 onTerminate());
     }
 
+    public void setApplyToRequest(final ApplyToRequest applyToRequest) {
+        this._applyToRequest = applyToRequest;
+    }
+
     @Override
     public Observable<Object> call(final Observable<Object> outboundMessage) {
         return outboundMessage.doOnNext(new Action1<Object>() {
@@ -154,6 +159,16 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             public void call(final Object msg) {
                 if (msg instanceof HttpRequest) {
                     final HttpRequest req = (HttpRequest)msg;
+                    
+                    final ApplyToRequest applyTo = _applyToRequest;
+                    if (null != applyTo) {
+                        try {
+                            applyTo.call(req);
+                        } catch (Exception e) {
+                            LOG.warn("exception when invoke applyToRequest.call, detail: {}",
+                              ExceptionUtils.exception2detail(e));
+                        }
+                    }
                     
                     _requestMethod = req.method().name();
                     _requestUri = req.uri();
@@ -279,6 +294,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     private final TerminateAwareSupport<HttpInitiator> _terminateAwareSupport;
     private final InboundEndpointSupport _inboundSupport;
     private final OutboundEndpointSupport _outboundSupport;
+    private volatile ApplyToRequest _applyToRequest;
     
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();

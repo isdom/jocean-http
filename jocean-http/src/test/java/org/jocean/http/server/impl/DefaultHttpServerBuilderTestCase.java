@@ -102,6 +102,7 @@ public class DefaultHttpServerBuilderTestCase {
         return request;
     }
     
+    /* // TODO using initiator
     @Test
     public void testHttpHappyPathOnce() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
@@ -206,6 +207,7 @@ public class DefaultHttpServerBuilderTestCase {
             server.close();
         }
     }
+    */
 
     @Test
     public void testTradeReadControl() throws Exception {

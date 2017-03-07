@@ -127,8 +127,6 @@ public class DefaultHttpClient implements HttpClient {
                 Feature.Util.union(cloneFeatures(Feature.Util.union(this._defaultFeatures, features)),
                     HttpClientConstants.APPLY_HTTPCLIENT);
         return this._channelPool.retainChannel(remoteAddress)
-            .doOnNext(RxNettys.actionUndoableApplyFeatures(
-                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
             .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
             .doOnNext(hookFeatures(fullFeatures))
             .map(new Func1<Channel, HttpInitiator>() {
@@ -140,104 +138,41 @@ public class DefaultHttpClient implements HttpClient {
                         public void call(Channel t) {
                             //  DO nothing
                         }});
-                    return new DefaultHttpInitiator(channel, _doRecycleChannel);
+                    final DefaultHttpInitiator initiator = new DefaultHttpInitiator(channel, _doRecycleChannel);
+                    initiator.setApplyToRequest(buildApplyToRequest(fullFeatures));
+                    RxNettys.applyFeaturesToChannel(
+                            channel, 
+                            HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, 
+                            fullFeatures, 
+                            initiator.onTerminate());
+                    
+                    final TrafficCounterAware trafficCounterAware = 
+                            InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])fullFeatures);
+                    if (null!=trafficCounterAware) {
+                        try {
+                            trafficCounterAware.setTrafficCounter(initiator.trafficCounter());
+                        } catch (Exception e) {
+                            LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
+                                    channel, ExceptionUtils.exception2detail(e));
+                        }
+                    }
+                    
+                    return initiator;
                 }});
     }
     
-    @Override
-    public Observable<? extends HttpObject> defineInteraction(
-            final SocketAddress remoteAddress,
-            final Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider,
-            final Feature... features) {
-        final Feature[] fullFeatures = 
-            Feature.Util.union(cloneFeatures(Feature.Util.union(this._defaultFeatures, features)),
-                HttpClientConstants.APPLY_HTTPCLIENT);
-        return this._channelPool.retainChannel(remoteAddress)
-            .doOnNext(RxNettys.actionUndoableApplyFeatures(
-                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, fullFeatures))
-            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
-            .doOnNext(hookFeatures(fullFeatures))
-            .flatMap(prepareRecvResponse(fullFeatures))
-            .flatMap(buildAndSendRequest(requestProvider, fullFeatures))
-            ;
+    private ApplyToRequest buildApplyToRequest(final Feature[] features) {
+        return InterfaceUtils.compositeIncludeType(
+            ApplyToRequest.class,
+            InterfaceUtils.compositeBySource(
+                ApplyToRequest.class, HttpClientConstants._CLS_TO_APPLY2REQ, features),
+            InterfaceUtils.compositeIncludeType(
+                ApplyToRequest.class, (Object[])features));
     }
     
-    @Override
-    public Observable<? extends HttpObject> defineInteraction(
-            final SocketAddress remoteAddress,
-            final Observable<? extends Object> request,
-            final Feature... features) {
-        return defineInteraction(remoteAddress, new Func1<DoOnUnsubscribe, Observable<? extends Object>>() {
-            @Override
-            public Observable<? extends Object> call(final DoOnUnsubscribe doOnUnsubscribe) {
-                return request;
-            }}, features);
-    }
-    
-    @Override
-    public InteractionBuilder interaction() {
-        final AtomicReference<SocketAddress> _remoteAddress = new AtomicReference<>();
-        final AtomicReference<Observable<? extends Object>> _request = new AtomicReference<>();
-        final AtomicReference<Func1<DoOnUnsubscribe, Observable<? extends Object>>> _requestProvider 
-            = new AtomicReference<>();
-        final List<Feature> _features = new ArrayList<>();
-        
-        return new InteractionBuilder() {
-            @Override
-            public InteractionBuilder remoteAddress(
-                    final SocketAddress remoteAddress) {
-                _remoteAddress.set(remoteAddress);
-                return this;
-            }
-
-            @Override
-            public InteractionBuilder request(final Observable<? extends Object> request) {
-                _request.set(request);
-                return this;
-            }
-            
-            @Override
-            public InteractionBuilder requestProvider(
-                    Func1<DoOnUnsubscribe, Observable<? extends Object>> requestProvider) {
-                _requestProvider.set(requestProvider);
-                return this;
-            }
-
-            @Override
-            public InteractionBuilder feature(final Feature... features) {
-                for (Feature f : features) {
-                    if (null != f) {
-                        _features.add(f);
-                    }
-                }
-                return this;
-            }
-
-            @Override
-            public Observable<? extends HttpObject> build() {
-                if (null == _remoteAddress.get()) {
-                    throw new RuntimeException("remoteAddress not set");
-                }
-                if (null == _requestProvider.get() && null == _request.get()) {
-                    throw new RuntimeException("request and requestProvider not set");
-                }
-                if (null != _requestProvider.get()) {
-                    return defineInteraction(_remoteAddress.get(), 
-                            _requestProvider.get(), 
-                            _features.toArray(Feature.EMPTY_FEATURES));
-                } else {
-                    return defineInteraction(_remoteAddress.get(), 
-                            _request.get(), 
-                            _features.toArray(Feature.EMPTY_FEATURES));
-                }
-            }};
-    }
-
-    protected Action1<? super Channel> hookFeatures(final Feature[] features) {
+    private Action1<? super Channel> hookFeatures(final Feature[] features) {
         final ChannelAware channelAware = 
                 InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
-        final TrafficCounterAware trafficCounterAware = 
-                InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])features);
         
         return new Action1<Channel>() {
             @Override
@@ -246,7 +181,6 @@ public class DefaultHttpClient implements HttpClient {
                     LOG.debug("dump outbound channel({})'s config: \n{}", channel, Nettys.dumpChannelConfig(channel.config()));
                 }
                 fillChannelAware(channel, channelAware);
-                hookTrafficCounter(channel, trafficCounterAware);
             }};
     }
 
@@ -259,28 +193,6 @@ public class DefaultHttpClient implements HttpClient {
                         channel, ExceptionUtils.exception2detail(e));
             }
         }
-    }
-
-    private void hookTrafficCounter(
-            final Channel channel,
-            final TrafficCounterAware trafficCounterAware) {
-        if (null!=trafficCounterAware) {
-            try {
-                trafficCounterAware.setTrafficCounter(buildTrafficCounter(channel));
-            } catch (Exception e) {
-                LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
-                        channel, ExceptionUtils.exception2detail(e));
-            }
-        }
-    }
-
-    private TrafficCounter buildTrafficCounter(final Channel channel) {
-        final TrafficCounterHandler handler = 
-                (TrafficCounterHandler)APPLY.TRAFFICCOUNTER.applyTo(channel.pipeline());
-        
-        RxNettys.doOnUnsubscribe(channel, 
-                Subscriptions.create(RxNettys.actionToRemoveHandler(channel, handler)));
-        return handler;
     }
 
     private static boolean isSSLEnabled(final Feature[] features) {
@@ -433,8 +345,6 @@ public class DefaultHttpClient implements HttpClient {
             .doOnNext(ChannelPool.Util.attachToChannelPoolAndEnableRecycle(_channelPool))
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
-            .doOnNext(RxNettys.actionUndoableApplyFeatures(
-                    HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, features))
             .flatMap(RxNettys.asyncConnectTo(remoteAddress))
             .compose(RxNettys.markAndPushChannelWhenReady(isSSLEnabled(features)));
     }

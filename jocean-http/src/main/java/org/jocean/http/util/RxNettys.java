@@ -92,14 +92,13 @@ public class RxNettys {
             final Channel channel,
             final HandlerBuilder builder,
             final Feature[] features,
-            final DoOnUnsubscribe doOnUnsubscribe) {
+            final Action1<Action0> onTerminate) {
         for (Feature feature : features) {
             if (feature instanceof FeatureOverChannelHandler) {
                 final ChannelHandler handler = ((FeatureOverChannelHandler)feature).call(builder, channel.pipeline());
-                if (null != handler && null!=doOnUnsubscribe) {
-                    doOnUnsubscribe.call(
-                        Subscriptions.create(
-                            RxNettys.actionToRemoveHandler(channel, handler)));
+                if (null != handler && null!=onTerminate) {
+                    onTerminate.call(
+                        RxNettys.actionToRemoveHandler(channel, handler));
                 }
             }
         }
@@ -208,20 +207,6 @@ public class RxNettys {
                         builder, 
                         features, 
                         null);
-            }};
-    }
-    
-    public static Action1<Channel> actionUndoableApplyFeatures(
-            final HandlerBuilder builder,
-            final Feature[] features) {
-        return new Action1<Channel>() {
-            @Override
-            public void call(final Channel channel) {
-                applyFeaturesToChannel(
-                        channel, 
-                        builder, 
-                        features, 
-                        queryDoOnUnsubscribe(channel));
             }};
     }
     

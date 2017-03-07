@@ -143,6 +143,7 @@ public class HttpServerDemo {
                     new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
             HttpHeaders.setContentLength(request, content.readableBytes());
             
+            /* // TODO using initiator
             final Iterator<HttpObject> itr =
                 client.defineInteraction(
                 new LocalAddress("test"), 
@@ -152,6 +153,7 @@ public class HttpServerDemo {
             
             final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
             LOG.info("recv Response: {}", new String(bytes, "UTF-8"));
+            */
             
             Thread.sleep(1000);
         }

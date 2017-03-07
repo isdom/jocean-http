@@ -104,9 +104,14 @@ public class DefaultHttpClientTestCase {
         final String testAddr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
                 responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING);
+                ENABLE_LOGGING
+                ,Feature.ENABLE_COMPRESSOR
+                );
         final DefaultHttpClient client = 
-                new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
+                new DefaultHttpClient(new TestChannelCreator(), 
+                        ENABLE_LOGGING
+                        ,Feature.ENABLE_COMPRESSOR
+                        );
         try ( final HttpInitiator initiator = 
             client.initiator().remoteAddress(new LocalAddress(testAddr)).build()
             .toBlocking().single()) {
@@ -124,6 +129,7 @@ public class DefaultHttpClientTestCase {
         }
     }
     
+    /* // TODO using initiator
     //  TODO, add more multi-call for same interaction define
     //       and check if each call generate different channel instance
     //  Happy Path
@@ -1629,6 +1635,7 @@ public class DefaultHttpClientTestCase {
             assertTrue(testSubscriber.getOnNextEvents().size()>=1);
         }
     }
+    */
     
     /*
     @Test
