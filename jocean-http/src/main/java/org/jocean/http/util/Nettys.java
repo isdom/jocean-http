@@ -28,7 +28,6 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
 import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCounted;
 import rx.functions.Action1;
@@ -61,14 +60,6 @@ public class Nettys {
             public boolean recycleChannel(final Channel channel) {
                 channel.close();
                 return false;
-            }
-    
-            @Override
-            public void preSendRequest(Channel channel, HttpRequest request) {
-            }
-    
-            @Override
-            public void postReceiveLastContent(Channel channel) {
             }
         };
     }

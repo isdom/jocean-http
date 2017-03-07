@@ -13,31 +13,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpUtil;
-import io.netty.util.AttributeKey;
 
 public class DefaultChannelPool extends AbstractChannelPool {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultChannelPool.class);
-
-    private static final AttributeKey<Boolean> KEEPALIVE = AttributeKey.valueOf("__KEEPALIVE");
-    
-    @Override
-    public void preSendRequest(final Channel channel, final HttpRequest request) {
-        //  当Channel被重用，但由于source cancel等情况，没有发送过request
-        //  则此时仍然可以被再次回收
-        transactionBegin(channel);
-        channel.attr(KEEPALIVE).set(HttpUtil.isKeepAlive(request));
-    }
-
-    @Override
-    public void postReceiveLastContent(final Channel channel) {
-        if (channel.attr(KEEPALIVE).get()) {
-            transactionEnd(channel);
-        }
-    }
 
     @Override
     protected Channel reuseChannel(final SocketAddress address) {
@@ -80,8 +60,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
     @Override
     public boolean recycleChannel(final Channel channel) {
         if (channel.isActive() 
-            && Nettys.isChannelReady(channel)
-            && !isTransactioning(channel)) {
+            && Nettys.isChannelReady(channel)) {
             final SocketAddress address = channel.remoteAddress();
             if (null!=address) {
                 RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
@@ -94,21 +73,6 @@ public class DefaultChannelPool extends AbstractChannelPool {
         channel.close();
         LOG.info("recycleChannel: try recycle channel({}), BUT it has been closed.", channel);
         return false;
-    }
-
-    private static final AttributeKey<Object> TRANSACTIONING = AttributeKey.valueOf("__TRANSACTIONING");
-    private static final Object OK = new Object();
-    
-    private void transactionBegin(final Channel channel) {
-        channel.attr(TRANSACTIONING).set(OK);
-    }
-
-    private void transactionEnd(final Channel channel) {
-        channel.attr(TRANSACTIONING).set(null);
-    }
-
-    private boolean isTransactioning(final Channel channel) {
-        return null != channel.attr(TRANSACTIONING).get();
     }
 
     private final ConcurrentMap<SocketAddress, Queue<Channel>> _channels = 

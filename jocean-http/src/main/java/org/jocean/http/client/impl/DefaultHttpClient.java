@@ -194,7 +194,7 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress, 
             final Feature[] features) {
         return this._channelCreator.newChannel()
-            .doOnNext(ChannelPool.Util.attachToChannelPoolAndEnableRecycle(_channelPool))
+//            .doOnNext(ChannelPool.Util.attachToChannelPoolAndEnableRecycle(_channelPool))
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
             .flatMap(RxNettys.asyncConnectTo(remoteAddress))
