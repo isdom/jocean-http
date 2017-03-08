@@ -84,7 +84,6 @@ public class InboundSpeedController {
                     , _maxDelay), 1);
             LOG.info("now speed: {} BPS > MAX ISC: {} BPS, "
                     + "inbound {} read action will be delay {} MILLISECONDS", 
-                    inbound.inboundBytes(), inbound.timeToLive(),
                     currentSpeed, _maxBytesPerSecond, inbound, timeoutToRead);
             scheduleNextCall(inbound, timeoutToRead, this);
         }};
