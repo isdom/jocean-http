@@ -276,6 +276,11 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             fullfeatures,
                             initiator.onTerminate()));
                 
+                final Action0 closeInitiator = new Action0() {
+                    @Override
+                    public void call() {
+                        initiator.close();
+                    }};
                 return initiator.inbound().message().last()
                     .flatMap(new Func1<HttpObject, Observable<RESP>>() {
                         @Override
@@ -286,11 +291,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                                 safeGetResponseType(fullfeatures),
                                 safeGetResponseBodyType(signalBean, fullfeatures));
                         }})
-                    .doAfterTerminate(new Action0() {
-                        @Override
-                        public void call() {
-                            initiator.close();
-                        }});
+                    .doAfterTerminate(closeInitiator)
+                    .doOnUnsubscribe(closeInitiator)
+                    ;
             }});
     }
     
