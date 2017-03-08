@@ -6,10 +6,12 @@ import org.jocean.http.InboundEndpoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.util.AttributeKey;
 import io.netty.util.Timeout;
 import io.netty.util.Timer;
 import io.netty.util.TimerTask;
 import rx.functions.Action1;
+import rx.functions.Func0;
 
 public class InboundSpeedController {
     private static final Logger LOG = LoggerFactory
@@ -29,14 +31,40 @@ public class InboundSpeedController {
     
     public void applyTo(final InboundEndpoint inbound) {
         inbound.setReadPolicy(this._ctrlInboundSpeed);
-        inbound.readMessage();
+    }
+    
+    private void scheduleNextCall(final InboundEndpoint inbound, 
+            final long timeoutToRead,
+            final Action1<InboundEndpoint> policy) {
+        final TimerTask readInboundTask = new TimerTask() {
+            @Override
+            public void run(final Timeout timeout) throws Exception {
+                policy.call(inbound);
+            }};
+        _timer.newTimeout(readInboundTask, timeoutToRead, TimeUnit.MILLISECONDS);
+    }
+
+    private final static AttributeKey<Func0<Boolean>> _CAN_READ = AttributeKey.valueOf("_CAN_READ");
+    
+    public static void setCanRead(final InboundEndpoint inbound, final Func0<Boolean> canRead) {
+        inbound.attr(_CAN_READ).set(canRead);
     }
     
     private final Action1<InboundEndpoint> _ctrlInboundSpeed = new Action1<InboundEndpoint>() {
         @Override
         public void call(final InboundEndpoint inbound) {
+            if (!inbound.isActive()) {
+                // if inbound is unactive , then ignore
+                return;
+            }
+            final Func0<Boolean> canRead = inbound.attr(_CAN_READ).get();
+            if (null != canRead 
+                && !canRead.call()) {
+                scheduleNextCall(inbound, 50, this);
+                return;
+            }
             if (inbound.unreadDurationInMs() > _maxDelay - 50) {
-                LOG.info("inbound {} read inbound for ISC wait {} MILLISECONDS", 
+                LOG.info("inbound {} wait {} MILLISECONDS, then perform read", 
                         inbound, inbound.unreadDurationInMs());
                 inbound.readMessage();
                 return;
@@ -44,7 +72,7 @@ public class InboundSpeedController {
             final long currentSpeed = (long) (inbound.inboundBytes() 
                     / (inbound.timeToLive() / 1000.0F));
             if (currentSpeed <= _maxBytesPerSecond) {
-                LOG.info("current inbound speed: {} Bytes/Second less than MAX ISC: {} Bytes/Second, so inbound {} read inbound right now", 
+                LOG.info("now speed: {} BPS <= MAX ISC: {} BPS, inbound {} perform read RIGHT NOW", 
                         currentSpeed, _maxBytesPerSecond, inbound);
                 inbound.readMessage();
                 return;
@@ -54,16 +82,11 @@ public class InboundSpeedController {
                     (long) (((float)inbound.inboundBytes() / _maxBytesPerSecond) * 1000L
                     - inbound.timeToLive())
                     , _maxDelay), 1);
-            final TimerTask readInboundTask = new TimerTask() {
-                @Override
-                public void run(final Timeout timeout) throws Exception {
-                    _ctrlInboundSpeed.call(inbound);
-                }};
-            LOG.info("inbound bytes:{} bytes/cost time:{} MILLISECONDS\ncurrent inbound speed: {} Bytes/Second more than MAX ISC: {} Bytes/Second, "
-                    + "so trade {} read inbound will be delay {} MILLISECONDS for ISC", 
+            LOG.info("now speed: {} BPS > MAX ISC: {} BPS, "
+                    + "inbound {} read action will be delay {} MILLISECONDS", 
                     inbound.inboundBytes(), inbound.timeToLive(),
                     currentSpeed, _maxBytesPerSecond, inbound, timeoutToRead);
-            _timer.newTimeout(readInboundTask, timeoutToRead, TimeUnit.MILLISECONDS);
+            scheduleNextCall(inbound, timeoutToRead, this);
         }};
         
     private long _maxBytesPerSecond = 8192L;

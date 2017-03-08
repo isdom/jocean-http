@@ -3,10 +3,11 @@ package org.jocean.http;
 import org.jocean.http.util.HttpMessageHolder;
 
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.util.AttributeMap;
 import rx.Observable;
 import rx.functions.Action1;
 
-public interface InboundEndpoint {
+public interface InboundEndpoint extends AttributeMap {
     public boolean isActive();
     
     public void readMessage();

@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.util.DefaultAttributeMap;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
@@ -24,7 +25,8 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.subscriptions.Subscriptions;
 
-public class InboundEndpointSupport implements InboundEndpoint {
+public class InboundEndpointSupport extends DefaultAttributeMap 
+    implements InboundEndpoint {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(InboundEndpointSupport.class);
