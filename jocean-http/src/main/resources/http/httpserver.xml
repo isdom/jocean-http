@@ -7,8 +7,8 @@
     <bean id="httpServerBuilder" class="org.jocean.http.server.impl.DefaultHttpServerBuilder">
         <constructor-arg value="${http.server.accept.thread.count:1}"/>
         <constructor-arg value="${http.server.work.thread.count:0}"/>
-        <property name="inboundBlockSize" value="${in.blocksize:0}"/>
-        <property name="inboundRecvBufSize" value="${in.recvbuf:8192}"/>
+        <property name="inboundBlockSize" value="${http.server.inbound.blocksize:0}"/>
+        <property name="inboundRecvBufSize" value="${http.server.inbound.recvbuf:8192}"/>
     </bean>
     
     <bean class="org.springframework.jmx.export.MBeanExporter"

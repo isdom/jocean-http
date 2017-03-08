@@ -41,8 +41,6 @@ public interface HttpServerBuilder extends Closeable {
         public void close();
         
         public TrafficCounter trafficCounter();
-//        public Subscription outboundResponse(final Observable<? extends HttpObject> response);
-//        public boolean readyforOutboundResponse();
         public Object transport();
         public boolean isActive();
         

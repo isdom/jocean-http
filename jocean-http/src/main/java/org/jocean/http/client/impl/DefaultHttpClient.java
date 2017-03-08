@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFactory;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -49,6 +50,30 @@ public class DefaultHttpClient implements HttpClient {
     
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
+    
+    public int getOutboundLowWaterMark() {
+        return this._outboundLowWaterMark;
+    }
+
+    public void setOutboundLowWaterMark(final int low) {
+        this._outboundLowWaterMark = low;
+    }
+    
+    public int getOutboundHighWaterMark() {
+        return this._outboundHighWaterMark;
+    }
+
+    public void setOutboundHighWaterMark(final int high) {
+        this._outboundHighWaterMark = high;
+    }
+    
+    public int getOutboundSendBufSize() {
+        return this._outboundSendBufSize;
+    }
+
+    public void setOutboundSendBufSize(final int outboundSendBufSize) {
+        this._outboundSendBufSize = outboundSendBufSize;
+    }
     
     public int getInboundBlockSize() {
         return this._inboundBlockSize;
@@ -122,6 +147,14 @@ public class DefaultHttpClient implements HttpClient {
                             //  DO nothing
                         }});
                     final DefaultHttpInitiator initiator = new DefaultHttpInitiator(channel, _doRecycleChannel);
+                    initiator.inbound().messageHolder().setMaxBlockSize(_inboundBlockSize);
+                    
+                    if (_outboundLowWaterMark >= 0 
+                        && _outboundHighWaterMark >= 0
+                        && _outboundHighWaterMark >= _outboundLowWaterMark) {
+                        initiator.outbound().setWriteBufferWaterMark(_outboundLowWaterMark, _outboundHighWaterMark);
+                    }
+                    
                     initiator.setApplyToRequest(buildApplyToRequest(fullFeatures));
                     RxNettys.applyFeaturesToChannel(
                             channel, 
@@ -194,7 +227,7 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress, 
             final Feature[] features) {
         return this._channelCreator.newChannel()
-//            .doOnNext(ChannelPool.Util.attachToChannelPoolAndEnableRecycle(_channelPool))
+            .doOnNext(_setSendBufSize)
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
             .flatMap(RxNettys.asyncConnectTo(remoteAddress))
@@ -285,9 +318,26 @@ public class DefaultHttpClient implements HttpClient {
         this._channelCreator.close();
     }
     
+    private int _outboundLowWaterMark = -1;
+    private int _outboundHighWaterMark = -1;
+    private int _outboundSendBufSize = -1;
     private int _inboundBlockSize = 0;
     
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
     private final Feature[] _defaultFeatures;
+
+    private final Action1<Channel> _setSendBufSize = new Action1<Channel>() {
+        @Override
+        public void call(final Channel channel) {
+            if ( _outboundSendBufSize > 0) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channel({})'s default SO_SNDBUF is {} bytes, and will be reset to {} bytes",
+                            channel, 
+                            channel.config().getOption(ChannelOption.SO_SNDBUF), 
+                            _outboundSendBufSize);
+                }
+                channel.config().setOption(ChannelOption.SO_SNDBUF, _outboundSendBufSize);
+            }
+        }};
 }

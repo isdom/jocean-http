@@ -6,6 +6,10 @@
         
     <bean id="httpClient" class="org.jocean.http.client.impl.DefaultHttpClient">
         <constructor-arg value="${http.client.thread.count:0}"/>
+        <property name="inboundBlockSize" value="${http.client.inbound.blocksize:0}"/>
+        <property name="outboundSendBufSize" value="${http.client.outbound.sendbuf:8192}"/>
+        <property name="outboundLowWaterMark" value="${http.client.outbound.lowmark:4096}"/>
+        <property name="outboundHighWaterMark" value="${http.client.outbound.highmark:8192}"/>
     </bean>
     
 </beans>

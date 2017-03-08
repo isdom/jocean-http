@@ -58,7 +58,9 @@ public class HttpMessageHolder {
             OP_WHEN_UNACTIVE);
     
     public void setMaxBlockSize(final int maxBlockSize) {
-        blockSizeUpdater.set(this, maxBlockSize);
+        if (0 != maxBlockSize) {
+            blockSizeUpdater.set(this, maxBlockSize);
+        }
         //  TODO, check if left block and drain to cached http objs
     }
     

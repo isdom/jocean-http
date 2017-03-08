@@ -183,7 +183,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                             }
                             if ( _inboundRecvBufSize > 0) {
                                 if (LOG.isDebugEnabled()) {
-                                    LOG.debug("inbound channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
+                                    LOG.debug("channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
                                             channel, 
                                             channel.config().getOption(ChannelOption.SO_RCVBUF), 
                                             _inboundRecvBufSize);
@@ -286,6 +286,9 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
         final Action1<HttpTrade> ... onTerminates) {
         this._numStartedTrades.incrementAndGet();
         final DefaultHttpTrade trade = new DefaultHttpTrade(channel, onTerminates);
+        
+        trade.inbound().messageHolder().setMaxBlockSize(this._inboundBlockSize);
+        
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
         
         trade.inbound().message().subscribe(new Action1<HttpObject>() {

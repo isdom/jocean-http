@@ -9,6 +9,7 @@ public interface OutboundEndpoint {
     public boolean isWritable();
     
     public void setFlushPerWrite(final boolean isFlushPerWrite);
+    public void setWriteBufferWaterMark(final int low, final int high);
     public Action0 doOnWritabilityChanged(final Action1<OutboundEndpoint> onWritabilityChanged);
     public Action0 doOnSended(final Action1<Object> onSended);
     

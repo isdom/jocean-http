@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.WriteBufferWaterMark;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.Transformer;
@@ -53,6 +54,11 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
     @Override
     public void setFlushPerWrite(final boolean isFlushPerWrite) {
         this._isFlushPerWrite = isFlushPerWrite;
+    }
+    
+    @Override
+    public void setWriteBufferWaterMark(final int low, final int high) {
+        this._op.setWriteBufferWaterMark(this, low, high);
     }
     
     private boolean queryWritable() {
@@ -115,6 +121,12 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
     private final Op _op;
     
     private static final Op OP_WHEN_ACTIVE = new Op() {
+        @Override
+        public void setWriteBufferWaterMark(final OutboundEndpointSupport support,
+                final int low, final int high) {
+            support._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
+        }
+        
         @Override
         public boolean isWritable(final OutboundEndpointSupport support) {
             return support.queryWritable();
@@ -185,6 +197,11 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
     
     private static final Op OP_WHEN_UNACTIVE = new Op() {
         @Override
+        public void setWriteBufferWaterMark(final OutboundEndpointSupport support, 
+                int low, int high) {
+        }
+        
+        @Override
         public boolean isWritable(final OutboundEndpointSupport support) {
             return false;
         }
@@ -218,10 +235,11 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
         @Override
         public void messageOnCompleted(OutboundEndpointSupport support) {
         }
-        
     };
     
     protected interface Op {
+        public void setWriteBufferWaterMark(final OutboundEndpointSupport support,
+                final int low, final int high);
         public boolean isWritable(final OutboundEndpointSupport support);
         public Action0 addOnSended(final OutboundEndpointSupport support, 
                 final Action1<Object> onSended);
