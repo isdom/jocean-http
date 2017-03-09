@@ -244,15 +244,14 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                 public void call() {
                     awaitChannels.remove(channel);
                     if (!subscriber.isUnsubscribed()) {
-                        subscriber.onNext(
-                            addToTrades(httpTradeOf(channel, 
+                        subscriber.onNext(httpTradeOf(channel, 
                                 doRecycleChannel(channel, subscriber, awaitChannels),
                                 new Action1<HttpTrade>() {
                                     @Override
                                     public void call(HttpTrade t) {
                                         _numCompletedTrades.incrementAndGet();
                                     }}
-                                ))
+                                )
                             )
                         ;
                     } else {
@@ -285,7 +284,12 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private final HttpTrade httpTradeOf(final Channel channel, 
         final Action1<HttpTrade> ... onTerminates) {
         this._numStartedTrades.incrementAndGet();
-        final DefaultHttpTrade trade = new DefaultHttpTrade(channel, onTerminates);
+        final DefaultHttpTrade trade = new DefaultHttpTrade(channel);
+        
+        addToTrades(trade);
+        for (Action1<HttpTrade> onTerminate : onTerminates) {
+            trade.doOnTerminate(onTerminate);
+        }
         
         trade.inbound().messageHolder().setMaxBlockSize(this._inboundBlockSize);
         
