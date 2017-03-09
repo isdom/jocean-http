@@ -22,6 +22,7 @@ import javax.ws.rs.HeaderParam;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeaturesAware;
 import org.jocean.http.PayloadCounter;
+import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.Outbound;
@@ -40,6 +41,8 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.Ordered;
 import org.jocean.idiom.ReflectUtils;
+import org.jocean.idiom.rx.RxObservables;
+import org.jocean.idiom.rx.RxObservables.RetryPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,6 +78,21 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultSignalClient.class);
+    
+    private static Func1<? super Observable<? extends Throwable>, ? extends Observable<?>> retryPolicy(
+            final int maxRetryTimes,
+            final long retryIntervalBase) {
+        return RxObservables.retryWith(new RetryPolicy<Integer>() {
+            @Override
+            public Observable<Integer> call(final Observable<Throwable> errors) {
+                return errors.compose(RxObservables.retryIfMatch(TransportException.class))
+                        .compose(RxObservables.retryMaxTimes(maxRetryTimes))
+                        .compose(RxObservables.retryDelayTo(retryIntervalBase))
+                        ;
+            }});
+    }
+    private final static Func1<? super Observable<? extends Throwable>, ? extends Observable<?>> _RETRY
+             = retryPolicy(3, 100);
     
     private static final Func1<URI, SocketAddress> _DEFAULT_URI2ADDR = new Func1<URI, SocketAddress>() {
         @Override
@@ -294,7 +312,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     .doAfterTerminate(closeInitiator)
                     .doOnUnsubscribe(closeInitiator)
                     ;
-            }});
+            }})
+        .retryWhen(_RETRY)
+        ;
     }
     
     private Feature[] genFeatures4HttpClient(final Object signalBean,
