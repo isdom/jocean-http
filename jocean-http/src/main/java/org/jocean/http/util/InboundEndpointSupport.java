@@ -158,19 +158,22 @@ public class InboundEndpointSupport extends DefaultAttributeMap
 
         @Override
         public Observable<? extends HttpObject> message(
-                InboundEndpointSupport support) {
-            return Observable.error(new RuntimeException("inbound unactived"));
+                final InboundEndpointSupport support) {
+            return Observable.error(support._unactiveReason);
         }
     };
     
-    public void fireAllSubscriberUnactive() {
+    public void fireAllSubscriberUnactive(final Throwable reason) {
+        this._unactiveReason = null != reason 
+                ? reason 
+                : new RuntimeException("inbound unactived");
         @SuppressWarnings("unchecked")
         final Subscriber<? super HttpObject>[] subscribers = 
             (Subscriber<? super HttpObject>[])this._subscribers.toArray(new Subscriber[0]);
         for (Subscriber<? super HttpObject> subscriber : subscribers) {
             if (!subscriber.isUnsubscribed()) {
                 try {
-                    subscriber.onError(new RuntimeException("inbound unactived"));
+                    subscriber.onError(_unactiveReason);
                 } catch (Exception e) {
                     LOG.warn("exception when invoke ({}).onError, detail: {}",
                             subscriber, ExceptionUtils.exception2detail(e));
@@ -236,6 +239,8 @@ public class InboundEndpointSupport extends DefaultAttributeMap
     public int holdingMemorySize() {
         return _holder.retainedByteBufSize();
     }
+    
+    private volatile Throwable _unactiveReason = null;
     
     private final InterfaceSelector _selector;
     

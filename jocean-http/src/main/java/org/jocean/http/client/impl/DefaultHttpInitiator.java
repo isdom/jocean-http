@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.jocean.http.InboundEndpoint;
 import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
+import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
@@ -122,7 +123,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 new Action0() {
                     @Override
                     public void call() {
-                        fireClosed();
+                        fireClosed(new TransportException("channelInactive of " + channel));
                     }});
         
         this._inboundSupport = 
@@ -145,7 +146,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
             doOnTerminate(onTerminate);
         }
         if (!channel.isActive()) {
-            fireClosed();
+            fireClosed(new TransportException("channelInactive of " + channel));
         }
     }
 
@@ -188,7 +189,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                 public void call(Throwable e) {
                     LOG.warn("initiator({})'s outbound.onError, invoke fireClosed() and detail:{}",
                             DefaultHttpInitiator.this, ExceptionUtils.exception2detail(e));
-                    fireClosed();
+                    fireClosed(e);
                 }});
     }
     
@@ -211,7 +212,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
                     public void call(Throwable e) {
                         LOG.warn("initiator({})'s inbound.onError, invoke fireClosed() and detail:{}",
                                 DefaultHttpInitiator.this, ExceptionUtils.exception2detail(e));
-                        fireClosed();
+                        fireClosed(e);
                     }});
             }};
     }
@@ -234,7 +235,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
 
     @Override
     public void close() {
-        fireClosed();
+        fireClosed(new RuntimeException("call close()"));
     }
 
     @Override
@@ -275,20 +276,21 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     private static final ActionN FIRE_CLOSED = new ActionN() {
         @Override
         public void call(final Object... args) {
-            ((DefaultHttpInitiator)args[0]).fireClosed0();
+            ((DefaultHttpInitiator)args[0]).fireClosed0((Throwable)args[1]);
         }};
         
-    private void fireClosed() {
-        this._selector.destroyAndSubmit(FIRE_CLOSED, this);
+    private void fireClosed(final Throwable e) {
+        this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
     }
 
-    private void fireClosed0() {
+    private void fireClosed0(final Throwable e) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("close active initiator[channel: {}] with isOutboundCompleted({})/isEndedWithKeepAlive({})", 
-                    this._channel, this._isOutboundCompleted.get(), this.isEndedWithKeepAlive());
+            LOG.debug("close active initiator[channel: {}] with isOutboundCompleted({})/isEndedWithKeepAlive({}), by {}", 
+                    this._channel, this._isOutboundCompleted.get(), this.isEndedWithKeepAlive(),
+                    ExceptionUtils.exception2detail(e));
         }
         //  fire all pending subscribers onError with unactived exception
-        this._inboundSupport.fireAllSubscriberUnactive();
+        this._inboundSupport.fireAllSubscriberUnactive(e);
         this._terminateAwareSupport.fireAllTerminates(this);
     }
 

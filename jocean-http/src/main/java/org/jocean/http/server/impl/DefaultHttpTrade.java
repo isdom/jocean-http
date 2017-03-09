@@ -289,7 +289,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
             LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
                     this._channel, this._isResponseCompleted.get(), this.isEndedWithKeepAlive());
         }
-        this._inboundSupport.fireAllSubscriberUnactive();
+        //  TODO add reason
+        this._inboundSupport.fireAllSubscriberUnactive(null);
         this._terminateAwareSupport.fireAllTerminates(this);
     }
 
