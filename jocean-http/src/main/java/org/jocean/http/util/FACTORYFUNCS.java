@@ -171,10 +171,10 @@ class FACTORYFUNCS {
                         LOG.debug("ON_CHANNEL_READ_FUNC1: channel({})/handler({}): channelRead with msg({}).", 
                                 ctx.channel(), ctx.name(), msg);
                     }
+                    RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
                     try {
                         onChannelRead.call();
                     } finally {
-                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
                         ctx.fireChannelRead(msg);
                     }
                 }
