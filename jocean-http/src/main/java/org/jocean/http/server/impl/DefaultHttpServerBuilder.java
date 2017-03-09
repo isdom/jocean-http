@@ -244,16 +244,19 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                 public void call() {
                     awaitChannels.remove(channel);
                     if (!subscriber.isUnsubscribed()) {
-                        subscriber.onNext(httpTradeOf(channel, 
+                        final HttpTrade trade = httpTradeOf(channel, 
                                 doRecycleChannel(channel, subscriber, awaitChannels),
                                 new Action1<HttpTrade>() {
                                     @Override
                                     public void call(HttpTrade t) {
                                         _numCompletedTrades.incrementAndGet();
                                     }}
-                                )
-                            )
-                        ;
+                                );
+                        if (trade.isActive()) {
+                            subscriber.onNext(trade);
+                        } else {
+                            LOG.info("HttpTrade({}) has unactived, so ignore.", trade);
+                        }
                     } else {
                         LOG.warn("HttpTrade Subscriber {} has unsubscribed, so close channel({})",
                                 subscriber, channel);

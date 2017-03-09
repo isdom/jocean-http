@@ -110,15 +110,14 @@ class DefaultHttpTrade extends DefaultAttributeMap
         final Channel channel, 
         final Action1<HttpTrade> ... onTerminates) {
         
+        this._channel = channel;
         this._terminateAwareSupport = 
                 new TerminateAwareSupport<HttpTrade>(_selector);
-        this._channel = channel;
         
         //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
         this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
                 APPLY.TRAFFICCOUNTER);
-        //  TODO, test for channel already inactive
         RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
                 APPLY.ON_CHANNEL_INACTIVE,
@@ -147,6 +146,9 @@ class DefaultHttpTrade extends DefaultAttributeMap
         
         for (Action1<HttpTrade> onTerminate : onTerminates) {
             doOnTerminate(onTerminate);
+        }
+        if (!channel.isActive()) {
+            fireClosed();
         }
     }
 

@@ -107,17 +107,15 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     DefaultHttpInitiator(
         final Channel channel, 
         final Action1<HttpInitiator> ... onTerminates) {
-        // TODO if channel.isActive() == false ?
         
+        this._channel = channel;
         this._terminateAwareSupport = 
             new TerminateAwareSupport<HttpInitiator>(_selector);
-        this._channel = channel;
         
         this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
                 APPLY.TRAFFICCOUNTER);
         
-        //  TODO, test for channel already inactive
         RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
                 APPLY.ON_CHANNEL_INACTIVE,
@@ -145,6 +143,9 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         
         for (Action1<HttpInitiator> onTerminate : onTerminates) {
             doOnTerminate(onTerminate);
+        }
+        if (!channel.isActive()) {
+            fireClosed();
         }
     }
 
