@@ -5,7 +5,8 @@
         http://www.springframework.org/schema/beans/spring-beans.xsd">
         
     <bean id="httpClient" class="org.jocean.http.client.impl.DefaultHttpClient">
-        <constructor-arg value="${http.client.thread.count:0}"/>
+        <constructor-arg index="0" value="${http.client.thread.count:0}"/>
+        <constructor-arg index="1" value="${http.client.pooled:true}"/>
         <property name="inboundBlockSize" value="${http.client.inbound.blocksize:0}"/>
         <property name="outboundSendBufSize" value="${http.client.outbound.sendbuf:8192}"/>
         <property name="outboundLowWaterMark" value="${http.client.outbound.lowmark:4096}"/>

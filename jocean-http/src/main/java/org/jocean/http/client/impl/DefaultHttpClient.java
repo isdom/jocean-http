@@ -245,20 +245,30 @@ public class DefaultHttpClient implements HttpClient {
         }
         return cloned;
     }
-
+    
+    public DefaultHttpClient(final boolean pooled) {
+        this(0, pooled, Feature.EMPTY_FEATURES);
+    }
+    
     public DefaultHttpClient(final int processThreadNumber) {
-        this(processThreadNumber, Feature.EMPTY_FEATURES);
-    }
-    
-    public DefaultHttpClient() {
-        this(0, Feature.EMPTY_FEATURES);
-    }
-    
-    public DefaultHttpClient(final Feature... defaultFeatures) {
-        this(0, defaultFeatures);
+        this(processThreadNumber, true, Feature.EMPTY_FEATURES);
     }
     
     public DefaultHttpClient(final int processThreadNumber,
+            final boolean pooled) {
+        this(processThreadNumber, pooled, Feature.EMPTY_FEATURES);
+    }
+    
+    public DefaultHttpClient() {
+        this(0, true, Feature.EMPTY_FEATURES);
+    }
+    
+    public DefaultHttpClient(final Feature... defaultFeatures) {
+        this(0, true, defaultFeatures);
+    }
+    
+    public DefaultHttpClient(final int processThreadNumber,
+            final boolean pooled,
             final Feature... defaultFeatures) {
         this(new AbstractChannelCreator() {
             @Override
@@ -267,7 +277,7 @@ public class DefaultHttpClient implements HttpClient {
                 .group(new NioEventLoopGroup(processThreadNumber))
                 .channel(NioSocketChannel.class);
             }},
-            new DefaultChannelPool(), 
+            pooled ? new DefaultChannelPool() : Nettys.unpoolChannels(), 
             defaultFeatures);
     }
     
