@@ -87,6 +87,8 @@ public class DefaultHttpClient implements HttpClient {
         @Override
         public void call(final HttpInitiator initiator) {
             final Channel channel = (Channel)initiator.transport();
+            // perform read for recv FIN SIG and to change state to close
+            channel.read();
             if (((DefaultHttpInitiator)initiator).isEndedWithKeepAlive()) {
                 _channelPool.recycleChannel(channel);
             } else {

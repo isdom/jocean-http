@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
+import io.netty.channel.EventLoop;
 import rx.Observable;
 import rx.Single;
 import rx.SingleSubscriber;
@@ -53,32 +54,47 @@ public abstract class AbstractChannelPool implements ChannelPool {
         return Observable.create(new Observable.OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    try {
-                        Channel channel;
-                        do {
-                            channel = reuseChannel(address);
-                            if (null != channel) {
-                                if (channel.isActive()) {
-                                    LOG.info("fetch channel({}) of address ({}) for reuse.", channel, address);
-                                    RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.from(subscriber));
-                                    subscriber.add(RxNettys.subscriptionForReleaseChannel(channel));
-                                    subscriber.onNext(channel);
-                                    subscriber.onCompleted();
-                                    return;
-                                } else {
-                                    channel.close();
-                                }
-                            }
-                        } while (null!=channel);
-                        //  no more channel can be reused
-                        subscriber.onError(new RuntimeException("Nonreused Channel"));
-                    } catch (Throwable e) {
-                        subscriber.onError(e);
-                    }
-                }
+                findReuseChannel(address, subscriber);
             }});
     }
     
     protected abstract Channel reuseChannel(final SocketAddress address);
+
+    private void pushActiveChannelOrCheckNext(
+            final SocketAddress address,
+            final Channel channel, 
+            final Subscriber<? super Channel> subscriber) {
+        if (!subscriber.isUnsubscribed()) {
+            if (channel.isActive()) {
+                LOG.info("fetch channel({}) of address ({}) for reuse.", channel, address);
+                RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.from(subscriber));
+                subscriber.add(RxNettys.subscriptionForReleaseChannel(channel));
+                subscriber.onNext(channel);
+                subscriber.onCompleted();
+            } else {
+                channel.close();
+                findReuseChannel(address, subscriber);
+            }
+        }
+    }
+
+    private void findReuseChannel(final SocketAddress address,
+            final Subscriber<? super Channel> subscriber) {
+        final Channel channel = reuseChannel(address);
+        if (null != channel) {
+            final EventLoop eventLoop = channel.eventLoop();
+            if (!eventLoop.inEventLoop()) {
+                eventLoop.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        pushActiveChannelOrCheckNext(address, channel, subscriber);
+                    }});
+            } else {
+                pushActiveChannelOrCheckNext(address, channel, subscriber);
+            }
+        } else {
+            //  no more channel can be reused
+            subscriber.onError(new RuntimeException("Nonreused Channel"));
+        }
+    }
 }

@@ -30,7 +30,9 @@ public class DefaultChannelPool extends AbstractChannelPool {
             channel = channels.poll();
             if (null != channel) {
                 if (channel.isActive()) {
-                    LOG.info("fetch active channel({}) from pool, try to reuse.", channel);
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("fetch active channel({}) from pool, try to reuse.", channel);
+                    }
                     break;
                 } else {
                     LOG.info("fetch inactive channel({}) from pool, drop and fetch next from pool.", channel);

@@ -91,9 +91,7 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
             public void call(final Subscriber<? super ChannelFuture> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final ChannelFuture future = _bootstrap.register();
-                    if ( LOG.isDebugEnabled() ) {
-                        LOG.debug("create new channel: {}", future.channel());
-                    }
+                    LOG.info("create new channel: {}", future.channel());
                     RxNettys.installDoOnUnsubscribe(future.channel(), DoOnUnsubscribe.Util.from(subscriber));
                     subscriber.add(Subscriptions.from(future));
                     subscriber.add(RxNettys.subscriptionForReleaseChannel(future.channel()));
