@@ -18,7 +18,8 @@ import rx.functions.Func1;
 public interface RedisClient extends AutoCloseable {
     public void close();
     
-    public interface RedisConnection {
+    public interface RedisConnection extends AutoCloseable {
+        public void close();
         /**
          * 定义一次与redis server的交互, 指定了远端地址，通过 requestProvider 创建 request
          * 当返回的Observable<? extends RedisMessage> 实例被subscribe时,才基于上述指定的参数真正发起交互动作

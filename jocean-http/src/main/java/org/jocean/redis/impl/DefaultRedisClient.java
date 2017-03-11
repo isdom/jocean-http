@@ -102,6 +102,12 @@ public class DefaultRedisClient implements RedisClient {
                             public Observable<? extends RedisMessage> call(final DoOnUnsubscribe doOnUnsubscribe) {
                                 return request;
                             }});
+                    }
+
+                    @Override
+                    public void close() {
+                        // TODO Auto-generated method stub
+                        
                     }};
             }};
     }

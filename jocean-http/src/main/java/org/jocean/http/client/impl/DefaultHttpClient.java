@@ -87,10 +87,12 @@ public class DefaultHttpClient implements HttpClient {
         @Override
         public void call(final HttpInitiator initiator) {
             final Channel channel = (Channel)initiator.transport();
-            // perform read for recv FIN SIG and to change state to close
-            channel.read();
             if (((DefaultHttpInitiator)initiator).isEndedWithKeepAlive()) {
-                _channelPool.recycleChannel(channel);
+                if (_channelPool.recycleChannel(channel)) {
+                    // recycle success
+                    // perform read for recv FIN SIG and to change state to close
+                    channel.read();
+                }
             } else {
                 channel.close();
             }
@@ -137,12 +139,17 @@ public class DefaultHttpClient implements HttpClient {
                 Feature.Util.union(cloneFeatures(Feature.Util.union(this._defaultFeatures, features)),
                     HttpClientConstants.APPLY_HTTPCLIENT);
         return this._channelPool.retainChannel(remoteAddress)
+            .doOnNext(new Action1<Channel>() {
+                @Override
+                public void call(final Channel channel) {
+                    // disable autoRead
+                    channel.config().setAutoRead(false);
+                }})
             .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
-            .doOnNext(hookFeatures(fullFeatures))
+            .doOnNext(processFeatures(fullFeatures))
             .map(new Func1<Channel, HttpInitiator>() {
                 @Override
                 public HttpInitiator call(final Channel channel) {
-                    channel.config().setAutoRead(false);
                     Nettys.setReleaseAction(channel, new Action1<Channel>() {
                         @Override
                         public void call(Channel t) {
@@ -188,7 +195,7 @@ public class DefaultHttpClient implements HttpClient {
                 ApplyToRequest.class, (Object[])features));
     }
     
-    private static Action1<? super Channel> hookFeatures(final Feature[] features) {
+    private static Action1<? super Channel> processFeatures(final Feature[] features) {
         final ChannelAware channelAware = 
                 InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
         
