@@ -14,7 +14,6 @@ import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
-import org.jocean.idiom.rx.RxObservables;
 import org.jocean.redis.RedisClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,14 +61,22 @@ public class DefaultRedisClient implements RedisClient {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultRedisClient.class);
     
+    private final Action1<RedisConnection> _doRecycleChannel = new Action1<RedisConnection>() {
+        @Override
+        public void call(final RedisConnection connection) {
+            final Channel channel = ((DefaultRedisConnection)connection).channel();
+            if (_channelPool.recycleChannel(channel)) {
+                // recycle success
+                // perform read for recv FIN SIG and to change state to close
+                channel.read();
+            }
+        }};
+        
     @Override
     public Observable<? extends RedisConnection> getConnection() {
         return null == this._defaultRemoteAddress 
                 ? Observable.<RedisConnection>error(new RuntimeException("No Default Redis Server"))
-                : this._channelPool.retainChannel(this._defaultRemoteAddress)
-                    .map(channel2RedisConnection())
-                    .onErrorResumeNext(createChannelAndConnectTo(this._defaultRemoteAddress))
-                    ;
+                : getConnection(this._defaultRemoteAddress);
     }
     
     @Override
@@ -84,31 +91,7 @@ public class DefaultRedisClient implements RedisClient {
         return new Func1<Channel, RedisConnection>() {
             @Override
             public RedisConnection call(final Channel channel) {
-                return new RedisConnection() {
-                    @Override
-                    public Observable<? extends RedisMessage> defineInteraction(
-                            final Func1<DoOnUnsubscribe, Observable<? extends RedisMessage>> requestProvider) {
-                        return prepareRecvResponse(channel)
-                            .flatMap(buildAndSendRequest(requestProvider))
-                            .compose(RxObservables.<RedisMessage>ensureSubscribeAtmostOnce())
-                            ;
-                    }
-
-                    @Override
-                    public Observable<? extends RedisMessage> defineInteraction(
-                            final Observable<? extends RedisMessage> request) {
-                        return defineInteraction(new Func1<DoOnUnsubscribe, Observable<? extends RedisMessage>>() {
-                            @Override
-                            public Observable<? extends RedisMessage> call(final DoOnUnsubscribe doOnUnsubscribe) {
-                                return request;
-                            }});
-                    }
-
-                    @Override
-                    public void close() {
-                        // TODO Auto-generated method stub
-                        
-                    }};
+                return new DefaultRedisConnection(channel, _doRecycleChannel);
             }};
     }
 
@@ -261,7 +244,7 @@ public class DefaultRedisClient implements RedisClient {
     private Observable<? extends RedisConnection> createChannelAndConnectTo(
             final SocketAddress remoteAddress) {
         final Observable<? extends RedisConnection> ret = this._channelCreator.newChannel()
-            .doOnNext(ChannelPool.Util.attachToChannelPoolAndEnableRecycle(_channelPool))
+//            .doOnNext(ChannelPool.Util.attachToChannelPoolAndEnableRecycle(_channelPool))
             .doOnNext(new Action1<Channel>() {
                 @Override
                 public void call(final Channel channel) {

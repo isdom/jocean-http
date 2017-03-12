@@ -279,6 +279,7 @@ class FACTORYFUNCS {
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onError(new TransportException("channelInactive of " + ctx.channel()));
                     }
+                    ctx.close();
                 }
 
                 @Override
