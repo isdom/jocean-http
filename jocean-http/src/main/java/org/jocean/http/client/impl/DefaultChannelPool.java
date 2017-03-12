@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 
+import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.rx.DoOnUnsubscribe;
@@ -13,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
+import rx.functions.Action0;
 
 public class DefaultChannelPool extends AbstractChannelPool {
 
@@ -66,7 +68,16 @@ public class DefaultChannelPool extends AbstractChannelPool {
             final SocketAddress address = channel.remoteAddress();
             if (null!=address) {
                 RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
-                getOrCreateChannels(address).add(channel);
+                final Queue<Channel> channels = getOrCreateChannels(address);
+                channels.add(channel);
+                APPLY.ON_CHANNEL_INACTIVE.applyTo(channel.pipeline(),
+                    new Action0() {
+                        @Override
+                        public void call() {
+                            channels.remove(channel);
+                            channel.close();
+                            LOG.info("removeChannel: channel({}) inactive, so remove from pool.", channel);
+                        }});
                 LOG.info("recycleChannel: channel({}) save to queue for ({}), can be reused.", channel, address);
                 return  true;
             }
