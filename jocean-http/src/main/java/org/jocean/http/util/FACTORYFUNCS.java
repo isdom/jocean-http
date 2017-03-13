@@ -251,7 +251,6 @@ class FACTORYFUNCS {
                             ctx.channel(), ctx.name(),
                             ExceptionUtils.exception2detail(cause), 
                             subscriber);
-//                    touchAllContentWith(ctx.channel(), "exceptionCaught:" + ExceptionUtils.exception2detail(cause));
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onError(new TransportException("exceptionCaught of" + ctx.channel(), cause));
                     }
@@ -266,7 +265,6 @@ class FACTORYFUNCS {
                                 ctx.channel(), ctx.name(), subscriber);
                     }
                     
-//                    touchAllContentWith(ctx.channel(), "channelInactive");
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onError(new TransportException("channelInactive of " + ctx.channel()));
                     }
@@ -286,18 +284,6 @@ class FACTORYFUNCS {
                                         ctx.channel(), ctx.name(), subscriber, msg);
                             }
                         }
-                        
-                        /*
-                        if (msg instanceof HttpRequest) {
-                            initTouchableWithRequest(ctx.channel(), (HttpRequest)msg);
-                        } else if (msg instanceof HttpResponse) {
-                            initTouchableWithResponse(ctx.channel(), (HttpResponse)msg);
-                        }
-                        
-                        if (msg instanceof HttpContent) {
-                            touchAndHoldContent(ctx.channel(), (HttpContent)msg);
-                        }
-                        */
                         
                         if (!subscriber.isUnsubscribed()) {
                             try {
@@ -340,84 +326,4 @@ class FACTORYFUNCS {
             };
         }
     };
-    
-    /*
-    private static final AttributeKey<String> ATTR_TOUCH_HINT = 
-            AttributeKey.valueOf("__HTTP_TOUCH_HINT");
-    
-    private static final AttributeKey<Queue<HttpContent>> ATTR_HTTPCONTENTS = 
-            AttributeKey.valueOf("__HTTPCONTENTS");
-    
-    private static void clearContentsOnUnsubscribe(final Channel channel) {
-        RxNettys.doOnUnsubscribe(channel, Subscriptions.create(new Action0() {
-            @Override
-            public void call() {
-                final Queue<HttpContent> queue = channel.attr(ATTR_HTTPCONTENTS).getAndSet(null);
-                if (null != queue) {
-                    queue.clear();
-                }
-            }}));
-    }
-    private static void initTouchableWithRequest(final Channel channel, final HttpRequest req) {
-        final StringBuilder sb = new StringBuilder();
-        sb.append('[');
-        sb.append(channel.toString());
-        sb.append('|');
-        sb.append(req.headers().get("remoteip", ""));
-        sb.append('|');
-        sb.append(req.method().name());
-        sb.append('|');
-        sb.append(req.uri());
-        sb.append('|');
-        sb.append(req.headers().get(HttpHeaderNames.CONTENT_TYPE, ""));
-        sb.append('|');
-        sb.append(req.headers().get(HttpHeaderNames.CONTENT_LENGTH, ""));
-        sb.append(']');
-        channel.attr(ATTR_TOUCH_HINT).set(sb.toString());
-        channel.attr(ATTR_HTTPCONTENTS).set(new ConcurrentLinkedQueue<HttpContent>());
-        clearContentsOnUnsubscribe(channel);
-    }
-
-    private static void initTouchableWithResponse(final Channel channel, final HttpResponse resp) {
-        final StringBuilder sb = new StringBuilder();
-        sb.append('[');
-        sb.append(channel.toString());
-        sb.append('|');
-        sb.append(resp.status().code());
-        sb.append('|');
-        sb.append(resp.headers().get(HttpHeaderNames.CONTENT_TYPE, ""));
-        sb.append('|');
-        sb.append(resp.headers().get(HttpHeaderNames.CONTENT_LENGTH, ""));
-        sb.append(']');
-        channel.attr(ATTR_TOUCH_HINT).set(sb.toString());
-        channel.attr(ATTR_HTTPCONTENTS).set(new ConcurrentLinkedQueue<HttpContent>());
-        clearContentsOnUnsubscribe(channel);
-    }
-
-    private static void touchAndHoldContent(final Channel channel, final HttpContent msg) {
-        final StringBuilder sb = new StringBuilder();
-        sb.append(channel.attr(ATTR_TOUCH_HINT).get());
-        sb.append("refCnt(");
-        sb.append(msg.refCnt());
-        sb.append(")[");
-        sb.append(msg.toString());
-        sb.append("]");
-        msg.touch(sb.toString());
-        final Queue<HttpContent> queue = channel.attr(ATTR_HTTPCONTENTS).get();
-        if (null != queue) {
-            queue.add(msg);
-        }
-    }
-
-    private static void touchAllContentWith(final Channel channel, final String hint) {
-        String fullhint = channel.attr(ATTR_TOUCH_HINT).get();
-        fullhint = (null != fullhint ? fullhint : "") + hint;
-        final Queue<HttpContent> queue = channel.attr(ATTR_HTTPCONTENTS).get();
-        if (null != queue) {
-            for (HttpContent c : queue) {
-                c.touch(fullhint);
-            }
-        }
-    }
-    */
 }

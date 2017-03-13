@@ -49,7 +49,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
     
     @Override
     public Observable<Channel> retainChannel(final SocketAddress address) {
-        return Observable.create(new Observable.OnSubscribe<Channel>() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> subscriber) {
                 findReuseChannel(address, subscriber);
@@ -58,15 +58,13 @@ public abstract class AbstractChannelPool implements ChannelPool {
     
     protected abstract Channel reuseChannel(final SocketAddress address);
 
-    private void pushActiveChannelOrCheckNext(
+    private void pushActiveChannelOrContinue(
             final SocketAddress address,
             final Channel channel, 
             final Subscriber<? super Channel> subscriber) {
         if (!subscriber.isUnsubscribed()) {
             if (channel.isActive()) {
                 LOG.info("fetch channel({}) of address ({}) for reuse.", channel, address);
-//                RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.from(subscriber));
-//                subscriber.add(RxNettys.subscriptionForReleaseChannel(channel));
                 subscriber.onNext(channel);
                 subscriber.onCompleted();
             } else {
@@ -85,10 +83,10 @@ public abstract class AbstractChannelPool implements ChannelPool {
                 eventLoop.submit(new Runnable() {
                     @Override
                     public void run() {
-                        pushActiveChannelOrCheckNext(address, channel, subscriber);
+                        pushActiveChannelOrContinue(address, channel, subscriber);
                     }});
             } else {
-                pushActiveChannelOrCheckNext(address, channel, subscriber);
+                pushActiveChannelOrContinue(address, channel, subscriber);
             }
         } else {
             //  no more channel can be reused

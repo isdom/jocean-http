@@ -30,7 +30,6 @@ import io.netty.channel.ServerChannel;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCounted;
-import rx.functions.Action1;
 import rx.functions.Func2;
 
 public class Nettys {
@@ -157,26 +156,6 @@ public class Nettys {
     public static boolean isChannelReady(final Channel channel) {
         return null != channel.attr(READY_ATTR).get();
     }
-    
-//    private static final AttributeKey<Action1<Channel>> RELEASE_ACTION = AttributeKey.valueOf("__RELEASE_ACTION");
-//    
-//    public static void setReleaseAction(final Channel channel, final Action1<Channel> releaser) {
-//        channel.attr(RELEASE_ACTION).set(releaser);
-//    }
-//    
-//    public static void releaseChannel(final Channel channel) {
-//        final Action1<Channel> releaser = channel.attr(RELEASE_ACTION).get();
-//        if (null!=releaser) {
-//            try {
-//                releaser.call(channel);
-//            } catch (Exception e) {
-//                LOG.warn("exception when invoke releaser {} for channel {}, detail: {}",
-//                        releaser, channel, ExceptionUtils.exception2detail(e));
-//            }
-//        } else {
-//            channel.close();
-//        }
-//    }
     
     public static byte[] dumpByteBufAsBytes(final ByteBuf bytebuf)
         throws IOException {

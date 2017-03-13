@@ -85,15 +85,13 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
 
     @Override
     public Observable<? extends Channel> newChannel() {
-        return Observable.create(new Observable.OnSubscribe<ChannelFuture>() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<ChannelFuture>() {
             @Override
             public void call(final Subscriber<? super ChannelFuture> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final ChannelFuture future = _bootstrap.register();
                     LOG.info("create new channel: {}", future.channel());
-//                    RxNettys.installDoOnUnsubscribe(future.channel(), DoOnUnsubscribe.Util.from(subscriber));
                     subscriber.add(Subscriptions.from(future));
-//                    subscriber.add(RxNettys.subscriptionForReleaseChannel(future.channel()));
                     subscriber.onNext(future);
                     subscriber.onCompleted();
                 }

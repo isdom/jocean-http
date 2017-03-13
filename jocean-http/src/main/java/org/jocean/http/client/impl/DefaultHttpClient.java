@@ -150,11 +150,6 @@ public class DefaultHttpClient implements HttpClient {
             .map(new Func1<Channel, HttpInitiator>() {
                 @Override
                 public HttpInitiator call(final Channel channel) {
-//                    Nettys.setReleaseAction(channel, new Action1<Channel>() {
-//                        @Override
-//                        public void call(Channel t) {
-//                            //  DO nothing
-//                        }});
                     final DefaultHttpInitiator initiator = new DefaultHttpInitiator(channel, _doRecycleChannel);
                     initiator.inbound().messageHolder().setMaxBlockSize(_inboundBlockSize);
                     

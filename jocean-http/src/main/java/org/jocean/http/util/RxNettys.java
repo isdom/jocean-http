@@ -61,32 +61,6 @@ public class RxNettys {
         throw new IllegalStateException("No instances!");
     }
 
-    /*
-    public static class DefaultDoOnUnsubscribe implements DoOnUnsubscribe, Subscription {
-
-        @Override
-        public void call(Subscription s) {
-            this._subscriptionList.add(s);
-        }
-        
-        @Override
-        public void unsubscribe() {
-            this._subscriptionList.unsubscribe();
-        }
-        
-        @Override
-        public boolean isUnsubscribed() {
-            return this._subscriptionList.isUnsubscribed();
-        }
-        
-        final private SubscriptionList _subscriptionList = new SubscriptionList();
-    }
-    
-    public static DefaultDoOnUnsubscribe createDoOnUnsubscribe() {
-        return new DefaultDoOnUnsubscribe();
-    }
-    */
-    
     public static void applyFeaturesToChannel(
             final Channel channel,
             final HandlerBuilder builder,
@@ -137,7 +111,7 @@ public class RxNettys {
     }
 
     public static <T, V> Observable<T> observableFromFuture(final Future<V> future) {
-        return Observable.create(new Observable.OnSubscribe<T>() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<T>() {
             @Override
             public void call(final Subscriber<? super T> subscriber) {
                 future.addListener(new GenericFutureListener<Future<V>>() {
@@ -157,7 +131,7 @@ public class RxNettys {
     }
     
     public static Observable<? extends Channel> channelObservableFromFuture(final ChannelFuture future) {
-        return Observable.create(new Observable.OnSubscribe<Channel>() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> subscriber) {
                 future.addListener(new GenericFutureListener<ChannelFuture>() {
@@ -182,7 +156,7 @@ public class RxNettys {
         return new Func1<Channel, Observable<? extends Channel>>() {
             @Override
             public Observable<? extends Channel> call(final Channel channel) {
-                return Observable.create(new Observable.OnSubscribe<ChannelFuture>() {
+                return Observable.unsafeCreate(new Observable.OnSubscribe<ChannelFuture>() {
                     @Override
                     public void call(final Subscriber<? super ChannelFuture> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
@@ -300,53 +274,6 @@ public class RxNettys {
                 }
             }};
     }
-    
-//    public static Subscription subscriptionForReleaseChannel(final Channel channel) {
-//        return Subscriptions.create(new Action0() {
-//            @Override
-//            public void call() {
-//                Nettys.releaseChannel(channel);
-//            }});
-//    }
-    
-//    public static <T> Action1<T> enableReleaseChannelWhenUnsubscribe() {
-//        return new Action1<T>() {
-//            @Override
-//            public void call(final T channelOrFuture) {
-//                Channel ch = null;
-//                if (channelOrFuture instanceof Channel) {
-//                    ch = (Channel)channelOrFuture;
-//                } else if (channelOrFuture instanceof ChannelFuture) {
-//                    ch = ((ChannelFuture)channelOrFuture).channel();
-//                }
-//                if (null!=ch) {
-//                    final Channel channel = ch;
-//                    RxNettys.doOnUnsubscribe(ch,subscriptionForReleaseChannel(channel));
-//                }
-//            }};
-//    }
-    
-//    private static final AttributeKey<DoOnUnsubscribe> DO_ON_UNSUBSCRIBE = AttributeKey.valueOf("__DO_ON_UNSUBSCRIBE");
-//    
-//    public static void installDoOnUnsubscribe(final Channel channel, final DoOnUnsubscribe doOnUnsubscribe) {
-//        channel.attr(DO_ON_UNSUBSCRIBE).set(doOnUnsubscribe);
-//    }
-//    
-//    public static DoOnUnsubscribe queryDoOnUnsubscribe(final Channel channel) {
-//        return channel.attr(DO_ON_UNSUBSCRIBE).get();
-//    }
-//    
-//    public static void doOnUnsubscribe(final Channel channel, final Subscription subscription) {
-//        final DoOnUnsubscribe doOnUnsubscribe = channel.attr(DO_ON_UNSUBSCRIBE).get();
-//        if (null!=doOnUnsubscribe) {
-//            try {
-//                doOnUnsubscribe.call(subscription);
-//            } catch (Exception e) {
-//                LOG.warn("exception when invoke doOnUnsubscribe {} for channel {}, detail: {}",
-//                        doOnUnsubscribe, channel, ExceptionUtils.exception2detail(e));
-//            }
-//        }
-//    }
     
     public static Subscription subscriptionForCloseChannel(final Channel channel) {
         return Subscriptions.create(new Action0() {

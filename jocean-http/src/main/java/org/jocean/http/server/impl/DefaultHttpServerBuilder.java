@@ -324,8 +324,6 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             @Override
             public void call(final HttpTrade trade) {
                 removeFromTrades(trade);
-//                RxNettys.installDoOnUnsubscribe(channel, 
-//                        DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
                 if (channel.isActive()
                     && ((DefaultHttpTrade)trade).isEndedWithKeepAlive()
                     && !subscriber.isUnsubscribed()) {

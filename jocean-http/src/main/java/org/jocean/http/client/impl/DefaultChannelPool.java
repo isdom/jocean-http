@@ -65,7 +65,6 @@ public class DefaultChannelPool extends AbstractChannelPool {
             && Nettys.isChannelReady(channel)) {
             final SocketAddress address = channel.remoteAddress();
             if (null!=address) {
-//                RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
                 final Queue<Channel> channels = getOrCreateChannels(address);
                 channels.add(channel);
                 APPLY.ON_CHANNEL_INACTIVE.applyTo(channel.pipeline(),
