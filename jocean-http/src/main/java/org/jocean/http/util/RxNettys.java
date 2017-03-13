@@ -542,7 +542,7 @@ public class RxNettys {
     public static Observable<? extends HttpObject> inboundFromChannel(
         final Channel channel,
         final Action1<Action0> onTerminate) {
-        return Observable.create(new Observable.OnSubscribe<HttpObject>() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<HttpObject>() {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
