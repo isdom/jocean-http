@@ -13,7 +13,6 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ProxyBuilder;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
-import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.jocean.idiom.rx.RxObservables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +39,6 @@ import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.ReferenceCounted;
 import io.netty.util.concurrent.Future;
@@ -54,7 +52,6 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Actions;
 import rx.functions.Func1;
-import rx.internal.util.SubscriptionList;
 import rx.subscriptions.Subscriptions;
 
 public class RxNettys {
@@ -64,6 +61,7 @@ public class RxNettys {
         throw new IllegalStateException("No instances!");
     }
 
+    /*
     public static class DefaultDoOnUnsubscribe implements DoOnUnsubscribe, Subscription {
 
         @Override
@@ -87,6 +85,7 @@ public class RxNettys {
     public static DefaultDoOnUnsubscribe createDoOnUnsubscribe() {
         return new DefaultDoOnUnsubscribe();
     }
+    */
     
     public static void applyFeaturesToChannel(
             final Channel channel,
@@ -188,7 +187,8 @@ public class RxNettys {
                     public void call(final Subscriber<? super ChannelFuture> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
                             final ChannelFuture future = channel.connect(remoteAddress);
-                            RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
+                            //  TODO doOnUnsubscribe
+//                            RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
                             subscriber.onNext(future);
                             subscriber.onCompleted();
                         }
@@ -301,52 +301,52 @@ public class RxNettys {
             }};
     }
     
-    public static Subscription subscriptionForReleaseChannel(final Channel channel) {
-        return Subscriptions.create(new Action0() {
-            @Override
-            public void call() {
-                Nettys.releaseChannel(channel);
-            }});
-    }
+//    public static Subscription subscriptionForReleaseChannel(final Channel channel) {
+//        return Subscriptions.create(new Action0() {
+//            @Override
+//            public void call() {
+//                Nettys.releaseChannel(channel);
+//            }});
+//    }
     
-    public static <T> Action1<T> enableReleaseChannelWhenUnsubscribe() {
-        return new Action1<T>() {
-            @Override
-            public void call(final T channelOrFuture) {
-                Channel ch = null;
-                if (channelOrFuture instanceof Channel) {
-                    ch = (Channel)channelOrFuture;
-                } else if (channelOrFuture instanceof ChannelFuture) {
-                    ch = ((ChannelFuture)channelOrFuture).channel();
-                }
-                if (null!=ch) {
-                    final Channel channel = ch;
-                    RxNettys.doOnUnsubscribe(ch,subscriptionForReleaseChannel(channel));
-                }
-            }};
-    }
+//    public static <T> Action1<T> enableReleaseChannelWhenUnsubscribe() {
+//        return new Action1<T>() {
+//            @Override
+//            public void call(final T channelOrFuture) {
+//                Channel ch = null;
+//                if (channelOrFuture instanceof Channel) {
+//                    ch = (Channel)channelOrFuture;
+//                } else if (channelOrFuture instanceof ChannelFuture) {
+//                    ch = ((ChannelFuture)channelOrFuture).channel();
+//                }
+//                if (null!=ch) {
+//                    final Channel channel = ch;
+//                    RxNettys.doOnUnsubscribe(ch,subscriptionForReleaseChannel(channel));
+//                }
+//            }};
+//    }
     
-    private static final AttributeKey<DoOnUnsubscribe> DO_ON_UNSUBSCRIBE = AttributeKey.valueOf("__DO_ON_UNSUBSCRIBE");
-    
-    public static void installDoOnUnsubscribe(final Channel channel, final DoOnUnsubscribe doOnUnsubscribe) {
-        channel.attr(DO_ON_UNSUBSCRIBE).set(doOnUnsubscribe);
-    }
-    
-    public static DoOnUnsubscribe queryDoOnUnsubscribe(final Channel channel) {
-        return channel.attr(DO_ON_UNSUBSCRIBE).get();
-    }
-    
-    public static void doOnUnsubscribe(final Channel channel, final Subscription subscription) {
-        final DoOnUnsubscribe doOnUnsubscribe = channel.attr(DO_ON_UNSUBSCRIBE).get();
-        if (null!=doOnUnsubscribe) {
-            try {
-                doOnUnsubscribe.call(subscription);
-            } catch (Exception e) {
-                LOG.warn("exception when invoke doOnUnsubscribe {} for channel {}, detail: {}",
-                        doOnUnsubscribe, channel, ExceptionUtils.exception2detail(e));
-            }
-        }
-    }
+//    private static final AttributeKey<DoOnUnsubscribe> DO_ON_UNSUBSCRIBE = AttributeKey.valueOf("__DO_ON_UNSUBSCRIBE");
+//    
+//    public static void installDoOnUnsubscribe(final Channel channel, final DoOnUnsubscribe doOnUnsubscribe) {
+//        channel.attr(DO_ON_UNSUBSCRIBE).set(doOnUnsubscribe);
+//    }
+//    
+//    public static DoOnUnsubscribe queryDoOnUnsubscribe(final Channel channel) {
+//        return channel.attr(DO_ON_UNSUBSCRIBE).get();
+//    }
+//    
+//    public static void doOnUnsubscribe(final Channel channel, final Subscription subscription) {
+//        final DoOnUnsubscribe doOnUnsubscribe = channel.attr(DO_ON_UNSUBSCRIBE).get();
+//        if (null!=doOnUnsubscribe) {
+//            try {
+//                doOnUnsubscribe.call(subscription);
+//            } catch (Exception e) {
+//                LOG.warn("exception when invoke doOnUnsubscribe {} for channel {}, detail: {}",
+//                        doOnUnsubscribe, channel, ExceptionUtils.exception2detail(e));
+//            }
+//        }
+//    }
     
     public static Subscription subscriptionForCloseChannel(final Channel channel) {
         return Subscriptions.create(new Action0() {

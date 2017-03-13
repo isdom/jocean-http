@@ -26,7 +26,6 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
-import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -325,8 +324,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             @Override
             public void call(final HttpTrade trade) {
                 removeFromTrades(trade);
-                RxNettys.installDoOnUnsubscribe(channel, 
-                        DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
+//                RxNettys.installDoOnUnsubscribe(channel, 
+//                        DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
                 if (channel.isActive()
                     && ((DefaultHttpTrade)trade).isEndedWithKeepAlive()
                     && !subscriber.isUnsubscribed()) {

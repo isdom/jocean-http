@@ -1,8 +1,5 @@
 package org.jocean.http.util;
 
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
 import org.jocean.http.TransportException;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
@@ -15,13 +12,9 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpClientCodec;
-import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpContentDecompressor;
-import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.ssl.SslContext;
@@ -29,7 +22,6 @@ import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
-import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 import rx.Subscriber;
 import rx.functions.Action0;
@@ -37,7 +29,6 @@ import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.functions.Func2;
 import rx.functions.FuncN;
-import rx.subscriptions.Subscriptions;
 
 class FACTORYFUNCS {
     private static final Logger LOG =
@@ -260,7 +251,7 @@ class FACTORYFUNCS {
                             ctx.channel(), ctx.name(),
                             ExceptionUtils.exception2detail(cause), 
                             subscriber);
-                    touchAllContentWith(ctx.channel(), "exceptionCaught:" + ExceptionUtils.exception2detail(cause));
+//                    touchAllContentWith(ctx.channel(), "exceptionCaught:" + ExceptionUtils.exception2detail(cause));
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onError(new TransportException("exceptionCaught of" + ctx.channel(), cause));
                     }
@@ -275,7 +266,7 @@ class FACTORYFUNCS {
                                 ctx.channel(), ctx.name(), subscriber);
                     }
                     
-                    touchAllContentWith(ctx.channel(), "channelInactive");
+//                    touchAllContentWith(ctx.channel(), "channelInactive");
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onError(new TransportException("channelInactive of " + ctx.channel()));
                     }
@@ -296,6 +287,7 @@ class FACTORYFUNCS {
                             }
                         }
                         
+                        /*
                         if (msg instanceof HttpRequest) {
                             initTouchableWithRequest(ctx.channel(), (HttpRequest)msg);
                         } else if (msg instanceof HttpResponse) {
@@ -305,6 +297,7 @@ class FACTORYFUNCS {
                         if (msg instanceof HttpContent) {
                             touchAndHoldContent(ctx.channel(), (HttpContent)msg);
                         }
+                        */
                         
                         if (!subscriber.isUnsubscribed()) {
                             try {
@@ -348,6 +341,7 @@ class FACTORYFUNCS {
         }
     };
     
+    /*
     private static final AttributeKey<String> ATTR_TOUCH_HINT = 
             AttributeKey.valueOf("__HTTP_TOUCH_HINT");
     
@@ -425,4 +419,5 @@ class FACTORYFUNCS {
             }
         }
     }
+    */
 }

@@ -8,8 +8,6 @@ import java.util.concurrent.ConcurrentMap;
 
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
-import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +65,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
             && Nettys.isChannelReady(channel)) {
             final SocketAddress address = channel.remoteAddress();
             if (null!=address) {
-                RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
+//                RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.UNSUBSCRIBE_NOW);
                 final Queue<Channel> channels = getOrCreateChannels(address);
                 channels.add(channel);
                 APPLY.ON_CHANNEL_INACTIVE.applyTo(channel.pipeline(),

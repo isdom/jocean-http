@@ -8,7 +8,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.Ordered;
-import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,9 +91,9 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
                 if (!subscriber.isUnsubscribed()) {
                     final ChannelFuture future = _bootstrap.register();
                     LOG.info("create new channel: {}", future.channel());
-                    RxNettys.installDoOnUnsubscribe(future.channel(), DoOnUnsubscribe.Util.from(subscriber));
+//                    RxNettys.installDoOnUnsubscribe(future.channel(), DoOnUnsubscribe.Util.from(subscriber));
                     subscriber.add(Subscriptions.from(future));
-                    subscriber.add(RxNettys.subscriptionForReleaseChannel(future.channel()));
+//                    subscriber.add(RxNettys.subscriptionForReleaseChannel(future.channel()));
                     subscriber.onNext(future);
                     subscriber.onCompleted();
                 }

@@ -5,15 +5,12 @@ package org.jocean.redis.impl;
 
 import java.net.SocketAddress;
 
-import org.jocean.http.TransportException;
 import org.jocean.http.client.impl.AbstractChannelCreator;
 import org.jocean.http.client.impl.ChannelCreator;
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.http.client.impl.DefaultChannelPool;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.jocean.redis.RedisClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,11 +19,8 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFactory;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.redis.RedisArrayAggregator;
@@ -39,11 +33,9 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
 import rx.Observable.Transformer;
-import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func1;
-import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -95,6 +87,7 @@ public class DefaultRedisClient implements RedisClient {
             }};
     }
 
+    /*
     private Observable<? extends Object> prepareRecvResponse(final Channel channel) {
         return Observable.create(new Observable.OnSubscribe<Object>() {
             @Override
@@ -109,7 +102,9 @@ public class DefaultRedisClient implements RedisClient {
                 }
             }});
     }
+    */
     
+    /*
     private Func1<Object, Observable<? extends RedisMessage>> buildAndSendRequest(
             final Func1<DoOnUnsubscribe, Observable<? extends RedisMessage>> requestProvider) {
         return new Func1<Object, Observable<? extends RedisMessage>>() {
@@ -128,6 +123,7 @@ public class DefaultRedisClient implements RedisClient {
             }
         };
     }
+    */
     
     private Action0 flushWhenCompleted(final Channel channel) {
         return new Action0() {
@@ -146,11 +142,12 @@ public class DefaultRedisClient implements RedisClient {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("send redis request msg :{}", reqmsg);
                 }
-                RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
+//                RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
                 return RxNettys.observableFromFuture(future);
             }};
     }
     
+    /*
     private static ChannelHandler buildSubscribHandler(final Subscriber<? super RedisMessage> subscriber) {
         return new SimpleChannelInboundHandler<RedisMessage>(true) {
             @Override
@@ -230,7 +227,9 @@ public class DefaultRedisClient implements RedisClient {
             // }
         };
     }
+    */
 
+    /*
     private Observable<? extends RedisMessage> safeBuildRequestByProvider(
             final Func1<DoOnUnsubscribe, Observable<? extends RedisMessage>> requestProvider,
             final Channel channel) {
@@ -240,6 +239,7 @@ public class DefaultRedisClient implements RedisClient {
                 ? requestObservable 
                 : Observable.<RedisMessage>error(new RuntimeException("Can't build request observable"));
     }
+    */
 
     private Observable<? extends RedisConnection> createChannelAndConnectTo(
             final SocketAddress remoteAddress) {

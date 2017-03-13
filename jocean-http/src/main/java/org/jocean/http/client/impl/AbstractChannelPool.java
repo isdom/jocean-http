@@ -2,8 +2,6 @@ package org.jocean.http.client.impl;
 
 import java.net.SocketAddress;
 
-import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.rx.DoOnUnsubscribe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,8 +65,8 @@ public abstract class AbstractChannelPool implements ChannelPool {
         if (!subscriber.isUnsubscribed()) {
             if (channel.isActive()) {
                 LOG.info("fetch channel({}) of address ({}) for reuse.", channel, address);
-                RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.from(subscriber));
-                subscriber.add(RxNettys.subscriptionForReleaseChannel(channel));
+//                RxNettys.installDoOnUnsubscribe(channel, DoOnUnsubscribe.Util.from(subscriber));
+//                subscriber.add(RxNettys.subscriptionForReleaseChannel(channel));
                 subscriber.onNext(channel);
                 subscriber.onCompleted();
             } else {
