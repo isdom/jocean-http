@@ -98,7 +98,7 @@ public class Nettys {
                 if (order==0) {
                     //  order equals, same ordered handler already added, 
                     //  so replaced by new handler
-                    LOG.warn("channel({}): handler order ({}) exist, old handler {}/{} will be replace by new handler {}/{}.",
+                    LOG.warn("insertHandler: channel ({}) handler order({}) exist, old handler {}/{} will be replace by new handler {}/{}.",
                             pipeline.channel(), toInsertOrdinal, 
                             entry.getKey(), entry.getValue(),
                             name, handler);
@@ -113,14 +113,14 @@ public class Nettys {
                     //  OK, add handler before current handler
                     pipeline.addBefore(entry.getKey(), name, handler);
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("channel({}): add handler({}/{}) before({}).", 
+                        LOG.debug("insertHandler: channel ({}) insert handler({}/{}) before({}).", 
                                 pipeline.channel(), name, handler, entry.getKey());
                     }
                     return handler;
                 }
             } catch (IllegalArgumentException e) {
                 // throw by toOrdinal.call, so just ignore this entry and continue
-                LOG.warn("channel({}): insert handler named({}), meet handler entry:{}, which is !NOT! ordinal, just ignore", 
+                LOG.warn("insertHandler: channel ({}) insert handler named({}), meet handler entry:{}, which is !NOT! ordinal, just ignore", 
                         pipeline.channel(), name, entry);
                 LOG.warn("call from {}", ExceptionUtils.dumpCallStack(new Throwable(), "", 2));
                 continue;
@@ -128,7 +128,7 @@ public class Nettys {
         }
         pipeline.addLast(name, handler);
         if (LOG.isDebugEnabled()) {
-            LOG.debug("channel({}): add handler({}/{}) at last.", 
+            LOG.debug("insertHandler: channel ({}) add handler({}/{}) at last.", 
                     pipeline.channel(), name, handler);
         }
         return handler;
