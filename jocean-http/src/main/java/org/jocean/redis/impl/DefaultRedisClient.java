@@ -49,6 +49,17 @@ public class DefaultRedisClient implements RedisClient {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultRedisClient.class);
     
+    private final static Action1<Channel> ADD_CODEC_AND_SET_READY = new Action1<Channel>() {
+        @Override
+        public void call(final Channel channel) {
+            final ChannelPipeline p = channel.pipeline();
+            p.addLast(new RedisDecoder());
+            p.addLast(new RedisBulkStringAggregator());
+            p.addLast(new RedisArrayAggregator());
+            p.addLast(new RedisEncoder());
+            Nettys.setChannelReady(channel);
+        }};
+        
     private final Action1<RedisConnection> _doRecycleChannel = new Action1<RedisConnection>() {
         @Override
         public void call(final RedisConnection connection) {
@@ -66,6 +77,12 @@ public class DefaultRedisClient implements RedisClient {
             }
         }};
         
+    final Func1<Channel, RedisConnection> _channel2Connection = new Func1<Channel, RedisConnection>() {
+        @Override
+        public RedisConnection call(final Channel channel) {
+            return new DefaultRedisConnection(channel, _doRecycleChannel);
+        }};
+            
     @Override
     public Observable<? extends RedisConnection> getConnection() {
         return null == this._defaultRemoteAddress 
@@ -76,38 +93,17 @@ public class DefaultRedisClient implements RedisClient {
     @Override
     public Observable<? extends RedisConnection> getConnection(final SocketAddress remoteAddress) {
         return this._channelPool.retainChannel(remoteAddress)
-                .map(channel2RedisConnection())
+                .map(this._channel2Connection)
                 .onErrorResumeNext(createChannelAndConnectTo(remoteAddress))
                 ;
-    }
-
-    private Func1<Channel, RedisConnection> channel2RedisConnection() {
-        return new Func1<Channel, RedisConnection>() {
-            @Override
-            public RedisConnection call(final Channel channel) {
-                return new DefaultRedisConnection(channel, _doRecycleChannel);
-            }};
     }
 
     private Observable<? extends RedisConnection> createChannelAndConnectTo(
             final SocketAddress remoteAddress) {
         final Observable<? extends RedisConnection> ret = this._channelCreator.newChannel()
-            .doOnNext(new Action1<Channel>() {
-                @Override
-                public void call(final Channel channel) {
-                    final ChannelPipeline p = channel.pipeline();
-                    p.addLast(new RedisDecoder());
-                    p.addLast(new RedisBulkStringAggregator());
-                    p.addLast(new RedisArrayAggregator());
-                    p.addLast(new RedisEncoder());
-                }})
             .flatMap(RxNettys.asyncConnectTo(remoteAddress))
-            .doOnNext(new Action1<Channel>() {
-                @Override
-                public void call(final Channel channel) {
-                    Nettys.setChannelReady(channel);
-                }})
-            .map(channel2RedisConnection());
+            .doOnNext(ADD_CODEC_AND_SET_READY)
+            .map(this._channel2Connection);
         if (null != this._fornew) {
             return ret.compose(this._fornew);
         } else {
@@ -180,6 +176,6 @@ public class DefaultRedisClient implements RedisClient {
     
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
-    private SocketAddress _defaultRemoteAddress;
-    private Transformer<? super RedisConnection, ? extends RedisConnection> _fornew = null;
+    private volatile SocketAddress _defaultRemoteAddress;
+    private volatile Transformer<? super RedisConnection, ? extends RedisConnection> _fornew = null;
 }

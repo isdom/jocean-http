@@ -23,6 +23,7 @@ import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
@@ -156,17 +157,24 @@ public class RxNettys {
         return new Func1<Channel, Observable<? extends Channel>>() {
             @Override
             public Observable<? extends Channel> call(final Channel channel) {
-                return Observable.unsafeCreate(new Observable.OnSubscribe<ChannelFuture>() {
+                return Observable.unsafeCreate(new Observable.OnSubscribe<Channel>() {
                     @Override
-                    public void call(final Subscriber<? super ChannelFuture> subscriber) {
+                    public void call(final Subscriber<? super Channel> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
-                            final ChannelFuture future = channel.connect(remoteAddress);
-                            //  TODO doOnUnsubscribe
-//                            RxNettys.doOnUnsubscribe(channel, Subscriptions.from(future));
-                            subscriber.onNext(future);
-                            subscriber.onCompleted();
+                            final ChannelFuture f = channel.connect(remoteAddress)
+                                .addListener(new ChannelFutureListener() {
+                                    @Override
+                                    public void operationComplete(final ChannelFuture future) throws Exception {
+                                        if (future.isSuccess()) {
+                                            subscriber.onNext(future.channel());
+                                            subscriber.onCompleted();
+                                        } else {
+                                            subscriber.onError(future.cause());
+                                        }
+                                    }});
+                            subscriber.add(Subscriptions.from(f));
                         }
-                    }}).compose(channelFutureToChannel());
+                    }});
             }};
     }
     
