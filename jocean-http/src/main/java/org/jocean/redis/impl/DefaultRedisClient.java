@@ -62,10 +62,10 @@ public class DefaultRedisClient implements RedisClient {
         
     private final Action1<RedisConnection> _doRecycleChannel = new Action1<RedisConnection>() {
         @Override
-        public void call(final RedisConnection connection) {
-            final DefaultRedisConnection defaultRedisConnection = (DefaultRedisConnection)connection;
-            final Channel channel = defaultRedisConnection.channel();
-            if (!defaultRedisConnection.isTransacting()) {
+        public void call(final RedisConnection c) {
+            final DefaultRedisConnection connection = (DefaultRedisConnection)c;
+            final Channel channel = connection.channel();
+            if (!connection.isTransacting()) {
                 if (_channelPool.recycleChannel(channel)) {
                     // recycle success
                     // perform read for recv FIN SIG and to change state to close

@@ -43,6 +43,9 @@ import rx.subscriptions.Subscriptions;
 class DefaultRedisConnection 
     implements RedisConnection, Comparable<DefaultRedisConnection>  {
     
+    private static final Logger LOG =
+            LoggerFactory.getLogger(DefaultRedisConnection.class);
+    
     private static final AtomicInteger _IDSRC = new AtomicInteger(0);
     
     private final int _id = _IDSRC.getAndIncrement();
@@ -91,9 +94,6 @@ class DefaultRedisConnection
         return builder.toString();
     }
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(DefaultRedisConnection.class);
-    
     private final InterfaceSelector _selector = new InterfaceSelector();
     
     @SafeVarargs
@@ -103,7 +103,7 @@ class DefaultRedisConnection
         
         this._channel = channel;
         this._terminateAwareSupport = 
-            new TerminateAwareSupport<RedisConnection>(_selector);
+            new TerminateAwareSupport<RedisConnection>(this._selector);
         
         RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
