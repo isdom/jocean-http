@@ -111,7 +111,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
         
         this._channel = channel;
         this._terminateAwareSupport = 
-            new TerminateAwareSupport<HttpInitiator>(_selector);
+            new TerminateAwareSupport<HttpInitiator>(this._selector);
         
         this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
@@ -235,7 +235,7 @@ class DefaultHttpInitiator extends DefaultAttributeMap
 
     @Override
     public void close() {
-        fireClosed(new RuntimeException("call close()"));
+        fireClosed(new RuntimeException("close()"));
     }
 
     @Override
@@ -276,14 +276,14 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     private static final ActionN FIRE_CLOSED = new ActionN() {
         @Override
         public void call(final Object... args) {
-            ((DefaultHttpInitiator)args[0]).fireClosed0((Throwable)args[1]);
+            ((DefaultHttpInitiator)args[0]).doClosed((Throwable)args[1]);
         }};
         
     private void fireClosed(final Throwable e) {
         this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
     }
 
-    private void fireClosed0(final Throwable e) {
+    private void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("close active initiator[channel: {}] with isOutboundCompleted({})/isEndedWithKeepAlive({}), by {}", 
                     this._channel, this._isOutboundCompleted.get(), this.isEndedWithKeepAlive(),
