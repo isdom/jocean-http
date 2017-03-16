@@ -410,7 +410,7 @@ class DefaultRedisConnection
     
                 @Override
                 public void onCompleted() {
-                    LOG.warn("Internal Error: invoke hooked response Observer.");
+                    LOG.warn("Internal Error: invoke hooked response Observer's onCompleted.");
                 }
     
                 @Override
@@ -452,9 +452,13 @@ class DefaultRedisConnection
             final Subscriber<? super RedisMessage> subscriber,
             final RedisMessage respmsg) {
         if (resetRespSubscriber(subscriber)) {
-            subscriber.onNext(respmsg);
-            clearTransacting();
-            subscriber.onCompleted();
+            try {
+                subscriber.onNext(respmsg);
+            } finally {
+                removeAndResetRespHandler();
+                clearTransacting();
+                subscriber.onCompleted();
+            }
         }
     }
 
@@ -463,13 +467,18 @@ class DefaultRedisConnection
             final Throwable e) {
         if (resetRespSubscriber(subscriber)) {
             // confirm this subscriber is current response subscriber
-            subscriber.onError(e);
+            try {
+                subscriber.onError(e);
+            } finally {
+                removeAndResetRespHandler();
+            }
         }
     }
 
     private void doOnUnsubscribeResponse(
             final Subscriber<? super RedisMessage> subscriber) {
         if (resetRespSubscriber(subscriber)) {
+            removeAndResetRespHandler();
             // unsubscribe before OnCompleted or OnError
             fireClosed(new RuntimeException("unsubscribe response"));
         }
