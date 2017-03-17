@@ -89,6 +89,9 @@ class DefaultRedisConnection
         builder.append("DefaultRedisConnection [create at:")
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
                 .append(", isActive=").append(isActive())
+                .append(", isTransacting=").append(isTransacting())
+                .append(", reqSubscription=").append(_reqSubscription)
+                .append(", respSubscriber=").append(_respSubscriber)
                 .append(", channel=").append(_channel)
                 .append("]");
         return builder.toString();
@@ -326,14 +329,12 @@ class DefaultRedisConnection
     private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, Subscription> reqSubscriptionUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, Subscription.class, "_reqSubscription");
     
-    @SuppressWarnings("unused")
     private volatile Subscription _reqSubscription;
     
     @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<DefaultRedisConnection, Subscriber> respSubscriberUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultRedisConnection.class, Subscriber.class, "_respSubscriber");
     
-    @SuppressWarnings("unused")
     private volatile Subscriber<? super RedisMessage> _respSubscriber;
     
     private static final AtomicIntegerFieldUpdater<DefaultRedisConnection> transactingUpdater =
