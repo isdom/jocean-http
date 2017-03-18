@@ -141,7 +141,7 @@ class DefaultRedisConnection
         return Observable.unsafeCreate(new Observable.OnSubscribe<RedisMessage>() {
             @Override
             public void call(final Subscriber<? super RedisMessage> subscriber) {
-                _op.onSubscribeResponse(DefaultRedisConnection.this, request, subscriber);
+                _op.subscribeResponse(DefaultRedisConnection.this, request, subscriber);
             }});
     }
 
@@ -192,43 +192,52 @@ class DefaultRedisConnection
                     ExceptionUtils.exception2detail(e));
         }
         
-        removeAndResetRespHandler();
+        removeRespHandler();
         
         // notify response Subscriber with error
-        @SuppressWarnings("unchecked")
-        final Subscriber<? super RedisMessage> respSubscriber = respSubscriberUpdater.getAndSet(this, null);
-        if (null != respSubscriber
-           && !respSubscriber.isUnsubscribed()) {
-            respSubscriber.onError(e);
-        }
+        releaseRespWithError(e);
         
-        final Subscription reqSubscription = reqSubscriptionUpdater.getAndSet(this, null);
-        if (null != reqSubscription
-            && !reqSubscription.isUnsubscribed()) {
-            reqSubscription.unsubscribe();
-        }
+        unsubscribeRequest();
+        
         this._terminateAwareSupport.fireAllTerminates(this);
     }
 
-    private void removeAndResetRespHandler() {
+    private void removeRespHandler() {
         final ChannelHandler handler = respHandlerUpdater.getAndSet(this, null);
         if (null != handler) {
             RxNettys.actionToRemoveHandler(this._channel, handler).call();
         }
     }
 
+    private void releaseRespWithError(final Throwable e) {
+        @SuppressWarnings("unchecked")
+        final Subscriber<? super RedisMessage> respSubscriber = respSubscriberUpdater.getAndSet(this, null);
+        if (null != respSubscriber
+           && !respSubscriber.isUnsubscribed()) {
+            try {
+                respSubscriber.onError(e);
+            } catch (Exception error) {
+                LOG.warn("exception when invoke {}.onError, detail: {}",
+                    respSubscriber, ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+
+    private void unsubscribeRequest() {
+        final Subscription reqSubscription = reqSubscriptionUpdater.getAndSet(this, null);
+        if (null != reqSubscription
+            && !reqSubscription.isUnsubscribed()) {
+            reqSubscription.unsubscribe();
+        }
+    }
+
     private final Op _op;
     
     protected interface Op {
-        public void onSubscribeResponse(
+        public void subscribeResponse(
                 final DefaultRedisConnection connection,
                 final Observable<? extends RedisMessage> request,
                 final Subscriber<? super RedisMessage> subscriber);
-        
-        public void responseOnError(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber,
-                final Throwable e);
         
         public void responseOnNext(
                 final DefaultRedisConnection connection,
@@ -246,19 +255,11 @@ class DefaultRedisConnection
     
     private static final Op OP_ACTIVE = new Op() {
         @Override
-        public void onSubscribeResponse(
+        public void subscribeResponse(
                 final DefaultRedisConnection connection,
                 final Observable<? extends RedisMessage> request,
                 final Subscriber<? super RedisMessage> subscriber) {
-            connection.onSubscribeResponse(request, subscriber);
-        }
-        
-        @Override
-        public void responseOnError(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber,
-                final Throwable e) {
-            connection.responseOnError(subscriber, e);
+            connection.subscribeResponse(request, subscriber);
         }
         
         @Override
@@ -286,18 +287,11 @@ class DefaultRedisConnection
     
     private static final Op OP_UNACTIVE = new Op() {
         @Override
-        public void onSubscribeResponse(
+        public void subscribeResponse(
                 final DefaultRedisConnection connection,
                 final Observable<? extends RedisMessage> request,
                 final Subscriber<? super RedisMessage> subscriber) {
             subscriber.onError(new RuntimeException("redis connection unactive."));
-        }
-        
-        @Override
-        public void responseOnError(
-                final DefaultRedisConnection connection,
-                final Subscriber<? super RedisMessage> subscriber,
-                final Throwable e) {
         }
         
         @Override
@@ -348,7 +342,7 @@ class DefaultRedisConnection
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
     
-    private void onSubscribeResponse(
+    private void subscribeResponse(
             final Observable<? extends RedisMessage> request,
             final Subscriber<? super RedisMessage> subscriber) {
         if (subscriber.isUnsubscribed()) {
@@ -359,7 +353,11 @@ class DefaultRedisConnection
         if (holdRespSubscriber(subscriber)) {
             // _respSubscriber field set to subscriber
             final ChannelHandler handler = 
-                    buildRespHandler(buildHookedRespObserver(subscriber));
+                buildRespHandler(new Action1<RedisMessage>() {
+                    @Override
+                    public void call(final RedisMessage respmsg) {
+                        _op.responseOnNext(DefaultRedisConnection.this, subscriber, respmsg);
+                    }});
             respHandlerUpdater.set(DefaultRedisConnection.this, handler);
             this._channel.pipeline().addLast(handler);
             
@@ -401,31 +399,6 @@ class DefaultRedisConnection
                 }};
     }
 
-    private Observer<RedisMessage> buildHookedRespObserver(
-            final Subscriber<? super RedisMessage> subscriber) {
-        return new Observer<RedisMessage>() {
-                @Override
-                public String toString() {
-                    return "hookedObserver: redis connection " + _channel;
-                }
-    
-                @Override
-                public void onCompleted() {
-                    LOG.warn("Internal Error: invoke hooked response Observer's onCompleted.");
-                }
-    
-                @Override
-                public void onError(final Throwable e) {
-                    // hook onError
-                    _op.responseOnError(DefaultRedisConnection.this, subscriber, e);
-                }
-    
-                @Override
-                public void onNext(final RedisMessage respmsg) {
-                    _op.responseOnNext(DefaultRedisConnection.this, subscriber, respmsg);
-                }};
-    }
-
     private void requestOnNext(final RedisMessage reqmsg) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("sending redis request msg {}", reqmsg);
@@ -452,34 +425,21 @@ class DefaultRedisConnection
     private void responseOnNext(
             final Subscriber<? super RedisMessage> subscriber,
             final RedisMessage respmsg) {
-        if (resetRespSubscriber(subscriber)) {
+        if (unholdRespSubscriber(subscriber)) {
             try {
                 subscriber.onNext(respmsg);
             } finally {
-                removeAndResetRespHandler();
+                removeRespHandler();
                 clearTransacting();
                 subscriber.onCompleted();
             }
         }
     }
 
-    private void responseOnError(
-            final Subscriber<? super RedisMessage> subscriber,
-            final Throwable e) {
-        if (resetRespSubscriber(subscriber)) {
-            // confirm this subscriber is current response subscriber
-            try {
-                subscriber.onError(e);
-            } finally {
-                removeAndResetRespHandler();
-            }
-        }
-    }
-
     private void doOnUnsubscribeResponse(
             final Subscriber<? super RedisMessage> subscriber) {
-        if (resetRespSubscriber(subscriber)) {
-            removeAndResetRespHandler();
+        if (unholdRespSubscriber(subscriber)) {
+            removeRespHandler();
             // unsubscribe before OnCompleted or OnError
             fireClosed(new RuntimeException("unsubscribe response"));
         }
@@ -490,7 +450,7 @@ class DefaultRedisConnection
         return respSubscriberUpdater.compareAndSet(this, null, subscriber);
     }
 
-    private boolean resetRespSubscriber(
+    private boolean unholdRespSubscriber(
             final Subscriber<? super RedisMessage> subscriber) {
         return respSubscriberUpdater.compareAndSet(this, subscriber, null);
     }
@@ -504,28 +464,16 @@ class DefaultRedisConnection
         transactingUpdater.compareAndSet(DefaultRedisConnection.this, 0, 1);
     }
 
-    private static ChannelHandler buildRespHandler(final Observer<? super RedisMessage> observer) {
+    private ChannelHandler buildRespHandler(final Action1<RedisMessage> onRead) {
         return new SimpleChannelInboundHandler<RedisMessage>(false) {
             @Override
             public void exceptionCaught(final ChannelHandlerContext ctx,
                     final Throwable cause) throws Exception {
-                LOG.warn("exceptionCaught at channel({})/handler({}), detail:{}, and call ({}).onError with TransportException.", 
-                        ctx.channel(), ctx.name(),
-                        ExceptionUtils.exception2detail(cause), 
-                        observer);
-                ctx.close();
-                observer.onError(new TransportException("exceptionCaught", cause));
-            }
-
-            @Override
-            public void channelInactive(final ChannelHandlerContext ctx)
-                    throws Exception {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("channel({})/handler({}): channelInactive and call ({}).onError with TransportException.", 
-                            ctx.channel(), ctx.name(), observer);
-                }
-                ctx.close();
-                observer.onError(new TransportException("channelInactive"));
+                LOG.warn("exceptionCaught at channel({})/handler({}), detail:{}", 
+                        ctx.channel(), 
+                        ctx.name(),
+                        ExceptionUtils.exception2detail(cause));
+                fireClosed(cause);
             }
 
             @Override
@@ -533,12 +481,12 @@ class DefaultRedisConnection
                     final RedisMessage msg) throws Exception {
                 try {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("channel({})/handler({}): channelRead0 and call ({}).onNext with msg({}).", 
-                                ctx.channel(), ctx.name(), observer, msg);
+                        LOG.debug("channel({})/handler({}): channelRead0 and call ({}) with msg({}).", 
+                                ctx.channel(), ctx.name(), onRead, msg);
                     }
 
                     try {
-                        observer.onNext(msg);
+                        onRead.call(msg);
                     } catch (Exception e) {
                         LOG.warn("exception when invoke onNext for channel({})/msg ({}), detail: {}.", 
                                 ctx.channel(), msg, ExceptionUtils.exception2detail(e));

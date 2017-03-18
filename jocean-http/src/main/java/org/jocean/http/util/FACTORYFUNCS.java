@@ -185,10 +185,12 @@ class FACTORYFUNCS {
                         LOG.debug("ON_CHANNEL_INACTIVE_FUNC1: channel({})/handler({}): channelInactive.", 
                                 ctx.channel(), ctx.name());
                     }
+                    ctx.close();
                     try {
                         onChannelInactive.call();
                     } finally {
-                        ctx.fireChannelInactive();
+                        //  TODO?
+//                        ctx.fireChannelInactive();
                     }
                 }
             };
