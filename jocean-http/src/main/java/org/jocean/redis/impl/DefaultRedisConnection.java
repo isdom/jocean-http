@@ -110,6 +110,15 @@ class DefaultRedisConnection
         
         RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
+                APPLY.ON_EXCEPTION_CAUGHT,
+                new Action1<Throwable>() {
+                    @Override
+                    public void call(final Throwable cause) {
+                        fireClosed(cause);
+                    }});
+        
+        RxNettys.applyToChannelWithUninstall(channel, 
+                onTerminate(), 
                 APPLY.ON_CHANNEL_INACTIVE,
                 new Action0() {
                     @Override
@@ -466,16 +475,6 @@ class DefaultRedisConnection
 
     private ChannelHandler buildRespHandler(final Action1<RedisMessage> onRead) {
         return new SimpleChannelInboundHandler<RedisMessage>(false) {
-            @Override
-            public void exceptionCaught(final ChannelHandlerContext ctx,
-                    final Throwable cause) throws Exception {
-                LOG.warn("exceptionCaught at channel({})/handler({}), detail:{}", 
-                        ctx.channel(), 
-                        ctx.name(),
-                        ExceptionUtils.exception2detail(cause));
-                fireClosed(cause);
-            }
-
             @Override
             protected void channelRead0(final ChannelHandlerContext ctx,
                     final RedisMessage msg) throws Exception {

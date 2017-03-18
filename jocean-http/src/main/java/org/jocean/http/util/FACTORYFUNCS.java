@@ -197,6 +197,28 @@ class FACTORYFUNCS {
         }
     };
     
+    static final Func1<Action1<Throwable>, ChannelHandler> ON_EXCEPTION_CAUGHT_FUNC1 = 
+            new Func1<Action1<Throwable>, ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Action1<Throwable> onExceptionCaught) {
+            return new ChannelInboundHandlerAdapter() {
+                @Override
+                public void exceptionCaught(final ChannelHandlerContext ctx,
+                        final Throwable cause) throws Exception {
+                    LOG.warn("ON_EXCEPTION_CAUGHT_FUNC1: channel({})/handler({}), detail:{}", 
+                            ctx.channel(), 
+                            ctx.name(),
+                            ExceptionUtils.exception2detail(cause));
+                    try {
+                        onExceptionCaught.call(cause);
+                    } finally {
+                        ctx.fireExceptionCaught(cause);
+                    }
+                }
+            };
+        }
+    };
+    
     static final Func1<Action0, ChannelHandler> ON_CHANNEL_READCOMPLETE_FUNC1 = 
             new Func1<Action0, ChannelHandler>() {
         @Override
