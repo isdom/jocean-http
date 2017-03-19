@@ -473,7 +473,7 @@ class DefaultRedisConnection
         transactingUpdater.compareAndSet(DefaultRedisConnection.this, 0, 1);
     }
 
-    private ChannelHandler buildRespHandler(final Action1<RedisMessage> onRead) {
+    private static ChannelHandler buildRespHandler(final Action1<RedisMessage> onRead) {
         return new SimpleChannelInboundHandler<RedisMessage>(false) {
             @Override
             protected void channelRead0(final ChannelHandlerContext ctx,
