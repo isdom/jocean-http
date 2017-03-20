@@ -350,4 +350,11 @@ class FACTORYFUNCS {
             };
         }
     };
+
+    static final Func1<ChannelHandler, ChannelHandler> ON_MESSAGE_FUNC1 = 
+            new Func1<ChannelHandler, ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final ChannelHandler handler) {
+            return handler;
+        }};
 }

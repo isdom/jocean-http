@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.TransportException;
 import org.jocean.http.util.APPLY;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
@@ -23,8 +24,6 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.redis.RedisMessage;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
@@ -362,13 +361,14 @@ class DefaultRedisConnection
         if (holdRespSubscriber(subscriber)) {
             // _respSubscriber field set to subscriber
             final ChannelHandler handler = 
-                buildRespHandler(new Action1<RedisMessage>() {
+                Nettys.onMessageHandler(new Action1<RedisMessage>() {
                     @Override
                     public void call(final RedisMessage respmsg) {
                         _op.responseOnNext(DefaultRedisConnection.this, subscriber, respmsg);
                     }});
+            APPLY.ON_MESSAGE.applyTo(this._channel.pipeline(), handler);
             respHandlerUpdater.set(DefaultRedisConnection.this, handler);
-            this._channel.pipeline().addLast(handler);
+//            this._channel.pipeline().addLast(handler);
             
             reqSubscriptionUpdater.set(DefaultRedisConnection.this, 
                     request.subscribe(buildRequestObserver(request)));
@@ -471,29 +471,5 @@ class DefaultRedisConnection
     private void setTransacting() {
         // TODO, using this field as counter for req redis count & resp redis count
         transactingUpdater.compareAndSet(DefaultRedisConnection.this, 0, 1);
-    }
-
-    private static ChannelHandler buildRespHandler(final Action1<RedisMessage> onRead) {
-        return new SimpleChannelInboundHandler<RedisMessage>(false) {
-            @Override
-            protected void channelRead0(final ChannelHandlerContext ctx,
-                    final RedisMessage msg) throws Exception {
-                try {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("channel({})/handler({}): channelRead0 and call ({}) with msg({}).", 
-                                ctx.channel(), ctx.name(), onRead, msg);
-                    }
-
-                    try {
-                        onRead.call(msg);
-                    } catch (Exception e) {
-                        LOG.warn("exception when invoke onNext for channel({})/msg ({}), detail: {}.", 
-                                ctx.channel(), msg, ExceptionUtils.exception2detail(e));
-                    }
-                } finally {
-                    ReferenceCountUtil.release(msg);
-                }
-            }
-        };
     }
 }
