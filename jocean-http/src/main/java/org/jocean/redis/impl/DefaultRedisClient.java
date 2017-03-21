@@ -9,6 +9,7 @@ import org.jocean.http.client.impl.AbstractChannelCreator;
 import org.jocean.http.client.impl.ChannelCreator;
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.http.client.impl.DefaultChannelPool;
+import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.redis.RedisClient;
@@ -22,10 +23,6 @@ import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.redis.RedisArrayAggregator;
-import io.netty.handler.codec.redis.RedisBulkStringAggregator;
-import io.netty.handler.codec.redis.RedisDecoder;
-import io.netty.handler.codec.redis.RedisEncoder;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
@@ -53,10 +50,14 @@ public class DefaultRedisClient implements RedisClient {
         @Override
         public void call(final Channel channel) {
             final ChannelPipeline p = channel.pipeline();
-            p.addLast(new RedisDecoder());
-            p.addLast(new RedisBulkStringAggregator());
-            p.addLast(new RedisArrayAggregator());
-            p.addLast(new RedisEncoder());
+            APPLY.REDIS_DECODER.applyTo(p);
+            APPLY.REDIS_BULKSTRING_AGGREGATOR.applyTo(p);
+            APPLY.REDIS_ARRAY_AGGREGATOR.applyTo(p);
+            APPLY.REDIS_ENCODER.applyTo(p);
+//            p.addLast(new RedisDecoder());
+//            p.addLast(new RedisBulkStringAggregator());
+//            p.addLast(new RedisArrayAggregator());
+//            p.addLast(new RedisEncoder());
             Nettys.setChannelReady(channel);
         }};
         

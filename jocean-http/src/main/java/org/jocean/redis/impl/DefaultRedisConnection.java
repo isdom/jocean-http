@@ -368,7 +368,6 @@ class DefaultRedisConnection
                     }});
             APPLY.ON_MESSAGE.applyTo(this._channel.pipeline(), handler);
             respHandlerUpdater.set(DefaultRedisConnection.this, handler);
-//            this._channel.pipeline().addLast(handler);
             
             reqSubscriptionUpdater.set(DefaultRedisConnection.this, 
                     request.subscribe(buildRequestObserver(request)));

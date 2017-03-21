@@ -17,6 +17,10 @@ import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.handler.codec.redis.RedisArrayAggregator;
+import io.netty.handler.codec.redis.RedisBulkStringAggregator;
+import io.netty.handler.codec.redis.RedisDecoder;
+import io.netty.handler.codec.redis.RedisEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
@@ -351,10 +355,34 @@ class FACTORYFUNCS {
         }
     };
 
-    static final Func1<ChannelHandler, ChannelHandler> ON_MESSAGE_FUNC1 = 
-            new Func1<ChannelHandler, ChannelHandler>() {
+    static final Func1<SimpleChannelInboundHandler<?>, ChannelHandler> ON_MESSAGE_FUNC1 = 
+            new Func1<SimpleChannelInboundHandler<?>, ChannelHandler>() {
         @Override
-        public ChannelHandler call(final ChannelHandler handler) {
+        public ChannelHandler call(final SimpleChannelInboundHandler<?> handler) {
             return handler;
+        }};
+
+    static final FuncN<ChannelHandler> REDIS_DECODER_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new RedisDecoder();
+        }};
+
+    static final FuncN<ChannelHandler> REDIS_BULKSTRING_AGGREGATOR_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new RedisBulkStringAggregator();
+        }};
+
+    static final FuncN<ChannelHandler> REDIS_ARRAY_AGGREGATOR_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new RedisArrayAggregator();
+        }};
+
+    static final FuncN<ChannelHandler> REDIS_ENCODER_FUNCN = new FuncN<ChannelHandler>() {
+        @Override
+        public ChannelHandler call(final Object... args) {
+            return new RedisEncoder();
         }};
 }
