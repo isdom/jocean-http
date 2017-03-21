@@ -11,7 +11,6 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.TransportException;
 import org.jocean.http.util.APPLY;
-import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
@@ -24,6 +23,8 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.redis.RedisMessage;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
@@ -369,13 +370,16 @@ class DefaultRedisConnection
         }
         if (holdRespSubscriber(subscriber)) {
             // _respSubscriber field set to subscriber
-            final ChannelHandler handler = 
-                new Nettys.OnMessageHandler<RedisMessage>(
-                    new Action1<RedisMessage>() {
-                    @Override
-                    public void call(final RedisMessage respmsg) {
-                        _op.responseOnNext(DefaultRedisConnection.this, subscriber, respmsg);
-                    }});
+            final ChannelHandler handler = new SimpleChannelInboundHandler<RedisMessage>() {
+                @Override
+                protected void channelRead0(final ChannelHandlerContext ctx,
+                        final RedisMessage respmsg) throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("channel({})/handler({}): channelRead0 and call with msg({}).",
+                            ctx.channel(), ctx.name(), respmsg);
+                    }
+                    _op.responseOnNext(DefaultRedisConnection.this, subscriber, respmsg);
+                }};
             APPLY.ON_MESSAGE.applyTo(this._channel.pipeline(), handler);
             respHandlerUpdater.set(DefaultRedisConnection.this, handler);
             

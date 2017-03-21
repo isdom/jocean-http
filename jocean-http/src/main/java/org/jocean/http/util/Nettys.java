@@ -25,15 +25,11 @@ import io.netty.buffer.ByteBufOutputStream;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.util.AttributeKey;
-import io.netty.util.ReferenceCountUtil;
 import io.netty.util.ReferenceCounted;
-import rx.functions.Action1;
 import rx.functions.Func2;
 
 public class Nettys {
@@ -218,38 +214,5 @@ public class Nettys {
         sb.append(config.isAutoRead());
         sb.append('\n');
         return sb.toString();
-    }
-
-    public static final class OnMessageHandler<T> extends SimpleChannelInboundHandler<T> {
-        private final Action1<T> _onRead;
-
-        public OnMessageHandler(Action1<T> onRead) {
-            super(false);
-            this._onRead = onRead;
-        }
-
-        @Override
-        protected void channelRead0(final ChannelHandlerContext ctx,
-                final T msg) throws Exception {
-            try {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug(
-                            "channel({})/handler({}): channelRead0 and call ({}) with msg({}).",
-                            ctx.channel(), ctx.name(), _onRead, msg);
-                }
-
-                try {
-                    this._onRead.call(msg);
-                } catch (Exception e) {
-                    LOG.warn(
-                            "exception when invoke onRead({}) for channel({})/msg ({}), detail: {}.",
-                            this._onRead,
-                            ctx.channel(), msg,
-                            ExceptionUtils.exception2detail(e));
-                }
-            } finally {
-                ReferenceCountUtil.release(msg);
-            }
-        }
     }
 }
