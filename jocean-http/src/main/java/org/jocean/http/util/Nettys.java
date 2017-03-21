@@ -220,10 +220,10 @@ public class Nettys {
         return sb.toString();
     }
 
-    private static final class OnMessageHandler<T> extends SimpleChannelInboundHandler<T> {
+    public static final class OnMessageHandler<T> extends SimpleChannelInboundHandler<T> {
         private final Action1<T> _onRead;
 
-        private OnMessageHandler(Action1<T> onRead) {
+        public OnMessageHandler(Action1<T> onRead) {
             super(false);
             this._onRead = onRead;
         }
@@ -251,9 +251,5 @@ public class Nettys {
                 ReferenceCountUtil.release(msg);
             }
         }
-    }
-
-    public static <T> ChannelHandler onMessageHandler(final Action1<T> onRead) {
-        return new OnMessageHandler<T>(onRead);
     }
 }

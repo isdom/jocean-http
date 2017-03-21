@@ -370,7 +370,8 @@ class DefaultRedisConnection
         if (holdRespSubscriber(subscriber)) {
             // _respSubscriber field set to subscriber
             final ChannelHandler handler = 
-                Nettys.onMessageHandler(new Action1<RedisMessage>() {
+                new Nettys.OnMessageHandler<RedisMessage>(
+                    new Action1<RedisMessage>() {
                     @Override
                     public void call(final RedisMessage respmsg) {
                         _op.responseOnNext(DefaultRedisConnection.this, subscriber, respmsg);
