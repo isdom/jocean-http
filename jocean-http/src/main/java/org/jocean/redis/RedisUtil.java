@@ -22,6 +22,7 @@ import io.netty.handler.codec.redis.SimpleStringRedisMessage;
 import io.netty.util.CharsetUtil;
 import rx.Observable;
 import rx.Observable.Transformer;
+import rx.functions.Action0;
 import rx.functions.Func1;
 
 /**
@@ -36,6 +37,10 @@ public class RedisUtil {
     
     private RedisUtil() {
         throw new IllegalStateException("No instances!");
+    }
+    
+    public static Observable<RedisMessage> cmdAuth(final String passwd) {
+        return Observable.<RedisMessage>just(RedisUtil.strs2array("AUTH", passwd));
     }
     
     public static Observable<RedisMessage> cmdInfo() {
@@ -187,8 +192,7 @@ public class RedisUtil {
                     return source.flatMap(new Func1<RedisConnection, Observable<RedisConnection>>() {
                     @Override
                     public Observable<RedisConnection> call(final RedisConnection conn) {
-                        return conn.defineInteraction(
-                                Observable.<RedisMessage>just(RedisUtil.strs2array("AUTH", passwd)))
+                        return conn.defineInteraction(cmdAuth(passwd))
                         .flatMap(new Func1<RedisMessage, Observable<RedisConnection>>() {
                             @Override
                             public Observable<RedisConnection> call(final RedisMessage resp) {
@@ -198,6 +202,8 @@ public class RedisUtil {
                                 if (isOK(resp)) {
                                     return Observable.<RedisConnection>just(conn);
                                 } else {
+                                    // close redis connection first
+                                    conn.close();
                                     return Observable.<RedisConnection>error(
                                             new RuntimeException("Auth Failed"));
                                 }
@@ -216,8 +222,7 @@ public class RedisUtil {
                 return source.flatMap(new Func1<RedisConnection, Observable<RedisConnection>>() {
                     @Override
                     public Observable<RedisConnection> call(final RedisConnection conn) {
-                        return conn.defineInteraction(
-                                Observable.<RedisMessage>just(RedisUtil.strs2array("SELECT", Integer.toString(dbno))))
+                        return conn.defineInteraction(cmdSelect(dbno))
                         .flatMap(new Func1<RedisMessage, Observable<RedisConnection>>() {
                             @Override
                             public Observable<RedisConnection> call(final RedisMessage resp) {
@@ -227,6 +232,8 @@ public class RedisUtil {
                                 if (isOK(resp)) {
                                     return Observable.<RedisConnection>just(conn);
                                 } else {
+                                    // close redis connection first
+                                    conn.close();
                                     return Observable.<RedisConnection>error(
                                             new RuntimeException("Select Failed"));
                                 }
@@ -255,7 +262,7 @@ public class RedisUtil {
                                     return conn.defineInteraction(doNext.call(msg));
                                 }});
                         }
-                        return resp;
+                        return resp.doAfterTerminate(conn.closer());
                     }})
                     ;
             }
