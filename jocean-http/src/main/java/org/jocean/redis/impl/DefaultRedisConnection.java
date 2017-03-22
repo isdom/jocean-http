@@ -448,11 +448,11 @@ class DefaultRedisConnection
             final Subscriber<? super RedisMessage> subscriber,
             final RedisMessage respmsg) {
         if (unholdRespSubscriber(subscriber)) {
+            removeRespHandler();
+            clearTransacting();
             try {
                 subscriber.onNext(respmsg);
             } finally {
-                removeRespHandler();
-                clearTransacting();
                 subscriber.onCompleted();
             }
         }
