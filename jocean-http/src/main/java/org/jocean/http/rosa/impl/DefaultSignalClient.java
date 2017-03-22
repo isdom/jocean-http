@@ -560,21 +560,21 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     LOG.warn("exception when BodyPreprocessor({}).call, detail: {}",
                             bodyPreprocessor, ExceptionUtils.exception2detail(e));
                 }
-                if (!builders.isEmpty()) {
-                    Collections.sort(builders, Ordered.ASC);
-                    for (BodyBuilder builder : builders) {
-                        try {
-                            if (builder instanceof FeaturesAware) {
-                                ((FeaturesAware)builder).setFeatures(features);
-                            }
-                            final BodyForm body = builder.call();
-                            if (null != body) {
-                                return body;
-                            }
-                        } catch (Exception e) {
-                            LOG.warn("exception when BodyBuilder({}).call, detail: {}",
-                                    builder, ExceptionUtils.exception2detail(e));
+            }
+            if (!builders.isEmpty()) {
+                Collections.sort(builders, Ordered.ASC);
+                for (BodyBuilder builder : builders) {
+                    try {
+                        if (builder instanceof FeaturesAware) {
+                            ((FeaturesAware)builder).setFeatures(features);
                         }
+                        final BodyForm body = builder.call();
+                        if (null != body) {
+                            return body;
+                        }
+                    } catch (Exception e) {
+                        LOG.warn("exception when BodyBuilder({}).call, detail: {}",
+                                builder, ExceptionUtils.exception2detail(e));
                     }
                 }
             }
