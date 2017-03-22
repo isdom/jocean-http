@@ -234,6 +234,15 @@ class DefaultHttpInitiator extends DefaultAttributeMap
     }
 
     @Override
+    public Action0 closer() {
+        return new Action0() {
+            @Override
+            public void call() {
+                close();
+            }};
+    }
+    
+    @Override
     public void close() {
         fireClosed(new RuntimeException("close()"));
     }

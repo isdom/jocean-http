@@ -54,10 +54,6 @@ public class DefaultRedisClient implements RedisClient {
             APPLY.REDIS_BULKSTRING_AGGREGATOR.applyTo(p);
             APPLY.REDIS_ARRAY_AGGREGATOR.applyTo(p);
             APPLY.REDIS_ENCODER.applyTo(p);
-//            p.addLast(new RedisDecoder());
-//            p.addLast(new RedisBulkStringAggregator());
-//            p.addLast(new RedisArrayAggregator());
-//            p.addLast(new RedisEncoder());
             Nettys.setChannelReady(channel);
         }};
         

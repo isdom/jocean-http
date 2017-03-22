@@ -14,6 +14,9 @@ public class RosaProfiles {
 
     static final Feature ENABLE_DEFAULTBODY = new DefaultBodyPreprocessor();
     
+    public static final Feature USING_APPLICATION_X_WWW_FORM_URLENCODED = 
+            new FormURLEncodedBodyPreprocessor();
+    
     public static final Feature[] _DEFAULT_PROFILE = new Feature[]{
             RosaProfiles.ENABLE_SETMETHOD,
             RosaProfiles.ENABLE_SETPATH,

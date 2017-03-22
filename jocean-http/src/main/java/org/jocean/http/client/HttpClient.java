@@ -13,6 +13,7 @@ import org.jocean.idiom.TerminateAware;
 
 import io.netty.util.AttributeMap;
 import rx.Observable;
+import rx.functions.Action0;
 
 /**
  * @author isdom
@@ -23,6 +24,7 @@ public interface HttpClient extends AutoCloseable {
     
     public interface HttpInitiator 
         extends AutoCloseable, TerminateAware<HttpInitiator>, AttributeMap {
+        public Action0 closer();
         public void close();
         
         public TrafficCounter trafficCounter();
