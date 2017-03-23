@@ -83,6 +83,105 @@ public class DefaultHttpClient implements HttpClient {
         this._inboundBlockSize = inboundBlockSize;
     }
     
+    private final Action1<HttpInitiator0> _doRecycleChannel0 = new Action1<HttpInitiator0>() {
+        @Override
+        public void call(final HttpInitiator0 initiator) {
+            final DefaultHttpInitiator0 initiator2 = (DefaultHttpInitiator0)initiator;
+            final Channel channel = initiator2.channel();
+            if (initiator2.isEndedWithKeepAlive()) {
+                if (_channelPool.recycleChannel(channel)) {
+                    // recycle success
+                    // perform read for recv FIN SIG and to change state to close
+                    channel.read();
+                }
+            } else {
+                channel.close();
+            }
+        }};
+        
+    @Override
+    public InitiatorBuilder0 initiator0() {
+        final AtomicReference<SocketAddress> _remoteAddress 
+        = new AtomicReference<>();
+    final List<Feature> _features = new ArrayList<>();
+    
+    return new InitiatorBuilder0() {
+        @Override
+        public InitiatorBuilder0 remoteAddress(
+                final SocketAddress remoteAddress) {
+            _remoteAddress.set(remoteAddress);
+            return this;
+        }
+
+        @Override
+        public InitiatorBuilder0 feature(final Feature... features) {
+            for (Feature f : features) {
+                if (null != f) {
+                    _features.add(f);
+                }
+            }
+            return this;
+        }
+
+        @Override
+        public Observable<? extends HttpInitiator0> build() {
+            if (null == _remoteAddress.get()) {
+                throw new RuntimeException("remoteAddress not set");
+            }
+            return initiator1(_remoteAddress.get(), 
+                    _features.toArray(Feature.EMPTY_FEATURES));
+        }};
+    }
+    
+    public Observable<? extends HttpInitiator0> initiator1(
+            final SocketAddress remoteAddress,
+            final Feature... features) {
+        final Feature[] fullFeatures = 
+                Feature.Util.union(cloneFeatures(Feature.Util.union(this._defaultFeatures, features)),
+                    HttpClientConstants.APPLY_HTTPCLIENT);
+        return this._channelPool.retainChannel(remoteAddress)
+            .doOnNext(new Action1<Channel>() {
+                @Override
+                public void call(final Channel channel) {
+                    // disable autoRead
+                    channel.config().setAutoRead(false);
+                }})
+            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
+            .doOnNext(processFeatures(fullFeatures))
+            .map(new Func1<Channel, HttpInitiator0>() {
+                @Override
+                public HttpInitiator0 call(final Channel channel) {
+                    final DefaultHttpInitiator0 initiator = new DefaultHttpInitiator0(channel, _doRecycleChannel0);
+//                    initiator.inbound().messageHolder().setMaxBlockSize(_inboundBlockSize);
+//                    
+//                    if (_outboundLowWaterMark >= 0 
+//                        && _outboundHighWaterMark >= 0
+//                        && _outboundHighWaterMark >= _outboundLowWaterMark) {
+//                        initiator.outbound().setWriteBufferWaterMark(_outboundLowWaterMark, _outboundHighWaterMark);
+//                    }
+//                    
+//                    initiator.setApplyToRequest(buildApplyToRequest(fullFeatures));
+                    RxNettys.applyFeaturesToChannel(
+                            channel, 
+                            HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, 
+                            fullFeatures, 
+                            initiator.onTerminate());
+                    
+                    final TrafficCounterAware trafficCounterAware = 
+                            InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])fullFeatures);
+                    if (null!=trafficCounterAware) {
+                        try {
+                            trafficCounterAware.setTrafficCounter(initiator.trafficCounter());
+                        } catch (Exception e) {
+                            LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
+                                    channel, ExceptionUtils.exception2detail(e));
+                        }
+                    }
+                    
+                    return initiator;
+                }});
+    }
+    
     private final Action1<HttpInitiator> _doRecycleChannel = new Action1<HttpInitiator>() {
         @Override
         public void call(final HttpInitiator initiator) {

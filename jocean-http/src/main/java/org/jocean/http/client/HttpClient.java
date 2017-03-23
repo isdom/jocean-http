@@ -11,6 +11,7 @@ import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.idiom.TerminateAware;
 
+import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.AttributeMap;
 import rx.Observable;
 import rx.functions.Action0;
@@ -46,4 +47,26 @@ public interface HttpClient extends AutoCloseable {
     }
     
     public InitiatorBuilder initiator();
+
+    public interface HttpInitiator0
+    extends AutoCloseable, TerminateAware<HttpInitiator0> {
+        public Action0 closer();
+        public void close();
+        
+        public boolean isActive();
+        
+        public Observable<? extends HttpObject> defineInteraction(
+                final Observable<? extends Object> request);
+    }
+
+    public interface InitiatorBuilder0 {
+        
+        public InitiatorBuilder0 remoteAddress(final SocketAddress remoteAddress);
+        
+        public InitiatorBuilder0 feature(final Feature... features);
+        
+        public Observable<? extends HttpInitiator0> build();
+    }
+    
+    public InitiatorBuilder0 initiator0();
 }
