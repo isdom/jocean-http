@@ -112,10 +112,9 @@ public class InboundEndpointSupport extends DefaultAttributeMap
         return 1 == completedUpdater.get(this);
     }
 
-    @SuppressWarnings("deprecation")
     private Observable<HttpObject> buildProxy(
             final Observable<? extends HttpObject> message) {
-        return Observable.create(new OnSubscribe<HttpObject>() {
+        return Observable.unsafeCreate(new OnSubscribe<HttpObject>() {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
                 final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
