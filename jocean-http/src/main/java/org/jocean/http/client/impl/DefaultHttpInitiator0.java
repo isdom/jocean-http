@@ -34,7 +34,6 @@ import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
-import rx.Observable.Transformer;
 import rx.Observer;
 import rx.Subscriber;
 import rx.Subscription;
@@ -48,7 +47,7 @@ import rx.subscriptions.Subscriptions;
  *
  */
 class DefaultHttpInitiator0
-    implements HttpInitiator0, Comparable<DefaultHttpInitiator0>, Transformer<Object, Object>  {
+    implements HttpInitiator0, Comparable<DefaultHttpInitiator0>{
     
     private static final AtomicInteger _IDSRC = new AtomicInteger(0);
     
@@ -126,6 +125,15 @@ class DefaultHttpInitiator0
         
         RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
+                APPLY.ON_EXCEPTION_CAUGHT,
+                new Action1<Throwable>() {
+                    @Override
+                    public void call(final Throwable cause) {
+                        fireClosed(cause);
+                    }});
+        
+        RxNettys.applyToChannelWithUninstall(channel, 
+                onTerminate(), 
                 APPLY.ON_CHANNEL_INACTIVE,
                 new Action0() {
                     @Override
@@ -158,69 +166,6 @@ class DefaultHttpInitiator0
     }
 
     @Override
-    public Observable<Object> call(final Observable<Object> outboundMessage) {
-        return outboundMessage.doOnNext(new Action1<Object>() {
-            @Override
-            public void call(final Object msg) {
-                if (msg instanceof HttpRequest) {
-                    final HttpRequest req = (HttpRequest)msg;
-                    
-                    final ApplyToRequest applyTo = _applyToRequest;
-                    if (null != applyTo) {
-                        try {
-                            applyTo.call(req);
-                        } catch (Exception e) {
-                            LOG.warn("exception when invoke applyToRequest.call, detail: {}",
-                              ExceptionUtils.exception2detail(e));
-                        }
-                    }
-                    
-                    _requestMethod = req.method().name();
-                    _requestUri = req.uri();
-                    _isKeepAlive.set(HttpUtil.isKeepAlive(req));
-                }
-                _isOutboundSended.compareAndSet(false, true);
-            }})
-            .doOnCompleted(new Action0() {
-                @Override
-                public void call() {
-                    _isOutboundCompleted.compareAndSet(false, true);
-//                    _inboundSupport.readMessage();
-                }})
-            .doOnError(new Action1<Throwable>() {
-                @Override
-                public void call(Throwable e) {
-                    LOG.warn("initiator({})'s outbound.onError, invoke fireClosed() and detail:{}",
-                            DefaultHttpInitiator0.this, ExceptionUtils.exception2detail(e));
-                    fireClosed(e);
-                }});
-    }
-    
-    private Transformer<HttpObject, HttpObject> markInboundStateAndCloseOnError() {
-        return new Transformer<HttpObject, HttpObject>() {
-            @Override
-            public Observable<HttpObject> call(final Observable<HttpObject> inbound) {
-                return inbound.doOnNext(new Action1<HttpObject>() {
-                    @Override
-                    public void call(final HttpObject msg) {
-                        _isInboundReceived.compareAndSet(false, true);
-                    }})
-                .doOnCompleted(new Action0() {
-                    @Override
-                    public void call() {
-                        _isInboundCompleted.set(true);
-                    }})
-                .doOnError(new Action1<Throwable>() {
-                    @Override
-                    public void call(Throwable e) {
-                        LOG.warn("initiator({})'s inbound.onError, invoke fireClosed() and detail:{}",
-                                DefaultHttpInitiator0.this, ExceptionUtils.exception2detail(e));
-                        fireClosed(e);
-                    }});
-            }};
-    }
-    
-//    @Override
     public TrafficCounter trafficCounter() {
         return this._trafficCounter;
     }
@@ -230,7 +175,11 @@ class DefaultHttpInitiator0
         return this._selector.isActive();
     }
 
-    public boolean isEndedWithKeepAlive() {
+    boolean isTransacting() {
+        return 1 == transactingUpdater.get(this);
+    }
+    
+    boolean isEndedWithKeepAlive() {
         return (this._isInboundCompleted.get() 
             && this._isOutboundCompleted.get()
             && this._isKeepAlive.get());
@@ -375,6 +324,7 @@ class DefaultHttpInitiator0
                 final DefaultHttpInitiator0 initiator,
                 final Subscriber<? super HttpObject> subscriber,
                 final HttpObject msg) {
+            ReferenceCountUtil.release(msg);
         }
         
         @Override
@@ -400,7 +350,7 @@ class DefaultHttpInitiator0
         }
         if (holdRespSubscriber(subscriber)) {
             // _respSubscriber field set to subscriber
-            final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>() {
+            final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
                 @Override
                 protected void channelRead0(final ChannelHandlerContext ctx,
                         final HttpObject respmsg) throws Exception {
@@ -408,6 +358,7 @@ class DefaultHttpInitiator0
                         LOG.debug("channel({})/handler({}): channelRead0 and call with msg({}).",
                             ctx.channel(), ctx.name(), respmsg);
                     }
+                    // TODO, add refcnt and exec on the eventloop thread on next round
                     _op.responseOnNext(DefaultHttpInitiator0.this, subscriber, respmsg);
                 }};
             APPLY.ON_MESSAGE.applyTo(this._channel.pipeline(), handler);
@@ -436,6 +387,8 @@ class DefaultHttpInitiator0
                         LOG.debug("request {} invoke onCompleted for connection: {}",
                             request, DefaultHttpInitiator0.this);
                     }
+                    _isOutboundCompleted.compareAndSet(false, true);
+//                  _inboundSupport.readMessage();
                 }
 
                 @Override
@@ -453,10 +406,16 @@ class DefaultHttpInitiator0
 
     private void requestOnNext(final Object reqmsg) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("sending redis request msg {}", reqmsg);
+            LOG.debug("sending http request msg {}", reqmsg);
         }
         // set in transacting flag
         setTransacting();
+        
+        if (reqmsg instanceof HttpRequest) {
+            onRequest((HttpRequest)reqmsg);
+        }
+        _isOutboundSended.compareAndSet(false, true);
+        
         this._channel.writeAndFlush(ReferenceCountUtil.retain(reqmsg))
         .addListener(new ChannelFutureListener() {
             @Override
@@ -464,22 +423,40 @@ class DefaultHttpInitiator0
                     throws Exception {
                 if (future.isSuccess()) {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("send redis request msg {} success.", reqmsg);
+                        LOG.debug("send http request msg {} success.", reqmsg);
                     }
                 } else {
-                    LOG.warn("exception when send redis req: {}, detail: {}",
+                    LOG.warn("exception when send http req: {}, detail: {}",
                             reqmsg, ExceptionUtils.exception2detail(future.cause()));
                     fireClosed(new TransportException("send reqmsg error", future.cause()));
                 }
             }});
     }
 
+    private void onRequest(final HttpRequest req) {
+        final ApplyToRequest applyTo = this._applyToRequest;
+        if (null != applyTo) {
+            try {
+                applyTo.call(req);
+            } catch (Exception e) {
+                LOG.warn("exception when invoke applyToRequest.call, detail: {}",
+                  ExceptionUtils.exception2detail(e));
+            }
+        }
+        
+        this._requestMethod = req.method().name();
+        this._requestUri = req.uri();
+        this._isKeepAlive.set(HttpUtil.isKeepAlive(req));
+    }
+
     private void responseOnNext(
             final Subscriber<? super HttpObject> subscriber,
             final HttpObject respmsg) {
+        this._isInboundReceived.compareAndSet(false, true);
         try {
             subscriber.onNext(respmsg);
         } finally {
+            ReferenceCountUtil.release(respmsg);
             if (respmsg instanceof LastHttpContent) {
                 /*
                  * netty 参考代码: https://github.com/netty/netty/blob/netty-
@@ -496,6 +473,7 @@ class DefaultHttpInitiator0
                 if (unholdRespSubscriber(subscriber)) {
                     removeRespHandler();
                     clearTransacting();
+                    this._isInboundCompleted.set(true);
                     subscriber.onCompleted();
                 }
             }
@@ -555,7 +533,6 @@ class DefaultHttpInitiator0
     }
 
     private void setTransacting() {
-        // TODO, using this field as counter for req redis count & resp redis count
         transactingUpdater.compareAndSet(DefaultHttpInitiator0.this, 0, 1);
     }
     

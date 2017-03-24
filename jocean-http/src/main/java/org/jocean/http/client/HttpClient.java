@@ -53,6 +53,7 @@ public interface HttpClient extends AutoCloseable {
         public Action0 closer();
         public void close();
         
+        public TrafficCounter trafficCounter();
         public boolean isActive();
         
         public Observable<? extends HttpObject> defineInteraction(
