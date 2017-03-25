@@ -203,9 +203,9 @@ class DefaultHttpInitiator0
     }
 
 //    @Override
-    public Object transport() {
-        return this._channel;
-    }
+//    public Object transport() {
+//        return this._channel;
+//    }
     
     Channel channel() {
         return this._channel;

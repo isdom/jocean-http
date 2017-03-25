@@ -4,8 +4,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.HttpClient.HttpInitiator;
+import org.jocean.http.client.HttpClient.HttpInitiator0;
 import org.jocean.http.client.impl.DefaultHttpClient;
+import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.slf4j.Logger;
@@ -92,19 +93,19 @@ public class SslDemo {
     private static String sendRequestAndRecv(final HttpClient client,
             final DefaultFullHttpRequest request, final String host,
             final Feature sslfeature) {
-        return client.initiator().remoteAddress(new InetSocketAddress(host, 443))
+        return client.initiator0().remoteAddress(new InetSocketAddress(host, 443))
         .feature(sslfeature, Feature.ENABLE_LOGGING_OVER_SSL).build()
-        .flatMap(new Func1<HttpInitiator, Observable<String>>() {
+        .flatMap(new Func1<HttpInitiator0, Observable<String>>() {
             @Override
-            public Observable<String> call(final HttpInitiator initiator) {
-                initiator.outbound().message(Observable.just(request));
-                
-                return initiator.inbound().message().last().map(new Func1<HttpObject, String>() {
+            public Observable<String> call(final HttpInitiator0 initiator) {
+                final HttpMessageHolder holder = new HttpMessageHolder();
+                initiator.doOnTerminate(holder.release());
+                return initiator.defineInteraction(Observable.just(request))
+                .compose(holder.assembleAndHold())
+                .last().map(new Func1<HttpObject, String>() {
                     @Override
                     public String call(HttpObject t) {
-                        final FullHttpResponse resp = initiator.inbound()
-                            .messageHolder()
-                            .httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();
+                        final FullHttpResponse resp = holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();
                         try {
                             return new String(Nettys.dumpByteBufAsBytes(resp.content()), Charsets.UTF_8);
                         } catch (IOException e) {
