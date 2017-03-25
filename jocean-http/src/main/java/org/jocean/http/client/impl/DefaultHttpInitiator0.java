@@ -100,6 +100,9 @@ class DefaultHttpInitiator0
                 .append(", isOutboundCompleted=").append(_isOutboundCompleted.get())
                 .append(", isKeepAlive=").append(_isKeepAlive.get())
                 .append(", isActive=").append(isActive())
+                .append(", isTransacting=").append(isTransacting())
+                .append(", reqSubscription=").append(_reqSubscription)
+                .append(", respSubscriber=").append(_respSubscriber)
                 .append(", channel=").append(_channel)
                 .append("]");
         return builder.toString();
