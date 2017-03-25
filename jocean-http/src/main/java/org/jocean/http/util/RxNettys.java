@@ -245,7 +245,7 @@ public class RxNettys {
                     return source.flatMap(new Func1<Channel, Observable<? extends Channel>> () {
                         @Override
                         public Observable<? extends Channel> call(final Channel channel) {
-                            return Observable.create(new Observable.OnSubscribe<Channel>() {
+                            return Observable.unsafeCreate(new Observable.OnSubscribe<Channel>() {
                                 @Override
                                 public void call(final Subscriber<? super Channel> subscriber) {
                                     if (!subscriber.isUnsubscribed()) {
