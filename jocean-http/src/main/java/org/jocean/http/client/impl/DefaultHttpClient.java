@@ -86,9 +86,11 @@ public class DefaultHttpClient implements HttpClient {
     private final Action1<HttpInitiator0> _doRecycleChannel0 = new Action1<HttpInitiator0>() {
         @Override
         public void call(final HttpInitiator0 initiator) {
-            final DefaultHttpInitiator0 initiator2 = (DefaultHttpInitiator0)initiator;
-            final Channel channel = initiator2.channel();
-            if (initiator2.isEndedWithKeepAlive()) {
+            final DefaultHttpInitiator0 defaultInitiator = (DefaultHttpInitiator0)initiator;
+            final Channel channel = defaultInitiator.channel();
+            if ( !defaultInitiator.isTransactionStarted()
+            || (defaultInitiator.isTransactionFinished()
+                && defaultInitiator.isKeepAlive())) {
                 if (_channelPool.recycleChannel(channel)) {
                     // recycle success
                     // perform read for recv FIN SIG and to change state to close
@@ -333,6 +335,7 @@ public class DefaultHttpClient implements HttpClient {
             .doOnNext(_setSendBufSize)
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
+            //  TODO, need change order ? add notify handler first then async connect to ?
             .flatMap(RxNettys.asyncConnectTo(remoteAddress))
             .compose(RxNettys.markAndPushChannelWhenReady(isSSLEnabled(features)));
     }

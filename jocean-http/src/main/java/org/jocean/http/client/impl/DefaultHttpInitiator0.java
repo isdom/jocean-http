@@ -98,9 +98,9 @@ class DefaultHttpInitiator0
                 .append(", isOutboundSetted=").append(_isOutboundSetted.get())
                 .append(", isOutboundSended=").append(_isOutboundSended.get())
                 .append(", isOutboundCompleted=").append(_isOutboundCompleted.get())
-                .append(", isKeepAlive=").append(_isKeepAlive.get())
+                .append(", isKeepAlive=").append(isKeepAlive())
                 .append(", isActive=").append(isActive())
-                .append(", isTransacting=").append(isTransacting())
+                .append(", transactionStatus=").append(transactingUpdater.get(this))
                 .append(", reqSubscription=").append(_reqSubscription)
                 .append(", respSubscriber=").append(_respSubscriber)
                 .append(", channel=").append(_channel)
@@ -178,16 +178,18 @@ class DefaultHttpInitiator0
         return this._selector.isActive();
     }
 
-    boolean isTransacting() {
-        return 1 == transactingUpdater.get(this);
+    boolean isTransactionStarted() {
+        return transactingUpdater.get(this) > 0;
     }
     
-    boolean isEndedWithKeepAlive() {
-        return (this._isInboundCompleted.get() 
-            && this._isOutboundCompleted.get()
-            && this._isKeepAlive.get());
+    boolean isTransactionFinished() {
+        return 2 == transactingUpdater.get(this);
     }
-
+    
+    boolean isKeepAlive() {
+        return 1 == keepaliveUpdater.get(this);
+    }
+    
     @Override
     public Action0 closer() {
         return new Action0() {
@@ -243,8 +245,14 @@ class DefaultHttpInitiator0
 
     private void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("close active initiator[channel: {}] with isOutboundCompleted({})/isEndedWithKeepAlive({}), by {}", 
-                    this._channel, this._isOutboundCompleted.get(), this.isEndedWithKeepAlive(),
+            LOG.debug("close active initiator[channel: {}] with isOutboundCompleted({})/"
+                    + "/transactionStatus({})"
+                    + "/isKeepAlive({}),"
+                    + "by {}", 
+                    this._channel, 
+                    this._isOutboundCompleted.get(), 
+                    transactingUpdater.get(this),
+                    this.isKeepAlive(),
                     ExceptionUtils.exception2detail(e));
         }
         
@@ -412,7 +420,7 @@ class DefaultHttpInitiator0
             LOG.debug("sending http request msg {}", reqmsg);
         }
         // set in transacting flag
-        setTransacting();
+        beginTransaction();
         
         if (reqmsg instanceof HttpRequest) {
             onRequest((HttpRequest)reqmsg);
@@ -449,7 +457,7 @@ class DefaultHttpInitiator0
         
         this._requestMethod = req.method().name();
         this._requestUri = req.uri();
-        this._isKeepAlive.set(HttpUtil.isKeepAlive(req));
+        keepaliveUpdater.set(this, HttpUtil.isKeepAlive(req) ? 1 : 0);
     }
 
     private void responseOnNext(
@@ -475,7 +483,7 @@ class DefaultHttpInitiator0
                  */
                 if (unholdRespSubscriber(subscriber)) {
                     removeRespHandler();
-                    clearTransacting();
+                    endTransaction();
                     this._isInboundCompleted.set(true);
                     subscriber.onCompleted();
                 }
@@ -531,14 +539,14 @@ class DefaultHttpInitiator0
         return respSubscriberUpdater.compareAndSet(this, subscriber, null);
     }
     
-    private void clearTransacting() {
-        transactingUpdater.compareAndSet(DefaultHttpInitiator0.this, 1, 0);
-    }
-
-    private void setTransacting() {
+    private void beginTransaction() {
         transactingUpdater.compareAndSet(DefaultHttpInitiator0.this, 0, 1);
     }
     
+    private void endTransaction() {
+        transactingUpdater.compareAndSet(DefaultHttpInitiator0.this, 1, 2);
+    }
+
     private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, ChannelHandler> respHandlerUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator0.class, ChannelHandler.class, "_respHandler");
     
@@ -562,6 +570,12 @@ class DefaultHttpInitiator0
     @SuppressWarnings("unused")
     private volatile int _isTransacting = 0;
     
+    private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator0> keepaliveUpdater =
+            AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_isKeepAlive");
+    
+    @SuppressWarnings("unused")
+    private volatile int _isKeepAlive = 0;
+    
     private final TerminateAwareSupport<HttpInitiator0> _terminateAwareSupport;
     private volatile ApplyToRequest _applyToRequest;
     
@@ -575,5 +589,4 @@ class DefaultHttpInitiator0
     private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
     private final AtomicBoolean _isOutboundSended = new AtomicBoolean(false);
     private final AtomicBoolean _isOutboundCompleted = new AtomicBoolean(false);
-    private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
 }
