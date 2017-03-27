@@ -156,7 +156,7 @@ class DefaultHttpInitiator0
 
     @Override
     public Observable<? extends HttpObject> defineInteraction(
-            Observable<? extends Object> request) {
+            final Observable<? extends Object> request) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<HttpObject>() {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
