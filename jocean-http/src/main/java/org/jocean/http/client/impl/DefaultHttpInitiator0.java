@@ -94,10 +94,9 @@ class DefaultHttpInitiator0
                 .append(", isInboundReceived=").append(_isInboundReceived.get())
                 .append(", requestMethod=").append(_requestMethod)
                 .append(", requestUri=").append(_requestUri)
-                .append(", isInboundCompleted=").append(_isInboundCompleted.get())
-                .append(", isOutboundSetted=").append(_isOutboundSetted.get())
-                .append(", isOutboundSended=").append(_isOutboundSended.get())
-                .append(", isOutboundCompleted=").append(_isOutboundCompleted.get())
+                .append(", isInboundCompleted=").append(_isInboundCompleted)
+                .append(", isOutboundSended=").append(_isOutboundSended)
+                .append(", isOutboundCompleted=").append(_isOutboundCompleted)
                 .append(", isKeepAlive=").append(isKeepAlive())
                 .append(", isActive=").append(isActive())
                 .append(", transactionStatus=").append(transactingUpdater.get(this))
@@ -250,7 +249,7 @@ class DefaultHttpInitiator0
                     + "/isKeepAlive({}),"
                     + "by {}", 
                     this._channel, 
-                    this._isOutboundCompleted.get(), 
+                    this._isOutboundCompleted, 
                     transactingUpdater.get(this),
                     this.isKeepAlive(),
                     ExceptionUtils.exception2detail(e));
@@ -398,7 +397,7 @@ class DefaultHttpInitiator0
                         LOG.debug("request {} invoke onCompleted for connection: {}",
                             request, DefaultHttpInitiator0.this);
                     }
-                    _isOutboundCompleted.compareAndSet(false, true);
+                    _isOutboundCompleted = true;
 //                  _inboundSupport.readMessage();
                 }
 
@@ -425,7 +424,8 @@ class DefaultHttpInitiator0
         if (reqmsg instanceof HttpRequest) {
             onRequest((HttpRequest)reqmsg);
         }
-        _isOutboundSended.compareAndSet(false, true);
+        
+        this._isOutboundSended = true;
         
         this._channel.writeAndFlush(ReferenceCountUtil.retain(reqmsg))
         .addListener(new ChannelFutureListener() {
@@ -484,7 +484,7 @@ class DefaultHttpInitiator0
                 if (unholdRespSubscriber(subscriber)) {
                     removeRespHandler();
                     endTransaction();
-                    this._isInboundCompleted.set(true);
+                    this._isInboundCompleted = true;
                     subscriber.onCompleted();
                 }
             }
@@ -585,8 +585,7 @@ class DefaultHttpInitiator0
     private String _requestMethod;
     private String _requestUri;
     private final AtomicBoolean _isInboundReceived = new AtomicBoolean(false);
-    private final AtomicBoolean _isInboundCompleted = new AtomicBoolean(false);
-    private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
-    private final AtomicBoolean _isOutboundSended = new AtomicBoolean(false);
-    private final AtomicBoolean _isOutboundCompleted = new AtomicBoolean(false);
+    private volatile boolean _isInboundCompleted = false;
+    private volatile boolean _isOutboundSended = false;
+    private volatile boolean _isOutboundCompleted = false;
 }
