@@ -142,12 +142,12 @@ public class DefaultHttpClient implements HttpClient {
                 Feature.Util.union(cloneFeatures(Feature.Util.union(this._defaultFeatures, features)),
                     HttpClientConstants.APPLY_HTTPCLIENT);
         return this._channelPool.retainChannel(remoteAddress)
-//            .doOnNext(new Action1<Channel>() {
-//                @Override
-//                public void call(final Channel channel) {
-//                    // disable autoRead
-//                    channel.config().setAutoRead(false);
-//                }})
+            .doOnNext(new Action1<Channel>() {
+                @Override
+                public void call(final Channel channel) {
+                    // disable autoRead
+                    channel.config().setAutoRead(false);
+                }})
             .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
             .doOnNext(processFeatures(fullFeatures))
             .map(new Func1<Channel, HttpInitiator0>() {

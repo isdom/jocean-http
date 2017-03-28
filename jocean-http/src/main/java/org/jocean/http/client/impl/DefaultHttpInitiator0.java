@@ -5,9 +5,9 @@ package org.jocean.http.client.impl;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.TrafficCounter;
@@ -91,7 +91,7 @@ class DefaultHttpInitiator0
         final StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpInitiator [create at:")
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
-                .append(", isInboundReceived=").append(_isInboundReceived.get())
+                .append(", isInboundReceived=").append(_isInboundReceived)
                 .append(", requestMethod=").append(_requestMethod)
                 .append(", requestUri=").append(_requestUri)
                 .append(", isInboundCompleted=").append(_isInboundCompleted)
@@ -99,7 +99,7 @@ class DefaultHttpInitiator0
                 .append(", isOutboundCompleted=").append(_isOutboundCompleted)
                 .append(", isKeepAlive=").append(isKeepAlive())
                 .append(", isActive=").append(isActive())
-                .append(", transactionStatus=").append(transactingUpdater.get(this))
+                .append(", transactionStatus=").append(transactionUpdater.get(this))
                 .append(", reqSubscription=").append(_reqSubscription)
                 .append(", respSubscriber=").append(_respSubscriber)
                 .append(", channel=").append(_channel)
@@ -143,6 +143,16 @@ class DefaultHttpInitiator0
                         fireClosed(new TransportException("channelInactive of " + channel));
                     }});
         
+        RxNettys.applyToChannelWithUninstall(channel, 
+                onTerminate(), 
+                APPLY.ON_CHANNEL_READCOMPLETE,
+                new Action0() {
+                    @Override
+                    public void call() {
+                        unreadBeginUpdater.set(DefaultHttpInitiator0.this, System.currentTimeMillis());
+                        _op.readMessage(DefaultHttpInitiator0.this);
+                    }});
+        
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
         
         for (Action1<HttpInitiator0> onTerminate : onTerminates) {
@@ -178,15 +188,21 @@ class DefaultHttpInitiator0
     }
 
     boolean isTransactionStarted() {
-        return transactingUpdater.get(this) > 0;
+        return transactionUpdater.get(this) > 0;
     }
     
     boolean isTransactionFinished() {
-        return 2 == transactingUpdater.get(this);
+        return 2 == transactionUpdater.get(this);
     }
     
     boolean isKeepAlive() {
         return 1 == keepaliveUpdater.get(this);
+    }
+    
+    @Override
+    public long unreadDurationInMs() {
+        final long begin = unreadBeginUpdater.get(this);
+        return 0 == begin ? 0 : System.currentTimeMillis() - begin;
     }
     
     @Override
@@ -250,7 +266,7 @@ class DefaultHttpInitiator0
                     + "by {}", 
                     this._channel, 
                     this._isOutboundCompleted, 
-                    transactingUpdater.get(this),
+                    transactionUpdater.get(this),
                     this.isKeepAlive(),
                     ExceptionUtils.exception2detail(e));
         }
@@ -286,6 +302,11 @@ class DefaultHttpInitiator0
         public void requestOnNext(
                 final DefaultHttpInitiator0 initiator,
                 final Object msg);
+
+        public void requestOnCompleted(
+                final DefaultHttpInitiator0 initiator);
+        
+        public void readMessage(final DefaultHttpInitiator0 initiator);
     }
     
     private static final Op OP_ACTIVE = new Op() {
@@ -318,6 +339,17 @@ class DefaultHttpInitiator0
                 final Object msg) {
             initiator.requestOnNext(msg);
         }
+        
+        @Override
+        public void requestOnCompleted(
+                final DefaultHttpInitiator0 initiator) {
+            initiator.requestOnCompleted();
+        }
+        
+        @Override
+        public void readMessage(final DefaultHttpInitiator0 initiator) {
+            initiator.readMessage();
+        }
     };
     
     private static final Op OP_UNACTIVE = new Op() {
@@ -347,6 +379,15 @@ class DefaultHttpInitiator0
         public void requestOnNext(
                 final DefaultHttpInitiator0 initiator,
                 final Object msg) {
+        }
+        
+        @Override
+        public void requestOnCompleted(
+                final DefaultHttpInitiator0 initiator) {
+        }
+        
+        @Override
+        public void readMessage(final DefaultHttpInitiator0 initiator) {
         }
     };
     
@@ -388,6 +429,14 @@ class DefaultHttpInitiator0
         }
     }
 
+    private void readMessage() {
+        if (!isTransactionFinished()) {
+            this._channel.read();
+            unreadBeginUpdater.set(this, 0);
+            readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
+        }
+    }
+
     private Observer<Object> buildRequestObserver(
             final Observable<? extends Object> request) {
         return new Observer<Object>() {
@@ -397,8 +446,7 @@ class DefaultHttpInitiator0
                         LOG.debug("request {} invoke onCompleted for connection: {}",
                             request, DefaultHttpInitiator0.this);
                     }
-                    _isOutboundCompleted = true;
-//                  _inboundSupport.readMessage();
+                    _op.requestOnCompleted(DefaultHttpInitiator0.this);
                 }
 
                 @Override
@@ -412,6 +460,12 @@ class DefaultHttpInitiator0
                 public void onNext(final Object reqmsg) {
                     _op.requestOnNext(DefaultHttpInitiator0.this, reqmsg);
                 }};
+    }
+
+    private void requestOnCompleted() {
+        _isOutboundCompleted = true;
+        //  TODO, add channel.read
+//      _inboundSupport.readMessage();
     }
 
     private void requestOnNext(final Object reqmsg) {
@@ -463,7 +517,7 @@ class DefaultHttpInitiator0
     private void responseOnNext(
             final Subscriber<? super HttpObject> subscriber,
             final HttpObject respmsg) {
-        this._isInboundReceived.compareAndSet(false, true);
+        this._isInboundReceived = true;
         try {
             subscriber.onNext(respmsg);
         } finally {
@@ -540,11 +594,11 @@ class DefaultHttpInitiator0
     }
     
     private void beginTransaction() {
-        transactingUpdater.compareAndSet(DefaultHttpInitiator0.this, 0, 1);
+        transactionUpdater.compareAndSet(DefaultHttpInitiator0.this, 0, 1);
     }
     
     private void endTransaction() {
-        transactingUpdater.compareAndSet(DefaultHttpInitiator0.this, 1, 2);
+        transactionUpdater.compareAndSet(DefaultHttpInitiator0.this, 1, 2);
     }
 
     private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, ChannelHandler> respHandlerUpdater =
@@ -564,17 +618,29 @@ class DefaultHttpInitiator0
     
     private volatile Subscriber<? super HttpObject> _respSubscriber;
     
-    private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator0> transactingUpdater =
-            AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_isTransacting");
+    private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator0> transactionUpdater =
+            AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_transactionStatus");
     
     @SuppressWarnings("unused")
-    private volatile int _isTransacting = 0;
+    private volatile int _transactionStatus = 0;
     
     private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator0> keepaliveUpdater =
             AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_isKeepAlive");
     
     @SuppressWarnings("unused")
     private volatile int _isKeepAlive = 0;
+    
+    private static final AtomicLongFieldUpdater<DefaultHttpInitiator0> readBeginUpdater =
+            AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_readBegin");
+    
+    @SuppressWarnings("unused")
+    private volatile long _readBegin;
+    
+    private static final AtomicLongFieldUpdater<DefaultHttpInitiator0> unreadBeginUpdater =
+            AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_unreadBegin");
+    
+    @SuppressWarnings("unused")
+    private volatile long _unreadBegin = 0;
     
     private final TerminateAwareSupport<HttpInitiator0> _terminateAwareSupport;
     private volatile ApplyToRequest _applyToRequest;
@@ -584,7 +650,7 @@ class DefaultHttpInitiator0
     private final TrafficCounter _trafficCounter;
     private String _requestMethod;
     private String _requestUri;
-    private final AtomicBoolean _isInboundReceived = new AtomicBoolean(false);
+    private volatile boolean _isInboundReceived = false;
     private volatile boolean _isInboundCompleted = false;
     private volatile boolean _isOutboundSended = false;
     private volatile boolean _isOutboundCompleted = false;
