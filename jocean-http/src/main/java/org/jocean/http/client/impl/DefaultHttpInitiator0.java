@@ -464,8 +464,7 @@ class DefaultHttpInitiator0
 
     private void requestOnCompleted() {
         _isOutboundCompleted = true;
-        //  TODO, add channel.read
-//      _inboundSupport.readMessage();
+        this.readMessage();
     }
 
     private void requestOnNext(final Object reqmsg) {
