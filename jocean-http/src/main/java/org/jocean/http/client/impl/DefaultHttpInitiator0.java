@@ -174,7 +174,7 @@ class DefaultHttpInitiator0
     }
     
     public void setApplyToRequest(final ApplyToRequest applyToRequest) {
-        this._applyToRequest = applyToRequest;
+        applyToRequestUpdater.set(this, applyToRequest);
     }
 
     @Override
@@ -463,7 +463,7 @@ class DefaultHttpInitiator0
     }
 
     private void requestOnCompleted() {
-        _isOutboundCompleted = true;
+        this._isOutboundCompleted = true;
         this.readMessage();
     }
 
@@ -498,7 +498,7 @@ class DefaultHttpInitiator0
     }
 
     private void onRequest(final HttpRequest req) {
-        final ApplyToRequest applyTo = this._applyToRequest;
+        final ApplyToRequest applyTo = applyToRequestUpdater.get(this);
         if (null != applyTo) {
             try {
                 applyTo.call(req);
@@ -641,9 +641,14 @@ class DefaultHttpInitiator0
     @SuppressWarnings("unused")
     private volatile long _unreadBegin = 0;
     
-    private final TerminateAwareSupport<HttpInitiator0> _terminateAwareSupport;
-    private volatile ApplyToRequest _applyToRequest;
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, ApplyToRequest> applyToRequestUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator0.class, ApplyToRequest.class, "_applyToRequest");
     
+    @SuppressWarnings("unused")
+    private volatile ApplyToRequest _applyToRequest;
+
+    private final TerminateAwareSupport<HttpInitiator0> _terminateAwareSupport;
+
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
     private final TrafficCounter _trafficCounter;
