@@ -206,6 +206,11 @@ class DefaultHttpInitiator0
     }
     
     @Override
+    public long readingDurationInMS() {
+        return Math.max(System.currentTimeMillis() - readBeginUpdater.get(this), 1L);
+    }
+    
+    @Override
     public Action0 closer() {
         return new Action0() {
             @Override
@@ -633,7 +638,7 @@ class DefaultHttpInitiator0
             AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_readBegin");
     
     @SuppressWarnings("unused")
-    private volatile long _readBegin;
+    private volatile long _readBegin = 0;
     
     private static final AtomicLongFieldUpdater<DefaultHttpInitiator0> unreadBeginUpdater =
             AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_unreadBegin");

@@ -56,6 +56,7 @@ public interface HttpClient extends AutoCloseable {
         public TrafficCounter trafficCounter();
         public boolean isActive();
         public long unreadDurationInMs();
+        public long readingDurationInMS();
         
         public Observable<? extends HttpObject> defineInteraction(
                 final Observable<? extends Object> request);
