@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator0;
+import org.jocean.http.client.HttpClient.ReadPolicy;
 import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.RxNettys;
@@ -111,7 +112,7 @@ class DefaultHttpInitiator0
             LoggerFactory.getLogger(DefaultHttpInitiator0.class);
     
     private final InterfaceSelector _selector = new InterfaceSelector();
-    
+
     @SafeVarargs
     DefaultHttpInitiator0(
         final Channel channel, 
@@ -150,7 +151,32 @@ class DefaultHttpInitiator0
                     @Override
                     public void call() {
                         unreadBeginUpdater.set(DefaultHttpInitiator0.this, System.currentTimeMillis());
-                        _op.readMessage(DefaultHttpInitiator0.this);
+                        if (!isTransactionFinished()) {
+                            final ReadPolicy readPolicy = _readPolicy;
+                            if (null != readPolicy) {
+                                readPolicy.policyOf(DefaultHttpInitiator0.this)
+                                .subscribe(new Action1<Object>() {
+                                    @Override
+                                    public void call(final Object obj) {
+                                        //  TODO
+                                        _op.readMessage(DefaultHttpInitiator0.this);
+                                    }});
+                            }
+                            //  if inbound message not completed, continue to read inbound
+                            /*
+                            @SuppressWarnings("unchecked")
+                            final Action1<InboundEndpoint> readPolicy = 
+                                    readPolicyUpdater.get(InboundEndpointSupport.this);
+                            if (null != readPolicy) {
+                                try {
+                                    readPolicy.call(InboundEndpointSupport.this);
+                                } catch (Exception e) {
+                                    LOG.warn("exception when invoke read policy({}), detail: {}",
+                                        readPolicy, ExceptionUtils.exception2detail(e));
+                                }
+                            }
+                            */
+                        }
                     }});
         
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
@@ -163,6 +189,11 @@ class DefaultHttpInitiator0
         }
     }
 
+    @Override
+    public void setReadPolicy(final ReadPolicy readPolicy) {
+        this._readPolicy = readPolicy;
+    }
+    
     @Override
     public Observable<? extends HttpObject> defineInteraction(
             final Observable<? extends Object> request) {
@@ -663,4 +694,7 @@ class DefaultHttpInitiator0
     private volatile boolean _isInboundCompleted = false;
     private volatile boolean _isOutboundSended = false;
     private volatile boolean _isOutboundCompleted = false;
+    
+    private ReadPolicy _readPolicy = ReadPolicy.CONST.ALWAYS;
+    
 }

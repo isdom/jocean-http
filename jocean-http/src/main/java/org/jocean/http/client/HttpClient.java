@@ -14,6 +14,7 @@ import org.jocean.idiom.TerminateAware;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.AttributeMap;
 import rx.Observable;
+import rx.Single;
 import rx.functions.Action0;
 
 /**
@@ -48,6 +49,19 @@ public interface HttpClient extends AutoCloseable {
     
     public InitiatorBuilder initiator();
 
+    public interface ReadPolicy {
+        public Single<?> policyOf(final HttpInitiator0 initiator);
+        
+        public static class CONST {
+            public static ReadPolicy ALWAYS = new ReadPolicy() {
+                @Override
+                public Single<?> policyOf(final HttpInitiator0 initiator) {
+                    return Single.just(1);
+                }};
+        }
+        
+    }
+    
     public interface HttpInitiator0
     extends AutoCloseable, TerminateAware<HttpInitiator0> {
         public Action0 closer();
@@ -57,6 +71,8 @@ public interface HttpClient extends AutoCloseable {
         public boolean isActive();
         public long unreadDurationInMs();
         public long readingDurationInMS();
+        
+        public void setReadPolicy(final ReadPolicy readPolicy);
         
         public Observable<? extends HttpObject> defineInteraction(
                 final Observable<? extends Object> request);

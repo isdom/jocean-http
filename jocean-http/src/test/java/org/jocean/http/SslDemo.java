@@ -64,6 +64,18 @@ public class SslDemo {
         
         try (final HttpClient client = new DefaultHttpClient()) {
             {
+                final String host = "www.sina.com.cn";
+
+                final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
+                        HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+                HttpUtil.setKeepAlive(request, true);
+                request.headers().set(HttpHeaderNames.HOST, host);
+
+                LOG.debug("send request:{}", request);
+              
+                LOG.info("recv:{}", sendRequestAndRecv(client, request, host, sslfeature));
+            }
+            {
                 final String host = "www.alipay.com";
 
                 final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
@@ -93,8 +105,8 @@ public class SslDemo {
     private static String sendRequestAndRecv(final HttpClient client,
             final DefaultFullHttpRequest request, final String host,
             final Feature sslfeature) {
-        return client.initiator0().remoteAddress(new InetSocketAddress(host, 443))
-        .feature(sslfeature, Feature.ENABLE_LOGGING_OVER_SSL).build()
+        return client.initiator0().remoteAddress(new InetSocketAddress(host, 80 /*443*/))
+        .feature(/*sslfeature,*/ Feature.ENABLE_LOGGING_OVER_SSL).build()
         .flatMap(new Func1<HttpInitiator0, Observable<String>>() {
             @Override
             public Observable<String> call(final HttpInitiator0 initiator) {
