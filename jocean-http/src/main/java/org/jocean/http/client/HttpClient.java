@@ -74,6 +74,8 @@ public interface HttpClient extends AutoCloseable {
         
         public void setReadPolicy(final ReadPolicy readPolicy);
         
+        public void setFlushPerWrite(final boolean isFlushPerWrite);
+        
         public Observable<? extends HttpObject> defineInteraction(
                 final Observable<? extends Object> request);
     }

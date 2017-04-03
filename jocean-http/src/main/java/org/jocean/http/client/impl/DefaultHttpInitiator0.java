@@ -493,7 +493,7 @@ class DefaultHttpInitiator0
             onRequest((HttpRequest)reqmsg);
         }
         
-        this._channel.writeAndFlush(ReferenceCountUtil.retain(reqmsg))
+        sendOutbound(reqmsg)
         .addListener(new ChannelFutureListener() {
             @Override
             public void operationComplete(final ChannelFuture future)
@@ -508,6 +508,12 @@ class DefaultHttpInitiator0
                     fireClosed(new TransportException("send reqmsg error", future.cause()));
                 }
             }});
+    }
+
+    private ChannelFuture sendOutbound(final Object reqmsg) {
+        return this._isFlushPerWrite
+                ? this._channel.writeAndFlush(ReferenceCountUtil.retain(reqmsg))
+                : this._channel.write(ReferenceCountUtil.retain(reqmsg));
     }
 
     private void onRequest(final HttpRequest req) {
@@ -674,4 +680,11 @@ class DefaultHttpInitiator0
     private volatile boolean _isOutboundCompleted = false;
     
     private ReadPolicy _readPolicy = ReadPolicy.CONST.ALWAYS;
+
+    @Override
+    public void setFlushPerWrite(final boolean isFlushPerWrite) {
+        this._isFlushPerWrite = isFlushPerWrite;
+    }
+    
+    private volatile boolean _isFlushPerWrite = false;
 }
