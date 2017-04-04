@@ -29,6 +29,7 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.WriteBufferWaterMark;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -323,6 +324,9 @@ class DefaultHttpInitiator0
                 final DefaultHttpInitiator0 initiator);
         
         public void readMessage(final DefaultHttpInitiator0 initiator);
+
+        public void setWriteBufferWaterMark(final DefaultHttpInitiator0 initiator,
+                final int low, final int high);
     }
     
     private static final Op OP_ACTIVE = new Op() {
@@ -366,6 +370,12 @@ class DefaultHttpInitiator0
         public void readMessage(final DefaultHttpInitiator0 initiator) {
             initiator.readMessage();
         }
+
+        @Override
+        public void setWriteBufferWaterMark(final DefaultHttpInitiator0 initiator,
+                final int low, final int high) {
+            initiator._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
+        }
     };
     
     private static final Op OP_UNACTIVE = new Op() {
@@ -404,6 +414,11 @@ class DefaultHttpInitiator0
         
         @Override
         public void readMessage(final DefaultHttpInitiator0 initiator) {
+        }
+
+        @Override
+        public void setWriteBufferWaterMark(DefaultHttpInitiator0 initiator,
+                int low, int high) {
         }
     };
     
@@ -684,6 +699,11 @@ class DefaultHttpInitiator0
     @Override
     public void setFlushPerWrite(final boolean isFlushPerWrite) {
         this._isFlushPerWrite = isFlushPerWrite;
+    }
+    
+    @Override
+    public void setWriteBufferWaterMark(final int low, final int high) {
+        this._op.setWriteBufferWaterMark(this, low, high);
     }
     
     private volatile boolean _isFlushPerWrite = false;
