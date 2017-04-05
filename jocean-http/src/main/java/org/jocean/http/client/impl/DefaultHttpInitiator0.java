@@ -149,18 +149,7 @@ class DefaultHttpInitiator0
                 new Action0() {
                     @Override
                     public void call() {
-                        unreadBeginUpdater.set(DefaultHttpInitiator0.this, System.currentTimeMillis());
-                        if (!isTransactionFinished()) {
-                            final ReadPolicy readPolicy = _readPolicy;
-                            if (null != readPolicy) {
-                                readPolicy.policyOf(DefaultHttpInitiator0.this)
-                                .subscribe(new Action1<Object>() {
-                                    @Override
-                                    public void call(final Object obj) {
-                                        _op.readMessage(DefaultHttpInitiator0.this);
-                                    }});
-                            }
-                        }
+                        onReadComplete();
                     }});
         
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
@@ -170,6 +159,21 @@ class DefaultHttpInitiator0
         }
         if (!channel.isActive()) {
             fireClosed(new TransportException("channelInactive of " + channel));
+        }
+    }
+
+    private void onReadComplete() {
+        unreadBeginUpdater.set(this, System.currentTimeMillis());
+        if (!isTransactionFinished()) {
+            final ReadPolicy readPolicy = _readPolicy;
+            if (null != readPolicy) {
+                readPolicy.policyOf(this)
+                .subscribe(new Action1<Object>() {
+                    @Override
+                    public void call(final Object obj) {
+                        _op.readMessage(DefaultHttpInitiator0.this);
+                    }});
+            }
         }
     }
 
@@ -481,10 +485,8 @@ class DefaultHttpInitiator0
                     _op.responseOnNext(DefaultHttpInitiator0.this, subscriber, respmsg);
                 }};
             APPLY.ON_MESSAGE.applyTo(this._channel.pipeline(), handler);
-            respHandlerUpdater.set(DefaultHttpInitiator0.this, handler);
-            
-            reqSubscriptionUpdater.set(DefaultHttpInitiator0.this, 
-                    request.subscribe(buildRequestObserver(request)));
+            respHandlerUpdater.set(this, handler);
+            reqSubscriptionUpdater.set(this,  request.subscribe(buildRequestObserver(request)));
             
             subscriber.add(Subscriptions.create(new Action0() {
                 @Override
@@ -681,15 +683,15 @@ class DefaultHttpInitiator0
     }
     
     private void markStartSending() {
-        transactionUpdater.compareAndSet(DefaultHttpInitiator0.this, STATUS_NOTSTART, STATUS_SND);
+        transactionUpdater.compareAndSet(this, STATUS_NOTSTART, STATUS_SND);
     }
     
     private void markStartRecving() {
-        transactionUpdater.compareAndSet(DefaultHttpInitiator0.this, STATUS_SND, STATUS_RECV);
+        transactionUpdater.compareAndSet(this, STATUS_SND, STATUS_RECV);
     }
     
     private void endTransaction() {
-        transactionUpdater.compareAndSet(DefaultHttpInitiator0.this, STATUS_RECV, STATUS_END);
+        transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_END);
     }
 
     private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, ChannelHandler> respHandlerUpdater =
