@@ -17,9 +17,11 @@ import org.jocean.http.client.HttpClient.ReadPolicy;
 import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
+import org.jocean.idiom.rx.Action1_N;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +44,7 @@ import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.ActionN;
+import rx.functions.Actions;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -173,6 +176,21 @@ class DefaultHttpInitiator0
     @Override
     public void setReadPolicy(final ReadPolicy readPolicy) {
         this._readPolicy = readPolicy;
+    }
+    
+    @Override
+    public void setFlushPerWrite(final boolean isFlushPerWrite) {
+        this._isFlushPerWrite = isFlushPerWrite;
+    }
+    
+    @Override
+    public void setWriteBufferWaterMark(final int low, final int high) {
+        this._op.setWriteBufferWaterMark(this, low, high);
+    }
+    
+    @Override
+    public Action0 doOnSended(final Action1<Object> onSended) {
+        return this._op.addOnSended(this, onSended);
     }
     
     @Override
@@ -327,6 +345,9 @@ class DefaultHttpInitiator0
 
         public void setWriteBufferWaterMark(final DefaultHttpInitiator0 initiator,
                 final int low, final int high);
+
+        public Action0 addOnSended(final DefaultHttpInitiator0 initiator, 
+                final Action1<Object> onSended);
     }
     
     private static final Op OP_ACTIVE = new Op() {
@@ -376,6 +397,17 @@ class DefaultHttpInitiator0
                 final int low, final int high) {
             initiator._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
         }
+        
+        @Override
+        public Action0 addOnSended(final DefaultHttpInitiator0 initiator,
+                final Action1<Object> onSended) {
+            initiator._onSendeds.addComponent(onSended);
+            return new Action0() {
+                @Override
+                public void call() {
+                    initiator._onSendeds.removeComponent(onSended);
+                }};
+        }
     };
     
     private static final Op OP_UNACTIVE = new Op() {
@@ -419,6 +451,12 @@ class DefaultHttpInitiator0
         @Override
         public void setWriteBufferWaterMark(DefaultHttpInitiator0 initiator,
                 int low, int high) {
+        }
+        
+        @Override
+        public Action0 addOnSended(DefaultHttpInitiator0 initiator,
+                Action1<Object> onSended) {
+            return Actions.empty();
         }
     };
     
@@ -517,12 +555,31 @@ class DefaultHttpInitiator0
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("send http request msg {} success.", reqmsg);
                     }
+                    onOutboundMsgSended(reqmsg);
                 } else {
                     LOG.warn("exception when send http req: {}, detail: {}",
                             reqmsg, ExceptionUtils.exception2detail(future.cause()));
                     fireClosed(new TransportException("send reqmsg error", future.cause()));
                 }
             }});
+    }
+
+    private static final Action1_N<Action1<Object>> _CALL_ONSENDED = 
+        new Action1_N<Action1<Object>>() {
+        @Override
+        public void call(final Action1<Object> onSended, final Object... args) {
+            try {
+                onSended.call(args[0]);
+            } catch (Exception e) {
+                LOG.warn("exception when invoke onSended({}) with msg({}), detail: {}",
+                    onSended, 
+                    args[0], 
+                    ExceptionUtils.exception2detail(e));
+            }
+        }};
+            
+    private void onOutboundMsgSended(final Object reqmsg) {
+        this._onSendeds.foreachComponent(_CALL_ONSENDED, reqmsg);
     }
 
     private ChannelFuture sendOutbound(final Object reqmsg) {
@@ -695,16 +752,9 @@ class DefaultHttpInitiator0
     private volatile boolean _isOutboundCompleted = false;
     
     private ReadPolicy _readPolicy = ReadPolicy.CONST.ALWAYS;
+    
+    private final COWCompositeSupport<Action1<Object>> _onSendeds = 
+            new COWCompositeSupport<>();
 
-    @Override
-    public void setFlushPerWrite(final boolean isFlushPerWrite) {
-        this._isFlushPerWrite = isFlushPerWrite;
-    }
-    
-    @Override
-    public void setWriteBufferWaterMark(final int low, final int high) {
-        this._op.setWriteBufferWaterMark(this, low, high);
-    }
-    
     private volatile boolean _isFlushPerWrite = false;
 }
