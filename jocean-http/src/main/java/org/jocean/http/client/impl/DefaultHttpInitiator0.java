@@ -541,6 +541,8 @@ class DefaultHttpInitiator0
     }
 
     private void requestOnCompleted() {
+        // force flush for _isFlushPerWrite = false
+        this._channel.flush();
         this._isOutboundCompleted = true;
         this.readMessage();
     }
@@ -754,7 +756,7 @@ class DefaultHttpInitiator0
     @SuppressWarnings("unused")
     private volatile ApplyToRequest _applyToRequest;
 
-    private volatile boolean _isFlushPerWrite = true;
+    private volatile boolean _isFlushPerWrite = false;
     private volatile boolean _isOutboundCompleted = false;
     private volatile ReadPolicy _readPolicy = null;
     
