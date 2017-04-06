@@ -39,6 +39,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observer;
+import rx.Single;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -165,16 +166,23 @@ class DefaultHttpInitiator0
     private void onReadComplete() {
         unreadBeginUpdater.set(this, System.currentTimeMillis());
         if (!isTransactionFinished()) {
-            final ReadPolicy readPolicy = _readPolicy;
-            if (null != readPolicy) {
-                readPolicy.policyOf(this)
-                .subscribe(new Action1<Object>() {
+            final Single<?> when = whenToRead();
+            if (null != when) {
+                when.subscribe(new Action1<Object>() {
                     @Override
-                    public void call(final Object obj) {
+                    public void call(final Object nouse) {
                         _op.readMessage(DefaultHttpInitiator0.this);
                     }});
+            } else {
+                //  perform read at once
+                _op.readMessage(DefaultHttpInitiator0.this);
             }
         }
+    }
+
+    private Single<?> whenToRead() {
+        final ReadPolicy readPolicy = this._readPolicy;
+        return null != readPolicy ? readPolicy.whenToRead(this) : null;
     }
 
     @Override
@@ -683,11 +691,11 @@ class DefaultHttpInitiator0
     }
     
     private void markStartSending() {
-        transactionUpdater.compareAndSet(this, STATUS_NOTSTART, STATUS_SND);
+        transactionUpdater.compareAndSet(this, STATUS_NOTSTART, STATUS_SEND);
     }
     
     private void markStartRecving() {
-        transactionUpdater.compareAndSet(this, STATUS_SND, STATUS_RECV);
+        transactionUpdater.compareAndSet(this, STATUS_SEND, STATUS_RECV);
     }
     
     private void endTransaction() {
@@ -715,7 +723,7 @@ class DefaultHttpInitiator0
             AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_transactionStatus");
     
     private static final int STATUS_NOTSTART = 0;
-    private static final int STATUS_SND = 1;
+    private static final int STATUS_SEND = 1;
     private static final int STATUS_RECV = 2;
     private static final int STATUS_END = 3;
     
@@ -746,17 +754,16 @@ class DefaultHttpInitiator0
     @SuppressWarnings("unused")
     private volatile ApplyToRequest _applyToRequest;
 
+    private volatile boolean _isFlushPerWrite = true;
+    private volatile boolean _isOutboundCompleted = false;
+    private volatile ReadPolicy _readPolicy = null;
+    
     private final TerminateAwareSupport<HttpInitiator0> _terminateAwareSupport;
 
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
     private final TrafficCounter _trafficCounter;
-    private volatile boolean _isOutboundCompleted = false;
-    
-    private ReadPolicy _readPolicy = ReadPolicy.CONST.ALWAYS;
     
     private final COWCompositeSupport<Action1<Object>> _onSendeds = 
             new COWCompositeSupport<>();
-
-    private volatile boolean _isFlushPerWrite = false;
 }

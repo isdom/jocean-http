@@ -51,16 +51,7 @@ public interface HttpClient extends AutoCloseable {
     public InitiatorBuilder initiator();
 
     public interface ReadPolicy {
-        public Single<?> policyOf(final HttpInitiator0 initiator);
-        
-        public static class CONST {
-            public static ReadPolicy ALWAYS = new ReadPolicy() {
-                @Override
-                public Single<?> policyOf(final HttpInitiator0 initiator) {
-                    return Single.just(1);
-                }};
-        }
-        
+        public Single<?> whenToRead(final HttpInitiator0 initiator);
     }
     
     public interface HttpInitiator0
