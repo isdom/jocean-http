@@ -164,7 +164,7 @@ class DefaultHttpInitiator0
     }
 
     private void onReadComplete() {
-        unreadBeginUpdater.set(this, System.currentTimeMillis());
+        this._unreadBegin = System.currentTimeMillis();
         if (!isTransactionFinished()) {
             final Single<?> when = whenToRead();
             if (null != when) {
@@ -216,7 +216,7 @@ class DefaultHttpInitiator0
     }
     
     public void setApplyToRequest(final ApplyToRequest applyToRequest) {
-        applyToRequestUpdater.set(this, applyToRequest);
+        this._applyToRequest = applyToRequest;
     }
 
     @Override
@@ -238,12 +238,12 @@ class DefaultHttpInitiator0
     }
     
     boolean isKeepAlive() {
-        return 1 == keepaliveUpdater.get(this);
+        return this._isKeepAlive;
     }
     
     @Override
     public long unreadDurationInMs() {
-        final long begin = unreadBeginUpdater.get(this);
+        final long begin = this._unreadBegin;
         return 0 == begin ? 0 : System.currentTimeMillis() - begin;
     }
     
@@ -510,7 +510,7 @@ class DefaultHttpInitiator0
     private void readMessage() {
         if (!isTransactionFinished()) {
             this._channel.read();
-            unreadBeginUpdater.set(this, 0);
+            this._unreadBegin = 0;
             readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
         }
     }
@@ -601,7 +601,7 @@ class DefaultHttpInitiator0
     }
 
     private void onRequest(final HttpRequest req) {
-        final ApplyToRequest applyTo = applyToRequestUpdater.get(this);
+        final ApplyToRequest applyTo = this._applyToRequest;
         if (null != applyTo) {
             try {
                 applyTo.call(req);
@@ -611,7 +611,7 @@ class DefaultHttpInitiator0
             }
         }
         
-        keepaliveUpdater.set(this, HttpUtil.isKeepAlive(req) ? 1 : 0);
+        this._isKeepAlive = HttpUtil.isKeepAlive(req);
     }
 
     private void responseOnNext(
@@ -732,11 +732,7 @@ class DefaultHttpInitiator0
     @SuppressWarnings("unused")
     private volatile int _transactionStatus = STATUS_NOTSTART;
     
-    private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator0> keepaliveUpdater =
-            AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_isKeepAlive");
-    
-    @SuppressWarnings("unused")
-    private volatile int _isKeepAlive = 0;
+    private volatile boolean _isKeepAlive = false;
     
     private static final AtomicLongFieldUpdater<DefaultHttpInitiator0> readBeginUpdater =
             AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_readBegin");
@@ -744,17 +740,9 @@ class DefaultHttpInitiator0
     @SuppressWarnings("unused")
     private volatile long _readBegin = 0;
     
-    private static final AtomicLongFieldUpdater<DefaultHttpInitiator0> unreadBeginUpdater =
-            AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_unreadBegin");
-    
-    @SuppressWarnings("unused")
     private volatile long _unreadBegin = 0;
     
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, ApplyToRequest> applyToRequestUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator0.class, ApplyToRequest.class, "_applyToRequest");
-    
-    @SuppressWarnings("unused")
-    private volatile ApplyToRequest _applyToRequest;
+    private volatile ApplyToRequest _applyToRequest = null;
 
     private volatile boolean _isFlushPerWrite = false;
     private volatile boolean _isOutboundCompleted = false;
