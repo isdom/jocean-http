@@ -141,7 +141,13 @@ class DefaultHttpInitiator0
                 new Action0() {
                     @Override
                     public void call() {
-                        fireClosed(new TransportException("channelInactive of " + channel));
+                        if (!isTransactionFinished()) {
+                            fireClosed(new TransportException("channelInactive of " + channel));
+                        } else {
+                            if (LOG.isDebugEnabled()) {
+                                LOG.debug("channel inactive after TransactionFinished, maybe Connection: close");
+                            }
+                        }
                     }});
         
         RxNettys.applyToChannelWithUninstall(channel, 
