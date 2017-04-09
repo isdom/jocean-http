@@ -98,7 +98,7 @@ class DefaultHttpInitiator0
         builder.append("DefaultHttpInitiator [create at:")
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
                 .append(", isActive=").append(isActive())
-                .append(", transactionStatus=").append(transactionUpdater.get(this))
+                .append(", transactionStatus=").append(transactionStatusAsString())
                 .append(", isKeepAlive=").append(isKeepAlive())
                 .append(", isOutboundCompleted=").append(_isOutboundCompleted)
                 .append(", reqSubscription=").append(_reqSubscription)
@@ -319,7 +319,7 @@ class DefaultHttpInitiator0
                     + "by {}", 
                     this._channel, 
                     this._isOutboundCompleted, 
-                    transactionUpdater.get(this),
+                    transactionStatusAsString(),
                     this.isKeepAlive(),
                     ExceptionUtils.exception2detail(e));
         }
@@ -333,6 +333,21 @@ class DefaultHttpInitiator0
         
         //  fire all pending subscribers onError with unactived exception
         this._terminateAwareSupport.fireAllTerminates(this);
+    }
+
+    private String transactionStatusAsString() {
+        switch(transactionUpdater.get(this)) {
+        case STATUS_NOTSTART:
+            return "NOTSTART";
+        case STATUS_SEND:
+            return "SEND";
+        case STATUS_RECV:
+            return "RECV";
+        case STATUS_END:
+            return "END";
+        default:
+            return "UNKNOWN";
+        }
     }
 
     private final Op _op;
