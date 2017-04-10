@@ -12,10 +12,12 @@ import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.Outbound.ApplyToRequest;
+import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.http.util.TrafficCounterAware;
+import org.jocean.http.util.TrafficCounterHandler;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.ReflectUtils;
@@ -174,7 +176,8 @@ public class DefaultHttpClient implements HttpClient {
                             InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])fullFeatures);
                     if (null!=trafficCounterAware) {
                         try {
-                            trafficCounterAware.setTrafficCounter(initiator.trafficCounter());
+                            trafficCounterAware.setTrafficCounter(
+                                (TrafficCounterHandler)initiator.enable(APPLY.TRAFFICCOUNTER));
                         } catch (Exception e) {
                             LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
                                     channel, ExceptionUtils.exception2detail(e));

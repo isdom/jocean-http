@@ -9,8 +9,10 @@ import org.jocean.http.Feature;
 import org.jocean.http.InboundEndpoint;
 import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
+import org.jocean.http.util.APPLY;
 import org.jocean.idiom.TerminateAware;
 
+import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.AttributeMap;
 import rx.Observable;
@@ -59,7 +61,9 @@ public interface HttpClient extends AutoCloseable {
         public Action0 closer();
         public void close();
         
-        public TrafficCounter trafficCounter();
+        //  replace trafficCounter() by enable(...)
+        public <T extends ChannelHandler> T enable(final APPLY apply, final Object... args);
+        
         public boolean isActive();
         public long unreadDurationInMs();
         public long readingDurationInMS();

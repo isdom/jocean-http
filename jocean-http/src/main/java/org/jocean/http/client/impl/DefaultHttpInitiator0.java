@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
-import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator0;
 import org.jocean.http.client.HttpClient.ReadPolicy;
@@ -122,9 +121,9 @@ class DefaultHttpInitiator0
         this._terminateAwareSupport = 
             new TerminateAwareSupport<HttpInitiator0>(this._selector);
         
-        this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
-                onTerminate(), 
-                APPLY.TRAFFICCOUNTER);
+//        this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
+//                onTerminate(), 
+//                APPLY.TRAFFICCOUNTER);
         
         RxNettys.applyToChannelWithUninstall(channel, 
                 onTerminate(), 
@@ -230,8 +229,8 @@ class DefaultHttpInitiator0
     }
 
     @Override
-    public TrafficCounter trafficCounter() {
-        return this._trafficCounter;
+    public <T extends ChannelHandler> T enable(final APPLY apply, final Object... args) {
+        return _op.enable(this, apply, args);
     }
     
     @Override
@@ -357,6 +356,10 @@ class DefaultHttpInitiator0
     private final Op _op;
     
     protected interface Op {
+        public <T extends ChannelHandler> T enable(
+                final DefaultHttpInitiator0 initiator, 
+                final APPLY apply, final Object... args);
+
         public void subscribeResponse(
                 final DefaultHttpInitiator0 initiator,
                 final Observable<? extends Object> request,
@@ -388,6 +391,13 @@ class DefaultHttpInitiator0
     }
     
     private static final Op OP_ACTIVE = new Op() {
+        public <T extends ChannelHandler> T enable(
+                final DefaultHttpInitiator0 initiator, 
+                final APPLY apply, final Object... args) {
+            return RxNettys.applyToChannelWithUninstall(initiator._channel, 
+                    initiator.onTerminate(), apply, args);
+        }
+        
         @Override
         public void subscribeResponse(
                 final DefaultHttpInitiator0 initiator,
@@ -448,6 +458,12 @@ class DefaultHttpInitiator0
     };
     
     private static final Op OP_UNACTIVE = new Op() {
+        public <T extends ChannelHandler> T enable(
+                final DefaultHttpInitiator0 initiator, 
+                final APPLY apply, final Object... args) {
+            return null;
+        }
+        
         @Override
         public void subscribeResponse(
                 final DefaultHttpInitiator0 initiator,
@@ -781,7 +797,6 @@ class DefaultHttpInitiator0
 
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
-    private final TrafficCounter _trafficCounter;
     
     private final COWCompositeSupport<Action1<Object>> _onSendeds = 
             new COWCompositeSupport<>();
