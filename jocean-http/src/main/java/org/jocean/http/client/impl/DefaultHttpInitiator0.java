@@ -141,13 +141,7 @@ class DefaultHttpInitiator0
                 new Action0() {
                     @Override
                     public void call() {
-                        if (!isTransactionFinished()) {
-                            fireClosed(new TransportException("channelInactive of " + channel));
-                        } else {
-                            if (LOG.isDebugEnabled()) {
-                                LOG.debug("channel inactive after TransactionFinished, maybe Connection: close");
-                            }
-                        }
+                        onChannelInactive();
                     }});
         
         RxNettys.applyToChannelWithUninstall(channel, 
@@ -166,6 +160,16 @@ class DefaultHttpInitiator0
         }
         if (!channel.isActive()) {
             fireClosed(new TransportException("channelInactive of " + channel));
+        }
+    }
+
+    private void onChannelInactive() {
+        if (!isTransactionFinished()) {
+            fireClosed(new TransportException("channelInactive of " + this._channel));
+        } else {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
+            }
         }
     }
 
@@ -236,11 +240,11 @@ class DefaultHttpInitiator0
     }
 
     boolean isTransactionStarted() {
-        return transactionUpdater.get(this) > STATUS_NOTSTART;
+        return transactionStatus() > STATUS_NOTSTART;
     }
-    
+
     boolean isTransactionFinished() {
-        return STATUS_END == transactionUpdater.get(this);
+        return STATUS_END == transactionStatus();
     }
     
     boolean isKeepAlive() {
@@ -336,7 +340,7 @@ class DefaultHttpInitiator0
     }
 
     private String transactionStatusAsString() {
-        switch(transactionUpdater.get(this)) {
+        switch(transactionStatus()) {
         case STATUS_NOTSTART:
             return "NOTSTART";
         case STATUS_SEND:
@@ -723,6 +727,10 @@ class DefaultHttpInitiator0
     
     private void endTransaction() {
         transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_END);
+    }
+    
+    private int transactionStatus() {
+        return transactionUpdater.get(this);
     }
 
     private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, ChannelHandler> respHandlerUpdater =
