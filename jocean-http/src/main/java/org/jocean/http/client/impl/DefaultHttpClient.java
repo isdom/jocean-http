@@ -159,12 +159,12 @@ public class DefaultHttpClient implements HttpClient {
                     final DefaultHttpInitiator0 initiator = new DefaultHttpInitiator0(channel, _doRecycleChannel0);
 //                    initiator.inbound().messageHolder().setMaxBlockSize(_inboundBlockSize);
 //                    
-//                    if (_outboundLowWaterMark >= 0 
-//                        && _outboundHighWaterMark >= 0
-//                        && _outboundHighWaterMark >= _outboundLowWaterMark) {
-//                        initiator.outbound().setWriteBufferWaterMark(_outboundLowWaterMark, _outboundHighWaterMark);
-//                    }
-//                    
+                    if (_outboundLowWaterMark >= 0 
+                        && _outboundHighWaterMark >= 0
+                        && _outboundHighWaterMark >= _outboundLowWaterMark) {
+                        initiator.setWriteBufferWaterMark(_outboundLowWaterMark, _outboundHighWaterMark);
+                    }
+                    
                     initiator.setApplyToRequest(buildApplyToRequest(fullFeatures));
                     RxNettys.applyFeaturesToChannel(
                             channel, 
