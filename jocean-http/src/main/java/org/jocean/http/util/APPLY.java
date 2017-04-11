@@ -49,6 +49,10 @@ public enum APPLY {
             this._factory.call(args), 
             TO_ORDINAL);
     }
+    
+    public boolean hasApplyTo(final ChannelPipeline pipeline) {
+        return (pipeline.names().indexOf(this.name()) >= 0);
+    }
 
     private APPLY(final FuncN<ChannelHandler> factory) {
         this._factory = factory;

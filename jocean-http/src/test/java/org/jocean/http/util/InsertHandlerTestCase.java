@@ -59,16 +59,16 @@ public class InsertHandlerTestCase {
 
         final Channel channel = new LocalChannel();
         
-//        Inbound.CLOSE_ON_IDLE.applyTo(channel, 180);
-//        Inbound.ENABLE_SSL.applyTo(channel, sslCtx);
-//        Inbound.CONTENT_COMPRESSOR.applyTo(channel);
-//        Inbound.LOGGING.applyTo(channel);
+        APPLY.CLOSE_ON_IDLE.applyTo(channel.pipeline(), 180);
+        APPLY.SSL.applyTo(channel.pipeline(), channel, sslCtx);
+        APPLY.CONTENT_COMPRESSOR.applyTo(channel.pipeline());
+        APPLY.LOGGING.applyTo(channel.pipeline());
         
         final List<String> names = channel.pipeline().names();
         
-//        assertEquals(Inbound.LOGGING.name(), names.get(0));
-//        assertEquals(Inbound.CLOSE_ON_IDLE.name(), names.get(1));
-//        assertEquals(Inbound.ENABLE_SSL.name(), names.get(2));
-//        assertEquals(Inbound.CONTENT_COMPRESSOR.name(), names.get(3));
+        assertEquals(APPLY.LOGGING.name(), names.get(0));
+        assertEquals(APPLY.CLOSE_ON_IDLE.name(), names.get(1));
+        assertEquals(APPLY.SSL.name(), names.get(2));
+        assertEquals(APPLY.CONTENT_COMPRESSOR.name(), names.get(3));
     }
 }
