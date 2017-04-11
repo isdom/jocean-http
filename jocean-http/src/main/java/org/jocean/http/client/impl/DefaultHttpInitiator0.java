@@ -96,7 +96,7 @@ class DefaultHttpInitiator0
                 .append(", isActive=").append(isActive())
                 .append(", transactionStatus=").append(transactionStatusAsString())
                 .append(", isKeepAlive=").append(isKeepAlive())
-                .append(", isOutboundCompleted=").append(_isOutboundCompleted)
+                .append(", isRequestCompleted=").append(_isRequestCompleted)
                 .append(", reqSubscription=").append(_reqSubscription)
                 .append(", respSubscriber=").append(_respSubscriber)
                 .append(", channel=").append(_channel)
@@ -313,13 +313,14 @@ class DefaultHttpInitiator0
 
     private void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("close active initiator[channel: {}] with isOutboundCompleted({})/"
+            LOG.debug("close active initiator[channel: {}] "
+                    + "with isRequestCompleted({})"
                     + "/transactionStatus({})"
                     + "/isKeepAlive({}),"
-                    + "by {}", 
+                    + "cause by {}", 
                     this._channel, 
-                    this._isOutboundCompleted, 
-                    transactionStatusAsString(),
+                    this._isRequestCompleted, 
+                    this.transactionStatusAsString(),
                     this.isKeepAlive(),
                     ExceptionUtils.exception2detail(e));
         }
@@ -559,7 +560,7 @@ class DefaultHttpInitiator0
     private void requestOnCompleted() {
         // force flush for _isFlushPerWrite = false
         this._channel.flush();
-        this._isOutboundCompleted = true;
+        this._isRequestCompleted = true;
         this.readMessage();
     }
 
@@ -763,7 +764,7 @@ class DefaultHttpInitiator0
     private volatile Action1<Object> _onSended = null;
 
     private volatile boolean _isFlushPerWrite = false;
-    private volatile boolean _isOutboundCompleted = false;
+    private volatile boolean _isRequestCompleted = false;
     private volatile ReadPolicy _readPolicy = null;
     
     private final TerminateAwareSupport<HttpInitiator0> _terminateAwareSupport;
