@@ -512,7 +512,7 @@ class DefaultHttpInitiator0
                 }};
             APPLY.ON_MESSAGE.applyTo(this._channel.pipeline(), handler);
             respHandlerUpdater.set(this, handler);
-            reqSubscriptionUpdater.set(this,  request.subscribe(buildRequestObserver(request)));
+            reqSubscriptionUpdater.set(this,  request.subscribe(buildRequestObserver()));
             
             subscriber.add(Subscriptions.create(new Action0() {
                 @Override
@@ -533,22 +533,20 @@ class DefaultHttpInitiator0
         }
     }
 
-    private Observer<Object> buildRequestObserver(
-            final Observable<? extends Object> request) {
+    private Observer<Object> buildRequestObserver() {
         return new Observer<Object>() {
                 @Override
                 public void onCompleted() {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("request {} invoke onCompleted for connection: {}",
-                            request, DefaultHttpInitiator0.this);
+                        LOG.debug("request invoke onCompleted for connection: {}", DefaultHttpInitiator0.this);
                     }
                     _op.requestOnCompleted(DefaultHttpInitiator0.this);
                 }
 
                 @Override
                 public void onError(final Throwable e) {
-                    LOG.warn("request {} invoke onError with ({}), try close connection: {}",
-                            request, ExceptionUtils.exception2detail(e), DefaultHttpInitiator0.this);
+                    LOG.warn("request invoke onError with ({}), try close connection: {}",
+                            ExceptionUtils.exception2detail(e), DefaultHttpInitiator0.this);
                     fireClosed(e);
                 }
 

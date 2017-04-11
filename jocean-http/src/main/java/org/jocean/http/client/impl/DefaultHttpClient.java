@@ -173,7 +173,9 @@ public class DefaultHttpClient implements HttpClient {
                             initiator.onTerminate());
                     
                     final TrafficCounterAware trafficCounterAware = 
-                            InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])fullFeatures);
+                            InterfaceUtils.compositeIncludeType(
+                                TrafficCounterAware.class, 
+                                (Object[])fullFeatures);
                     if (null!=trafficCounterAware) {
                         try {
                             trafficCounterAware.setTrafficCounter(
