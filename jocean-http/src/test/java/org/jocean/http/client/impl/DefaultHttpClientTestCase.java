@@ -103,7 +103,7 @@ public class DefaultHttpClientTestCase {
             .compose(holder.<HttpObject>assembleAndHold())
             .toCompletable().await();
             final FullHttpResponse resp = 
-                holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE)
+                holder.fullOf(RxNettys.BUILD_FULL_RESPONSE)
                 .call();
             final byte[] bytes = Nettys.dumpByteBufAsBytes(resp.content());
             resp.release();

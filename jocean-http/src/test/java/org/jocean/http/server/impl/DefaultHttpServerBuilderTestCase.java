@@ -70,7 +70,7 @@ public class DefaultHttpServerBuilderTestCase {
                     new Action0() {
                         @Override
                         public void call() {
-                            final FullHttpRequest req = holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call();
+                            final FullHttpRequest req = holder.fullOf(RxNettys.BUILD_FULL_REQUEST).call();
                             if (null!=req) {
                                 try {
                                     try (final InputStream is = new ByteBufInputStream(req.content())) {
@@ -246,7 +246,7 @@ public class DefaultHttpServerBuilderTestCase {
             trade1.inbound().message().toCompletable().await();
             
             final FullHttpRequest reqReceived1 = trade1.inbound().messageHolder().
-                    httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call();
+                    fullOf(RxNettys.BUILD_FULL_REQUEST).call();
             assertEquals(reqToSend1, reqReceived1);
             
             final Channel channel = (Channel)initiator.transport();
@@ -274,7 +274,7 @@ public class DefaultHttpServerBuilderTestCase {
             trade2.inbound().message().toCompletable().await();
             
             final FullHttpRequest reqReceived2 = trade2.inbound().messageHolder().
-                    httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call();
+                    fullOf(RxNettys.BUILD_FULL_REQUEST).call();
             assertEquals(reqToSend2, reqReceived2);
         } finally {
             client.close();

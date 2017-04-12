@@ -301,7 +301,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     .flatMap(new Func1<HttpObject, Observable<RESP>>() {
                         @Override
                         public Observable<RESP> call(HttpObject t) {
-                            return toRESP(holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE),
+                            return toRESP(holder.fullOf(RxNettys.BUILD_FULL_RESPONSE),
                                 safeGetResponseType(fullfeatures),
                                 safeGetResponseBodyType(signalBean, fullfeatures));
                         }})

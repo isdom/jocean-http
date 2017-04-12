@@ -472,7 +472,7 @@ public class DefaultHttpTradeTestCase {
         //  inbound.subscribe();    double subscribe holder.assembleAndHold()
         
         final FullHttpRequest recvreq = trade.inbound().messageHolder()
-                .httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call();
+                .fullOf(RxNettys.BUILD_FULL_REQUEST).call();
         
         try {
             assertNotNull(recvreq);
@@ -523,7 +523,7 @@ public class DefaultHttpTradeTestCase {
         .syncUninterruptibly();
         
         final Func0<FullHttpRequest> fullRequestBuilder = 
-            trade.inbound().messageHolder().httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST);
+            trade.inbound().messageHolder().fullOf(RxNettys.BUILD_FULL_REQUEST);
         
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
             fullRequestBuilder, REQ_CONTENT.getBytes(Charsets.UTF_8), 0);
@@ -543,7 +543,7 @@ public class DefaultHttpTradeTestCase {
         writeToInboundAndFlush(channel, request);
         
         final Func0<FullHttpRequest> fullRequestBuilder = 
-            trade.inbound().messageHolder().httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST);
+            trade.inbound().messageHolder().fullOf(RxNettys.BUILD_FULL_REQUEST);
         
         //  expected refCnt, request -- 1 + HttpMessageHolder -- 1, total refcnt is 2
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
@@ -568,7 +568,7 @@ public class DefaultHttpTradeTestCase {
         writeToInboundAndFlush(channel, lastcontent);
         
         final Func0<FullHttpRequest> fullRequestBuilder = 
-            trade.inbound().messageHolder().httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST);
+            trade.inbound().messageHolder().fullOf(RxNettys.BUILD_FULL_REQUEST);
         
         //  expected refCnt, request -- 1 + HttpMessageHolder -- 1, total refcnt is 2
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(

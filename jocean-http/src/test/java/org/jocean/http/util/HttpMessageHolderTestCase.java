@@ -115,11 +115,11 @@ public class HttpMessageHolderTestCase {
             
         final int size = holder.retainedByteBufSize();
         assertFalse(holder.isFragmented());
-        assertNotNull(holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call());
+        assertNotNull(holder.fullOf(RxNettys.BUILD_FULL_REQUEST).call());
          
         holder.releaseHttpContent(req_contents[0]);
         assertTrue(holder.isFragmented());
-        assertNull(holder.httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST).call());
+        assertNull(holder.fullOf(RxNettys.BUILD_FULL_REQUEST).call());
         assertEquals(size -1, holder.retainedByteBufSize());
     }
     
@@ -179,7 +179,7 @@ public class HttpMessageHolderTestCase {
             RxSubscribers.ignoreNext(),
             RxSubscribers.ignoreError());
         
-        holder.httpMessageBuilder(new Func1<HttpObject[],Void>() {
+        holder.fullOf(new Func1<HttpObject[],Void>() {
             @Override
             public Void call(final HttpObject[] objs) {
                 assertTrue(Arrays.equals(partReq.toArray(new HttpObject[0]), objs));
@@ -199,7 +199,7 @@ public class HttpMessageHolderTestCase {
                 objsRef.set(objs);
                 return null;
             }};
-        final Func0<Void> getobjs = holder.httpMessageBuilder(visitorHttpObjs);
+        final Func0<Void> getobjs = holder.fullOf(visitorHttpObjs);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -234,7 +234,7 @@ public class HttpMessageHolderTestCase {
                 objsRef.set(objs);
                 return null;
             }};
-        final Func0<Void> getobjs = holder.httpMessageBuilder(visitorHttpObjs);
+        final Func0<Void> getobjs = holder.fullOf(visitorHttpObjs);
         
         final DefaultHttpRequest request = 
                 new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
@@ -287,7 +287,7 @@ public class HttpMessageHolderTestCase {
                 objsRef.set(objs);
                 return null;
             }};
-        holder.httpMessageBuilder(visitorHttpObjs).call();
+        holder.fullOf(visitorHttpObjs).call();
         assertNull(objsRef.get());
     }
     

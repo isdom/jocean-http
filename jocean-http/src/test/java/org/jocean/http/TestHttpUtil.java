@@ -52,7 +52,7 @@ public class TestHttpUtil {
                             RxSubscribers.ignoreError(),
                             RxActions.bindParameter(onRequestCompleted,
                                 trade.inbound().messageHolder()
-                                    .httpMessageBuilder(RxNettys.BUILD_FULL_REQUEST), 
+                                    .fullOf(RxNettys.BUILD_FULL_REQUEST), 
                                 trade));
                 }});
     }

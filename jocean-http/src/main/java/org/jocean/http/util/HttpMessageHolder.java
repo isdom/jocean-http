@@ -64,7 +64,7 @@ public class HttpMessageHolder {
         //  TODO, check if left block and drain to cached http objs
     }
     
-    public <R> Func0<R> httpMessageBuilder(final Func1<HttpObject[], R> visitor) {
+    public <R> Func0<R> fullOf(final Func1<HttpObject[], R> visitor) {
         return new Func0<R>() {
             @SuppressWarnings("unchecked")
             @Override
