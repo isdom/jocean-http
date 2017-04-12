@@ -296,7 +296,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             initRequestOf(uri),
                             fullfeatures,
                             initiator.onTerminate()))
-                    .compose(holder.assembleAndHold())
+                    .compose(holder.<HttpObject>assembleAndHold())
                     .last()
                     .flatMap(new Func1<HttpObject, Observable<RESP>>() {
                         @Override
