@@ -246,7 +246,7 @@ public class HttpMessageHolder {
             ((HttpMessageHolder)args[0]).doRelease();
         }};
         
-    public Action0 release() {
+    public Action0 closer() {
         return new Action0() {
         @Override
         public void call() {

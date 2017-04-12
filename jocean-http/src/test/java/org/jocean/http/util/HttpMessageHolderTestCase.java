@@ -141,7 +141,7 @@ public class HttpMessageHolderTestCase {
         
         assertEquals(1, subscholder.getSubscriberCount());
 
-        holder.release().call();
+        holder.closer().call();
         
         Nettys4Test.emitHttpObjects(subscholder.getAt(0), request);
         Nettys4Test.emitHttpObjects(subscholder.getAt(0), req_contents);
@@ -252,7 +252,7 @@ public class HttpMessageHolderTestCase {
             .compose(holder.assembleAndHold())
             .subscribe();
         
-        holder.release().call();
+        holder.closer().call();
         getobjs.call();
         assertNull(objsRef.get());
     }
@@ -278,7 +278,7 @@ public class HttpMessageHolderTestCase {
             .compose(holder.assembleAndHold())
             .subscribe();
         
-        holder.release().call();
+        holder.closer().call();
         
         final AtomicReference<HttpObject[]> objsRef = new AtomicReference<>();
         final Func1<HttpObject[], Void> visitorHttpObjs = new Func1<HttpObject[], Void>() {
@@ -339,7 +339,7 @@ public class HttpMessageHolderTestCase {
         assertEquals(2 + (req_contents.length * PIECE_SIZE + MAX_BLOCK_SIZE -1) / MAX_BLOCK_SIZE, 
                 holder.cachedHttpObjectCount());
         
-        holder.release().call();
+        holder.closer().call();
         
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
             @Override

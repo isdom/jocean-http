@@ -4,8 +4,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.HttpClient.HttpInitiator0;
+import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.impl.DefaultHttpClient;
+import org.jocean.http.util.APPLY;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
@@ -32,31 +33,6 @@ public class SslDemo {
     private static final Logger LOG =
             LoggerFactory.getLogger(SslDemo.class);
     
-    /*
-    private static byte[] responseAsBytes(final Iterator<HttpObject> itr)
-            throws IOException {
-        final CompositeByteBuf composite = Unpooled.compositeBuffer();
-        try {
-            while (itr.hasNext()) {
-                final HttpObject obj = itr.next();
-                if (obj instanceof HttpContent) {
-                    composite.addComponent(((HttpContent)obj).content());
-                }
-                System.out.println(obj);
-            }
-            composite.setIndex(0, composite.capacity());
-            
-            @SuppressWarnings("resource")
-            final InputStream is = new ByteBufInputStream(composite);
-            final byte[] bytes = new byte[is.available()];
-            is.read(bytes);
-            return bytes;
-        } finally {
-            ReferenceCountUtil.release(composite);
-        }
-    }
-    */
-    
     public static void main(String[] args) throws Exception {
         
         final SslContext sslCtx = SslContextBuilder.forClient().build();
@@ -67,19 +43,25 @@ public class SslDemo {
                 final String host = "www.sina.com.cn";
 
                 final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
-                        HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
-                HttpUtil.setKeepAlive(request, true);
+                        HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
+//                HttpUtil.setKeepAlive(request, true);
                 request.headers().set(HttpHeaderNames.HOST, host);
 
                 LOG.debug("send request:{}", request);
               
-                LOG.info("recv:{}", sendRequestAndRecv(client, request, host, sslfeature));
+                final String content = sendRequestAndRecv(client, request, host,
+//                        , sslfeature
+                        Feature.ENABLE_LOGGING
+//                        Feature.ENABLE_COMPRESSOR
+                        );
+//                LOG.info("recv:{}", content);
             }
+            /*
             {
                 final String host = "www.alipay.com";
 
                 final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
-                        HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+                        HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
                 HttpUtil.setKeepAlive(request, true);
                 request.headers().set(HttpHeaderNames.HOST, host);
 
@@ -87,11 +69,13 @@ public class SslDemo {
               
                 LOG.info("recv:{}", sendRequestAndRecv(client, request, host, sslfeature));
             }
+            */
+            /*
             {
                 final String host = "github.com";
 
                 final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
-                        HttpVersion.HTTP_1_1, HttpMethod.GET, "/isdom");
+                        HttpVersion.HTTP_1_0, HttpMethod.GET, "/isdom");
                 HttpUtil.setKeepAlive(request, true);
                 request.headers().set(HttpHeaderNames.HOST, host);
 
@@ -99,25 +83,28 @@ public class SslDemo {
               
                 LOG.info("recv:{}", sendRequestAndRecv(client, request, host, sslfeature));
             }
+            */
         }
     }
 
     private static String sendRequestAndRecv(final HttpClient client,
             final DefaultFullHttpRequest request, final String host,
-            final Feature sslfeature) {
-        return client.initiator0().remoteAddress(new InetSocketAddress(host, 80 /*443*/))
-        .feature(/*sslfeature,*/ Feature.ENABLE_LOGGING_OVER_SSL).build()
-        .flatMap(new Func1<HttpInitiator0, Observable<String>>() {
+            final Feature... features) {
+        return client.initiator().remoteAddress(new InetSocketAddress(host, 80 /*443*/))
+        .feature(features)
+        .build()
+        .flatMap(new Func1<HttpInitiator, Observable<String>>() {
             @Override
-            public Observable<String> call(final HttpInitiator0 initiator) {
+            public Observable<String> call(final HttpInitiator initiator) {
                 final HttpMessageHolder holder = new HttpMessageHolder();
-                initiator.doOnTerminate(holder.release());
+                final TrafficCounter counter = initiator.enable(APPLY.TRAFFICCOUNTER);
+                initiator.doOnTerminate(holder.closer());
                 return initiator.defineInteraction(Observable.just(request))
                 .compose(holder.assembleAndHold())
                 .last().map(new Func1<HttpObject, String>() {
                     @Override
                     public String call(HttpObject t) {
-                        final FullHttpResponse resp = holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();
+                        final FullHttpResponse resp = holder.fullOf(RxNettys.BUILD_FULL_RESPONSE).call();
                         try {
                             return new String(Nettys.dumpByteBufAsBytes(resp.content()), Charsets.UTF_8);
                         } catch (IOException e) {
@@ -126,11 +113,13 @@ public class SslDemo {
                         } finally {
                             resp.release();
                         }
-                    }}).doAfterTerminate(new Action0() {
-                        @Override
-                        public void call() {
-                            initiator.close();
-                        }});
+                    }})
+                .doAfterTerminate(new Action0() {
+                    @Override
+                    public void call() {
+                        LOG.debug("upload {}/download {}", counter.outboundBytes(), counter.inboundBytes());
+//                        initiator.close();
+                    }});
             }})
         .toBlocking().single();
     }

@@ -50,7 +50,7 @@ public class InboundEndpointSupport extends DefaultAttributeMap
         this._selector = selector;
         this._readBegin = readBegin;
         this._holder = new HttpMessageHolder();
-        onTerminate.call(_holder.release());
+        onTerminate.call(_holder.closer());
         
         final Observable<? extends HttpObject> message = 
                 RxNettys.inboundFromChannel(channel, onTerminate)

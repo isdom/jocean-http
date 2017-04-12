@@ -290,7 +290,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             @Override
             public Observable<RESP> call(final HttpInitiator initiator) {
                 final HttpMessageHolder holder = new HttpMessageHolder();
-                initiator.doOnTerminate(holder.release());
+                initiator.doOnTerminate(holder.closer());
                 return initiator.defineInteraction(
                     outboundMessageOf(signalBean, 
                             initRequestOf(uri),

@@ -98,7 +98,7 @@ public class DefaultHttpClientTestCase {
             .toBlocking().single()) {
             final HttpMessageHolder holder = new HttpMessageHolder();
             
-            initiator.doOnTerminate(holder.release());
+            initiator.doOnTerminate(holder.closer());
             initiator.defineInteraction(Observable.just(fullHttpRequest()))
             .compose(holder.<HttpObject>assembleAndHold())
             .toCompletable().await();
