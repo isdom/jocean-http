@@ -24,7 +24,7 @@ import org.jocean.http.Feature.FeaturesAware;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.HttpClient.HttpInitiator;
+import org.jocean.http.client.HttpClient.HttpInitiator0;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.impl.internal.Facades.ResponseBodyTypeSource;
@@ -32,6 +32,7 @@ import org.jocean.http.rosa.impl.internal.Facades.ResponseTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.UriSource;
 import org.jocean.http.rosa.impl.internal.RosaProfiles;
 import org.jocean.http.util.FeaturesBuilder;
+import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.PayloadCounterAware;
 import org.jocean.http.util.RxNettys;
@@ -281,26 +282,26 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final Feature... features) {
         final Feature[] fullfeatures = Feature.Util.union(RosaProfiles._DEFAULT_PROFILE, features);
         final URI uri = req2uri(signalBean, fullfeatures);
-        return _httpClient.initiator()
+        return _httpClient.initiator0()
         .remoteAddress(safeGetAddress(signalBean, uri))
         .feature(genFeatures4HttpClient(signalBean, fullfeatures))
         .build()
-        .flatMap(new Func1<HttpInitiator, Observable<RESP>>() {
+        .flatMap(new Func1<HttpInitiator0, Observable<RESP>>() {
             @Override
-            public Observable<RESP> call(final HttpInitiator initiator) {
-                initiator.outbound().message(
+            public Observable<RESP> call(final HttpInitiator0 initiator) {
+                final HttpMessageHolder holder = new HttpMessageHolder();
+                initiator.doOnTerminate(holder.release());
+                return initiator.defineInteraction(
                     outboundMessageOf(signalBean, 
                             initRequestOf(uri),
                             fullfeatures,
-                            initiator.onTerminate()));
-                
-                return initiator.inbound().message().last()
+                            initiator.onTerminate()))
+                    .compose(holder.assembleAndHold())
+                    .last()
                     .flatMap(new Func1<HttpObject, Observable<RESP>>() {
                         @Override
                         public Observable<RESP> call(HttpObject t) {
-                            return toRESP(initiator.inbound()
-                                    .messageHolder()
-                                    .httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE),
+                            return toRESP(holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE),
                                 safeGetResponseType(fullfeatures),
                                 safeGetResponseBodyType(signalBean, fullfeatures));
                         }})
