@@ -281,10 +281,10 @@ class DefaultHttpInitiator0
         fireClosed(new RuntimeException("close()"));
     }
 
-//    @Override
-//    public Object transport() {
-//        return this._channel;
-//    }
+    @Override
+    public Object transport() {
+        return this._channel;
+    }
     
     Channel channel() {
         return this._channel;

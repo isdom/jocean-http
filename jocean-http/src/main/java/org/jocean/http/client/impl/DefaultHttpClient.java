@@ -11,7 +11,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ChannelAware;
@@ -75,14 +74,6 @@ public class DefaultHttpClient implements HttpClient {
 
     public void setOutboundSendBufSize(final int outboundSendBufSize) {
         this._outboundSendBufSize = outboundSendBufSize;
-    }
-    
-    public int getInboundBlockSize() {
-        return this._inboundBlockSize;
-    }
-
-    public void setInboundBlockSize(final int inboundBlockSize) {
-        this._inboundBlockSize = inboundBlockSize;
     }
     
     private final Action1<HttpInitiator0> _doRecycleChannel0 = new Action1<HttpInitiator0>() {
@@ -187,113 +178,6 @@ public class DefaultHttpClient implements HttpClient {
                     
                     return initiator;
                 }});
-    }
-    
-    private final Action1<HttpInitiator> _doRecycleChannel = new Action1<HttpInitiator>() {
-        @Override
-        public void call(final HttpInitiator initiator) {
-            final Channel channel = (Channel)initiator.transport();
-            if (((DefaultHttpInitiator)initiator).isEndedWithKeepAlive()) {
-                if (_channelPool.recycleChannel(channel)) {
-                    // recycle success
-                    // perform read for recv FIN SIG and to change state to close
-                    channel.read();
-                }
-            } else {
-                channel.close();
-            }
-        }};
-        
-    @Override
-    public InitiatorBuilder initiator() {
-        final AtomicReference<SocketAddress> _remoteAddress 
-            = new AtomicReference<>();
-        final List<Feature> _features = new ArrayList<>();
-        
-        return new InitiatorBuilder() {
-            @Override
-            public InitiatorBuilder remoteAddress(
-                    final SocketAddress remoteAddress) {
-                _remoteAddress.set(remoteAddress);
-                return this;
-            }
-
-            @Override
-            public InitiatorBuilder feature(final Feature... features) {
-                for (Feature f : features) {
-                    if (null != f) {
-                        _features.add(f);
-                    }
-                }
-                return this;
-            }
-
-            @Override
-            public Observable<? extends HttpInitiator> build() {
-                if (null == _remoteAddress.get()) {
-                    throw new RuntimeException("remoteAddress not set");
-                }
-                return initiator0(_remoteAddress.get(), 
-                        _features.toArray(Feature.EMPTY_FEATURES));
-            }};
-    }
-    
-    public Observable<? extends HttpInitiator> initiator0(
-            final SocketAddress remoteAddress,
-            final Feature... features) {
-        final Feature[] fullFeatures = 
-                Feature.Util.union(cloneFeatures(Feature.Util.union(this._defaultFeatures, features)),
-                    HttpClientConstants.APPLY_HTTPCLIENT);
-        return this._channelPool.retainChannel(remoteAddress)
-            .doOnNext(new Action1<Channel>() {
-                @Override
-                public void call(final Channel channel) {
-                    // disable autoRead
-                    channel.config().setAutoRead(false);
-                }})
-            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures))
-            .doOnNext(processFeatures(fullFeatures))
-            .map(new Func1<Channel, HttpInitiator>() {
-                @Override
-                public HttpInitiator call(final Channel channel) {
-                    final DefaultHttpInitiator initiator = new DefaultHttpInitiator(channel, _doRecycleChannel);
-                    initiator.inbound().messageHolder().setMaxBlockSize(_inboundBlockSize);
-                    
-                    if (_outboundLowWaterMark >= 0 
-                        && _outboundHighWaterMark >= 0
-                        && _outboundHighWaterMark >= _outboundLowWaterMark) {
-                        initiator.outbound().setWriteBufferWaterMark(_outboundLowWaterMark, _outboundHighWaterMark);
-                    }
-                    
-                    initiator.setApplyToRequest(buildApplyToRequest(fullFeatures));
-                    RxNettys.applyFeaturesToChannel(
-                            channel, 
-                            HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, 
-                            fullFeatures, 
-                            initiator.onTerminate());
-                    
-                    final TrafficCounterAware trafficCounterAware = 
-                            InterfaceUtils.compositeIncludeType(TrafficCounterAware.class, (Object[])fullFeatures);
-                    if (null!=trafficCounterAware) {
-                        try {
-                            trafficCounterAware.setTrafficCounter(initiator.trafficCounter());
-                        } catch (Exception e) {
-                            LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
-                                    channel, ExceptionUtils.exception2detail(e));
-                        }
-                    }
-                    
-                    return initiator;
-                }});
-    }
-    
-    private static ApplyToRequest buildApplyToRequest(final Feature[] features) {
-        return InterfaceUtils.compositeIncludeType(
-            ApplyToRequest.class,
-            InterfaceUtils.compositeBySource(
-                ApplyToRequest.class, HttpClientConstants._CLS_TO_APPLY2REQ, features),
-            InterfaceUtils.compositeIncludeType(
-                ApplyToRequest.class, (Object[])features));
     }
     
     private static Action1<? super Channel> processFeatures(final Feature[] features) {
@@ -442,7 +326,6 @@ public class DefaultHttpClient implements HttpClient {
     private int _outboundLowWaterMark = -1;
     private int _outboundHighWaterMark = -1;
     private int _outboundSendBufSize = -1;
-    private int _inboundBlockSize = 0;
     
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;

@@ -1,58 +1,39 @@
 package org.jocean.http.client.impl;
 
-import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.jocean.http.Feature.ENABLE_LOGGING;
-import static org.jocean.http.Feature.ENABLE_LOGGING_OVER_SSL;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.security.cert.CertificateException;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
 
 import javax.net.ssl.SSLException;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TestHttpUtil;
-import org.jocean.http.client.HttpClient.HttpInitiator;
+import org.jocean.http.client.HttpClient.HttpInitiator0;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpMessageHolder;
-import org.jocean.http.util.HttpUtil;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.rx.OnNextSensor;
-import org.jocean.idiom.rx.RxFunctions;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.local.LocalAddress;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.ssl.NotSslRecordException;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
-import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
-import rx.observers.TestSubscriber;
-import rx.schedulers.Schedulers;
 
 public class DefaultHttpClientTestCase {
 
@@ -109,16 +90,20 @@ public class DefaultHttpClientTestCase {
                 );
         final DefaultHttpClient client = 
                 new DefaultHttpClient(new TestChannelCreator(), 
-                        ENABLE_LOGGING
-                        ,Feature.ENABLE_COMPRESSOR
-                        );
-        try ( final HttpInitiator initiator = 
-            client.initiator().remoteAddress(new LocalAddress(testAddr)).build()
+                ENABLE_LOGGING
+                ,Feature.ENABLE_COMPRESSOR
+                );
+        try ( final HttpInitiator0 initiator = 
+            client.initiator0().remoteAddress(new LocalAddress(testAddr)).build()
             .toBlocking().single()) {
-            initiator.outbound().message(Observable.just(fullHttpRequest()));
-            initiator.inbound().message().toCompletable().await();
-            final FullHttpResponse resp = initiator.inbound().messageHolder()
-                .httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE)
+            final HttpMessageHolder holder = new HttpMessageHolder();
+            
+            initiator.doOnTerminate(holder.release());
+            initiator.defineInteraction(Observable.just(fullHttpRequest()))
+            .compose(holder.<HttpObject>assembleAndHold())
+            .toCompletable().await();
+            final FullHttpResponse resp = 
+                holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE)
                 .call();
             final byte[] bytes = Nettys.dumpByteBufAsBytes(resp.content());
             resp.release();
