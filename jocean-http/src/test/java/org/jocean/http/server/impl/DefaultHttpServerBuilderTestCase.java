@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
-import org.jocean.http.client.HttpClient.HttpInitiator0;
+import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.client.impl.TestChannelPool;
@@ -235,8 +235,8 @@ public class DefaultHttpServerBuilderTestCase {
         
         final TestChannelPool pool = new TestChannelPool(1);
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), pool);
-        try ( final HttpInitiator0 initiator = 
-                client.initiator0().remoteAddress(new LocalAddress(testAddr)).build()
+        try ( final HttpInitiator initiator = 
+                client.initiator().remoteAddress(new LocalAddress(testAddr)).build()
                 .toBlocking().single()) {
             final FullHttpRequest reqToSend1 = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");

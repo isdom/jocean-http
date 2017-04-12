@@ -12,7 +12,7 @@ import javax.net.ssl.SSLException;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TestHttpUtil;
-import org.jocean.http.client.HttpClient.HttpInitiator0;
+import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
@@ -93,8 +93,8 @@ public class DefaultHttpClientTestCase {
                 ENABLE_LOGGING
                 ,Feature.ENABLE_COMPRESSOR
                 );
-        try ( final HttpInitiator0 initiator = 
-            client.initiator0().remoteAddress(new LocalAddress(testAddr)).build()
+        try ( final HttpInitiator initiator = 
+            client.initiator().remoteAddress(new LocalAddress(testAddr)).build()
             .toBlocking().single()) {
             final HttpMessageHolder holder = new HttpMessageHolder();
             

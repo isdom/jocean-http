@@ -24,7 +24,7 @@ import org.jocean.http.Feature.FeaturesAware;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.HttpClient.HttpInitiator0;
+import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.Outbound;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.impl.internal.Facades.ResponseBodyTypeSource;
@@ -282,13 +282,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             final Feature... features) {
         final Feature[] fullfeatures = Feature.Util.union(RosaProfiles._DEFAULT_PROFILE, features);
         final URI uri = req2uri(signalBean, fullfeatures);
-        return _httpClient.initiator0()
+        return _httpClient.initiator()
         .remoteAddress(safeGetAddress(signalBean, uri))
         .feature(genFeatures4HttpClient(signalBean, fullfeatures))
         .build()
-        .flatMap(new Func1<HttpInitiator0, Observable<RESP>>() {
+        .flatMap(new Func1<HttpInitiator, Observable<RESP>>() {
             @Override
-            public Observable<RESP> call(final HttpInitiator0 initiator) {
+            public Observable<RESP> call(final HttpInitiator initiator) {
                 final HttpMessageHolder holder = new HttpMessageHolder();
                 initiator.doOnTerminate(holder.release());
                 return initiator.defineInteraction(

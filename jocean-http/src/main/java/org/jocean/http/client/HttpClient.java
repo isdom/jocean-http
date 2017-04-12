@@ -24,11 +24,11 @@ public interface HttpClient extends AutoCloseable {
     public void close();
     
     public interface ReadPolicy {
-        public Single<?> whenToRead(final HttpInitiator0 initiator);
+        public Single<?> whenToRead(final HttpInitiator initiator);
     }
     
-    public interface HttpInitiator0
-    extends AutoCloseable, TerminateAware<HttpInitiator0> {
+    public interface HttpInitiator
+    extends AutoCloseable, TerminateAware<HttpInitiator> {
         public Object transport();
         
         public Action0 closer();
@@ -51,14 +51,14 @@ public interface HttpClient extends AutoCloseable {
                 final Observable<? extends Object> request);
     }
 
-    public interface InitiatorBuilder0 {
+    public interface InitiatorBuilder {
         
-        public InitiatorBuilder0 remoteAddress(final SocketAddress remoteAddress);
+        public InitiatorBuilder remoteAddress(final SocketAddress remoteAddress);
         
-        public InitiatorBuilder0 feature(final Feature... features);
+        public InitiatorBuilder feature(final Feature... features);
         
-        public Observable<? extends HttpInitiator0> build();
+        public Observable<? extends HttpInitiator> build();
     }
     
-    public InitiatorBuilder0 initiator0();
+    public InitiatorBuilder initiator();
 }

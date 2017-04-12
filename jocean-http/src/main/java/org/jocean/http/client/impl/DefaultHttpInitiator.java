@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.TransportException;
-import org.jocean.http.client.HttpClient.HttpInitiator0;
+import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.HttpClient.ReadPolicy;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
@@ -50,8 +50,8 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpInitiator0
-    implements HttpInitiator0, Comparable<DefaultHttpInitiator0>{
+class DefaultHttpInitiator
+    implements HttpInitiator, Comparable<DefaultHttpInitiator>{
     
     private static final Action1<Object> DECLARESUPPORTCOMPRESS = new Action1<Object>() {
         @Override
@@ -69,7 +69,7 @@ class DefaultHttpInitiator0
     private final int _id = _IDSRC.getAndIncrement();
     
     @Override
-    public int compareTo(final DefaultHttpInitiator0 o) {
+    public int compareTo(final DefaultHttpInitiator o) {
         return this._id - o._id;
     }
     
@@ -95,7 +95,7 @@ class DefaultHttpInitiator0
             return false;
         if (getClass() != obj.getClass())
             return false;
-        DefaultHttpInitiator0 other = (DefaultHttpInitiator0) obj;
+        DefaultHttpInitiator other = (DefaultHttpInitiator) obj;
         if (this._id != other._id)
             return false;
         return true;
@@ -118,18 +118,18 @@ class DefaultHttpInitiator0
     }
 
     private static final Logger LOG =
-            LoggerFactory.getLogger(DefaultHttpInitiator0.class);
+            LoggerFactory.getLogger(DefaultHttpInitiator.class);
     
     private final InterfaceSelector _selector = new InterfaceSelector();
 
     @SafeVarargs
-    DefaultHttpInitiator0(
+    DefaultHttpInitiator(
         final Channel channel, 
-        final Action1<HttpInitiator0> ... onTerminates) {
+        final Action1<HttpInitiator> ... onTerminates) {
         
         this._channel = channel;
         this._terminateAwareSupport = 
-            new TerminateAwareSupport<HttpInitiator0>(this._selector);
+            new TerminateAwareSupport<HttpInitiator>(this._selector);
         
 //        this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
 //                onTerminate(), 
@@ -164,7 +164,7 @@ class DefaultHttpInitiator0
         
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
         
-        for (Action1<HttpInitiator0> onTerminate : onTerminates) {
+        for (Action1<HttpInitiator> onTerminate : onTerminates) {
             doOnTerminate(onTerminate);
         }
         if (!channel.isActive()) {
@@ -190,11 +190,11 @@ class DefaultHttpInitiator0
                 when.subscribe(new Action1<Object>() {
                     @Override
                     public void call(final Object nouse) {
-                        _op.readMessage(DefaultHttpInitiator0.this);
+                        _op.readMessage(DefaultHttpInitiator.this);
                     }});
             } else {
                 //  perform read at once
-                _op.readMessage(DefaultHttpInitiator0.this);
+                _op.readMessage(DefaultHttpInitiator.this);
             }
         }
     }
@@ -230,7 +230,7 @@ class DefaultHttpInitiator0
         return Observable.unsafeCreate(new Observable.OnSubscribe<HttpObject>() {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
-                _op.subscribeResponse(DefaultHttpInitiator0.this, request, subscriber);
+                _op.subscribeResponse(DefaultHttpInitiator.this, request, subscriber);
             }});
     }
     
@@ -296,7 +296,7 @@ class DefaultHttpInitiator0
     }
             
     @Override
-    public Action1<Action1<HttpInitiator0>> onTerminateOf() {
+    public Action1<Action1<HttpInitiator>> onTerminateOf() {
         return this._terminateAwareSupport.onTerminateOf(this);
     }
 
@@ -306,14 +306,14 @@ class DefaultHttpInitiator0
     }
                 
     @Override
-    public Action0 doOnTerminate(final Action1<HttpInitiator0> onTerminate) {
+    public Action0 doOnTerminate(final Action1<HttpInitiator> onTerminate) {
         return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
     }
     
     private static final ActionN FIRE_CLOSED = new ActionN() {
         @Override
         public void call(final Object... args) {
-            ((DefaultHttpInitiator0)args[0]).doClosed((Throwable)args[1]);
+            ((DefaultHttpInitiator)args[0]).doClosed((Throwable)args[1]);
         }};
         
     private void fireClosed(final Throwable e) {
@@ -364,39 +364,39 @@ class DefaultHttpInitiator0
     
     protected interface Op {
         public <T extends ChannelHandler> T enable(
-                final DefaultHttpInitiator0 initiator, 
+                final DefaultHttpInitiator initiator, 
                 final APPLY apply, final Object... args);
 
         public void subscribeResponse(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
                 final Subscriber<? super HttpObject> subscriber);
         
         public void responseOnNext(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Subscriber<? super HttpObject> subscriber,
                 final HttpObject msg);
         
         public void doOnUnsubscribeResponse(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Subscriber<? super HttpObject> subscriber);
         
         public void requestOnNext(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Object msg);
 
         public void requestOnCompleted(
-                final DefaultHttpInitiator0 initiator);
+                final DefaultHttpInitiator initiator);
         
-        public void readMessage(final DefaultHttpInitiator0 initiator);
+        public void readMessage(final DefaultHttpInitiator initiator);
 
-        public void setWriteBufferWaterMark(final DefaultHttpInitiator0 initiator,
+        public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
                 final int low, final int high);
     }
     
     private static final Op OP_ACTIVE = new Op() {
         public <T extends ChannelHandler> T enable(
-                final DefaultHttpInitiator0 initiator, 
+                final DefaultHttpInitiator initiator, 
                 final APPLY apply, final Object... args) {
             return RxNettys.applyToChannelWithUninstall(initiator._channel, 
                     initiator.onTerminate(), apply, args);
@@ -404,7 +404,7 @@ class DefaultHttpInitiator0
         
         @Override
         public void subscribeResponse(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
                 final Subscriber<? super HttpObject> subscriber) {
             initiator.subscribeResponse(request, subscriber);
@@ -412,7 +412,7 @@ class DefaultHttpInitiator0
         
         @Override
         public void responseOnNext(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Subscriber<? super HttpObject> subscriber,
                 final HttpObject msg) {
             initiator.responseOnNext(subscriber, msg);
@@ -420,31 +420,31 @@ class DefaultHttpInitiator0
         
         @Override
         public void doOnUnsubscribeResponse(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Subscriber<? super HttpObject> subscriber) {
             initiator.doOnUnsubscribeResponse(subscriber);
         }
         
         @Override
         public void requestOnNext(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Object msg) {
             initiator.requestOnNext(msg);
         }
         
         @Override
         public void requestOnCompleted(
-                final DefaultHttpInitiator0 initiator) {
+                final DefaultHttpInitiator initiator) {
             initiator.requestOnCompleted();
         }
         
         @Override
-        public void readMessage(final DefaultHttpInitiator0 initiator) {
+        public void readMessage(final DefaultHttpInitiator initiator) {
             initiator.readMessage();
         }
 
         @Override
-        public void setWriteBufferWaterMark(final DefaultHttpInitiator0 initiator,
+        public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
                 final int low, final int high) {
             initiator._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
         }
@@ -452,14 +452,14 @@ class DefaultHttpInitiator0
     
     private static final Op OP_UNACTIVE = new Op() {
         public <T extends ChannelHandler> T enable(
-                final DefaultHttpInitiator0 initiator, 
+                final DefaultHttpInitiator initiator, 
                 final APPLY apply, final Object... args) {
             return null;
         }
         
         @Override
         public void subscribeResponse(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
                 final Subscriber<? super HttpObject> subscriber) {
             subscriber.onError(new RuntimeException("http connection unactive."));
@@ -467,7 +467,7 @@ class DefaultHttpInitiator0
         
         @Override
         public void responseOnNext(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Subscriber<? super HttpObject> subscriber,
                 final HttpObject msg) {
             ReferenceCountUtil.release(msg);
@@ -475,27 +475,27 @@ class DefaultHttpInitiator0
         
         @Override
         public void doOnUnsubscribeResponse(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Subscriber<? super HttpObject> subscriber) {
         }
 
         @Override
         public void requestOnNext(
-                final DefaultHttpInitiator0 initiator,
+                final DefaultHttpInitiator initiator,
                 final Object msg) {
         }
         
         @Override
         public void requestOnCompleted(
-                final DefaultHttpInitiator0 initiator) {
+                final DefaultHttpInitiator initiator) {
         }
         
         @Override
-        public void readMessage(final DefaultHttpInitiator0 initiator) {
+        public void readMessage(final DefaultHttpInitiator initiator) {
         }
 
         @Override
-        public void setWriteBufferWaterMark(DefaultHttpInitiator0 initiator,
+        public void setWriteBufferWaterMark(DefaultHttpInitiator initiator,
                 int low, int high) {
         }
     };
@@ -518,7 +518,7 @@ class DefaultHttpInitiator0
                         LOG.debug("channel({})/handler({}): channelRead0 and call with msg({}).",
                             ctx.channel(), ctx.name(), respmsg);
                     }
-                    _op.responseOnNext(DefaultHttpInitiator0.this, subscriber, respmsg);
+                    _op.responseOnNext(DefaultHttpInitiator.this, subscriber, respmsg);
                 }};
             APPLY.ON_MESSAGE.applyTo(this._channel.pipeline(), handler);
             respHandlerUpdater.set(this, handler);
@@ -527,7 +527,7 @@ class DefaultHttpInitiator0
             subscriber.add(Subscriptions.create(new Action0() {
                 @Override
                 public void call() {
-                    _op.doOnUnsubscribeResponse(DefaultHttpInitiator0.this, subscriber);
+                    _op.doOnUnsubscribeResponse(DefaultHttpInitiator.this, subscriber);
                 }}));
         } else {
             // _respSubscriber field has already setted
@@ -557,21 +557,21 @@ class DefaultHttpInitiator0
                 @Override
                 public void onCompleted() {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("request invoke onCompleted for connection: {}", DefaultHttpInitiator0.this);
+                        LOG.debug("request invoke onCompleted for connection: {}", DefaultHttpInitiator.this);
                     }
-                    _op.requestOnCompleted(DefaultHttpInitiator0.this);
+                    _op.requestOnCompleted(DefaultHttpInitiator.this);
                 }
 
                 @Override
                 public void onError(final Throwable e) {
                     LOG.warn("request invoke onError with ({}), try close connection: {}",
-                            ExceptionUtils.exception2detail(e), DefaultHttpInitiator0.this);
+                            ExceptionUtils.exception2detail(e), DefaultHttpInitiator.this);
                     fireClosed(e);
                 }
 
                 @Override
                 public void onNext(final Object reqmsg) {
-                    _op.requestOnNext(DefaultHttpInitiator0.this, reqmsg);
+                    _op.requestOnNext(DefaultHttpInitiator.this, reqmsg);
                 }};
     }
 
@@ -731,24 +731,24 @@ class DefaultHttpInitiator0
     }
 
     @SuppressWarnings("rawtypes")
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, Subscriber> respSubscriberUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator0.class, Subscriber.class, "_respSubscriber");
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscriber> respSubscriberUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscriber.class, "_respSubscriber");
     
     private volatile Subscriber<? super HttpObject> _respSubscriber;
     
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, ChannelHandler> respHandlerUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator0.class, ChannelHandler.class, "_respHandler");
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, ChannelHandler> respHandlerUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, ChannelHandler.class, "_respHandler");
     
     @SuppressWarnings("unused")
     private volatile ChannelHandler _respHandler;
     
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, Subscription> reqSubscriptionUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator0.class, Subscription.class, "_reqSubscription");
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscription> reqSubscriptionUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscription.class, "_reqSubscription");
     
     private volatile Subscription _reqSubscription;
     
-    private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator0> transactionUpdater =
-            AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_transactionStatus");
+    private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator> transactionUpdater =
+            AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator.class, "_transactionStatus");
     
     private static final int STATUS_NOTSTART = 0;
     private static final int STATUS_SEND = 1;
@@ -760,8 +760,8 @@ class DefaultHttpInitiator0
     
     private volatile boolean _isKeepAlive = false;
     
-    private static final AtomicLongFieldUpdater<DefaultHttpInitiator0> readBeginUpdater =
-            AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_readBegin");
+    private static final AtomicLongFieldUpdater<DefaultHttpInitiator> readBeginUpdater =
+            AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator.class, "_readBegin");
     
     @SuppressWarnings("unused")
     private volatile long _readBegin = 0;
@@ -774,7 +774,7 @@ class DefaultHttpInitiator0
     private volatile boolean _isRequestCompleted = false;
     private volatile ReadPolicy _readPolicy = null;
     
-    private final TerminateAwareSupport<HttpInitiator0> _terminateAwareSupport;
+    private final TerminateAwareSupport<HttpInitiator> _terminateAwareSupport;
 
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();

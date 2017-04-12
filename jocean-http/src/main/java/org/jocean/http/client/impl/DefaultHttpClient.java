@@ -76,10 +76,10 @@ public class DefaultHttpClient implements HttpClient {
         this._outboundSendBufSize = outboundSendBufSize;
     }
     
-    private final Action1<HttpInitiator0> _doRecycleChannel0 = new Action1<HttpInitiator0>() {
+    private final Action1<HttpInitiator> _doRecycleChannel0 = new Action1<HttpInitiator>() {
         @Override
-        public void call(final HttpInitiator0 initiator) {
-            final DefaultHttpInitiator0 defaultInitiator = (DefaultHttpInitiator0)initiator;
+        public void call(final HttpInitiator initiator) {
+            final DefaultHttpInitiator defaultInitiator = (DefaultHttpInitiator)initiator;
             final Channel channel = defaultInitiator.channel();
             if ( !defaultInitiator.isTransactionStarted()
             || (defaultInitiator.isTransactionFinished()
@@ -95,21 +95,21 @@ public class DefaultHttpClient implements HttpClient {
         }};
         
     @Override
-    public InitiatorBuilder0 initiator0() {
+    public InitiatorBuilder initiator() {
         final AtomicReference<SocketAddress> _remoteAddress 
         = new AtomicReference<>();
     final List<Feature> _features = new ArrayList<>();
     
-    return new InitiatorBuilder0() {
+    return new InitiatorBuilder() {
         @Override
-        public InitiatorBuilder0 remoteAddress(
+        public InitiatorBuilder remoteAddress(
                 final SocketAddress remoteAddress) {
             _remoteAddress.set(remoteAddress);
             return this;
         }
 
         @Override
-        public InitiatorBuilder0 feature(final Feature... features) {
+        public InitiatorBuilder feature(final Feature... features) {
             for (Feature f : features) {
                 if (null != f) {
                     _features.add(f);
@@ -119,7 +119,7 @@ public class DefaultHttpClient implements HttpClient {
         }
 
         @Override
-        public Observable<? extends HttpInitiator0> build() {
+        public Observable<? extends HttpInitiator> build() {
             if (null == _remoteAddress.get()) {
                 throw new RuntimeException("remoteAddress not set");
             }
@@ -128,7 +128,7 @@ public class DefaultHttpClient implements HttpClient {
         }};
     }
     
-    public Observable<? extends HttpInitiator0> initiator1(
+    public Observable<? extends HttpInitiator> initiator1(
             final SocketAddress remoteAddress,
             final Feature... features) {
         final Feature[] fullFeatures = 
@@ -144,10 +144,10 @@ public class DefaultHttpClient implements HttpClient {
                     }})
                 )
             .doOnNext(processFeatures(fullFeatures))
-            .map(new Func1<Channel, HttpInitiator0>() {
+            .map(new Func1<Channel, HttpInitiator>() {
                 @Override
-                public HttpInitiator0 call(final Channel channel) {
-                    final DefaultHttpInitiator0 initiator = new DefaultHttpInitiator0(channel, _doRecycleChannel0);
+                public HttpInitiator call(final Channel channel) {
+                    final DefaultHttpInitiator initiator = new DefaultHttpInitiator(channel, _doRecycleChannel0);
 //                    initiator.inbound().messageHolder().setMaxBlockSize(_inboundBlockSize);
 //                    
                     if (_outboundLowWaterMark >= 0 
