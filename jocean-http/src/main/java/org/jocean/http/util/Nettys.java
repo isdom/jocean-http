@@ -215,4 +215,8 @@ public class Nettys {
         sb.append('\n');
         return sb.toString();
     }
+    
+    public static boolean isSupportCompress(final Channel channel) {
+        return APPLY.CONTENT_DECOMPRESSOR.hasApplyTo(channel.pipeline());
+    }
 }

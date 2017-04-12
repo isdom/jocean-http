@@ -165,7 +165,6 @@ public class DefaultHttpClient implements HttpClient {
                         initiator.setWriteBufferWaterMark(_outboundLowWaterMark, _outboundHighWaterMark);
                     }
                     
-                    initiator.setApplyToRequest(buildApplyToRequest(fullFeatures));
                     RxNettys.applyFeaturesToChannel(
                             channel, 
                             HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, 

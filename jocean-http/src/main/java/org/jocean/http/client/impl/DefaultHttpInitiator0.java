@@ -13,8 +13,8 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator0;
 import org.jocean.http.client.HttpClient.ReadPolicy;
-import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
@@ -29,6 +29,8 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -51,6 +53,17 @@ import rx.subscriptions.Subscriptions;
 class DefaultHttpInitiator0
     implements HttpInitiator0, Comparable<DefaultHttpInitiator0>{
     
+    private static final Action1<Object> DECLARESUPPORTCOMPRESS = new Action1<Object>() {
+        @Override
+        public void call(final Object msg) {
+            if (msg instanceof HttpRequest) {
+                final HttpRequest request = (HttpRequest)msg;
+                request.headers().add(
+                    HttpHeaderNames.ACCEPT_ENCODING, 
+                    HttpHeaderValues.GZIP + "," + HttpHeaderValues.DEFLATE);
+            }
+        }};
+        
     private static final AtomicInteger _IDSRC = new AtomicInteger(0);
     
     private final int _id = _IDSRC.getAndIncrement();
@@ -221,10 +234,6 @@ class DefaultHttpInitiator0
             }});
     }
     
-    public void setApplyToRequest(final ApplyToRequest applyToRequest) {
-        this._applyToRequest = applyToRequest;
-    }
-
     @Override
     public <T extends ChannelHandler> T enable(final APPLY apply, final Object... args) {
         return _op.enable(this, apply, args);
@@ -513,7 +522,7 @@ class DefaultHttpInitiator0
                 }};
             APPLY.ON_MESSAGE.applyTo(this._channel.pipeline(), handler);
             respHandlerUpdater.set(this, handler);
-            reqSubscriptionUpdater.set(this,  request.subscribe(buildRequestObserver()));
+            reqSubscriptionUpdater.set(this,  wrapRequest(request).subscribe(buildRequestObserver()));
             
             subscriber.add(Subscriptions.create(new Action0() {
                 @Override
@@ -523,6 +532,15 @@ class DefaultHttpInitiator0
         } else {
             // _respSubscriber field has already setted
             subscriber.onError(new RuntimeException("response subscriber already setted."));
+        }
+    }
+
+    private Observable<? extends Object> wrapRequest(
+            final Observable<? extends Object> request) {
+        if (Nettys.isSupportCompress(this._channel)) {
+            return request.doOnNext(DECLARESUPPORTCOMPRESS);
+        } else {
+            return request;
         }
     }
 
@@ -615,16 +633,6 @@ class DefaultHttpInitiator0
     }
 
     private void onRequest(final HttpRequest req) {
-        final ApplyToRequest applyTo = this._applyToRequest;
-        if (null != applyTo) {
-            try {
-                applyTo.call(req);
-            } catch (Exception e) {
-                LOG.warn("exception when invoke applyToRequest.call, detail: {}",
-                  ExceptionUtils.exception2detail(e));
-            }
-        }
-        
         this._isKeepAlive = HttpUtil.isKeepAlive(req);
     }
 
@@ -722,6 +730,12 @@ class DefaultHttpInitiator0
         return transactionUpdater.get(this);
     }
 
+    @SuppressWarnings("rawtypes")
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, Subscriber> respSubscriberUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator0.class, Subscriber.class, "_respSubscriber");
+    
+    private volatile Subscriber<? super HttpObject> _respSubscriber;
+    
     private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, ChannelHandler> respHandlerUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator0.class, ChannelHandler.class, "_respHandler");
     
@@ -732,12 +746,6 @@ class DefaultHttpInitiator0
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator0.class, Subscription.class, "_reqSubscription");
     
     private volatile Subscription _reqSubscription;
-    
-    @SuppressWarnings("rawtypes")
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator0, Subscriber> respSubscriberUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator0.class, Subscriber.class, "_respSubscriber");
-    
-    private volatile Subscriber<? super HttpObject> _respSubscriber;
     
     private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator0> transactionUpdater =
             AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator0.class, "_transactionStatus");
@@ -760,7 +768,6 @@ class DefaultHttpInitiator0
     
     private volatile long _unreadBegin = 0;
     
-    private volatile ApplyToRequest _applyToRequest = null;
     private volatile Action1<Object> _onSended = null;
 
     private volatile boolean _isFlushPerWrite = false;
