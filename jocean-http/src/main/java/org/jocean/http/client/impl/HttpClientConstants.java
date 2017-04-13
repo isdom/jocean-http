@@ -2,19 +2,12 @@ package org.jocean.http.client.impl;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.Outbound;
-import org.jocean.http.client.Outbound.ApplyToRequest;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Class2ApplyBuilder;
-
-import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpHeaderValues;
-import io.netty.handler.codec.http.HttpRequest;
 
 final class HttpClientConstants {
     final static Feature APPLY_HTTPCLIENT = new Feature.AbstractFeature0() {};
 
-    static final Class2Instance<Feature, ApplyToRequest> _CLS_TO_APPLY2REQ;
-    
     static final Class2ApplyBuilder _APPLY_BUILDER_PER_INTERACTION;
         
     static final Class2ApplyBuilder _APPLY_BUILDER_PER_CHANNEL;
@@ -30,16 +23,5 @@ final class HttpClientConstants {
         _APPLY_BUILDER_PER_CHANNEL = new Class2ApplyBuilder();
         _APPLY_BUILDER_PER_CHANNEL.register(Feature.ENABLE_SSL.class, APPLY.SSL);
         _APPLY_BUILDER_PER_CHANNEL.register(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
-        
-        _CLS_TO_APPLY2REQ = new Class2Instance<>();
-        _CLS_TO_APPLY2REQ.register(Feature.ENABLE_COMPRESSOR.getClass(), 
-            new ApplyToRequest() {
-                @Override
-                public void call(final HttpRequest request) {
-                    request.headers().add(
-                            HttpHeaderNames.ACCEPT_ENCODING, 
-                            HttpHeaderValues.GZIP + "," + HttpHeaderValues.DEFLATE);
-                }
-            });
     }
 }
