@@ -76,7 +76,7 @@ public class DefaultHttpClient implements HttpClient {
         this._outboundSendBufSize = outboundSendBufSize;
     }
     
-    private final Action1<HttpInitiator> _doRecycleChannel0 = new Action1<HttpInitiator>() {
+    private final Action1<HttpInitiator> _doRecycleChannel = new Action1<HttpInitiator>() {
         @Override
         public void call(final HttpInitiator initiator) {
             final DefaultHttpInitiator defaultInitiator = (DefaultHttpInitiator)initiator;
@@ -92,6 +92,13 @@ public class DefaultHttpClient implements HttpClient {
             } else {
                 channel.close();
             }
+        }};
+        
+    private static final Action1<Channel> _DISABLE_AUTOREAD = new Action1<Channel>() {
+        @Override
+        public void call(final Channel channel) {
+            // disable autoRead
+            channel.config().setAutoRead(false);
         }};
         
     @Override
@@ -123,12 +130,12 @@ public class DefaultHttpClient implements HttpClient {
             if (null == _remoteAddress.get()) {
                 throw new RuntimeException("remoteAddress not set");
             }
-            return initiator1(_remoteAddress.get(), 
+            return initiator0(_remoteAddress.get(), 
                     _features.toArray(Feature.EMPTY_FEATURES));
         }};
     }
     
-    public Observable<? extends HttpInitiator> initiator1(
+    private Observable<? extends HttpInitiator> initiator0(
             final SocketAddress remoteAddress,
             final Feature... features) {
         final Feature[] fullFeatures = 
@@ -136,18 +143,12 @@ public class DefaultHttpClient implements HttpClient {
                     HttpClientConstants.APPLY_HTTPCLIENT);
         return this._channelPool.retainChannel(remoteAddress)
             .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures)
-                .doOnNext(new Action1<Channel>() {
-                    @Override
-                    public void call(final Channel channel) {
-                        // disable autoRead
-                        channel.config().setAutoRead(false);
-                    }})
-                )
+                .doOnNext(_DISABLE_AUTOREAD))
             .doOnNext(processFeatures(fullFeatures))
             .map(new Func1<Channel, HttpInitiator>() {
                 @Override
                 public HttpInitiator call(final Channel channel) {
-                    final DefaultHttpInitiator initiator = new DefaultHttpInitiator(channel, _doRecycleChannel0);
+                    final DefaultHttpInitiator initiator = new DefaultHttpInitiator(channel, _doRecycleChannel);
 //                    initiator.inbound().messageHolder().setMaxBlockSize(_inboundBlockSize);
 //                    
                     if (_outboundLowWaterMark >= 0 
@@ -194,7 +195,7 @@ public class DefaultHttpClient implements HttpClient {
             }};
     }
 
-    private static void fillChannelAware(final Channel channel, ChannelAware channelAware) {
+    private static void fillChannelAware(final Channel channel, final ChannelAware channelAware) {
         if (null!=channelAware) {
             try {
                 channelAware.setChannel(channel);
@@ -221,7 +222,7 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress, 
             final Feature[] features) {
         return this._channelCreator.newChannel()
-            .doOnNext(_setSendBufSize)
+            .doOnNext(this._setSendBufSize)
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
             //  TODO, need change order ? add notify handler first then async connect to ?
