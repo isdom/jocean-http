@@ -2,8 +2,11 @@ package org.jocean.http.util;
 
 import org.jocean.http.util.Nettys.ToOrdinal;
 import org.jocean.idiom.rx.RxFunctions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.handler.logging.LoggingHandler;
 import rx.functions.FuncN;
@@ -54,9 +57,24 @@ public enum APPLY {
         return (pipeline.names().indexOf(this.name()) >= 0);
     }
 
+    public boolean removeFrom(final ChannelPipeline pipeline) {
+        final ChannelHandlerContext ctx = pipeline.context(this.name());
+        if (ctx != null) {
+            pipeline.remove(ctx.handler());
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("removeFrom: channel ({}) remove handler({}/{}) success.", 
+                        pipeline.channel(), ctx.name(), ctx.handler());
+            }
+            return true;
+        }
+        return false;
+    }
+    
     private APPLY(final FuncN<ChannelHandler> factory) {
         this._factory = factory;
     }
 
     private final FuncN<ChannelHandler> _factory;
+    private static final Logger LOG =
+            LoggerFactory.getLogger(RxNettys.class);
 }

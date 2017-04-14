@@ -56,24 +56,6 @@ public abstract class AbstractChannelPool implements ChannelPool {
             }});
     }
     
-    protected abstract Channel reuseChannel(final SocketAddress address);
-
-    private void pushActiveChannelOrContinue(
-            final SocketAddress address,
-            final Channel channel, 
-            final Subscriber<? super Channel> subscriber) {
-        if (!subscriber.isUnsubscribed()) {
-            if (channel.isActive()) {
-                LOG.info("fetch channel({}) of address ({}) for reuse.", channel, address);
-                subscriber.onNext(channel);
-                subscriber.onCompleted();
-            } else {
-                channel.close();
-                findReuseChannel(address, subscriber);
-            }
-        }
-    }
-
     private void findReuseChannel(final SocketAddress address,
             final Subscriber<? super Channel> subscriber) {
         final Channel channel = reuseChannel(address);
@@ -91,6 +73,24 @@ public abstract class AbstractChannelPool implements ChannelPool {
         } else {
             //  no more channel can be reused
             subscriber.onError(new RuntimeException("Nonreused Channel"));
+        }
+    }
+    
+    protected abstract Channel reuseChannel(final SocketAddress address);
+
+    private void pushActiveChannelOrContinue(
+            final SocketAddress address,
+            final Channel channel, 
+            final Subscriber<? super Channel> subscriber) {
+        if (!subscriber.isUnsubscribed()) {
+            if (channel.isActive()) {
+                LOG.info("fetch channel({}) of address ({}) for reuse.", channel, address);
+                subscriber.onNext(channel);
+                subscriber.onCompleted();
+            } else {
+                channel.close();
+                findReuseChannel(address, subscriber);
+            }
         }
     }
 }

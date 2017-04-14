@@ -33,6 +33,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("fetch active channel({}) from pool, try to reuse.", channel);
                     }
+                    APPLY.ON_CHANNEL_INACTIVE.removeFrom(channel.pipeline());
                     break;
                 } else {
                     LOG.info("fetch inactive channel({}) from pool, drop and fetch next from pool.", channel);
