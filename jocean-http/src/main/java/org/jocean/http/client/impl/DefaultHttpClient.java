@@ -144,7 +144,7 @@ public class DefaultHttpClient implements HttpClient {
         return this._channelPool.retainChannel(remoteAddress)
             .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures)
                 .doOnNext(_DISABLE_AUTOREAD))
-            .doOnNext(processFeatures(fullFeatures))
+            .doOnNext(fillChannelAware(fullFeatures))
             .map(new Func1<Channel, HttpInitiator>() {
                 @Override
                 public HttpInitiator call(final Channel channel) {
@@ -181,7 +181,7 @@ public class DefaultHttpClient implements HttpClient {
                 }});
     }
     
-    private static Action1<? super Channel> processFeatures(final Feature[] features) {
+    private static Action1<? super Channel> fillChannelAware(final Feature[] features) {
         final ChannelAware channelAware = 
                 InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
         
@@ -191,33 +191,17 @@ public class DefaultHttpClient implements HttpClient {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("dump outbound channel({})'s config: \n{}", channel, Nettys.dumpChannelConfig(channel.config()));
                 }
-                fillChannelAware(channel, channelAware);
+                if (null!=channelAware) {
+                    try {
+                        channelAware.setChannel(channel);
+                    } catch (Exception e) {
+                        LOG.warn("exception when invoke setChannel for channel ({}), detail: {}",
+                                channel, ExceptionUtils.exception2detail(e));
+                    }
+                }
             }};
     }
 
-    private static void fillChannelAware(final Channel channel, final ChannelAware channelAware) {
-        if (null!=channelAware) {
-            try {
-                channelAware.setChannel(channel);
-            } catch (Exception e) {
-                LOG.warn("exception when invoke setChannel for channel ({}), detail: {}",
-                        channel, ExceptionUtils.exception2detail(e));
-            }
-        }
-    }
-
-    private static boolean isSSLEnabled(final Feature[] features) {
-        if (null == features) {
-            return false;
-        }
-        for (Feature feature : features) {
-            if (feature instanceof ENABLE_SSL) {
-                return true;
-            }
-        }
-        return false;
-    }
-    
     private Observable<? extends Channel> createChannelAndConnectTo(
             final SocketAddress remoteAddress, 
             final Feature[] features) {
@@ -228,6 +212,20 @@ public class DefaultHttpClient implements HttpClient {
             //  TODO, need change order ? add notify handler first then async connect to ?
             .flatMap(RxNettys.asyncConnectTo(remoteAddress))
             .compose(RxNettys.markAndPushChannelWhenReady(isSSLEnabled(features)));
+    }
+    
+    // TODO, using APPLY.hasApplyTo replace check features
+    //  more direct and reason-full
+    private static boolean isSSLEnabled(final Feature[] features) {
+        if (null == features) {
+            return false;
+        }
+        for (Feature feature : features) {
+            if (feature instanceof ENABLE_SSL) {
+                return true;
+            }
+        }
+        return false;
     }
     
     private static Feature[] cloneFeatures(final Feature[] features) {
