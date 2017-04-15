@@ -43,7 +43,7 @@ public class SslDemo {
                 final String host = "www.sina.com.cn";
 
                 final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
-                        HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
+                        HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
 //                HttpUtil.setKeepAlive(request, true);
                 request.headers().set(HttpHeaderNames.HOST, host);
 
@@ -51,8 +51,8 @@ public class SslDemo {
               
                 final String content = sendRequestAndRecv(client, request, host,
 //                        , sslfeature
-                        Feature.ENABLE_LOGGING
-//                        Feature.ENABLE_COMPRESSOR
+                        Feature.ENABLE_LOGGING,
+                        Feature.ENABLE_COMPRESSOR
                         );
 //                LOG.info("recv:{}", content);
             }
@@ -88,40 +88,63 @@ public class SslDemo {
     }
 
     private static String sendRequestAndRecv(final HttpClient client,
-            final DefaultFullHttpRequest request, final String host,
+            final DefaultFullHttpRequest request, 
+            final String host,
             final Feature... features) {
-        return client.initiator().remoteAddress(new InetSocketAddress(host, 80 /*443*/))
-        .feature(features)
-        .build()
-        .flatMap(new Func1<HttpInitiator, Observable<String>>() {
-            @Override
-            public Observable<String> call(final HttpInitiator initiator) {
-                final HttpMessageHolder holder = new HttpMessageHolder();
-                final TrafficCounter counter = initiator.enable(APPLY.TRAFFICCOUNTER);
-                initiator.doOnTerminate(holder.closer());
-                return initiator.defineInteraction(Observable.just(request))
-                .compose(holder.assembleAndHold())
-                .last().map(new Func1<HttpObject, String>() {
-                    @Override
-                    public String call(HttpObject t) {
-                        final FullHttpResponse resp = holder.fullOf(RxNettys.BUILD_FULL_RESPONSE).call();
-                        try {
-                            return new String(Nettys.dumpByteBufAsBytes(resp.content()), Charsets.UTF_8);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            return null;
-                        } finally {
-                            resp.release();
-                        }
-                    }})
-                .doAfterTerminate(new Action0() {
-                    @Override
-                    public void call() {
-                        LOG.debug("upload {}/download {}", counter.outboundBytes(), counter.inboundBytes());
-//                        initiator.close();
-                    }});
-            }})
-        .toBlocking().single();
+        final HttpInitiator initiator =
+                client.initiator().remoteAddress(new InetSocketAddress(host, 80 /*443*/))
+                .feature(features)
+                .build()
+                .toBlocking()
+                .single();
+        
+        final TrafficCounter counter = initiator.enable(APPLY.TRAFFICCOUNTER);
+        final String resp1 = sendAndRecv(initiator, request).toBlocking().single();
+        LOG.debug("1 interaction: {}", resp1);
+        
+        final String resp2 = sendAndRecv(initiator, request).toBlocking().single();
+        LOG.debug("2 interaction: {}", resp2);
+        
+        LOG.debug("upload {}/download {}", counter.outboundBytes(), counter.inboundBytes());
+        initiator.close();
+        return resp1 /* + resp2 */;
+        
+//        .flatMap(new Func1<HttpInitiator, Observable<String>>() {
+//            @Override
+//            public Observable<String> call(final HttpInitiator initiator) {
+//                final TrafficCounter counter = initiator.enable(APPLY.TRAFFICCOUNTER);
+//                
+//                final Observable<String> respContent = sendAndRecv(initiator, request);
+//                return respContent.doOnUnsubscribe(new Action0() {
+//                    @Override
+//                    public void call() {
+//                        LOG.debug("upload {}/download {}", counter.outboundBytes(), counter.inboundBytes());
+////                        initiator.close();
+//                    }});
+//            }})
+//        .toBlocking().single();
+    }
+
+    private static Observable<String> sendAndRecv(
+            final HttpInitiator initiator,
+            final DefaultFullHttpRequest request) {
+        final HttpMessageHolder holder = new HttpMessageHolder();
+        initiator.doOnTerminate(holder.closer());
+        return initiator.defineInteraction(Observable.just(request))
+            .compose(holder.assembleAndHold())
+            .last().map(new Func1<HttpObject, String>() {
+                @Override
+                public String call(HttpObject t) {
+                    final FullHttpResponse resp = holder.fullOf(RxNettys.BUILD_FULL_RESPONSE).call();
+                    try {
+                        return new String(Nettys.dumpByteBufAsBytes(resp.content()), Charsets.UTF_8);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        return null;
+                    } finally {
+                        resp.release();
+                    }
+                }});
     }
 
 }

@@ -173,7 +173,7 @@ class DefaultHttpInitiator
     }
 
     private void onChannelInactive() {
-        if (!isTransactionFinished()) {
+        if (inTransacting()) {
             fireClosed(new TransportException("channelInactive of " + this._channel));
         } else {
             if (LOG.isDebugEnabled()) {
@@ -184,7 +184,7 @@ class DefaultHttpInitiator
 
     private void onReadComplete() {
         this._unreadBegin = System.currentTimeMillis();
-        if (!isTransactionFinished()) {
+        if (inTransacting()) {
             final Single<?> when = whenToRead();
             if (null != when) {
                 when.subscribe(new Action1<Object>() {
@@ -244,12 +244,8 @@ class DefaultHttpInitiator
         return this._selector.isActive();
     }
 
-    boolean isTransactionStarted() {
+    boolean inTransacting() {
         return transactionStatus() > STATUS_NOTSTART;
-    }
-
-    boolean isTransactionFinished() {
-        return STATUS_END == transactionStatus();
     }
     
     boolean isKeepAlive() {
@@ -353,8 +349,6 @@ class DefaultHttpInitiator
             return "SEND";
         case STATUS_RECV:
             return "RECV";
-        case STATUS_END:
-            return "END";
         default:
             return "UNKNOWN";
         }
@@ -545,7 +539,7 @@ class DefaultHttpInitiator
     }
 
     private void readMessage() {
-        if (!isTransactionFinished()) {
+        if (inTransacting()) {
             this._channel.read();
             this._unreadBegin = 0;
             readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
@@ -723,7 +717,7 @@ class DefaultHttpInitiator
     }
     
     private void endTransaction() {
-        transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_END);
+        transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_NOTSTART);
     }
     
     private int transactionStatus() {
@@ -753,12 +747,11 @@ class DefaultHttpInitiator
     private static final int STATUS_NOTSTART = 0;
     private static final int STATUS_SEND = 1;
     private static final int STATUS_RECV = 2;
-    private static final int STATUS_END = 3;
     
     @SuppressWarnings("unused")
     private volatile int _transactionStatus = STATUS_NOTSTART;
     
-    private volatile boolean _isKeepAlive = false;
+    private volatile boolean _isKeepAlive = true;
     
     private static final AtomicLongFieldUpdater<DefaultHttpInitiator> readBeginUpdater =
             AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator.class, "_readBegin");

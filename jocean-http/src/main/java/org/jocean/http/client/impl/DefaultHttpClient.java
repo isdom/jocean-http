@@ -81,9 +81,8 @@ public class DefaultHttpClient implements HttpClient {
         public void call(final HttpInitiator initiator) {
             final DefaultHttpInitiator defaultInitiator = (DefaultHttpInitiator)initiator;
             final Channel channel = defaultInitiator.channel();
-            if ( !defaultInitiator.isTransactionStarted()
-            || (defaultInitiator.isTransactionFinished()
-                && defaultInitiator.isKeepAlive())) {
+            if (!defaultInitiator.inTransacting()
+                && defaultInitiator.isKeepAlive()) {
                 if (_channelPool.recycleChannel(channel)) {
                     // recycle success
                     // perform read for recv FIN SIG and to change state to close
