@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
-import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
@@ -183,7 +182,7 @@ public class DefaultHttpClient implements HttpClient {
     private static Action1<? super Channel> fillChannelAware(final Feature[] features) {
         final ChannelAware channelAware = 
                 InterfaceUtils.compositeIncludeType(ChannelAware.class, (Object[])features);
-        
+
         return new Action1<Channel>() {
             @Override
             public void call(final Channel channel) {
@@ -208,23 +207,7 @@ public class DefaultHttpClient implements HttpClient {
             .doOnNext(this._setSendBufSize)
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
-            //  TODO, need change order ? add notify handler first then async connect to ?
-            .flatMap(RxNettys.asyncConnectTo(remoteAddress))
-            .compose(RxNettys.markAndPushChannelWhenReady(isSSLEnabled(features)));
-    }
-    
-    // TODO, using APPLY.hasApplyTo replace check features
-    //  more direct and reason-full
-    private static boolean isSSLEnabled(final Feature[] features) {
-        if (null == features) {
-            return false;
-        }
-        for (Feature feature : features) {
-            if (feature instanceof ENABLE_SSL) {
-                return true;
-            }
-        }
-        return false;
+            .flatMap(RxNettys.asyncConnectToMaybeSSL(remoteAddress));
     }
     
     private static Feature[] cloneFeatures(final Feature[] features) {

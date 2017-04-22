@@ -45,8 +45,6 @@ import io.netty.util.ReferenceCounted;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import rx.Observable;
-import rx.Single;
-import rx.SingleSubscriber;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -178,6 +176,62 @@ public class RxNettys {
             }};
     }
     
+    public static Func1<Channel, Observable<? extends Channel>> asyncConnectToMaybeSSL(
+            final SocketAddress remoteAddress) {
+        return new Func1<Channel, Observable<? extends Channel>>() {
+            @Override
+            public Observable<? extends Channel> call(final Channel channel) {
+                return Observable.unsafeCreate(new Observable.OnSubscribe<Channel>() {
+                    @Override
+                    public void call(final Subscriber<? super Channel> subscriber) {
+                        if (!subscriber.isUnsubscribed()) {
+                        	final boolean sslEnabled = APPLY.SSL.hasApplyTo(channel.pipeline());
+                        	if (sslEnabled) {
+                                enableSSLNotify(channel, subscriber);
+                        	}
+                        	
+                            final ChannelFuture f = channel.connect(remoteAddress)
+                                .addListener(new ChannelFutureListener() {
+                                    @Override
+                                    public void operationComplete(final ChannelFuture future) throws Exception {
+                                        if (future.isSuccess()) {
+                                        	if (!sslEnabled) {
+                                        		Nettys.setChannelReady(future.channel());
+	                                            subscriber.onNext(future.channel());
+	                                            subscriber.onCompleted();
+                                        	}
+                                        } else {
+                                            subscriber.onError(future.cause());
+                                        }
+                                    }});
+                            subscriber.add(Subscriptions.from(f));
+                        }
+                    }});
+            }};
+    }
+    
+	private static void enableSSLNotify(final Channel channel, final Subscriber<? super Channel> subscriber) {
+		APPLY.SSLNOTIFY.applyTo(channel.pipeline(), 
+		    new Action1<Channel>() {
+		        @Override
+		        public void call(final Channel ch) {
+		            Nettys.setChannelReady(ch);
+		            subscriber.onNext(ch);
+		            subscriber.onCompleted();
+		            if (LOG.isDebugEnabled()) {
+		                LOG.debug("channel({}): userEventTriggered for ssl handshake success", ch);
+		            }
+		        }},
+		    new Action1<Throwable>() {
+		        @Override
+		        public void call(final Throwable e) {
+		            subscriber.onError(e);
+		            LOG.warn("channel({}): userEventTriggered for ssl handshake failure:{}",
+		                    channel,
+		                    ExceptionUtils.exception2detail(e));
+		        }});
+	}
+	
     public static Action1<Channel> actionPermanentlyApplyFeatures(
             final HandlerBuilder builder,
             final Feature[] features) {
@@ -189,97 +243,6 @@ public class RxNettys {
                         builder, 
                         features, 
                         null);
-            }};
-    }
-    
-    public static Single.Transformer<? super Channel, ? extends Channel> markAndPushChannelWhenReadyAsSingle(final boolean isSSLEnabled) {
-        return new Single.Transformer<Channel, Channel>() {
-            @Override
-            public Single<Channel> call(final Single<Channel> source) {
-                if (isSSLEnabled) {
-                    return source.flatMap(new Func1<Channel, Single<? extends Channel>> () {
-                        @Override
-                        public Single<? extends Channel> call(final Channel channel) {
-                            return Single.create(new Single.OnSubscribe<Channel>() {
-                                @Override
-                                public void call(final SingleSubscriber<? super Channel> subscriber) {
-                                    if (!subscriber.isUnsubscribed()) {
-                                        APPLY.SSLNOTIFY.applyTo(channel.pipeline(), 
-                                            new Action1<Channel>() {
-                                                @Override
-                                                public void call(final Channel ch) {
-                                                    Nettys.setChannelReady(ch);
-                                                    subscriber.onSuccess(ch);
-                                                    if (LOG.isDebugEnabled()) {
-                                                        LOG.debug("channel({}): userEventTriggered for ssl handshake success", ch);
-                                                    }
-                                                }},
-                                            new Action1<Throwable>() {
-                                                @Override
-                                                public void call(final Throwable e) {
-                                                    subscriber.onError(e);
-                                                    LOG.warn("channel({}): userEventTriggered for ssl handshake failure:{}",
-                                                            channel,
-                                                            ExceptionUtils.exception2detail(e));
-                                                }});
-                                    } else {
-                                        LOG.warn("SslHandshakeNotifier: channelSubscriber {} has unsubscribe", subscriber);
-                                    }
-                                }});
-                        }});
-                } else {
-                    return source.doOnSuccess(new Action1<Channel>() {
-                        @Override
-                        public void call(final Channel channel) {
-                            Nettys.setChannelReady(channel);
-                        }});
-                }
-            }};
-    }
-    
-    public static Observable.Transformer<? super Channel, ? extends Channel> markAndPushChannelWhenReady(final boolean isSSLEnabled) {
-        return new Observable.Transformer<Channel, Channel>() {
-            @Override
-            public Observable<Channel> call(final Observable<Channel> source) {
-                if (isSSLEnabled) {
-                    return source.flatMap(new Func1<Channel, Observable<? extends Channel>> () {
-                        @Override
-                        public Observable<? extends Channel> call(final Channel channel) {
-                            return Observable.unsafeCreate(new Observable.OnSubscribe<Channel>() {
-                                @Override
-                                public void call(final Subscriber<? super Channel> subscriber) {
-                                    if (!subscriber.isUnsubscribed()) {
-                                        APPLY.SSLNOTIFY.applyTo(channel.pipeline(), 
-                                            new Action1<Channel>() {
-                                                @Override
-                                                public void call(final Channel ch) {
-                                                    Nettys.setChannelReady(ch);
-                                                    subscriber.onNext(ch);
-                                                    subscriber.onCompleted();
-                                                    if (LOG.isDebugEnabled()) {
-                                                        LOG.debug("channel({}): userEventTriggered for ssl handshake success", ch);
-                                                    }
-                                                }},
-                                            new Action1<Throwable>() {
-                                                @Override
-                                                public void call(final Throwable e) {
-                                                    subscriber.onError(e);
-                                                    LOG.warn("channel({}): userEventTriggered for ssl handshake failure:{}",
-                                                            channel,
-                                                            ExceptionUtils.exception2detail(e));
-                                                }});
-                                    } else {
-                                        LOG.warn("SslHandshakeNotifier: channelSubscriber {} has unsubscribe", subscriber);
-                                    }
-                                }});
-                        }});
-                } else {
-                    return source.doOnNext(new Action1<Channel>() {
-                        @Override
-                        public void call(final Channel channel) {
-                            Nettys.setChannelReady(channel);
-                        }});
-                }
             }};
     }
     
