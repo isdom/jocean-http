@@ -96,19 +96,6 @@ public class RxNettys {
                 : Actions.empty();
     }
     
-    public static final Func1<Object, Object> RETAIN_OBJ = 
-            new Func1<Object, Object>() {
-        @Override
-        public Object call(final Object obj) {
-            //    retain obj for blocking
-            return ReferenceCountUtil.retain(obj);
-        }};
-        
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    public static <T> Func1<T, T> retainer() {
-        return (Func1)RETAIN_OBJ;
-    }
-
     public static <T, V> Observable<T> observableFromFuture(final Future<V> future) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<T>() {
             @Override

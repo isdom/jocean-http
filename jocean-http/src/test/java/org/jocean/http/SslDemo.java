@@ -49,8 +49,11 @@ public class SslDemo {
 
                 LOG.debug("send request:{}", request);
               
-                final String content = sendRequestAndRecv(client, request, host,
-//                        , sslfeature
+                final String content = sendRequestAndRecv(client, 
+                		host, 
+                		443, 
+                		request,
+                        sslfeature,
                         Feature.ENABLE_LOGGING,
                         Feature.ENABLE_COMPRESSOR
                         );
@@ -88,11 +91,12 @@ public class SslDemo {
     }
 
     private static String sendRequestAndRecv(final HttpClient client,
-            final DefaultFullHttpRequest request, 
-            final String host,
+            final String host, 
+            final int port,
+            final DefaultFullHttpRequest request,
             final Feature... features) {
         final HttpInitiator initiator =
-                client.initiator().remoteAddress(new InetSocketAddress(host, 80 /*443*/))
+                client.initiator().remoteAddress(new InetSocketAddress(host, port))
                 .feature(features)
                 .build()
                 .toBlocking()
