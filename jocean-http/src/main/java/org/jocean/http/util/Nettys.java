@@ -25,6 +25,7 @@ import io.netty.buffer.ByteBufOutputStream;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
 import io.netty.handler.codec.http.HttpMethod;
@@ -147,6 +148,40 @@ public class Nettys {
             }};
     }
     
+    
+    public static <H extends Enum<H>> ChannelHandler applyHandlerTo(final H handlerType, 
+            final ChannelPipeline pipeline, final Object ... args) {
+        final HandlerType htype = (HandlerType)handlerType;
+        if (null==htype 
+            || null==htype.factory()) {
+            throw new UnsupportedOperationException("HandlerType's factory is null");
+        }
+        return Nettys.insertHandler(
+            pipeline,
+            handlerType.name(), 
+            htype.factory().call(args), 
+            htype.toOrdinal());
+    }
+    
+    public static <H extends Enum<H>> boolean isHandlerApplied(final H handlerType, 
+            final ChannelPipeline pipeline) {
+        return (pipeline.names().indexOf(handlerType.name()) >= 0);
+    }
+
+    public static <H extends Enum<H>> boolean removeHandlerFrom(final H handlerType, 
+            final ChannelPipeline pipeline) {
+        final ChannelHandlerContext ctx = pipeline.context(handlerType.name());
+        if (ctx != null) {
+            pipeline.remove(ctx.handler());
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("removeFrom: channel ({}) remove handler({}/{}) success.", 
+                        pipeline.channel(), ctx.name(), ctx.handler());
+            }
+            return true;
+        }
+        return false;
+    }
+    
     private static final AttributeKey<Object> READY_ATTR = AttributeKey.valueOf("__READY");
     
     public static void setChannelReady(final Channel channel) {
@@ -217,6 +252,6 @@ public class Nettys {
     }
     
     public static boolean isSupportCompress(final Channel channel) {
-        return APPLY.CONTENT_DECOMPRESSOR.hasApplyTo(channel.pipeline());
+        return isHandlerApplied(APPLY.CONTENT_DECOMPRESSOR, channel.pipeline());
     }
 }

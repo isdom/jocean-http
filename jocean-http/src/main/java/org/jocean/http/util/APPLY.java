@@ -12,7 +12,7 @@ import io.netty.handler.logging.LoggingHandler;
 import rx.functions.FuncN;
 import rx.functions.Functions;
 
-public enum APPLY {
+public enum APPLY implements HandlerType {
     ON_CHANNEL_READ(Functions.fromFunc(FACTORYFUNCS.ON_CHANNEL_READ_FUNC1)),
     LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
     TRAFFICCOUNTER(FACTORYFUNCS.TRAFFICCOUNTER_FUNCN),
@@ -42,6 +42,7 @@ public enum APPLY {
     
     public static final ToOrdinal TO_ORDINAL = Nettys.ordinal(APPLY.class);
     
+    /*
     public ChannelHandler applyTo(final ChannelPipeline pipeline, final Object ... args) {
         if (null==this._factory) {
             throw new UnsupportedOperationException("ChannelHandler's factory is null");
@@ -69,12 +70,24 @@ public enum APPLY {
         }
         return false;
     }
+    */
     
     private APPLY(final FuncN<ChannelHandler> factory) {
         this._factory = factory;
     }
 
     private final FuncN<ChannelHandler> _factory;
+    
     private static final Logger LOG =
-            LoggerFactory.getLogger(RxNettys.class);
+            LoggerFactory.getLogger(APPLY.class);
+
+    @Override
+    public FuncN<ChannelHandler> factory() {
+        return this._factory;
+    }
+
+    @Override
+    public ToOrdinal toOrdinal() {
+        return TO_ORDINAL;
+    }
 }

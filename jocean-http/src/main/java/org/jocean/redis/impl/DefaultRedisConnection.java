@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.TransportException;
 import org.jocean.http.util.APPLY;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
@@ -380,7 +381,7 @@ class DefaultRedisConnection
                     }
                     _op.responseOnNext(DefaultRedisConnection.this, subscriber, respmsg);
                 }};
-            APPLY.ON_MESSAGE.applyTo(this._channel.pipeline(), handler);
+            Nettys.applyHandlerTo(APPLY.ON_MESSAGE, this._channel.pipeline(), handler);
             respHandlerUpdater.set(DefaultRedisConnection.this, handler);
             
             reqSubscriptionUpdater.set(DefaultRedisConnection.this, 

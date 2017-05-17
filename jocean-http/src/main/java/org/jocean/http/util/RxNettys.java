@@ -172,7 +172,7 @@ public class RxNettys {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
-                        	final boolean sslEnabled = APPLY.SSL.hasApplyTo(channel.pipeline());
+                        	final boolean sslEnabled = Nettys.isHandlerApplied(APPLY.SSL, channel.pipeline());
                         	if (sslEnabled) {
                                 enableSSLNotify(channel, subscriber);
                         	}
@@ -198,7 +198,7 @@ public class RxNettys {
     }
     
 	private static void enableSSLNotify(final Channel channel, final Subscriber<? super Channel> subscriber) {
-		APPLY.SSLNOTIFY.applyTo(channel.pipeline(), 
+	    Nettys.applyHandlerTo(APPLY.SSLNOTIFY, channel.pipeline(), 
 		    new Action1<Channel>() {
 		        @Override
 		        public void call(final Channel ch) {
@@ -512,7 +512,7 @@ public class RxNettys {
                     }
                     onTerminate.call(
                         RxNettys.actionToRemoveHandler(channel, 
-                        APPLY.HTTPOBJ_SUBSCRIBER.applyTo(channel.pipeline(), subscriber)));
+                            Nettys.applyHandlerTo(APPLY.HTTPOBJ_SUBSCRIBER, channel.pipeline(), subscriber)));
                 } else {
                     LOG.warn("subscriber {} isUnsubscribed, can't used as HTTPOBJ_SUBSCRIBER ", subscriber);
                 }
@@ -527,7 +527,7 @@ public class RxNettys {
             final APPLY apply, 
             final Object... args) {
         final ChannelHandler handler = 
-            apply.applyTo(channel.pipeline(), args);
+            Nettys.applyHandlerTo(apply, channel.pipeline(), args);
         
         onTerminate.call(RxNettys.actionToRemoveHandler(channel, handler));
         return (T)handler;
