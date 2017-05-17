@@ -50,10 +50,10 @@ public class DefaultRedisClient implements RedisClient {
         @Override
         public void call(final Channel channel) {
             final ChannelPipeline p = channel.pipeline();
-            Nettys.applyHandlerTo(APPLY.REDIS_DECODER, p);
-            Nettys.applyHandlerTo(APPLY.REDIS_BULKSTRING_AGGREGATOR, p);
-            Nettys.applyHandlerTo(APPLY.REDIS_ARRAY_AGGREGATOR, p);
-            Nettys.applyHandlerTo(APPLY.REDIS_ENCODER, p);
+            Nettys.applyHandler(APPLY.REDIS_DECODER, p);
+            Nettys.applyHandler(APPLY.REDIS_BULKSTRING_AGGREGATOR, p);
+            Nettys.applyHandler(APPLY.REDIS_ARRAY_AGGREGATOR, p);
+            Nettys.applyHandler(APPLY.REDIS_ENCODER, p);
             Nettys.setChannelReady(channel);
         }};
         

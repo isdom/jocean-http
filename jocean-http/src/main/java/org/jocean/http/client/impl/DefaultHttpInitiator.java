@@ -514,7 +514,7 @@ class DefaultHttpInitiator
                     }
                     _op.responseOnNext(DefaultHttpInitiator.this, subscriber, respmsg);
                 }};
-            Nettys.applyHandlerTo(APPLY.ON_MESSAGE, this._channel.pipeline(), handler);
+            Nettys.applyHandler(APPLY.ON_MESSAGE, this._channel.pipeline(), handler);
             respHandlerUpdater.set(this, handler);
             reqSubscriptionUpdater.set(this,  wrapRequest(request).subscribe(buildRequestObserver()));
             

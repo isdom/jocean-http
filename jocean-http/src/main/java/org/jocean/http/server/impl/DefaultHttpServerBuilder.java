@@ -201,7 +201,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                                     }
                                 }
                             }
-                            Nettys.applyHandlerTo(APPLY.HTTPSERVER, channel.pipeline());
+                            Nettys.applyHandler(APPLY.HTTPSERVER, channel.pipeline());
                             awaitInboundRequest(channel, subscriber, awaitChannels);
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
@@ -237,7 +237,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             final Subscriber<? super HttpTrade> subscriber, 
             final List<Channel> awaitChannels) {
         awaitChannels.add(channel);
-        Nettys.applyHandlerTo(APPLY.ON_CHANNEL_READ, channel.pipeline(), 
+        Nettys.applyHandler(APPLY.ON_CHANNEL_READ, channel.pipeline(), 
             new Action0() {
                 @Override
                 public void call() {

@@ -2,12 +2,8 @@ package org.jocean.http.util;
 
 import org.jocean.http.util.Nettys.ToOrdinal;
 import org.jocean.idiom.rx.RxFunctions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelPipeline;
 import io.netty.handler.logging.LoggingHandler;
 import rx.functions.FuncN;
 import rx.functions.Functions;
@@ -40,52 +36,19 @@ public enum APPLY implements HandlerType {
     ON_CHANNEL_WRITABILITYCHANGED(Functions.fromFunc(FACTORYFUNCS.ON_CHANNEL_WRITABILITYCHANGED_FUNC1)),
     ;
     
-    public static final ToOrdinal TO_ORDINAL = Nettys.ordinal(APPLY.class);
-    
-    /*
-    public ChannelHandler applyTo(final ChannelPipeline pipeline, final Object ... args) {
-        if (null==this._factory) {
-            throw new UnsupportedOperationException("ChannelHandler's factory is null");
-        }
-        return Nettys.insertHandler(
-            pipeline,
-            this.name(), 
-            this._factory.call(args), 
-            TO_ORDINAL);
-    }
-    
-    public boolean hasApplyTo(final ChannelPipeline pipeline) {
-        return (pipeline.names().indexOf(this.name()) >= 0);
-    }
-
-    public boolean removeFrom(final ChannelPipeline pipeline) {
-        final ChannelHandlerContext ctx = pipeline.context(this.name());
-        if (ctx != null) {
-            pipeline.remove(ctx.handler());
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("removeFrom: channel ({}) remove handler({}/{}) success.", 
-                        pipeline.channel(), ctx.name(), ctx.handler());
-            }
-            return true;
-        }
-        return false;
-    }
-    */
-    
     private APPLY(final FuncN<ChannelHandler> factory) {
         this._factory = factory;
     }
 
     private final FuncN<ChannelHandler> _factory;
     
-    private static final Logger LOG =
-            LoggerFactory.getLogger(APPLY.class);
-
     @Override
     public FuncN<ChannelHandler> factory() {
         return this._factory;
     }
 
+    private static final ToOrdinal TO_ORDINAL = Nettys.ordinal(APPLY.class);
+    
     @Override
     public ToOrdinal toOrdinal() {
         return TO_ORDINAL;

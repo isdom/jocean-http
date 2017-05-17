@@ -149,7 +149,7 @@ public class Nettys {
     }
     
     
-    public static <H extends Enum<H>> ChannelHandler applyHandlerTo(final H handlerType, 
+    public static <H extends Enum<H>> ChannelHandler applyHandler(final H handlerType, 
             final ChannelPipeline pipeline, final Object ... args) {
         final HandlerType htype = (HandlerType)handlerType;
         if (null==htype 
@@ -168,7 +168,7 @@ public class Nettys {
         return (pipeline.names().indexOf(handlerType.name()) >= 0);
     }
 
-    public static <H extends Enum<H>> boolean removeHandlerFrom(final H handlerType, 
+    public static <H extends Enum<H>> boolean removeHandler(final H handlerType, 
             final ChannelPipeline pipeline) {
         final ChannelHandlerContext ctx = pipeline.context(handlerType.name());
         if (ctx != null) {

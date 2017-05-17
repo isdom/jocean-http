@@ -20,7 +20,7 @@ public class Class2ApplyBuilder implements HandlerBuilder {
             final Object... args) {
         final APPLY apply = this._cls2apply.get(feature.getClass());
         if (null!=apply) {
-            return Nettys.applyHandlerTo(apply, pipeline, args);
+            return Nettys.applyHandler(apply, pipeline, args);
         } else {
             return null;
         }
