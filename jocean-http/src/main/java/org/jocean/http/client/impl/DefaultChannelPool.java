@@ -20,7 +20,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
             LoggerFactory.getLogger(DefaultChannelPool.class);
 
     @Override
-    protected Channel reuseChannel(final SocketAddress address) {
+    protected Channel findActiveChannel(final SocketAddress address) {
         final Queue<Channel> channels = getChannels(address);
         if (null == channels) {
             return null;

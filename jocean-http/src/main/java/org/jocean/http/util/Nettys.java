@@ -51,7 +51,7 @@ public class Nettys {
     public static ChannelPool unpoolChannels() {
         return new AbstractChannelPool() {
             @Override
-            protected Channel reuseChannel(final SocketAddress address) {
+            protected Channel findActiveChannel(final SocketAddress address) {
                 return null;
             }
             

@@ -20,23 +20,25 @@ public abstract class AbstractChannelPool implements ChannelPool {
         return Observable.unsafeCreate(new Observable.OnSubscribe<Channel>() {
             @Override
             public void call(final Subscriber<? super Channel> subscriber) {
-                findReuseChannel(address, subscriber);
+                doRetainChannel(address, subscriber);
             }});
     }
     
-    private void findReuseChannel(final SocketAddress address,
+    protected abstract Channel findActiveChannel(final SocketAddress address);
+
+    private void doRetainChannel(final SocketAddress address,
             final Subscriber<? super Channel> subscriber) {
-        final Channel channel = reuseChannel(address);
+        final Channel channel = findActiveChannel(address);
         if (null != channel) {
             final EventLoop eventLoop = channel.eventLoop();
-            if (!eventLoop.inEventLoop()) {
+            if (eventLoop.inEventLoop()) {
+                reuseActiveChannelOrContinue(address, channel, subscriber);
+            } else {
                 eventLoop.submit(new Runnable() {
                     @Override
                     public void run() {
-                        pushActiveChannelOrContinue(address, channel, subscriber);
+                        reuseActiveChannelOrContinue(address, channel, subscriber);
                     }});
-            } else {
-                pushActiveChannelOrContinue(address, channel, subscriber);
             }
         } else {
             //  no more channel can be reused
@@ -44,9 +46,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
         }
     }
     
-    protected abstract Channel reuseChannel(final SocketAddress address);
-
-    private void pushActiveChannelOrContinue(
+    private void reuseActiveChannelOrContinue(
             final SocketAddress address,
             final Channel channel, 
             final Subscriber<? super Channel> subscriber) {
@@ -57,7 +57,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
                 subscriber.onCompleted();
             } else {
                 channel.close();
-                findReuseChannel(address, subscriber);
+                doRetainChannel(address, subscriber);
             }
         }
     }
