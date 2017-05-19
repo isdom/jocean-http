@@ -18,7 +18,7 @@ dependencies {
     compile 'com.alibaba:fastjson:1.2.28'
 	
 	testCompile 'junit:junit:4.12'
-    testCompile 'ch.qos.logback:logback-classic:1.1.7'
+    testCompile 'ch.qos.logback:logback-classic:1.2.2'
     testCompile 'com.google.guava:guava:20.0'
     testCompile 'org.apache.httpcomponents:httpclient:4.4'
     testCompile 'org.apache.httpcomponents:httpmime:4.4'
