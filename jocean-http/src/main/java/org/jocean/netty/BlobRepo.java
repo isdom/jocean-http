@@ -117,5 +117,15 @@ public interface BlobRepo {
         public static Func1<PutResult, Blob> result2Blob() {
             return _RESULT2BLOB;
         }
+        
+        private static Func1<PutResult, String> _RESULT2KEY = new Func1<PutResult, String>() {
+            @Override
+            public String call(final PutResult result) {
+                return result.key();
+            }};
+            
+        public static Func1<PutResult, String> result2key() {
+            return _RESULT2KEY;
+        }
     }
 }
