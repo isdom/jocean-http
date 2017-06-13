@@ -181,8 +181,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                                         channel, Nettys.dumpChannelConfig(channel.config()));
                             }
                             if ( _inboundRecvBufSize > 0) {
-                                if (LOG.isDebugEnabled()) {
-                                    LOG.debug("channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
+                                if (LOG.isInfoEnabled()) {
+                                    LOG.info("channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
                                             channel, 
                                             channel.config().getOption(ChannelOption.SO_RCVBUF), 
                                             _inboundRecvBufSize);

@@ -316,8 +316,8 @@ public class DefaultHttpClient implements HttpClient {
         @Override
         public void call(final Channel channel) {
             if ( _outboundSendBufSize > 0) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("channel({})'s default SO_SNDBUF is {} bytes, and will be reset to {} bytes",
+                if (LOG.isInfoEnabled()) {
+                    LOG.info("channel({})'s default SO_SNDBUF is {} bytes, and will be reset to {} bytes",
                             channel, 
                             channel.config().getOption(ChannelOption.SO_SNDBUF), 
                             _outboundSendBufSize);
