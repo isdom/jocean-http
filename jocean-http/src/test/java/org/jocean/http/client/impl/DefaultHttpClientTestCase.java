@@ -114,35 +114,10 @@ public class DefaultHttpClientTestCase {
         }
     }
     
-    /* // TODO using initiator
     //  TODO, add more multi-call for same interaction define
     //       and check if each call generate different channel instance
-    //  Happy Path
-    @Test
-    public void testHttpHappyPathOnce() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING);
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
-        try {
-        
-            final Iterator<HttpObject> itr = 
-                client.defineInteraction(
-                    new LocalAddress(testAddr), 
-                    Observable.just(fullHttpRequest()))
-                .map(RxNettys.<HttpObject>retainer())
-                .toBlocking().toIterable().iterator();
-            
-            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-            
-            assertTrue(Arrays.equals(bytes, CONTENT));
-        } finally {
-            client.close();
-            server.unsubscribe();
-        }
-    }
 
+    /* // TODO using initiator
     @Test(timeout=1000)
     public void testHttpHappyPathObserveOnOtherthread() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
