@@ -51,7 +51,7 @@ public class DefaultHttpClient implements HttpClient {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
     
-	    public int getLowWaterMark() {
+    public int getLowWaterMark() {
         return this._lowWaterMark;
     }
 
