@@ -263,9 +263,16 @@ class DefaultHttpInitiator
             }};
     }
     
+    static class CloseException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+        CloseException() {
+            super("close()");
+        }
+    }
+    
     @Override
     public void close() {
-        fireClosed(new RuntimeException("close()"));
+        fireClosed(new CloseException());
     }
 
     @Override
@@ -318,7 +325,7 @@ class DefaultHttpInitiator
                     this._isRequestCompleted, 
                     this.transactionStatusAsString(),
                     this.isKeepAlive(),
-                    ExceptionUtils.exception2detail(e));
+                    errorAsString(e));
         }
         
         removeRespHandler();
@@ -330,6 +337,12 @@ class DefaultHttpInitiator
         
         //  fire all pending subscribers onError with unactived exception
         this._terminateAwareSupport.fireAllTerminates(this);
+    }
+
+    private static String errorAsString(final Throwable e) {
+        return (e instanceof CloseException)
+            ? "close()" 
+            : ExceptionUtils.exception2detail(e);
     }
 
     private String transactionStatusAsString() {
@@ -692,7 +705,7 @@ class DefaultHttpInitiator
             reqSubscription.unsubscribe();
         }
     }
-    
+
     private boolean holdRespSubscriber(
             final Subscriber<? super HttpObject> subscriber) {
         return respSubscriberUpdater.compareAndSet(this, null, subscriber);
