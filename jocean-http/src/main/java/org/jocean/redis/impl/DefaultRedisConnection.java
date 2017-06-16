@@ -12,7 +12,6 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import org.jocean.http.TransportException;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
@@ -109,8 +108,8 @@ class DefaultRedisConnection
         this._terminateAwareSupport = 
             new TerminateAwareSupport<RedisConnection>(this._selector);
         
-        RxNettys.applyToChannelWithUninstall(channel, 
-                onTerminate(), 
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
                 APPLY.ON_EXCEPTION_CAUGHT,
                 new Action1<Throwable>() {
                     @Override
@@ -118,8 +117,8 @@ class DefaultRedisConnection
                         fireClosed(cause);
                     }});
         
-        RxNettys.applyToChannelWithUninstall(channel, 
-                onTerminate(), 
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
                 APPLY.ON_CHANNEL_INACTIVE,
                 new Action0() {
                     @Override
@@ -224,7 +223,7 @@ class DefaultRedisConnection
     private void removeRespHandler() {
         final ChannelHandler handler = respHandlerUpdater.getAndSet(this, null);
         if (null != handler) {
-            RxNettys.actionToRemoveHandler(this._channel, handler).call();
+            Nettys.actionToRemoveHandler(this._channel, handler).call();
         }
     }
 
@@ -381,7 +380,7 @@ class DefaultRedisConnection
                     }
                     _op.responseOnNext(DefaultRedisConnection.this, subscriber, respmsg);
                 }};
-            Nettys.applyHandler(APPLY.ON_MESSAGE, this._channel.pipeline(), handler);
+            Nettys.applyHandler(this._channel.pipeline(), APPLY.ON_MESSAGE, handler);
             respHandlerUpdater.set(DefaultRedisConnection.this, handler);
             
             reqSubscriptionUpdater.set(DefaultRedisConnection.this, 

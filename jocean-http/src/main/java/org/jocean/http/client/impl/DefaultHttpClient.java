@@ -177,11 +177,11 @@ public class DefaultHttpClient implements HttpClient {
                 }
                 
                 //  apply features per interaction
-                RxNettys.applyFeaturesToChannel(
+                Nettys.applyFeaturesToChannel(
+                        initiator.onTerminate(), 
                         channel, 
                         HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, 
-                        features, 
-                        initiator.onTerminate());
+                        features);
                 
                 //  enable TrafficCounter if needed
                 final TrafficCounterAware trafficCounterAware = 
@@ -229,11 +229,23 @@ public class DefaultHttpClient implements HttpClient {
         return this._channelCreator.newChannel()
             .doOnNext(_SET_SNDBUF_SIZE)
             .doOnNext(_DISABLE_AUTOREAD)
-            .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
-                    HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
+            .doOnNext(applyPerChannelFeatures(features))
             .flatMap(RxNettys.asyncConnectToMaybeSSL(remoteAddress));
     }
     
+    public static Action1<Channel> applyPerChannelFeatures(
+            final Feature[] features) {
+        return new Action1<Channel>() {
+            @Override
+            public void call(final Channel channel) {
+                Nettys.applyFeaturesToChannel(null, 
+                    channel, 
+                    HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, 
+                    features);
+            }
+        };
+    }
+
     private static Feature[] cloneFeatures(final Feature[] features) {
         final Feature[] cloned = new Feature[features.length];
         for (int idx = 0; idx < cloned.length; idx++) {

@@ -112,7 +112,7 @@ class FACTORYFUNCS {
                 public void userEventTriggered(final ChannelHandlerContext ctx,
                         final Object evt) throws Exception {
                     if (evt instanceof SslHandshakeCompletionEvent) {
-                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
+                        Nettys.actionToRemoveHandler(ctx.channel(), this).call();
                         final SslHandshakeCompletionEvent sslComplete = ((SslHandshakeCompletionEvent) evt);
                         if (sslComplete.isSuccess()) {
                             try {
@@ -169,7 +169,7 @@ class FACTORYFUNCS {
                     try {
                         onChannelRead.call();
                     } finally {
-                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
+                        Nettys.actionToRemoveHandler(ctx.channel(), this).call();
                         ctx.fireChannelRead(msg);
                     }
                 }
@@ -327,7 +327,7 @@ class FACTORYFUNCS {
                     
                     if (msg instanceof LastHttpContent) {
                         //  remove handler itself
-                        RxNettys.actionToRemoveHandler(ctx.channel(), this).call();
+                        Nettys.actionToRemoveHandler(ctx.channel(), this).call();
                         
                         /*
                          * netty 参考代码: https://github.com/netty/netty/blob/netty-

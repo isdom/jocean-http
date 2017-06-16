@@ -14,8 +14,8 @@ import org.jocean.http.TrafficCounter;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.InboundEndpointSupport;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.OutboundEndpointSupport;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
@@ -115,11 +115,11 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 new TerminateAwareSupport<HttpTrade>(_selector);
         
         //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
-        this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
-                onTerminate(), 
+        this._trafficCounter = Nettys.applyToChannel(onTerminate(), 
+                channel, 
                 APPLY.TRAFFICCOUNTER);
-        RxNettys.applyToChannelWithUninstall(channel, 
-                onTerminate(), 
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
                 APPLY.ON_CHANNEL_INACTIVE,
                 new Action0() {
                     @Override

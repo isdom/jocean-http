@@ -8,6 +8,9 @@ import java.net.SocketAddress;
 import java.util.Iterator;
 import java.util.Map.Entry;
 
+import org.jocean.http.Feature;
+import org.jocean.http.Feature.FeatureOverChannelHandler;
+import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.client.impl.AbstractChannelPool;
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.idiom.AnnotationWrapper;
@@ -31,6 +34,9 @@ import io.netty.channel.ServerChannel;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCounted;
+import rx.functions.Action0;
+import rx.functions.Action1;
+import rx.functions.Actions;
 import rx.functions.Func2;
 
 public class Nettys {
@@ -149,8 +155,9 @@ public class Nettys {
     }
     
     
-    public static <H extends Enum<H>> ChannelHandler applyHandler(final H handlerType, 
-            final ChannelPipeline pipeline, final Object ... args) {
+    public static <H extends Enum<H>> ChannelHandler applyHandler(
+            final ChannelPipeline pipeline, 
+            final H handlerType, final Object ... args) {
         final HandlerType htype = (HandlerType)handlerType;
         if (null==htype 
             || null==htype.factory()) {
@@ -163,13 +170,15 @@ public class Nettys {
             htype.toOrdinal());
     }
     
-    public static <H extends Enum<H>> boolean isHandlerApplied(final H handlerType, 
-            final ChannelPipeline pipeline) {
+    public static <H extends Enum<H>> boolean isHandlerApplied(
+            final ChannelPipeline pipeline, 
+            final H handlerType) {
         return (pipeline.names().indexOf(handlerType.name()) >= 0);
     }
 
-    public static <H extends Enum<H>> boolean removeHandler(final H handlerType, 
-            final ChannelPipeline pipeline) {
+    public static <H extends Enum<H>> boolean removeHandler(
+            final ChannelPipeline pipeline, 
+            final H handlerType) {
         final ChannelHandlerContext ctx = pipeline.context(handlerType.name());
         if (ctx != null) {
             pipeline.remove(ctx.handler());
@@ -180,6 +189,57 @@ public class Nettys {
             return true;
         }
         return false;
+    }
+    
+    public static Action0 actionToRemoveHandler(
+            final Channel channel,
+            final ChannelHandler handler) {
+        return null != handler 
+            ? new Action0() {
+                @Override
+                public void call() {
+                    final ChannelPipeline pipeline = channel.pipeline();
+                    final ChannelHandlerContext ctx = pipeline.context(handler);
+                    if (ctx != null) {
+                        pipeline.remove(handler);
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("actionToRemoveHandler: channel ({}) remove handler({}/{}) success.", 
+                                    channel, ctx.name(), handler);
+                        }
+                    }
+                }}
+            : Actions.empty();
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T extends ChannelHandler,H extends Enum<H>> T applyToChannel(
+            final Action1<Action0> onTerminate,
+            final Channel channel,
+            final H handlerType, 
+            final Object... args) {
+        final ChannelHandler handler = 
+            Nettys.applyHandler(channel.pipeline(), handlerType, args);
+        
+        if (null!=onTerminate) {
+            onTerminate.call(Nettys.actionToRemoveHandler(channel, handler));
+        }
+        return (T)handler;
+    }
+    
+    public static void applyFeaturesToChannel(
+            final Action1<Action0> onTerminate,
+            final Channel channel,
+            final HandlerBuilder builder,
+            final Feature[] features) {
+        for (Feature feature : features) {
+            if (feature instanceof FeatureOverChannelHandler) {
+                final ChannelHandler handler = ((FeatureOverChannelHandler)feature).call(builder, channel.pipeline());
+                if (null != handler && null!=onTerminate) {
+                    onTerminate.call(
+                        Nettys.actionToRemoveHandler(channel, handler));
+                }
+            }
+        }
     }
     
     private static final AttributeKey<Object> READY_ATTR = AttributeKey.valueOf("__READY");
@@ -252,6 +312,6 @@ public class Nettys {
     }
     
     public static boolean isSupportCompress(final Channel channel) {
-        return isHandlerApplied(APPLY.CONTENT_DECOMPRESSOR, channel.pipeline());
+        return isHandlerApplied(channel.pipeline(), APPLY.CONTENT_DECOMPRESSOR);
     }
 }

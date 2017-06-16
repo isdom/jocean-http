@@ -78,9 +78,9 @@ public class InboundEndpointSupport extends DefaultAttributeMap
         this._trafficCounter = trafficCounter;
         this._inboundProxy = buildProxy(message);
         
-        RxNettys.applyToChannelWithUninstall(
-            channel, 
+        Nettys.applyToChannel(
             onTerminate, 
+            channel, 
             APPLY.ON_CHANNEL_READCOMPLETE,
             new Action0() {
                 @Override

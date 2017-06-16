@@ -6,9 +6,6 @@ import java.net.SocketAddress;
 import java.util.Collection;
 import java.util.Iterator;
 
-import org.jocean.http.Feature;
-import org.jocean.http.Feature.FeatureOverChannelHandler;
-import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ProxyBuilder;
 import org.jocean.idiom.ToString;
@@ -24,9 +21,6 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelPipeline;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpMessage;
@@ -49,7 +43,6 @@ import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.Actions;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
@@ -60,42 +53,6 @@ public class RxNettys {
         throw new IllegalStateException("No instances!");
     }
 
-    public static void applyFeaturesToChannel(
-            final Channel channel,
-            final HandlerBuilder builder,
-            final Feature[] features,
-            final Action1<Action0> onTerminate) {
-        for (Feature feature : features) {
-            if (feature instanceof FeatureOverChannelHandler) {
-                final ChannelHandler handler = ((FeatureOverChannelHandler)feature).call(builder, channel.pipeline());
-                if (null != handler && null!=onTerminate) {
-                    onTerminate.call(
-                        RxNettys.actionToRemoveHandler(channel, handler));
-                }
-            }
-        }
-    }
-    
-    public static Action0 actionToRemoveHandler(
-        final Channel channel,
-        final ChannelHandler handler) {
-        return null != handler 
-                ? new Action0() {
-                    @Override
-                    public void call() {
-                        final ChannelPipeline pipeline = channel.pipeline();
-                        final ChannelHandlerContext ctx = pipeline.context(handler);
-                        if (ctx != null) {
-                            pipeline.remove(handler);
-                            if (LOG.isDebugEnabled()) {
-                                LOG.debug("actionToRemoveHandler: channel ({}) remove handler({}/{}) success.", 
-                                        channel, ctx.name(), handler);
-                            }
-                        }
-                    }}
-                : Actions.empty();
-    }
-    
     public static <T, V> Observable<T> observableFromFuture(final Future<V> future) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<T>() {
             @Override
@@ -164,7 +121,7 @@ public class RxNettys {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
-                        	final boolean sslEnabled = Nettys.isHandlerApplied(APPLY.SSL, channel.pipeline());
+                        	final boolean sslEnabled = Nettys.isHandlerApplied(channel.pipeline(), APPLY.SSL);
                         	if (sslEnabled) {
                                 enableSSLNotifier(channel, subscriber);
                         	} 
@@ -202,7 +159,7 @@ public class RxNettys {
     }
     
 	private static void enableSSLNotifier(final Channel channel, final Subscriber<? super Channel> subscriber) {
-	    Nettys.applyHandler(APPLY.SSLNOTIFY, channel.pipeline(), 
+	    Nettys.applyHandler(channel.pipeline(), APPLY.SSLNOTIFY, 
 		    new Action1<Channel>() {
 		        @Override
 		        public void call(final Channel ch) {
@@ -222,21 +179,7 @@ public class RxNettys {
 		                    ExceptionUtils.exception2detail(e));
 		        }});
 	}
-	
-    public static Action1<Channel> actionPermanentlyApplyFeatures(
-            final HandlerBuilder builder,
-            final Feature[] features) {
-        return new Action1<Channel>() {
-            @Override
-            public void call(final Channel channel) {
-                applyFeaturesToChannel(
-                        channel, 
-                        builder, 
-                        features, 
-                        null);
-            }};
-    }
-    
+	    
     public static Subscription subscriptionForCloseChannel(final Channel channel) {
         return Subscriptions.create(new Action0() {
             @Override
@@ -515,25 +458,12 @@ public class RxNettys {
                         throw new RuntimeException("Channel[" + channel + "]already add HTTPOBJ_SUBSCRIBER handler.");
                     }
                     onTerminate.call(
-                        RxNettys.actionToRemoveHandler(channel, 
-                            Nettys.applyHandler(APPLY.HTTPOBJ_SUBSCRIBER, channel.pipeline(), subscriber)));
+                        Nettys.actionToRemoveHandler(channel, 
+                            Nettys.applyHandler(channel.pipeline(), APPLY.HTTPOBJ_SUBSCRIBER, subscriber)));
                 } else {
                     LOG.warn("subscriber {} isUnsubscribed, can't used as HTTPOBJ_SUBSCRIBER ", subscriber);
                 }
             }} )
             .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
-    }
-    
-    @SuppressWarnings("unchecked")
-    public static <T extends ChannelHandler> T applyToChannelWithUninstall(
-            final Channel channel, 
-            final Action1<Action0> onTerminate,
-            final APPLY apply, 
-            final Object... args) {
-        final ChannelHandler handler = 
-            Nettys.applyHandler(apply, channel.pipeline(), args);
-        
-        onTerminate.call(RxNettys.actionToRemoveHandler(channel, handler));
-        return (T)handler;
     }
 }

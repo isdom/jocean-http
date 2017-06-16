@@ -39,9 +39,9 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
         this._transformer = transformer;
         this._trafficCounter = trafficCounter;
         
-        RxNettys.applyToChannelWithUninstall(
-            channel, 
+        Nettys.applyToChannel(
             onTerminate, 
+            channel, 
             APPLY.ON_CHANNEL_WRITABILITYCHANGED,
             new Action0() {
                 @Override

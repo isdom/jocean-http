@@ -34,7 +34,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
                         LOG.debug("fetch active channel({}) from pool, try to reuse.", channel);
                     }
                     // 移除对 channel inactive 时的缺省处理 Handler
-                    Nettys.removeHandler(APPLY.ON_CHANNEL_INACTIVE, channel.pipeline());
+                    Nettys.removeHandler(channel.pipeline(), APPLY.ON_CHANNEL_INACTIVE);
                     break;
                 } else {
                     LOG.info("fetch inactive channel({}) from pool, drop it and fetch next from pool.", channel);
@@ -69,7 +69,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
             if (null!=address) {
                 final Queue<Channel> channels = getOrCreateChannels(address);
                 channels.add(channel);
-                Nettys.applyHandler(APPLY.ON_CHANNEL_INACTIVE, channel.pipeline(),
+                Nettys.applyHandler(channel.pipeline(), APPLY.ON_CHANNEL_INACTIVE,
                     new Action0() {
                         @Override
                         public void call() {

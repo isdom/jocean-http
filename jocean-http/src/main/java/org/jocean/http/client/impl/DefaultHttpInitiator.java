@@ -15,7 +15,6 @@ import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.HttpClient.ReadPolicy;
 import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
@@ -130,8 +129,8 @@ class DefaultHttpInitiator
 //                onTerminate(), 
 //                APPLY.TRAFFICCOUNTER);
         
-        RxNettys.applyToChannelWithUninstall(channel, 
-                onTerminate(), 
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
                 APPLY.ON_EXCEPTION_CAUGHT,
                 new Action1<Throwable>() {
                     @Override
@@ -139,8 +138,8 @@ class DefaultHttpInitiator
                         fireClosed(cause);
                     }});
         
-        RxNettys.applyToChannelWithUninstall(channel, 
-                onTerminate(), 
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
                 APPLY.ON_CHANNEL_INACTIVE,
                 new Action0() {
                     @Override
@@ -148,8 +147,8 @@ class DefaultHttpInitiator
                         onChannelInactive();
                     }});
         
-        RxNettys.applyToChannelWithUninstall(channel, 
-                onTerminate(), 
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
                 APPLY.ON_CHANNEL_READCOMPLETE,
                 new Action0() {
                     @Override
@@ -384,8 +383,8 @@ class DefaultHttpInitiator
         public <T extends ChannelHandler> T enable(
                 final DefaultHttpInitiator initiator, 
                 final APPLY apply, final Object... args) {
-            return RxNettys.applyToChannelWithUninstall(initiator._channel, 
-                    initiator.onTerminate(), apply, args);
+            return Nettys.applyToChannel(initiator.onTerminate(), 
+                    initiator._channel, apply, args);
         }
         
         @Override
@@ -510,7 +509,7 @@ class DefaultHttpInitiator
                     }
                     _op.responseOnNext(DefaultHttpInitiator.this, subscriber, respmsg);
                 }};
-            Nettys.applyHandler(APPLY.ON_MESSAGE, this._channel.pipeline(), handler);
+            Nettys.applyHandler(this._channel.pipeline(), APPLY.ON_MESSAGE, handler);
             respHandlerUpdater.set(this, handler);
             reqSubscriptionUpdater.set(this,  wrapRequest(request).subscribe(buildRequestObserver()));
             
@@ -668,7 +667,7 @@ class DefaultHttpInitiator
     private void removeRespHandler() {
         final ChannelHandler handler = respHandlerUpdater.getAndSet(this, null);
         if (null != handler) {
-            RxNettys.actionToRemoveHandler(this._channel, handler).call();
+            Nettys.actionToRemoveHandler(this._channel, handler).call();
         }
     }
 
