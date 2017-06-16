@@ -147,16 +147,8 @@ public class RxNettys {
                     public void call(final Subscriber<? super Channel> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
                             final ChannelFuture f = channel.connect(remoteAddress)
-                                .addListener(new ChannelFutureListener() {
-                                    @Override
-                                    public void operationComplete(final ChannelFuture future) throws Exception {
-                                        if (future.isSuccess()) {
-                                            subscriber.onNext(future.channel());
-                                            subscriber.onCompleted();
-                                        } else {
-                                            subscriber.onError(future.cause());
-                                        }
-                                    }});
+                                .addListener(onSuccessNotifier(subscriber))
+                                .addListener(onErrorNotifier(subscriber));
                             subscriber.add(Subscriptions.from(f));
                         }
                     }});
@@ -174,30 +166,42 @@ public class RxNettys {
                         if (!subscriber.isUnsubscribed()) {
                         	final boolean sslEnabled = Nettys.isHandlerApplied(APPLY.SSL, channel.pipeline());
                         	if (sslEnabled) {
-                                enableSSLNotify(channel, subscriber);
+                                enableSSLNotifier(channel, subscriber);
+                        	} 
+                            final ChannelFuture f = channel.connect(remoteAddress);
+                            if (!sslEnabled) {
+                        	    f.addListener(onSuccessNotifier(subscriber));
                         	}
-                        	
-                            final ChannelFuture f = channel.connect(remoteAddress)
-                                .addListener(new ChannelFutureListener() {
-                                    @Override
-                                    public void operationComplete(final ChannelFuture future) throws Exception {
-                                        if (future.isSuccess()) {
-                                        	if (!sslEnabled) {
-                                        		Nettys.setChannelReady(future.channel());
-	                                            subscriber.onNext(future.channel());
-	                                            subscriber.onCompleted();
-                                        	}
-                                        } else {
-                                            subscriber.onError(future.cause());
-                                        }
-                                    }});
+                            f.addListener(onErrorNotifier(subscriber));
                             subscriber.add(Subscriptions.from(f));
                         }
                     }});
             }};
     }
     
-	private static void enableSSLNotify(final Channel channel, final Subscriber<? super Channel> subscriber) {
+    private static ChannelFutureListener onSuccessNotifier(final Subscriber<? super Channel> subscriber) {
+        return new ChannelFutureListener() {
+            @Override
+            public void operationComplete(final ChannelFuture future) throws Exception {
+                if (future.isSuccess()) {
+                    Nettys.setChannelReady(future.channel());
+                    subscriber.onNext(future.channel());
+                    subscriber.onCompleted();
+                }
+            }};
+    }
+    
+    private static ChannelFutureListener onErrorNotifier(final Subscriber<? super Channel> subscriber) {
+        return new ChannelFutureListener() {
+            @Override
+            public void operationComplete(final ChannelFuture future) throws Exception {
+                if (!future.isSuccess()) {
+                    subscriber.onError(future.cause());
+                }
+            }};
+    }
+    
+	private static void enableSSLNotifier(final Channel channel, final Subscriber<? super Channel> subscriber) {
 	    Nettys.applyHandler(APPLY.SSLNOTIFY, channel.pipeline(), 
 		    new Action1<Channel>() {
 		        @Override

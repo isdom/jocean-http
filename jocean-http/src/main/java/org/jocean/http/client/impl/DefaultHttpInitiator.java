@@ -53,7 +53,10 @@ import rx.subscriptions.Subscriptions;
 class DefaultHttpInitiator
     implements HttpInitiator, Comparable<DefaultHttpInitiator>{
     
-    private static final Action1<Object> DECLARESUPPORTCOMPRESS = new Action1<Object>() {
+    private static final Logger LOG =
+            LoggerFactory.getLogger(DefaultHttpInitiator.class);
+    
+    private static final Action1<Object> _ADD_ACCEPT_ENCODING = new Action1<Object>() {
         @Override
         public void call(final Object msg) {
             if (msg instanceof HttpRequest) {
@@ -117,16 +120,8 @@ class DefaultHttpInitiator
         return builder.toString();
     }
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(DefaultHttpInitiator.class);
-    
-    private final InterfaceSelector _selector = new InterfaceSelector();
-
-    @SafeVarargs
-    DefaultHttpInitiator(
-        final Channel channel, 
-        final Action1<HttpInitiator> ... onTerminates) {
-        
+    DefaultHttpInitiator(final Channel channel) {
+        this._selector = new InterfaceSelector();
         this._channel = channel;
         this._terminateAwareSupport = 
             new TerminateAwareSupport<HttpInitiator>(this._selector);
@@ -164,10 +159,7 @@ class DefaultHttpInitiator
         
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
         
-        for (Action1<HttpInitiator> onTerminate : onTerminates) {
-            doOnTerminate(onTerminate);
-        }
-        if (!channel.isActive()) {
+        if (!this._channel.isActive()) {
             fireClosed(new TransportException("channelInactive of " + channel));
         }
     }
@@ -441,6 +433,10 @@ class DefaultHttpInitiator
         public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
                 final int low, final int high) {
             initiator._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
+            if (LOG.isInfoEnabled()) {
+                LOG.info("channel({}) setWriteBufferWaterMark with low:{} high:{}", 
+                    initiator._channel, low, high);
+            }
         }
     };
     
@@ -532,7 +528,7 @@ class DefaultHttpInitiator
     private Observable<? extends Object> wrapRequest(
             final Observable<? extends Object> request) {
         if (Nettys.isSupportCompress(this._channel)) {
-            return request.doOnNext(DECLARESUPPORTCOMPRESS);
+            return request.doOnNext(_ADD_ACCEPT_ENCODING);
         } else {
             return request;
         }
@@ -767,6 +763,8 @@ class DefaultHttpInitiator
     private volatile boolean _isRequestCompleted = false;
     private volatile ReadPolicy _readPolicy = null;
     
+    private final InterfaceSelector _selector;
+
     private final TerminateAwareSupport<HttpInitiator> _terminateAwareSupport;
 
     private final Channel _channel;

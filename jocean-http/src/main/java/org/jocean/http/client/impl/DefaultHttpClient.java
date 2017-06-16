@@ -51,31 +51,31 @@ public class DefaultHttpClient implements HttpClient {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpClient.class);
     
-    public int getOutboundLowWaterMark() {
-        return this._outboundLowWaterMark;
+	    public int getLowWaterMark() {
+        return this._lowWaterMark;
     }
 
-    public void setOutboundLowWaterMark(final int low) {
-        this._outboundLowWaterMark = low;
+    public void setLowWaterMark(final int low) {
+        this._lowWaterMark = low;
     }
     
-    public int getOutboundHighWaterMark() {
-        return this._outboundHighWaterMark;
+    public int getHighWaterMark() {
+        return this._highWaterMark;
     }
 
-    public void setOutboundHighWaterMark(final int high) {
-        this._outboundHighWaterMark = high;
+    public void setHighWaterMark(final int high) {
+        this._highWaterMark = high;
     }
     
-    public int getOutboundSendBufSize() {
-        return this._outboundSendBufSize;
+    public int getSendBufSize() {
+        return this._sendBufSize;
     }
 
-    public void setOutboundSendBufSize(final int outboundSendBufSize) {
-        this._outboundSendBufSize = outboundSendBufSize;
+    public void setSendBufSize(final int sendBufSize) {
+        this._sendBufSize = sendBufSize;
     }
     
-    private final Action1<HttpInitiator> _doRecycleChannel = new Action1<HttpInitiator>() {
+    private final Action1<HttpInitiator> _RECYCLE_CHANNEL = new Action1<HttpInitiator>() {
         @Override
         public void call(final HttpInitiator initiator) {
             final DefaultHttpInitiator defaultInitiator = (DefaultHttpInitiator)initiator;
@@ -89,6 +89,20 @@ public class DefaultHttpClient implements HttpClient {
                 }
             } else {
                 channel.close();
+            }
+        }};
+        
+    private final Action1<Channel> _SET_SNDBUF_SIZE = new Action1<Channel>() {
+        @Override
+        public void call(final Channel channel) {
+            if ( _sendBufSize > 0) {
+                if (LOG.isInfoEnabled()) {
+                    LOG.info("channel({})'s default SO_SNDBUF is {} bytes, and will be reset to {} bytes",
+                            channel, 
+                            channel.config().getOption(ChannelOption.SO_SNDBUF), 
+                            _sendBufSize);
+                }
+                channel.config().setOption(ChannelOption.SO_SNDBUF, _sendBufSize);
             }
         }};
         
@@ -136,47 +150,56 @@ public class DefaultHttpClient implements HttpClient {
     private Observable<? extends HttpInitiator> initiator0(
             final SocketAddress remoteAddress,
             final Feature... features) {
-        final Feature[] fullFeatures = 
+        final Feature[] allfeatures = 
                 Feature.Util.union(cloneFeatures(Feature.Util.union(this._defaultFeatures, features)),
                     HttpClientConstants.APPLY_HTTPCLIENT);
         return this._channelPool.retainChannel(remoteAddress)
-            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, fullFeatures)
-                .doOnNext(_DISABLE_AUTOREAD))
-            .doOnNext(fillChannelAware(fullFeatures))
-            .map(new Func1<Channel, HttpInitiator>() {
-                @Override
-                public HttpInitiator call(final Channel channel) {
-                    final DefaultHttpInitiator initiator = new DefaultHttpInitiator(channel, _doRecycleChannel);
+            .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, allfeatures))
+            .doOnNext(fillChannelAware(allfeatures))
+            .map(channel2initiator(allfeatures));
+    }
+
+    private Func1<Channel, HttpInitiator> channel2initiator(final Feature[] features) {
+        return new Func1<Channel, HttpInitiator>() {
+            @Override
+            public HttpInitiator call(final Channel channel) {
+                final DefaultHttpInitiator initiator = new DefaultHttpInitiator(channel);
+                
+                // enable recycle action
+                initiator.doOnTerminate(_RECYCLE_CHANNEL);
 //                    initiator.inbound().messageHolder().setMaxBlockSize(_inboundBlockSize);
-//                    
-                    if (_outboundLowWaterMark >= 0 
-                        && _outboundHighWaterMark >= 0
-                        && _outboundHighWaterMark >= _outboundLowWaterMark) {
-                        initiator.setWriteBufferWaterMark(_outboundLowWaterMark, _outboundHighWaterMark);
+                
+                //  set water mark's low/high
+                if (_lowWaterMark >= 0 
+                    && _highWaterMark >= 0
+                    && _highWaterMark >= _lowWaterMark) {
+                    initiator.setWriteBufferWaterMark(_lowWaterMark, _highWaterMark);
+                }
+                
+                //  apply features per interaction
+                RxNettys.applyFeaturesToChannel(
+                        channel, 
+                        HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, 
+                        features, 
+                        initiator.onTerminate());
+                
+                //  enable TrafficCounter if needed
+                final TrafficCounterAware trafficCounterAware = 
+                        InterfaceUtils.compositeIncludeType(
+                            TrafficCounterAware.class, 
+                            (Object[])features);
+                if (null!=trafficCounterAware) {
+                    try {
+                        trafficCounterAware.setTrafficCounter(
+                            (TrafficCounterHandler)initiator.enable(APPLY.TRAFFICCOUNTER));
+                    } catch (Exception e) {
+                        LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
+                                channel, ExceptionUtils.exception2detail(e));
                     }
-                    
-                    RxNettys.applyFeaturesToChannel(
-                            channel, 
-                            HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, 
-                            fullFeatures, 
-                            initiator.onTerminate());
-                    
-                    final TrafficCounterAware trafficCounterAware = 
-                            InterfaceUtils.compositeIncludeType(
-                                TrafficCounterAware.class, 
-                                (Object[])fullFeatures);
-                    if (null!=trafficCounterAware) {
-                        try {
-                            trafficCounterAware.setTrafficCounter(
-                                (TrafficCounterHandler)initiator.enable(APPLY.TRAFFICCOUNTER));
-                        } catch (Exception e) {
-                            LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
-                                    channel, ExceptionUtils.exception2detail(e));
-                        }
-                    }
-                    
-                    return initiator;
-                }});
+                }
+                
+                return initiator;
+            }};
     }
     
     private static Action1<? super Channel> fillChannelAware(final Feature[] features) {
@@ -204,7 +227,8 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress, 
             final Feature[] features) {
         return this._channelCreator.newChannel()
-            .doOnNext(this._setSendBufSize)
+            .doOnNext(_SET_SNDBUF_SIZE)
+            .doOnNext(_DISABLE_AUTOREAD)
             .doOnNext(RxNettys.actionPermanentlyApplyFeatures(
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, features))
             .flatMap(RxNettys.asyncConnectToMaybeSSL(remoteAddress));
@@ -304,25 +328,11 @@ public class DefaultHttpClient implements HttpClient {
         this._channelCreator.close();
     }
     
-    private int _outboundLowWaterMark = -1;
-    private int _outboundHighWaterMark = -1;
-    private int _outboundSendBufSize = -1;
+    private int _lowWaterMark = -1;
+    private int _highWaterMark = -1;
+    private int _sendBufSize = -1;
     
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
     private final Feature[] _defaultFeatures;
-
-    private final Action1<Channel> _setSendBufSize = new Action1<Channel>() {
-        @Override
-        public void call(final Channel channel) {
-            if ( _outboundSendBufSize > 0) {
-                if (LOG.isInfoEnabled()) {
-                    LOG.info("channel({})'s default SO_SNDBUF is {} bytes, and will be reset to {} bytes",
-                            channel, 
-                            channel.config().getOption(ChannelOption.SO_SNDBUF), 
-                            _outboundSendBufSize);
-                }
-                channel.config().setOption(ChannelOption.SO_SNDBUF, _outboundSendBufSize);
-            }
-        }};
 }
