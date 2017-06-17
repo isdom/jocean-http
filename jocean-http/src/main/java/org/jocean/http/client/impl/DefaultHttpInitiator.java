@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.HttpClient.ReadPolicy;
-import org.jocean.http.util.APPLY;
+import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
@@ -131,7 +131,7 @@ class DefaultHttpInitiator
         
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
-                APPLY.ON_EXCEPTION_CAUGHT,
+                HttpHandlers.ON_EXCEPTION_CAUGHT,
                 new Action1<Throwable>() {
                     @Override
                     public void call(final Throwable cause) {
@@ -140,7 +140,7 @@ class DefaultHttpInitiator
         
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
-                APPLY.ON_CHANNEL_INACTIVE,
+                HttpHandlers.ON_CHANNEL_INACTIVE,
                 new Action0() {
                     @Override
                     public void call() {
@@ -149,7 +149,7 @@ class DefaultHttpInitiator
         
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
-                APPLY.ON_CHANNEL_READCOMPLETE,
+                HttpHandlers.ON_CHANNEL_READCOMPLETE,
                 new Action0() {
                     @Override
                     public void call() {
@@ -226,7 +226,7 @@ class DefaultHttpInitiator
     }
     
     @Override
-    public <T extends ChannelHandler> T enable(final APPLY apply, final Object... args) {
+    public <T extends ChannelHandler> T enable(final HttpHandlers apply, final Object... args) {
         return _op.enable(this, apply, args);
     }
     
@@ -363,7 +363,7 @@ class DefaultHttpInitiator
     protected interface Op {
         public <T extends ChannelHandler> T enable(
                 final DefaultHttpInitiator initiator, 
-                final APPLY apply, final Object... args);
+                final HttpHandlers apply, final Object... args);
 
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
@@ -395,7 +395,7 @@ class DefaultHttpInitiator
     private static final Op OP_ACTIVE = new Op() {
         public <T extends ChannelHandler> T enable(
                 final DefaultHttpInitiator initiator, 
-                final APPLY apply, final Object... args) {
+                final HttpHandlers apply, final Object... args) {
             return Nettys.applyToChannel(initiator.onTerminate(), 
                     initiator._channel, apply, args);
         }
@@ -455,7 +455,7 @@ class DefaultHttpInitiator
     private static final Op OP_UNACTIVE = new Op() {
         public <T extends ChannelHandler> T enable(
                 final DefaultHttpInitiator initiator, 
-                final APPLY apply, final Object... args) {
+                final HttpHandlers apply, final Object... args) {
             return null;
         }
         
@@ -522,7 +522,7 @@ class DefaultHttpInitiator
                     }
                     _op.responseOnNext(DefaultHttpInitiator.this, subscriber, respmsg);
                 }};
-            Nettys.applyHandler(this._channel.pipeline(), APPLY.ON_MESSAGE, handler);
+            Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
             respHandlerUpdater.set(this, handler);
             reqSubscriptionUpdater.set(this,  wrapRequest(request).subscribe(buildRequestObserver()));
             

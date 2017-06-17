@@ -93,8 +93,8 @@ public class Nettys4Test {
                 .handler(new ChannelInitializer<Channel>() {
                     @Override
                     protected void initChannel(final Channel ch) throws Exception {
-                        Nettys.applyHandler(ch.pipeline(), APPLY.LOGGING);
-                        Nettys.applyHandler(ch.pipeline(), APPLY.HTTPCLIENT);
+                        Nettys.applyHandler(ch.pipeline(), HttpHandlers.LOGGING);
+                        Nettys.applyHandler(ch.pipeline(), HttpHandlers.HTTPCLIENT);
                     }})
                 .remoteAddress(new LocalAddress(addr));
 
@@ -104,8 +104,8 @@ public class Nettys4Test {
                 .childHandler(new ChannelInitializer<Channel>() {
                     @Override
                     protected void initChannel(final Channel ch) throws Exception {
-                        Nettys.applyHandler(ch.pipeline(), APPLY.LOGGING);
-                        Nettys.applyHandler(ch.pipeline(), APPLY.HTTPSERVER);
+                        Nettys.applyHandler(ch.pipeline(), HttpHandlers.LOGGING);
+                        Nettys.applyHandler(ch.pipeline(), HttpHandlers.HTTPSERVER);
                         serverChannels.offer(ch);
                     }})
                 .localAddress(new LocalAddress(addr))

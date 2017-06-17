@@ -6,7 +6,7 @@ import java.net.InetSocketAddress;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.impl.DefaultHttpClient;
-import org.jocean.http.util.APPLY;
+import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
@@ -102,7 +102,7 @@ public class SslDemo {
                 .toBlocking()
                 .single();
         
-        final TrafficCounter counter = initiator.enable(APPLY.TRAFFICCOUNTER);
+        final TrafficCounter counter = initiator.enable(HttpHandlers.TRAFFICCOUNTER);
         final String resp1 = sendAndRecv(initiator, request).toBlocking().single();
         LOG.debug("1 interaction: {}", resp1);
         

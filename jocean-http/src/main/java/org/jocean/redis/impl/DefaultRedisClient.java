@@ -9,7 +9,6 @@ import org.jocean.http.client.impl.AbstractChannelCreator;
 import org.jocean.http.client.impl.ChannelCreator;
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.http.client.impl.DefaultChannelPool;
-import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.redis.RedisClient;
@@ -50,10 +49,10 @@ public class DefaultRedisClient implements RedisClient {
         @Override
         public void call(final Channel channel) {
             final ChannelPipeline p = channel.pipeline();
-            Nettys.applyHandler(p, APPLY.REDIS_DECODER);
-            Nettys.applyHandler(p, APPLY.REDIS_BULKSTRING_AGGREGATOR);
-            Nettys.applyHandler(p, APPLY.REDIS_ARRAY_AGGREGATOR);
-            Nettys.applyHandler(p, APPLY.REDIS_ENCODER);
+            Nettys.applyHandler(p, RedisHandlers.REDIS_DECODER);
+            Nettys.applyHandler(p, RedisHandlers.REDIS_BULKSTRING_AGGREGATOR);
+            Nettys.applyHandler(p, RedisHandlers.REDIS_ARRAY_AGGREGATOR);
+            Nettys.applyHandler(p, RedisHandlers.REDIS_ENCODER);
             Nettys.setChannelReady(channel);
         }};
         

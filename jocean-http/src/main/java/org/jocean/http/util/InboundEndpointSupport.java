@@ -81,7 +81,7 @@ public class InboundEndpointSupport extends DefaultAttributeMap
         Nettys.applyToChannel(
             onTerminate, 
             channel, 
-            APPLY.ON_CHANNEL_READCOMPLETE,
+            HttpHandlers.ON_CHANNEL_READCOMPLETE,
             new Action0() {
                 @Override
                 public void call() {

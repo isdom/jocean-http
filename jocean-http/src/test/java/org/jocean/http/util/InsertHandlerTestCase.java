@@ -59,16 +59,16 @@ public class InsertHandlerTestCase {
 
         final Channel channel = new LocalChannel();
         
-        Nettys.applyHandler(channel.pipeline(), APPLY.CLOSE_ON_IDLE, 180);
-        Nettys.applyHandler(channel.pipeline(), APPLY.SSL, channel, sslCtx);
-        Nettys.applyHandler(channel.pipeline(), APPLY.CONTENT_COMPRESSOR);
-        Nettys.applyHandler(channel.pipeline(), APPLY.LOGGING);
+        Nettys.applyHandler(channel.pipeline(), HttpHandlers.CLOSE_ON_IDLE, 180);
+        Nettys.applyHandler(channel.pipeline(), HttpHandlers.SSL, channel, sslCtx);
+        Nettys.applyHandler(channel.pipeline(), HttpHandlers.CONTENT_COMPRESSOR);
+        Nettys.applyHandler(channel.pipeline(), HttpHandlers.LOGGING);
         
         final List<String> names = channel.pipeline().names();
         
-        assertEquals(APPLY.LOGGING.name(), names.get(0));
-        assertEquals(APPLY.CLOSE_ON_IDLE.name(), names.get(1));
-        assertEquals(APPLY.SSL.name(), names.get(2));
-        assertEquals(APPLY.CONTENT_COMPRESSOR.name(), names.get(3));
+        assertEquals(HttpHandlers.LOGGING.name(), names.get(0));
+        assertEquals(HttpHandlers.CLOSE_ON_IDLE.name(), names.get(1));
+        assertEquals(HttpHandlers.SSL.name(), names.get(2));
+        assertEquals(HttpHandlers.CONTENT_COMPRESSOR.name(), names.get(3));
     }
 }

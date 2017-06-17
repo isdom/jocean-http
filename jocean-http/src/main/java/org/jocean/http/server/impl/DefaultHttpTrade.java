@@ -12,7 +12,7 @@ import org.jocean.http.InboundEndpoint;
 import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.http.util.APPLY;
+import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.InboundEndpointSupport;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.OutboundEndpointSupport;
@@ -117,10 +117,10 @@ class DefaultHttpTrade extends DefaultAttributeMap
         //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
         this._trafficCounter = Nettys.applyToChannel(onTerminate(), 
                 channel, 
-                APPLY.TRAFFICCOUNTER);
+                HttpHandlers.TRAFFICCOUNTER);
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
-                APPLY.ON_CHANNEL_INACTIVE,
+                HttpHandlers.ON_CHANNEL_INACTIVE,
                 new Action0() {
                     @Override
                     public void call() {

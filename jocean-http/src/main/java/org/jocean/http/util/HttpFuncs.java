@@ -17,10 +17,6 @@ import io.netty.handler.codec.http.HttpContentDecompressor;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.handler.codec.redis.RedisArrayAggregator;
-import io.netty.handler.codec.redis.RedisBulkStringAggregator;
-import io.netty.handler.codec.redis.RedisDecoder;
-import io.netty.handler.codec.redis.RedisEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.handler.stream.ChunkedWriteHandler;
@@ -34,11 +30,11 @@ import rx.functions.Func1;
 import rx.functions.Func2;
 import rx.functions.FuncN;
 
-class FACTORYFUNCS {
+class HttpFuncs {
     private static final Logger LOG =
-            LoggerFactory.getLogger(FACTORYFUNCS.class);
+            LoggerFactory.getLogger(HttpFuncs.class);
     
-    private FACTORYFUNCS() {
+    private HttpFuncs() {
         throw new IllegalStateException("No instances!");
     }
     
@@ -177,52 +173,6 @@ class FACTORYFUNCS {
         }
     };
     
-    static final Func1<Action0, ChannelHandler> ON_CHANNEL_INACTIVE_FUNC1 = 
-            new Func1<Action0, ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Action0 onChannelInactive) {
-            return new ChannelInboundHandlerAdapter() {
-                @Override
-                public void channelInactive(final ChannelHandlerContext ctx)
-                        throws Exception {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("ON_CHANNEL_INACTIVE_FUNC1: channel({})/handler({}): channelInactive.", 
-                                ctx.channel(), ctx.name());
-                    }
-                    ctx.close();
-                    try {
-                        onChannelInactive.call();
-                    } finally {
-                        //  TODO?
-//                        ctx.fireChannelInactive();
-                    }
-                }
-            };
-        }
-    };
-    
-    static final Func1<Action1<Throwable>, ChannelHandler> ON_EXCEPTION_CAUGHT_FUNC1 = 
-            new Func1<Action1<Throwable>, ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Action1<Throwable> onExceptionCaught) {
-            return new ChannelInboundHandlerAdapter() {
-                @Override
-                public void exceptionCaught(final ChannelHandlerContext ctx,
-                        final Throwable cause) throws Exception {
-                    LOG.warn("ON_EXCEPTION_CAUGHT_FUNC1: channel({})/handler({}), detail:{}", 
-                            ctx.channel(), 
-                            ctx.name(),
-                            ExceptionUtils.exception2detail(cause));
-                    try {
-                        onExceptionCaught.call(cause);
-                    } finally {
-                        ctx.fireExceptionCaught(cause);
-                    }
-                }
-            };
-        }
-    };
-    
     static final Func1<Action0, ChannelHandler> ON_CHANNEL_READCOMPLETE_FUNC1 = 
             new Func1<Action0, ChannelHandler>() {
         @Override
@@ -354,35 +304,4 @@ class FACTORYFUNCS {
             };
         }
     };
-
-    static final Func1<SimpleChannelInboundHandler<?>, ChannelHandler> ON_MESSAGE_FUNC1 = 
-            new Func1<SimpleChannelInboundHandler<?>, ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final SimpleChannelInboundHandler<?> handler) {
-            return handler;
-        }};
-
-    static final FuncN<ChannelHandler> REDIS_DECODER_FUNCN = new FuncN<ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Object... args) {
-            return new RedisDecoder();
-        }};
-
-    static final FuncN<ChannelHandler> REDIS_BULKSTRING_AGGREGATOR_FUNCN = new FuncN<ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Object... args) {
-            return new RedisBulkStringAggregator();
-        }};
-
-    static final FuncN<ChannelHandler> REDIS_ARRAY_AGGREGATOR_FUNCN = new FuncN<ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Object... args) {
-            return new RedisArrayAggregator();
-        }};
-
-    static final FuncN<ChannelHandler> REDIS_ENCODER_FUNCN = new FuncN<ChannelHandler>() {
-        @Override
-        public ChannelHandler call(final Object... args) {
-            return new RedisEncoder();
-        }};
 }

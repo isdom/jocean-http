@@ -6,7 +6,7 @@ package org.jocean.http.client;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
-import org.jocean.http.util.APPLY;
+import org.jocean.http.util.HttpHandlers;
 import org.jocean.idiom.TerminateAware;
 
 import io.netty.channel.ChannelHandler;
@@ -35,7 +35,7 @@ public interface HttpClient extends AutoCloseable {
         public void close();
         
         //  replace trafficCounter() by enable(...)
-        public <T extends ChannelHandler> T enable(final APPLY apply, final Object... args);
+        public <T extends ChannelHandler> T enable(final HttpHandlers apply, final Object... args);
         
         public boolean isActive();
         public long unreadDurationInMs();

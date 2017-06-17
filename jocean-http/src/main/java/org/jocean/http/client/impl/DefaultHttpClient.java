@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.util.APPLY;
+import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
@@ -189,7 +189,7 @@ public class DefaultHttpClient implements HttpClient {
                 if (null!=trafficCounterAware) {
                     try {
                         trafficCounterAware.setTrafficCounter(
-                            (TrafficCounterHandler)initiator.enable(APPLY.TRAFFICCOUNTER));
+                            (TrafficCounterHandler)initiator.enable(HttpHandlers.TRAFFICCOUNTER));
                     } catch (Exception e) {
                         LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
                                 channel, ExceptionUtils.exception2detail(e));
@@ -240,7 +240,7 @@ public class DefaultHttpClient implements HttpClient {
                     channel, 
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, 
                     features);
-                Nettys.applyHandler(channel.pipeline(), APPLY.HTTPCLIENT);
+                Nettys.applyHandler(channel.pipeline(), HttpHandlers.HTTPCLIENT);
             }
         };
     }

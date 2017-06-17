@@ -42,7 +42,7 @@ public class OutboundEndpointSupport implements OutboundEndpoint {
         Nettys.applyToChannel(
             onTerminate, 
             channel, 
-            APPLY.ON_CHANNEL_WRITABILITYCHANGED,
+            HttpHandlers.ON_CHANNEL_WRITABILITYCHANGED,
             new Action0() {
                 @Override
                 public void call() {

@@ -121,7 +121,7 @@ public class RxNettys {
                     @Override
                     public void call(final Subscriber<? super Channel> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
-                        	final boolean sslEnabled = Nettys.isHandlerApplied(channel.pipeline(), APPLY.SSL);
+                        	final boolean sslEnabled = Nettys.isHandlerApplied(channel.pipeline(), HttpHandlers.SSL);
                         	if (sslEnabled) {
                                 enableSSLNotifier(channel, subscriber);
                         	} 
@@ -159,7 +159,7 @@ public class RxNettys {
     }
     
 	private static void enableSSLNotifier(final Channel channel, final Subscriber<? super Channel> subscriber) {
-	    Nettys.applyHandler(channel.pipeline(), APPLY.SSLNOTIFY, 
+	    Nettys.applyHandler(channel.pipeline(), HttpHandlers.SSLNOTIFY, 
 		    new Action1<Channel>() {
 		        @Override
 		        public void call(final Channel ch) {
@@ -451,7 +451,7 @@ public class RxNettys {
             @Override
             public void call(final Subscriber<? super HttpObject> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
-                    if (null != channel.pipeline().get(APPLY.HTTPOBJ_SUBSCRIBER.name()) ) {
+                    if (null != channel.pipeline().get(HttpHandlers.HTTPOBJ_SUBSCRIBER.name()) ) {
                         // already add HTTPOBJ_SUBSCRIBER Handler, so throw exception
                         LOG.warn("channel ({}) already add HTTPOBJ_SUBSCRIBER handler, internal error",
                                 channel);
@@ -459,7 +459,7 @@ public class RxNettys {
                     }
                     onTerminate.call(
                         Nettys.actionToRemoveHandler(channel, 
-                            Nettys.applyHandler(channel.pipeline(), APPLY.HTTPOBJ_SUBSCRIBER, subscriber)));
+                            Nettys.applyHandler(channel.pipeline(), HttpHandlers.HTTPOBJ_SUBSCRIBER, subscriber)));
                 } else {
                     LOG.warn("subscriber {} isUnsubscribed, can't used as HTTPOBJ_SUBSCRIBER ", subscriber);
                 }

@@ -17,7 +17,7 @@ import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
 import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.mbean.TradeHolderMXBean;
-import org.jocean.http.util.APPLY;
+import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Class2ApplyBuilder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ServerChannelAware;
@@ -201,7 +201,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                                     }
                                 }
                             }
-                            Nettys.applyHandler(channel.pipeline(), APPLY.HTTPSERVER);
+                            Nettys.applyHandler(channel.pipeline(), HttpHandlers.HTTPSERVER);
                             awaitInboundRequest(channel, subscriber, awaitChannels);
                         }});
                     final ChannelFuture future = bootstrap.bind(localAddress);
@@ -237,7 +237,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             final Subscriber<? super HttpTrade> subscriber, 
             final List<Channel> awaitChannels) {
         awaitChannels.add(channel);
-        Nettys.applyHandler(channel.pipeline(), APPLY.ON_CHANNEL_READ, 
+        Nettys.applyHandler(channel.pipeline(), HttpHandlers.ON_CHANNEL_READ, 
             new Action0() {
                 @Override
                 public void call() {
@@ -408,10 +408,10 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
         
     static {
         _APPLY_BUILDER = new Class2ApplyBuilder();
-        _APPLY_BUILDER.register(Feature.ENABLE_LOGGING.getClass(), APPLY.LOGGING);
-        _APPLY_BUILDER.register(Feature.ENABLE_LOGGING_OVER_SSL.getClass(), APPLY.LOGGING_OVER_SSL);
-        _APPLY_BUILDER.register(Feature.ENABLE_COMPRESSOR.getClass(), APPLY.CONTENT_COMPRESSOR);
-        _APPLY_BUILDER.register(Feature.ENABLE_CLOSE_ON_IDLE.class, APPLY.CLOSE_ON_IDLE);
-        _APPLY_BUILDER.register(Feature.ENABLE_SSL.class, APPLY.SSL);
+        _APPLY_BUILDER.register(Feature.ENABLE_LOGGING.getClass(), HttpHandlers.LOGGING);
+        _APPLY_BUILDER.register(Feature.ENABLE_LOGGING_OVER_SSL.getClass(), HttpHandlers.LOGGING_OVER_SSL);
+        _APPLY_BUILDER.register(Feature.ENABLE_COMPRESSOR.getClass(), HttpHandlers.CONTENT_COMPRESSOR);
+        _APPLY_BUILDER.register(Feature.ENABLE_CLOSE_ON_IDLE.class, HttpHandlers.CLOSE_ON_IDLE);
+        _APPLY_BUILDER.register(Feature.ENABLE_SSL.class, HttpHandlers.SSL);
     }
 }

@@ -312,6 +312,6 @@ public class Nettys {
     }
     
     public static boolean isSupportCompress(final Channel channel) {
-        return isHandlerApplied(channel.pipeline(), APPLY.CONTENT_DECOMPRESSOR);
+        return isHandlerApplied(channel.pipeline(), HttpHandlers.CONTENT_DECOMPRESSOR);
     }
 }

@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.TransportException;
-import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
@@ -110,7 +109,7 @@ class DefaultRedisConnection
         
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
-                APPLY.ON_EXCEPTION_CAUGHT,
+                RedisHandlers.ON_EXCEPTION_CAUGHT,
                 new Action1<Throwable>() {
                     @Override
                     public void call(final Throwable cause) {
@@ -119,7 +118,7 @@ class DefaultRedisConnection
         
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
-                APPLY.ON_CHANNEL_INACTIVE,
+                RedisHandlers.ON_CHANNEL_INACTIVE,
                 new Action0() {
                     @Override
                     public void call() {
@@ -380,7 +379,7 @@ class DefaultRedisConnection
                     }
                     _op.responseOnNext(DefaultRedisConnection.this, subscriber, respmsg);
                 }};
-            Nettys.applyHandler(this._channel.pipeline(), APPLY.ON_MESSAGE, handler);
+            Nettys.applyHandler(this._channel.pipeline(), RedisHandlers.ON_MESSAGE, handler);
             respHandlerUpdater.set(DefaultRedisConnection.this, handler);
             
             reqSubscriptionUpdater.set(DefaultRedisConnection.this, 
