@@ -150,9 +150,7 @@ public class DefaultHttpClient implements HttpClient {
     private Observable<? extends HttpInitiator> initiator0(
             final SocketAddress remoteAddress,
             final Feature... features) {
-        final Feature[] allfeatures = 
-                Feature.Util.union(cloneFeatures(Feature.Util.union(this._defaultFeatures, features)),
-                    HttpClientConstants.APPLY_HTTPCLIENT);
+        final Feature[] allfeatures = cloneFeatures(Feature.Util.union(this._defaultFeatures, features));
         return this._channelPool.retainChannel(remoteAddress)
             .onErrorResumeNext(createChannelAndConnectTo(remoteAddress, allfeatures))
             .doOnNext(fillChannelAware(allfeatures))
@@ -242,6 +240,7 @@ public class DefaultHttpClient implements HttpClient {
                     channel, 
                     HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, 
                     features);
+                Nettys.applyHandler(channel.pipeline(), APPLY.HTTPCLIENT);
             }
         };
     }

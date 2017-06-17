@@ -6,8 +6,6 @@ import org.jocean.http.util.APPLY;
 import org.jocean.http.util.Class2ApplyBuilder;
 
 final class HttpClientConstants {
-    final static Feature APPLY_HTTPCLIENT = new Feature.AbstractFeature0() {};
-
     static final Class2ApplyBuilder _APPLY_BUILDER_PER_INTERACTION;
         
     static final Class2ApplyBuilder _APPLY_BUILDER_PER_CHANNEL;
@@ -22,6 +20,5 @@ final class HttpClientConstants {
         
         _APPLY_BUILDER_PER_CHANNEL = new Class2ApplyBuilder();
         _APPLY_BUILDER_PER_CHANNEL.register(Feature.ENABLE_SSL.class, APPLY.SSL);
-        _APPLY_BUILDER_PER_CHANNEL.register(APPLY_HTTPCLIENT.getClass(), APPLY.HTTPCLIENT);
     }
 }
