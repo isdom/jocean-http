@@ -178,7 +178,7 @@ public class DefaultHttpClient implements HttpClient {
                 Nettys.applyFeaturesToChannel(
                         initiator.onTerminate(), 
                         channel, 
-                        HttpClientConstants._APPLY_BUILDER_PER_INTERACTION, 
+                        HttpClientBuilders._FOR_INTERACTION, 
                         features);
                 
                 //  enable TrafficCounter if needed
@@ -238,7 +238,7 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Channel channel) {
                 Nettys.applyFeaturesToChannel(null, 
                     channel, 
-                    HttpClientConstants._APPLY_BUILDER_PER_CHANNEL, 
+                    HttpClientBuilders._FOR_CHANNEL, 
                     features);
                 Nettys.applyHandler(channel.pipeline(), HttpHandlers.HTTPCLIENT);
             }

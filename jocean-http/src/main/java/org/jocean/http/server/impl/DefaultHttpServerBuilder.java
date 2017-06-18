@@ -18,7 +18,7 @@ import org.jocean.http.Feature.FeatureOverChannelHandler;
 import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.mbean.TradeHolderMXBean;
 import org.jocean.http.util.HttpHandlers;
-import org.jocean.http.util.Class2ApplyBuilder;
+import org.jocean.http.util.Feature2Handler;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ServerChannelAware;
 import org.jocean.http.util.RxNettys;
@@ -398,7 +398,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private int _inboundRecvBufSize = -1;
     private int _inboundBlockSize = 0;
     
-    private static final Class2ApplyBuilder _APPLY_BUILDER;
+    private static final Feature2Handler _APPLY_BUILDER;
     
     private final AtomicLong     _numStartedTrades = new AtomicLong(0);
     private final AtomicLong     _numCompletedTrades = new AtomicLong(0);
@@ -407,7 +407,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private final AtomicInteger  _peakInboundMemory = new AtomicInteger(0);
         
     static {
-        _APPLY_BUILDER = new Class2ApplyBuilder();
+        _APPLY_BUILDER = new Feature2Handler();
         _APPLY_BUILDER.register(Feature.ENABLE_LOGGING.getClass(), HttpHandlers.LOGGING);
         _APPLY_BUILDER.register(Feature.ENABLE_LOGGING_OVER_SSL.getClass(), HttpHandlers.LOGGING_OVER_SSL);
         _APPLY_BUILDER.register(Feature.ENABLE_COMPRESSOR.getClass(), HttpHandlers.CONTENT_COMPRESSOR);
