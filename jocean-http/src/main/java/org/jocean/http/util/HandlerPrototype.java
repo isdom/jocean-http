@@ -5,7 +5,7 @@ import org.jocean.http.util.Nettys.ToOrdinal;
 import io.netty.channel.ChannelHandler;
 import rx.functions.FuncN;
 
-public interface HandlerType {
+public interface HandlerPrototype {
     
     public FuncN<ChannelHandler> factory();
     

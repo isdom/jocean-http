@@ -8,7 +8,7 @@ import io.netty.handler.logging.LoggingHandler;
 import rx.functions.FuncN;
 import rx.functions.Functions;
 
-public enum HttpHandlers implements HandlerType {
+public enum HttpHandlers implements HandlerPrototype {
     ON_CHANNEL_READ(Functions.fromFunc(HttpFuncs.ON_CHANNEL_READ_FUNC1)),
     LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
     TRAFFICCOUNTER(HttpFuncs.TRAFFICCOUNTER_FUNCN),

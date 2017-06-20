@@ -158,16 +158,16 @@ public class Nettys {
     public static <H extends Enum<H>> ChannelHandler applyHandler(
             final ChannelPipeline pipeline, 
             final H handlerType, final Object ... args) {
-        final HandlerType htype = (HandlerType)handlerType;
-        if (null==htype 
-            || null==htype.factory()) {
+        final HandlerPrototype prototype = (HandlerPrototype)handlerType;
+        if (null==prototype 
+            || null==prototype.factory()) {
             throw new UnsupportedOperationException("HandlerType's factory is null");
         }
         return Nettys.insertHandler(
             pipeline,
             handlerType.name(), 
-            htype.factory().call(args), 
-            htype.toOrdinal());
+            prototype.factory().call(args), 
+            prototype.toOrdinal());
     }
     
     public static <H extends Enum<H>> boolean isHandlerApplied(

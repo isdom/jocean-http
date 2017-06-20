@@ -1,7 +1,7 @@
 package org.jocean.redis.impl;
 
 import org.jocean.http.util.CommonFuncs;
-import org.jocean.http.util.HandlerType;
+import org.jocean.http.util.HandlerPrototype;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ToOrdinal;
 
@@ -9,7 +9,7 @@ import io.netty.channel.ChannelHandler;
 import rx.functions.FuncN;
 import rx.functions.Functions;
 
-public enum RedisHandlers implements HandlerType {
+public enum RedisHandlers implements HandlerPrototype {
 //    ON_CHANNEL_READ(Functions.fromFunc(FACTORYFUNCS.ON_CHANNEL_READ_FUNC1)),
 //    LOGGING(RxFunctions.<ChannelHandler>fromConstant(new LoggingHandler())),
 //    TRAFFICCOUNTER(FACTORYFUNCS.TRAFFICCOUNTER_FUNCN),
