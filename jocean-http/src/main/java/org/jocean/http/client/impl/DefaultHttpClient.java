@@ -10,6 +10,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.Outbound;
+import org.jocean.http.util.Feature2Handler;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ChannelAware;
@@ -178,7 +180,7 @@ public class DefaultHttpClient implements HttpClient {
                 Nettys.applyFeaturesToChannel(
                         initiator.onTerminate(), 
                         channel, 
-                        HttpClientBuilders._FOR_INTERACTION, 
+                        _FOR_INTERACTION, 
                         features);
                 
                 //  enable TrafficCounter if needed
@@ -238,7 +240,7 @@ public class DefaultHttpClient implements HttpClient {
             public void call(final Channel channel) {
                 Nettys.applyFeaturesToChannel(null, 
                     channel, 
-                    HttpClientBuilders._FOR_CHANNEL, 
+                    _FOR_CHANNEL, 
                     features);
                 Nettys.applyHandler(channel.pipeline(), HttpHandlers.HTTPCLIENT);
             }
@@ -346,4 +348,20 @@ public class DefaultHttpClient implements HttpClient {
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
     private final Feature[] _defaultFeatures;
+    
+    static final Feature2Handler<HttpHandlers> _FOR_INTERACTION;
+    
+    static final Feature2Handler<HttpHandlers> _FOR_CHANNEL;
+
+    static {
+        _FOR_INTERACTION = new Feature2Handler<>();
+        _FOR_INTERACTION.register(Feature.ENABLE_LOGGING.getClass(), HttpHandlers.LOGGING);
+        _FOR_INTERACTION.register(Feature.ENABLE_LOGGING_OVER_SSL.getClass(), HttpHandlers.LOGGING_OVER_SSL);
+        _FOR_INTERACTION.register(Feature.ENABLE_COMPRESSOR.getClass(), HttpHandlers.CONTENT_DECOMPRESSOR);
+        _FOR_INTERACTION.register(Feature.ENABLE_CLOSE_ON_IDLE.class, HttpHandlers.CLOSE_ON_IDLE);
+        _FOR_INTERACTION.register(Outbound.ENABLE_MULTIPART.getClass(), HttpHandlers.CHUNKED_WRITER);
+        
+        _FOR_CHANNEL = new Feature2Handler<>();
+        _FOR_CHANNEL.register(Feature.ENABLE_SSL.class, HttpHandlers.SSL);
+    }
 }
