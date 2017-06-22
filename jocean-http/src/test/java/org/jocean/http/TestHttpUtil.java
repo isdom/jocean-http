@@ -2,6 +2,8 @@ package org.jocean.http;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
+import java.util.concurrent.BlockingQueue;
+
 import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.impl.AbstractBootstrapCreator;
@@ -11,6 +13,7 @@ import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxSubscribers;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.DefaultEventLoopGroup;
@@ -72,12 +75,35 @@ public class TestHttpUtil {
                 }});
     }
     
+    public static Subscription createTestServerWith(
+            final String acceptId,
+            final BlockingQueue<HttpTrade> trades,
+            final Feature... features) {
+        return TEST_SERVER_BUILDER.defineServer(new LocalAddress(acceptId), features)
+            .subscribe(new Action1<HttpTrade>() {
+                @Override
+                public void call(final HttpTrade trade) {
+                    trades.offer(trade);
+                }});
+    }
+    
     public static Observable<HttpObject> buildBytesResponse(
             final String contentType, 
-            final byte[] bodyAsBytes) {
+            final byte[] content) {
         final FullHttpResponse response = new DefaultFullHttpResponse(
                 HttpVersion.HTTP_1_1, OK, 
-                Unpooled.wrappedBuffer(bodyAsBytes));
+                Unpooled.wrappedBuffer(content));
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        return  Observable.<HttpObject>just(response);
+    }
+    
+    public static Observable<HttpObject> buildByteBufResponse(
+            final String contentType, 
+            final ByteBuf content) {
+        final FullHttpResponse response = new DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1, OK, 
+                content);
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
         return  Observable.<HttpObject>just(response);

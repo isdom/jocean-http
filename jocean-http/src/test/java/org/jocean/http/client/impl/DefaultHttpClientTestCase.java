@@ -1,11 +1,15 @@
 package org.jocean.http.client.impl;
 
-import static org.jocean.http.Feature.ENABLE_LOGGING;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.IOException;
 import java.security.cert.CertificateException;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.SynchronousQueue;
 
 import javax.net.ssl.SSLException;
 
@@ -21,6 +25,10 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.PoolArenaMetric;
+import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.PooledByteBufAllocatorMetric;
 import io.netty.channel.local.LocalAddress;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
@@ -70,153 +78,252 @@ public class DefaultHttpClientTestCase {
 
     private Action1<HttpTrade> responseBy(
             final String contentType, 
-            final byte[] bodyAsBytes) {
+            final byte[] content) {
         return new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade trade) {
-                trade.outbound().message(TestHttpUtil.buildBytesResponse(contentType, bodyAsBytes));
+                trade.outbound().message(TestHttpUtil.buildBytesResponse(contentType, content));
             }};
     }
     
+    private Action1<HttpTrade> responseBy(
+            final String contentType, 
+            final ByteBuf content) {
+        return new Action1<HttpTrade>() {
+            @Override
+            public void call(final HttpTrade trade) {
+                trade.outbound().message(
+                    TestHttpUtil.buildByteBufResponse(contentType, content));
+            }};
+    }
+    
+    private static void configDefaultAllocator() {
+        System.getProperties().setProperty("io.netty.allocator.tinyCacheSize", "0");
+        System.getProperties().setProperty("io.netty.allocator.smallCacheSize", "0");
+        System.getProperties().setProperty("io.netty.allocator.normalCacheSize", "0");
+        System.getProperties().setProperty("io.netty.allocator.type", "pooled");
+        System.getProperties().setProperty("io.netty.noPreferDirect", "true");
+    }
+    
+    private static PooledByteBufAllocator defaultAllocator() {
+        return PooledByteBufAllocator.DEFAULT;
+    }
+
+    private static int allActiveAllocationsCount(final Iterator<PoolArenaMetric> iter) {
+        int total = 0;
+        while (iter.hasNext()) {
+            total += iter.next().numActiveAllocations();
+        }
+        return total;
+    }
+    
+    private static int allHeapActiveAllocationsCount(final PooledByteBufAllocator allocator) {
+        return allActiveAllocationsCount(allocator.metric().heapArenas().iterator());
+    }
+    
+    private static int allDirectActiveAllocationsCount(final PooledByteBufAllocator allocator) {
+        return allActiveAllocationsCount(allocator.metric().directArenas().iterator());
+    }
+    
+    private static int allActiveAllocationsCount(final PooledByteBufAllocator allocator) {
+        return allHeapActiveAllocationsCount(allocator) 
+                + allDirectActiveAllocationsCount(allocator);
+    }
+
+    private static byte[] dumpResponseContentAsBytes(final HttpMessageHolder holder) throws IOException {
+        final FullHttpResponse resp = 
+            holder.fullOf(RxNettys.BUILD_FULL_RESPONSE)
+            .call();
+        try {
+            return Nettys.dumpByteBufAsBytes(resp.content());
+        } finally {
+            if (null!=resp) {
+                resp.release();
+            }
+        }
+    }
+
     @Test
-    public void tesHttpInitiatorHappyPathOnce() 
-        throws Exception
-    {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING
-                ,Feature.ENABLE_COMPRESSOR
+    public void testInitiatorInteractionWithServerUsingHttp() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        final BlockingQueue<HttpTrade> trades = new SynchronousQueue<>();
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING
                 );
         final DefaultHttpClient client = 
                 new DefaultHttpClient(new TestChannelCreator(), 
-                ENABLE_LOGGING
-                ,Feature.ENABLE_COMPRESSOR
+                Feature.ENABLE_LOGGING
                 );
-        try ( final HttpInitiator initiator = 
-            client.initiator().remoteAddress(new LocalAddress(testAddr)).build()
+        try ( final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build()
             .toBlocking().single()) {
             final HttpMessageHolder holder = new HttpMessageHolder();
+            holder.setMaxBlockSize(-1);
+            
+            initiator.doOnTerminate(holder.closer());
+            final Observable<HttpObject> respObservable = initiator.defineInteraction(Observable.just(fullHttpRequest()))
+            .compose(holder.<HttpObject>assembleAndHold())
+            .cache();
+            
+            // initiator 开始发送 请求
+            respObservable.subscribe();
+            
+            // server side recv req
+            final HttpTrade trade = trades.take();
+            
+            // recv all request
+            trade.inbound().message().toCompletable().await();
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+            assertEquals(1, allActiveAllocationsCount(allocator));
+            
+            // send back resp
+            trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
+            
+            // wait for recv all resp at client side
+            respObservable.toCompletable().await();
+            
+            svrRespContent.release();
+            
+            // holder create clientside resp's content
+            assertEquals(1, allActiveAllocationsCount(allocator));
+            
+            assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
+        } finally {
+            // initiator closed, so clientside resp's content released
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            client.close();
+            server.unsubscribe();
+        }
+    }
+
+    @Test
+    public void testInitiatorInteractionWithServerUsingHttps() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        final BlockingQueue<HttpTrade> trades = new SynchronousQueue<>();
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                enableSSL4ServerWithSelfSigned(),
+                Feature.ENABLE_LOGGING_OVER_SSL
+                );
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                enableSSL4Client(),
+                Feature.ENABLE_LOGGING_OVER_SSL
+                );
+        try ( final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build()
+            .toBlocking().single()) {
+            final HttpMessageHolder holder = new HttpMessageHolder();
+            holder.setMaxBlockSize(-1);
+            
+            initiator.doOnTerminate(holder.closer());
+            final Observable<HttpObject> respObservable = initiator.defineInteraction(Observable.just(fullHttpRequest()))
+            .compose(holder.<HttpObject>assembleAndHold())
+            .cache();
+            
+            // initiator 开始发送 请求
+            respObservable.subscribe();
+            
+            // server side recv req
+            final HttpTrade trade = trades.take();
+            
+            // recv all request
+            trade.inbound().message().toCompletable().await();
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+            assertEquals(1, allActiveAllocationsCount(allocator));
+            
+            // send back resp
+            trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
+            
+            // wait for recv all resp at client side
+            respObservable.toCompletable().await();
+            
+            svrRespContent.release();
+            
+            // holder create clientside resp's content
+            assertEquals(1, allActiveAllocationsCount(allocator));
+            
+            assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
+        } finally {
+            // initiator closed, so clientside resp's content released
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
+    @Test
+    public void testInitiatorInteractionWithServerUsingHttpReuseConnection() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+        assertEquals(1, allActiveAllocationsCount(allocator));
+        
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                responseBy("text/plain", svrRespContent),
+                Feature.ENABLE_LOGGING
+                );
+        
+        
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING
+                );
+        try ( final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build()
+            .toBlocking().single()) {
+            final HttpMessageHolder holder = new HttpMessageHolder();
+            holder.setMaxBlockSize(-1);
             
             initiator.doOnTerminate(holder.closer());
             initiator.defineInteraction(Observable.just(fullHttpRequest()))
             .compose(holder.<HttpObject>assembleAndHold())
             .toCompletable().await();
-            final FullHttpResponse resp = 
-                holder.fullOf(RxNettys.BUILD_FULL_RESPONSE)
-                .call();
-            final byte[] bytes = Nettys.dumpByteBufAsBytes(resp.content());
-            resp.release();
+            
+            // holder create clientside resp's content
+            assertEquals(2, allActiveAllocationsCount(allocator));
+            
+            final byte[] bytes = dumpResponseContentAsBytes(holder);
             assertTrue(Arrays.equals(bytes, CONTENT));
         } finally {
+            // initiator closed, so clientside resp's content released
+            assertEquals(1, allActiveAllocationsCount(allocator));
             client.close();
             server.unsubscribe();
+            svrRespContent.release();
         }
+        assertEquals(0, allActiveAllocationsCount(allocator));
     }
     
     //  TODO, add more multi-call for same interaction define
     //       and check if each call generate different channel instance
 
     /* // TODO using initiator
-    @Test(timeout=1000)
-    public void testHttpHappyPathObserveOnOtherthread() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING);
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), ENABLE_LOGGING);
-        try {
-            final HttpMessageHolder holder = new HttpMessageHolder();
-        
-            client.defineInteraction(
-                new LocalAddress(testAddr), 
-                Observable.just(fullHttpRequest()),
-                HttpUtil.buildHoldMessageFeature(holder)
-                )
-            .observeOn(Schedulers.io())
-//            .compose(holder.assembleAndHold())
-            .toBlocking().last();
-            
-            final FullHttpResponse resp = holder.httpMessageBuilder(RxNettys.BUILD_FULL_RESPONSE).call();
-            try {
-                final byte[] bytes = Nettys.dumpByteBufAsBytes(resp.content());
-                assertTrue(Arrays.equals(bytes, CONTENT));
-            } finally {
-                ReferenceCountUtil.release(resp);
-            }
-            
-            holder.release().call();
-            
-        } finally {
-            client.close();
-            server.unsubscribe();
-        }
-    }
-    
-    @Test
-    public void testHttpHappyPathOnceAndCheckRefCount() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING);
-
-        final ByteBuf content = Unpooled.buffer(0);
-        content.writeBytes("test content".getBytes("UTF-8"));
-        final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
-        
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
-                ENABLE_LOGGING);
-        try {
-            final Iterator<HttpObject> itr = 
-                client.defineInteraction(
-                    new LocalAddress(testAddr), 
-                    Observable.just(request))
-                .map(RxNettys.<HttpObject>retainer())
-                .toBlocking().toIterable().iterator();
-            
-            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-            
-            //  assert true referenced count release to zero
-            assertTrue(ReferenceCountUtil.release(request));
-            
-            assertTrue(Arrays.equals(bytes, CONTENT));
-        } finally {
-            client.close();
-            server.unsubscribe();
-        }
-        
-        assertEquals(0, request.refCnt());
-    }
-    
-    @Test
-    public void testHttpsHappyPathOnce() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                enableSSL4ServerWithSelfSigned(),
-                ENABLE_LOGGING_OVER_SSL);
-
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
-                ENABLE_LOGGING_OVER_SSL,
-                enableSSL4Client());
-        try {
-            final Iterator<HttpObject> itr = 
-                client.defineInteraction(
-                    new LocalAddress(testAddr), 
-                    Observable.just(fullHttpRequest()))
-                .map(RxNettys.<HttpObject>retainer())
-                .toBlocking().toIterable().iterator();
-            
-            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-            
-            assertTrue(Arrays.equals(bytes, CONTENT));
-        } finally {
-            client.close();
-            server.unsubscribe();
-        }
-    }
-
     @Test
     public void testHttpHappyPathKeepAliveReuseConnection() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
