@@ -1,6 +1,7 @@
 package org.jocean.http.client.impl;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -10,7 +11,6 @@ import java.util.Iterator;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.SynchronousQueue;
 
 import javax.net.ssl.SSLException;
 
@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PoolArenaMetric;
 import io.netty.buffer.PooledByteBufAllocator;
-import io.netty.buffer.PooledByteBufAllocatorMetric;
+import io.netty.channel.Channel;
 import io.netty.channel.local.LocalAddress;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
@@ -207,7 +207,7 @@ public class DefaultHttpClientTestCase {
         }
     }
 
-    @Test//(timeout=5000)
+    @Test(timeout=5000)
     public void testInitiatorInteractionWithServerUsingHttps() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap
@@ -269,7 +269,7 @@ public class DefaultHttpClientTestCase {
         }
     }
     
-    @Test
+    @Test(timeout=5000)
     public void testInitiatorInteractionWithServerUsingHttpReuseConnection() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap
@@ -279,43 +279,96 @@ public class DefaultHttpClientTestCase {
         
         assertEquals(0, allActiveAllocationsCount(allocator));
         
-        final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
-        assertEquals(1, allActiveAllocationsCount(allocator));
-        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
         final String addr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(addr, 
-                responseBy("text/plain", svrRespContent),
+                trades,
                 Feature.ENABLE_LOGGING
                 );
-        
-        
         final DefaultHttpClient client = 
                 new DefaultHttpClient(new TestChannelCreator(), 
                 Feature.ENABLE_LOGGING
                 );
-        try ( final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build()
+        
+        Channel ch1;
+        // first time
+        try (final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build()
             .toBlocking().single()) {
+            ch1 = (Channel)initiator.transport();
             final HttpMessageHolder holder = new HttpMessageHolder();
             holder.setMaxBlockSize(-1);
             
             initiator.doOnTerminate(holder.closer());
-            initiator.defineInteraction(Observable.just(fullHttpRequest()))
+            final Observable<HttpObject> respObservable = initiator.defineInteraction(Observable.just(fullHttpRequest()))
             .compose(holder.<HttpObject>assembleAndHold())
-            .toCompletable().await();
+            .cache();
             
-            // holder create clientside resp's content
-            assertEquals(2, allActiveAllocationsCount(allocator));
+            // initiator 开始发送 请求
+            respObservable.subscribe();
             
-            final byte[] bytes = dumpResponseContentAsBytes(holder);
-            assertTrue(Arrays.equals(bytes, CONTENT));
+            // server side recv req
+            final HttpTrade trade = trades.take();
+            
+            // recv all request
+            trade.inbound().message().toCompletable().await();
+            
+            final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+            
+            // send back resp
+            trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
+            
+            // wait for recv all resp at client side
+            respObservable.toCompletable().await();
+            
+            svrRespContent.release();
+            
+            assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
         } finally {
             // initiator closed, so clientside resp's content released
-            assertEquals(1, allActiveAllocationsCount(allocator));
+            assertEquals(0, allActiveAllocationsCount(allocator));
+        }
+        
+        Channel ch2;
+        // first time
+        try (final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build()
+            .toBlocking().single()) {
+            ch2 = (Channel)initiator.transport();
+            final HttpMessageHolder holder = new HttpMessageHolder();
+            holder.setMaxBlockSize(-1);
+            
+            initiator.doOnTerminate(holder.closer());
+            final Observable<HttpObject> respObservable = initiator.defineInteraction(Observable.just(fullHttpRequest()))
+            .compose(holder.<HttpObject>assembleAndHold())
+            .cache();
+            
+            // initiator 开始发送 请求
+            respObservable.subscribe();
+            
+            // server side recv req
+            final HttpTrade trade = trades.take();
+            
+            // recv all request
+            trade.inbound().message().toCompletable().await();
+            
+            final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+            
+            // send back resp
+            trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
+            
+            // wait for recv all resp at client side
+            respObservable.toCompletable().await();
+            
+            svrRespContent.release();
+            
+            assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
+        } finally {
+            // initiator closed, so clientside resp's content released
+            assertEquals(0, allActiveAllocationsCount(allocator));
             client.close();
             server.unsubscribe();
-            svrRespContent.release();
         }
-        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        assertSame(ch1, ch2);
     }
     
     //  TODO, add more multi-call for same interaction define
