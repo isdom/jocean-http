@@ -169,7 +169,7 @@ public class DefaultHttpClientTestCase {
     }
 
     @Test(timeout=5000)
-    public void testInitiatorInteractionWithServerUsingHttp() 
+    public void testInitiatorInteractionSuccessUsingHttp() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap
         configDefaultAllocator();
@@ -228,7 +228,7 @@ public class DefaultHttpClientTestCase {
     }
 
     @Test(timeout=5000)
-    public void testInitiatorInteractionWithServerUsingHttps() 
+    public void testInitiatorInteractionSuccessUsingHttps() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap
         configDefaultAllocator();
@@ -318,7 +318,7 @@ public class DefaultHttpClientTestCase {
     }
     
     @Test(timeout=5000)
-    public void testInitiatorInteractionWithServerUsingHttpReuseConnection() 
+    public void testInitiatorInteractionSuccessUsingHttpReuseChannel() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap
         configDefaultAllocator();
@@ -359,7 +359,7 @@ public class DefaultHttpClientTestCase {
     }
     
     @Test(timeout=5000)
-    public void testInitiatorInteractionWithServerUsingHttpsReuseConnection() 
+    public void testInitiatorInteractionSuccessUsingHttpsReuseChannel() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap
         configDefaultAllocator();
