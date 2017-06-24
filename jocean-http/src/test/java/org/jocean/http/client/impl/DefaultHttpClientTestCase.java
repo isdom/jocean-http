@@ -5,6 +5,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.security.cert.CertificateException;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -17,6 +18,7 @@ import javax.net.ssl.SSLException;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TestHttpUtil;
+import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpMessageHolder;
@@ -143,6 +145,32 @@ public class DefaultHttpClientTestCase {
             }
         }
     }
+    
+    static public interface Interaction {
+        public void interact(final Observable<HttpObject> response, final HttpMessageHolder holder) throws Exception;
+    }
+    
+    private static HttpInitiator startInteraction(
+            final HttpClient client,
+            final SocketAddress addr, 
+            final Observable<? extends Object> request, 
+            final Interaction interaction ) throws Exception {
+        try ( final HttpInitiator initiator = client.initiator()
+                .remoteAddress(addr)
+                .build()
+                .toBlocking()
+                .single()) {
+            final HttpMessageHolder holder = new HttpMessageHolder();
+            holder.setMaxBlockSize(-1);
+            initiator.doOnTerminate(holder.closer());
+            
+            interaction.interact(
+                initiator.defineInteraction(request)
+                    .compose(holder.<HttpObject>assembleAndHold()), 
+                holder);
+            return initiator;
+        }
+    }
 
     @Test(timeout=5000)
     public void testInitiatorInteractionWithServerUsingHttp() 
@@ -158,49 +186,46 @@ public class DefaultHttpClientTestCase {
         final String addr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(addr, 
                 trades,
-                Feature.ENABLE_LOGGING
-                );
+                Feature.ENABLE_LOGGING);
         final DefaultHttpClient client = 
                 new DefaultHttpClient(new TestChannelCreator(), 
-                Feature.ENABLE_LOGGING
-                );
-        try ( final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build()
-            .toBlocking().single()) {
-            final HttpMessageHolder holder = new HttpMessageHolder();
-            holder.setMaxBlockSize(-1);
-            
-            initiator.doOnTerminate(holder.closer());
-            final Observable<HttpObject> respObservable = initiator.defineInteraction(Observable.just(fullHttpRequest()))
-            .compose(holder.<HttpObject>assembleAndHold())
-            .cache();
-            
-            // initiator 开始发送 请求
-            respObservable.subscribe();
-            
-            // server side recv req
-            final HttpTrade trade = trades.take();
-            
-            // recv all request
-            trade.inbound().message().toCompletable().await();
-            assertEquals(0, allActiveAllocationsCount(allocator));
-            
-            final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
-            assertEquals(1, allActiveAllocationsCount(allocator));
-            
-            // send back resp
-            trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
-            
-            // wait for recv all resp at client side
-            respObservable.toCompletable().await();
-            
-            svrRespContent.release();
-            
-            // holder create clientside resp's content
-            assertEquals(1, allActiveAllocationsCount(allocator));
-            
-            assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
+                Feature.ENABLE_LOGGING);
+        try {
+            startInteraction(client, 
+                new LocalAddress(addr), 
+                Observable.just(fullHttpRequest()),
+                new Interaction() {
+                    @Override
+                    public void interact(final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        final Observable<HttpObject> cached = response.cache();
+                        
+                        cached.subscribe();
+                        // server side recv req
+                        final HttpTrade trade = trades.take();
+                        
+                        // recv all request
+                        trade.inbound().message().toCompletable().await();
+                        assertEquals(0, allActiveAllocationsCount(allocator));
+                        
+                        final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+                        assertEquals(1, allActiveAllocationsCount(allocator));
+                        
+                        // send back resp
+                        trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
+                        
+                        // wait for recv all resp at client side
+                        cached.toCompletable().await();
+                        
+                        svrRespContent.release();
+                        
+                        // holder create clientside resp's content
+                        assertEquals(1, allActiveAllocationsCount(allocator));
+                        
+                        assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
+                    }
+                });
         } finally {
-            // initiator closed, so clientside resp's content released
             assertEquals(0, allActiveAllocationsCount(allocator));
             client.close();
             server.unsubscribe();
@@ -222,51 +247,80 @@ public class DefaultHttpClientTestCase {
         final Subscription server = TestHttpUtil.createTestServerWith(addr, 
                 trades,
                 enableSSL4ServerWithSelfSigned(),
-                Feature.ENABLE_LOGGING_OVER_SSL
-                );
+                Feature.ENABLE_LOGGING_OVER_SSL);
         final DefaultHttpClient client = 
                 new DefaultHttpClient(new TestChannelCreator(), 
                 enableSSL4Client(),
-                Feature.ENABLE_LOGGING_OVER_SSL
-                );
-        try ( final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build()
-            .toBlocking().single()) {
-            final HttpMessageHolder holder = new HttpMessageHolder();
-            holder.setMaxBlockSize(-1);
-            
-            initiator.doOnTerminate(holder.closer());
-            final Observable<HttpObject> respObservable = initiator.defineInteraction(Observable.just(fullHttpRequest()))
-            .compose(holder.<HttpObject>assembleAndHold())
-            .cache();
-            
-            // initiator 开始发送 请求
-            respObservable.subscribe();
-            
-            LOG.debug("before get tarde");
-            // server side recv req
-            final HttpTrade trade = trades.take();
-            LOG.debug("after get tarde");
-            
-            // recv all request
-            trade.inbound().message().toCompletable().await();
-            
-            final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
-            
-            // send back resp
-            trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
-            
-            // wait for recv all resp at client side
-            respObservable.toCompletable().await();
-            
-            svrRespContent.release();
-            
-            assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        try {
+            startInteraction(client, 
+                new LocalAddress(addr), 
+                Observable.just(fullHttpRequest()),
+                new Interaction() {
+                    @Override
+                    public void interact(final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        final Observable<HttpObject> cached = response.cache();
+                        // initiator 开始发送 请求
+                        cached.subscribe();
+                        
+                        LOG.debug("before get tarde");
+                        // server side recv req
+                        final HttpTrade trade = trades.take();
+                        LOG.debug("after get tarde");
+                        
+                        // recv all request
+                        trade.inbound().message().toCompletable().await();
+                        
+                        final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+                        
+                        // send back resp
+                        trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
+                        
+                        // wait for recv all resp at client side
+                        cached.toCompletable().await();
+                        
+                        svrRespContent.release();
+                        
+                        assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
+                    }
+                });
         } finally {
-            // initiator closed, so clientside resp's content released
             assertEquals(0, allActiveAllocationsCount(allocator));
             client.close();
             server.unsubscribe();
         }
+    }
+    
+    private static Interaction standardInteraction(
+            final PooledByteBufAllocator allocator,
+            final BlockingQueue<HttpTrade> trades) {
+        return new Interaction() {
+            @Override
+            public void interact(final Observable<HttpObject> response, 
+                    final HttpMessageHolder holder) throws Exception {
+                final Observable<HttpObject> cached = response.cache();
+                
+                cached.subscribe();
+                // server side recv req
+                final HttpTrade trade = trades.take();
+                
+                // recv all request
+                trade.inbound().message().toCompletable().await();
+                
+                final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+                
+                // send back resp
+                trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
+                
+                // wait for recv all resp at client side
+                cached.toCompletable().await();
+                
+                svrRespContent.release();
+                
+                assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
+            }
+        };
     }
     
     @Test(timeout=5000)
@@ -277,98 +331,80 @@ public class DefaultHttpClientTestCase {
 
         final PooledByteBufAllocator allocator = defaultAllocator();
         
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
+        
         assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            final Channel ch1 = (Channel)startInteraction(client, 
+                    new LocalAddress(addr), 
+                    Observable.just(fullHttpRequest()),
+                    standardInteraction(allocator, trades)).transport();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            final Channel ch2 = (Channel)startInteraction(client, 
+                    new LocalAddress(addr), 
+                    Observable.just(fullHttpRequest()),
+                    standardInteraction(allocator, trades)).transport();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            assertSame(ch1, ch2);
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
+    @Test(timeout=5000)
+    public void testInitiatorInteractionWithServerUsingHttpsReuseConnection() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
         
         final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
         final String addr = UUID.randomUUID().toString();
         final Subscription server = TestHttpUtil.createTestServerWith(addr, 
                 trades,
-                Feature.ENABLE_LOGGING
-                );
+                enableSSL4ServerWithSelfSigned(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
         final DefaultHttpClient client = 
                 new DefaultHttpClient(new TestChannelCreator(), 
-                Feature.ENABLE_LOGGING
-                );
+                enableSSL4Client(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
         
-        Channel ch1;
-        // first time
-        try (final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build()
-            .toBlocking().single()) {
-            ch1 = (Channel)initiator.transport();
-            final HttpMessageHolder holder = new HttpMessageHolder();
-            holder.setMaxBlockSize(-1);
-            
-            initiator.doOnTerminate(holder.closer());
-            final Observable<HttpObject> respObservable = initiator.defineInteraction(Observable.just(fullHttpRequest()))
-            .compose(holder.<HttpObject>assembleAndHold())
-            .cache();
-            
-            // initiator 开始发送 请求
-            respObservable.subscribe();
-            
-            // server side recv req
-            final HttpTrade trade = trades.take();
-            
-            // recv all request
-            trade.inbound().message().toCompletable().await();
-            
-            final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
-            
-            // send back resp
-            trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
-            
-            // wait for recv all resp at client side
-            respObservable.toCompletable().await();
-            
-            svrRespContent.release();
-            
-            assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
-        } finally {
-            // initiator closed, so clientside resp's content released
-            assertEquals(0, allActiveAllocationsCount(allocator));
-        }
+        assertEquals(0, allActiveAllocationsCount(allocator));
         
-        Channel ch2;
-        // first time
-        try (final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build()
-            .toBlocking().single()) {
-            ch2 = (Channel)initiator.transport();
-            final HttpMessageHolder holder = new HttpMessageHolder();
-            holder.setMaxBlockSize(-1);
+        try {
+            final Channel ch1 = (Channel)startInteraction(client, 
+                    new LocalAddress(addr), 
+                    Observable.just(fullHttpRequest()),
+                    standardInteraction(allocator, trades)).transport();
             
-            initiator.doOnTerminate(holder.closer());
-            final Observable<HttpObject> respObservable = initiator.defineInteraction(Observable.just(fullHttpRequest()))
-            .compose(holder.<HttpObject>assembleAndHold())
-            .cache();
-            
-            // initiator 开始发送 请求
-            respObservable.subscribe();
-            
-            // server side recv req
-            final HttpTrade trade = trades.take();
-            
-            // recv all request
-            trade.inbound().message().toCompletable().await();
-            
-            final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
-            
-            // send back resp
-            trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
-            
-            // wait for recv all resp at client side
-            respObservable.toCompletable().await();
-            
-            svrRespContent.release();
-            
-            assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
-        } finally {
-            // initiator closed, so clientside resp's content released
             assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            final Channel ch2 = (Channel)startInteraction(client, 
+                    new LocalAddress(addr), 
+                    Observable.just(fullHttpRequest()),
+                    standardInteraction(allocator, trades)).transport();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            assertSame(ch1, ch2);
+        } finally {
             client.close();
             server.unsubscribe();
         }
-        
-        assertSame(ch1, ch2);
     }
     
     //  TODO, add more multi-call for same interaction define
