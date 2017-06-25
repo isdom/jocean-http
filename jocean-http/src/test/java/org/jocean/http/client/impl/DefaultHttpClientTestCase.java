@@ -44,6 +44,7 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
+import rx.observers.TestSubscriber;
 
 public class DefaultHttpClientTestCase {
 
@@ -153,9 +154,7 @@ public class DefaultHttpClientTestCase {
             final InitiatorBuilder builder,
             final Observable<? extends Object> request, 
             final Interaction interaction ) throws Exception {
-        try ( final HttpInitiator initiator = builder.build()
-                .toBlocking()
-                .single()) {
+        try ( final HttpInitiator initiator = builder.build().toBlocking().single()) {
             final HttpMessageHolder holder = new HttpMessageHolder();
             holder.setMaxBlockSize(-1);
             initiator.doOnTerminate(holder.closer());
@@ -169,7 +168,7 @@ public class DefaultHttpClientTestCase {
     }
 
     @Test(timeout=5000)
-    public void testInitiatorInteractionSuccessUsingHttp() 
+    public void testInitiatorInteractionSuccessAsHttp() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap
         configDefaultAllocator();
@@ -228,7 +227,7 @@ public class DefaultHttpClientTestCase {
     }
 
     @Test(timeout=5000)
-    public void testInitiatorInteractionSuccessUsingHttps() 
+    public void testInitiatorInteractionSuccessAsHttps() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap
         configDefaultAllocator();
@@ -318,7 +317,7 @@ public class DefaultHttpClientTestCase {
     }
     
     @Test(timeout=5000)
-    public void testInitiatorInteractionSuccessUsingHttpReuseChannel() 
+    public void testInitiatorInteractionSuccessAsHttpReuseChannel() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap
         configDefaultAllocator();
@@ -359,7 +358,7 @@ public class DefaultHttpClientTestCase {
     }
     
     @Test(timeout=5000)
-    public void testInitiatorInteractionSuccessUsingHttpsReuseChannel() 
+    public void testInitiatorInteractionSuccessAsHttpsReuseChannel() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap
         configDefaultAllocator();
@@ -401,314 +400,116 @@ public class DefaultHttpClientTestCase {
         }
     }
     
+    @Test(timeout=5000)
+    public void testInitiatorInteractionNo1NotSendNo2SuccessReuseChannelAsHttp() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            final Channel ch1 = (Channel)startInteraction(
+                client.initiator().remoteAddress(new LocalAddress(addr)), 
+                Observable.<HttpObject>error(new RuntimeException("test error")),
+                new Interaction() {
+                    @Override
+                    public void interact(final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
+                        response.subscribe(subscriber);
+                        
+                        subscriber.awaitTerminalEvent();
+                        subscriber.assertError(RuntimeException.class);
+                        subscriber.assertNoValues();
+                    }
+                }).transport();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            final Channel ch2 = (Channel)startInteraction(
+                    client.initiator().remoteAddress(new LocalAddress(addr)), 
+                    Observable.just(fullHttpRequest()),
+                    standardInteraction(allocator, trades)).transport();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            assertSame(ch1, ch2);
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
+    @Test(timeout=5000)
+    public void testInitiatorInteractionNo1NotSendNo2SuccessReuseChannelAsHttps() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                enableSSL4ServerWithSelfSigned(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                enableSSL4Client(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            final Channel ch1 = (Channel)startInteraction(
+                client.initiator().remoteAddress(new LocalAddress(addr)), 
+                Observable.<HttpObject>error(new RuntimeException("test error")),
+                new Interaction() {
+                    @Override
+                    public void interact(final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
+                        response.subscribe(subscriber);
+                        
+                        subscriber.awaitTerminalEvent();
+                        subscriber.assertError(RuntimeException.class);
+                        subscriber.assertNoValues();
+                    }
+                }).transport();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            final Channel ch2 = (Channel)startInteraction(
+                    client.initiator().remoteAddress(new LocalAddress(addr)), 
+                    Observable.just(fullHttpRequest()),
+                    standardInteraction(allocator, trades)).transport();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            assertSame(ch1, ch2);
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
     //  TODO, add more multi-call for same interaction define
     //       and check if each call generate different channel instance
 
     /* // TODO using initiator
-    @Test
-    public void testHttpHappyPathKeepAliveReuseConnection() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING);
-
-        final TestChannelCreator creator = new TestChannelCreator();
-    
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING);
-        try {
-            // first 
-            {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new LocalAddress(testAddr), 
-                        Observable.just(fullHttpRequest()))
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
-                
-                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                
-                assertTrue(Arrays.equals(bytes, CONTENT));
-                //  await for 1 second
-                pool.awaitRecycleChannels(1);
-            }
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertNotClose(1);
-            // second
-            {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new LocalAddress(testAddr), 
-                        Observable.just(fullHttpRequest()))
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
-                
-                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                
-                assertTrue(Arrays.equals(bytes, CONTENT));
-            }
-            assertEquals(1, creator.getChannels().size());
-            //  try wait for close
-            creator.getChannels().get(0).assertNotClose(1);
-        } finally {
-            client.close();
-            server.unsubscribe();
-        }
-    }
-    
-    @Test
-    public void testHttpHappyPathKeepAliveReuseConnectionTwice() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING);
-
-        final TestChannelCreator creator = new TestChannelCreator();
-    
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING);
-        try {
-            // first 
-            {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new LocalAddress(testAddr), 
-                        Observable.just(fullHttpRequest()))
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
-                
-                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                
-                assertTrue(Arrays.equals(bytes, CONTENT));
-                //  await for 1 second
-                pool.awaitRecycleChannelsAndReset(1, 1);
-            }
-            assertEquals(1, creator.getChannels().size());
-            //  try wait for close
-            creator.getChannels().get(0).assertNotClose(1);
-            // second
-            {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new LocalAddress(testAddr), 
-                        Observable.just(fullHttpRequest()))
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
-                
-                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                
-                assertTrue(Arrays.equals(bytes, CONTENT));
-                //  await for 1 second
-                pool.awaitRecycleChannelsAndReset(1, 1);
-            }
-            assertEquals(1, creator.getChannels().size());
-            //  try wait for close
-            creator.getChannels().get(0).assertNotClose(1);
-            // third
-            {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new LocalAddress(testAddr), 
-                        Observable.just(fullHttpRequest()))
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
-                
-                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                
-                assertTrue(Arrays.equals(bytes, CONTENT));
-                //  await for 1 second
-                pool.awaitRecycleChannelsAndReset(1, 1);
-            }
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertNotClose(1);
-        } finally {
-            client.close();
-            server.unsubscribe();
-        }
-    }
-    
-    @Test
-    public void testHttpsHappyPathKeepAliveReuseConnection() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                enableSSL4ServerWithSelfSigned(),
-                ENABLE_LOGGING_OVER_SSL);
-
-        final TestChannelCreator creator = new TestChannelCreator();
-        
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING,
-                enableSSL4Client());
-        
-        try {
-            // first 
-            {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new LocalAddress(testAddr), 
-                        Observable.just(fullHttpRequest()))
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
-                
-                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                
-                assertTrue(Arrays.equals(bytes, CONTENT));
-                //  await for 1 second
-                pool.awaitRecycleChannels(1);
-            }
-            assertEquals(1, creator.getChannels().size());
-            //  try wait for close
-            creator.getChannels().get(0).assertNotClose(1);
-            // second
-            {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new LocalAddress(testAddr), 
-                        Observable.just(fullHttpRequest()))
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
-                
-                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                
-                assertTrue(Arrays.equals(bytes, CONTENT));
-            }
-            assertEquals(1, creator.getChannels().size());
-            //  try wait for close
-            creator.getChannels().get(0).assertNotClose(1);
-        } finally {
-            client.close();
-            server.unsubscribe();
-        }
-    }
-    
-    @Test(timeout=10000)
-    public void testHttpOnErrorBeforeSend1stAnd2ndHappyPathKeepAliveReuseConnection() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                Feature.ENABLE_LOGGING);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING);
-        
-        try {
-            // first 
-            {
-                final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-                final CountDownLatch unsubscribed = new CountDownLatch(1);
-                try {
-                    client.defineInteraction(
-                        new LocalAddress(testAddr),
-                        Observable.<HttpObject>error(new RuntimeException("test error")))
-                    .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-                    .subscribe(testSubscriber);
-                    unsubscribed.await();
-                    
-                    //  await for 1 second
-                    pool.awaitRecycleChannels(1);
-                } finally {
-                    assertEquals(1, testSubscriber.getOnErrorEvents().size());
-                    assertEquals(RuntimeException.class, 
-                            testSubscriber.getOnErrorEvents().get(0).getClass());
-                    assertEquals(0, testSubscriber.getCompletions());
-                    assertEquals(0, testSubscriber.getOnNextEvents().size());
-                }
-            }
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertNotClose(1);
-            // second
-            {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new LocalAddress(testAddr),
-                        Observable.just(fullHttpRequest()))
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
-                
-                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                
-                assertTrue(Arrays.equals(bytes, CONTENT));
-            }
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertNotClose(1);
-        } finally {
-            client.close();
-//            server.stop();
-            server.unsubscribe();
-        }
-    }
-
-    @Test(timeout=10000)
-    public void testHttpSendingError1stAnd2ndHappyPathNotReuseConnection() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING);
-
-        @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setWriteException(new RuntimeException("write error"));
-        
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING);
-        
-        try {
-            // first 
-            {
-                final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-                final CountDownLatch unsubscribed = new CountDownLatch(1);
-                try {
-                    client.defineInteraction(
-                        new LocalAddress(testAddr), 
-                        Observable.just(fullHttpRequest()))
-                    .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-                    .subscribe(testSubscriber);
-                    unsubscribed.await();
-                    
-                    //  await for 1 second
-                    pool.awaitRecycleChannels(1);
-                } finally {
-                    assertEquals(1, testSubscriber.getOnErrorEvents().size());
-                    assertEquals(RuntimeException.class, 
-                            testSubscriber.getOnErrorEvents().get(0).getClass());
-                    assertEquals(0, testSubscriber.getCompletions());
-                    assertEquals(0, testSubscriber.getOnNextEvents().size());
-                }
-            }
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed(1);
-            creator.reset();
-            //  reset write exception
-            creator.setWriteException(null);
-            
-            // second
-            {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new LocalAddress(testAddr), 
-                        Observable.just(fullHttpRequest()))
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
-                
-                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                
-                assertTrue(Arrays.equals(bytes, CONTENT));
-            }
-            assertEquals(2, creator.getChannels().size());
-            creator.getChannels().get(1).assertNotClose(1);
-        } finally {
-            client.close();
-            server.unsubscribe();
-        }
-    }
     
     //  all kinds of exception
     //  Not connected
