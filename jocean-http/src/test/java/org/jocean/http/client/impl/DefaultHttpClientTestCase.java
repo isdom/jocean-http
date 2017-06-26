@@ -568,42 +568,44 @@ public class DefaultHttpClientTestCase {
         }
     }
     
+    @Test(timeout=15000)
+    public void testInitiatorInteractionNotShakehandAsHttps() throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final String addr = UUID.randomUUID().toString();
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                enableSSL4Client(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            final TestSubscriber<HttpInitiator> subscriber = new TestSubscriber<>();
+            
+            client.initiator().remoteAddress(new LocalAddress(addr)).build().subscribe(subscriber);
+                        
+            subscriber.awaitTerminalEvent();
+            subscriber.assertError(SSLException.class);
+            subscriber.assertNoValues();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
     //  TODO, add more multi-call for same interaction define
     //       and check if each call generate different channel instance
 
     /* // TODO using initiator
-    
-    //  all kinds of exception
-    //  Not connected
-    @Test
-    public void testHttpForNotConnected() throws Exception {
-        
-        final CountDownLatch unsubscribed = new CountDownLatch(1);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(creator, ENABLE_LOGGING);
-        //    NOT setup server for local channel
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
-        try {
-            client.defineInteraction(new LocalAddress("test"), 
-                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
-            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-            .subscribe(testSubscriber);
-            
-            unsubscribed.await();
-            
-            testSubscriber.awaitTerminalEvent();
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed(1);
-        } finally {
-            client.close();
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            nextSensor.assertNotCalled();
-        }
-    }
 
     @Test
     public void testTrafficCounterWhenHttpAndNotConnected() throws Exception {
@@ -699,75 +701,6 @@ public class DefaultHttpClientTestCase {
             assertEquals(0, testSubscriber.getOnNextEvents().size());
             assertEquals(0, testSubscriber.getCompletions());
             assertEquals(0, testSubscriber.getOnErrorEvents().size());
-            nextSensor.assertNotCalled();
-        }
-    }
-
-    @Test
-    public void testHttpsNotConnected() throws Exception {
-        final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(creator,
-                ENABLE_LOGGING,
-                enableSSL4Client());
-        //  NOT setup server for local channel
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
-        try {
-            final CountDownLatch unsubscribed = new CountDownLatch(1);
-            client.defineInteraction(new LocalAddress(UUID.randomUUID().toString()), 
-                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
-            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-            .subscribe(testSubscriber);
-            // await for unsubscribed
-            unsubscribed.await();
-            testSubscriber.awaitTerminalEvent();
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed(1);
-        } finally {
-            client.close();
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            nextSensor.assertNotCalled();
-        }
-    }
-
-    @Test
-    public void testHttpsNotShakehand() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                enableSSL4Client());
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
-        try {
-            final CountDownLatch unsubscribed = new CountDownLatch(1);
-            client.defineInteraction(
-                new LocalAddress(testAddr), 
-                Observable.just(fullHttpRequest()).doOnNext(nextSensor))
-            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-            .subscribe(testSubscriber);
-            unsubscribed.await();
-            testSubscriber.awaitTerminalEvent();
-            
-            //  await for 1 second
-            pool.awaitRecycleChannels(1);
-            
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed(1);
-        } finally {
-            client.close();
-            server.unsubscribe();
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            assertEquals(NotSslRecordException.class, 
-                    testSubscriber.getOnErrorEvents().get(0).getClass());
             nextSensor.assertNotCalled();
         }
     }
