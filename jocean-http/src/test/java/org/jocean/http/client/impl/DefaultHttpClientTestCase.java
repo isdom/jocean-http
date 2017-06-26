@@ -148,7 +148,10 @@ public class DefaultHttpClientTestCase {
     }
     
     static public interface Interaction {
-        public void interact(final Observable<HttpObject> response, final HttpMessageHolder holder) throws Exception;
+        public void interact(
+                final HttpInitiator initiator,
+                final Observable<HttpObject> response, 
+                final HttpMessageHolder holder) throws Exception;
     }
     
     private static HttpInitiator startInteraction(
@@ -160,7 +163,7 @@ public class DefaultHttpClientTestCase {
             holder.setMaxBlockSize(-1);
             initiator.doOnTerminate(holder.closer());
             
-            interaction.interact(
+            interaction.interact(initiator,
                 initiator.defineInteraction(request)
                     .compose(holder.<HttpObject>assembleAndHold()), 
                 holder);
@@ -191,7 +194,9 @@ public class DefaultHttpClientTestCase {
                 Observable.just(fullHttpRequest()),
                 new Interaction() {
                     @Override
-                    public void interact(final Observable<HttpObject> response, 
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
                             final HttpMessageHolder holder) throws Exception {
                         final Observable<HttpObject> cached = response.cache();
                         
@@ -252,7 +257,9 @@ public class DefaultHttpClientTestCase {
                 Observable.just(fullHttpRequest()),
                 new Interaction() {
                     @Override
-                    public void interact(final Observable<HttpObject> response, 
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
                             final HttpMessageHolder holder) throws Exception {
                         final Observable<HttpObject> cached = response.cache();
                         // initiator 开始发送 请求
@@ -291,7 +298,9 @@ public class DefaultHttpClientTestCase {
             final BlockingQueue<HttpTrade> trades) {
         return new Interaction() {
             @Override
-            public void interact(final Observable<HttpObject> response, 
+            public void interact(
+                    final HttpInitiator initiator,
+                    final Observable<HttpObject> response, 
                     final HttpMessageHolder holder) throws Exception {
                 final Observable<HttpObject> cached = response.cache();
                 
@@ -426,7 +435,9 @@ public class DefaultHttpClientTestCase {
                 Observable.<HttpObject>error(new RuntimeException("test error")),
                 new Interaction() {
                     @Override
-                    public void interact(final Observable<HttpObject> response, 
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
                             final HttpMessageHolder holder) throws Exception {
                         final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
                         response.subscribe(subscriber);
@@ -480,7 +491,9 @@ public class DefaultHttpClientTestCase {
                 Observable.<HttpObject>error(new RuntimeException("test error")),
                 new Interaction() {
                     @Override
-                    public void interact(final Observable<HttpObject> response, 
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
                             final HttpMessageHolder holder) throws Exception {
                         final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
                         response.subscribe(subscriber);
@@ -661,7 +674,9 @@ public class DefaultHttpClientTestCase {
                 Observable.just(fullHttpRequest()),
                 new Interaction() {
                     @Override
-                    public void interact(final Observable<HttpObject> response, 
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
                             final HttpMessageHolder holder) throws Exception {
                         final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
                         
@@ -682,82 +697,65 @@ public class DefaultHttpClientTestCase {
         }
     }
     
+    @Test(timeout=5000)
+    public void testInitiatorInteractionDisconnectFromServerAfterConnectedAsHttp() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            startInteraction(
+                client.initiator().remoteAddress(new LocalAddress(addr)), 
+                Observable.just(fullHttpRequest()),
+                new Interaction() {
+                    @Override
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
+                        response.subscribe(subscriber);
+                        
+                        // server side recv req
+                        final HttpTrade trade = trades.take();
+                        
+                        // recv request from client side
+                        trade.inbound().message().toCompletable().await();
+                        
+                        // disconnect
+                        trade.close();
+                        
+                        subscriber.awaitTerminalEvent();
+                        subscriber.assertError(RuntimeException.class);
+                        subscriber.assertNotCompleted();
+                        subscriber.assertNoValues();
+                    }
+                });
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
     //  TODO, add more multi-call for same interaction define
     //       and check if each call generate different channel instance
 
     /* // TODO using initiator
-
-    @Test
-    public void testHttpEmitExceptionWhenConnecting() throws Exception {
-        final String errorMsg = "connecting failure";
-        
-        @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setConnectException(new RuntimeException(errorMsg));
-        
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
-        //    NOT setup server for local channel
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
-        try {
-            final CountDownLatch unsubscribed = new CountDownLatch(1);
-            client.defineInteraction(
-                new LocalAddress(UUID.randomUUID().toString()), 
-                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
-            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-            .subscribe(testSubscriber);
-            unsubscribed.await();
-            testSubscriber.awaitTerminalEvent();
-            assertEquals(1, creator.getChannels().size());
-            assertFalse(creator.getChannels().get(0).isActive());
-        } finally {
-            client.close();
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            assertEquals(errorMsg, 
-                    testSubscriber.getOnErrorEvents().get(0).getMessage());
-            //  channel not connected, so no message send
-            nextSensor.assertNotCalled();
-        }
-    }
-    
-    @Test
-    public void testHttpsEmitExceptionWhenConnecting() throws Exception {
-        final String errorMsg = "connecting failure";
-        
-        @SuppressWarnings("resource")
-        final TestChannelCreator creator = new TestChannelCreator()
-            .setConnectException(new RuntimeException(errorMsg));
-        
-        final DefaultHttpClient client = new DefaultHttpClient(creator,
-                enableSSL4Client());
-        //    NOT setup server for local channel
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
-        try {
-            final CountDownLatch unsubscribed = new CountDownLatch(1);
-            client.defineInteraction(
-                new LocalAddress("test"), 
-                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
-            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-            .subscribe(testSubscriber);
-            unsubscribed.await();
-            testSubscriber.awaitTerminalEvent();
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed(1);
-        } finally {
-            client.close();
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            assertEquals(errorMsg, 
-                    testSubscriber.getOnErrorEvents().get(0).getMessage());
-            //  channel not connected, so no message send
-            nextSensor.assertNotCalled();
-        }
-    }
-    
     //  connected but meet error
     @Test
     public void testHttpDisconnectFromServerAfterConnected() throws Exception {
