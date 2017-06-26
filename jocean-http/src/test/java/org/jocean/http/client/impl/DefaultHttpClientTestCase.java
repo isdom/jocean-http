@@ -602,109 +602,91 @@ public class DefaultHttpClientTestCase {
             server.unsubscribe();
         }
     }
-    //  TODO, add more multi-call for same interaction define
-    //       and check if each call generate different channel instance
+    
+    @Test(timeout=5000)
+    public void testGetInitiatorUnsubscribedAlreadyAsHttp()
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
 
-    /* // TODO using initiator
-
-    @Test
-    public void testTrafficCounterWhenHttpAndNotConnected() throws Exception {
+        final PooledByteBufAllocator allocator = defaultAllocator();
         
-        final CountDownLatch unsubscribed = new CountDownLatch(1);
+        final String addr = UUID.randomUUID().toString();
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
         
-        final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(creator, ENABLE_LOGGING);
-        //    NOT setup server for local channel
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
         try {
-            final HttpUtil.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
+            final TestSubscriber<HttpInitiator> subscriber = new TestSubscriber<>();
             
-            client.defineInteraction(new LocalAddress("test"), 
-                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor),
-                counter
-                )
-                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-                .subscribe(testSubscriber);
+            subscriber.unsubscribe();
+            final Subscription subscription = client.initiator().remoteAddress(new LocalAddress(addr))
+                    .build().subscribe(subscriber);
+
+            assertTrue(subscription.isUnsubscribed());
             
-            unsubscribed.await();
+            subscriber.assertNoTerminalEvent();
+            subscriber.assertNoValues();
             
-            testSubscriber.awaitTerminalEvent();
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed(1);
-            assertEquals(0, counter.outboundBytes());
-            assertEquals(0, counter.inboundBytes());
+            assertEquals(0, allActiveAllocationsCount(allocator));
         } finally {
             client.close();
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            nextSensor.assertNotCalled();
         }
     }
     
-    @Test
-    public void testTrafficCounterWhenHttpHappyPathOnce() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING);
+    @Test(timeout=5000)
+    public void testInitiatorInteractionUnsubscribedAlreadyAsHttp() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
 
-        final HttpUtil.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
-        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
-                ENABLE_LOGGING,
-                counter);
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final String addr = UUID.randomUUID().toString();
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
         try {
-            final Iterator<HttpObject> itr = 
-                client.defineInteraction(
-                    new LocalAddress(testAddr), 
-                    Observable.just(fullHttpRequest()))
-                .map(RxNettys.<HttpObject>retainer())
-                .toBlocking().toIterable().iterator();
+            startInteraction(
+                client.initiator().remoteAddress(new LocalAddress(addr)), 
+                Observable.just(fullHttpRequest()),
+                new Interaction() {
+                    @Override
+                    public void interact(final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
+                        
+                        subscriber.unsubscribe();
+                        final Subscription subscription = response.subscribe(subscriber);
+                        
+                        assertTrue(subscription.isUnsubscribed());
+                        
+                        subscriber.assertNoTerminalEvent();
+                        subscriber.assertNoValues();
+                    }
+                });
             
-            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-            
-            assertTrue(Arrays.equals(bytes, CONTENT));
-            assertTrue(0 < counter.outboundBytes());
-            assertTrue(0 < counter.inboundBytes());
-            LOG.debug("meter.uploadBytes: {}", counter.outboundBytes());
-            LOG.debug("meter.downloadBytes: {}", counter.inboundBytes());
+            assertEquals(0, allActiveAllocationsCount(allocator));
         } finally {
             client.close();
             server.unsubscribe();
         }
     }
     
-    @Test
-    public void testHttpForUnsubscribedBeforeSubscribe() throws Exception {
-        
-        final CountDownLatch unsubscribed = new CountDownLatch(1);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(creator, ENABLE_LOGGING);
-        //    NOT setup server for local channel
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
-        try {
-            testSubscriber.unsubscribe();
-            
-            client.defineInteraction(new LocalAddress(UUID.randomUUID().toString()), 
-                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
-            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-            .subscribe(testSubscriber);
-            
-            unsubscribed.await();
-            
-            assertEquals(0, creator.getChannels().size());
-        } finally {
-            client.close();
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(0, testSubscriber.getOnErrorEvents().size());
-            nextSensor.assertNotCalled();
-        }
-    }
-    
+    //  TODO, add more multi-call for same interaction define
+    //       and check if each call generate different channel instance
+
+    /* // TODO using initiator
+
     @Test
     public void testHttpEmitExceptionWhenConnecting() throws Exception {
         final String errorMsg = "connecting failure";
@@ -1579,6 +1561,75 @@ public class DefaultHttpClientTestCase {
             assertTrue(testSubscriber.getOnNextEvents().size()>=1);
         }
     }
+    
+    @Test
+    public void testTrafficCounterWhenHttpAndNotConnected() throws Exception {
+        
+        final CountDownLatch unsubscribed = new CountDownLatch(1);
+        
+        final TestChannelCreator creator = new TestChannelCreator();
+        final DefaultHttpClient client = new DefaultHttpClient(creator, ENABLE_LOGGING);
+        //    NOT setup server for local channel
+        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
+        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
+        try {
+            final HttpUtil.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
+            
+            client.defineInteraction(new LocalAddress("test"), 
+                Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor),
+                counter
+                )
+                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
+                .subscribe(testSubscriber);
+            
+            unsubscribed.await();
+            
+            testSubscriber.awaitTerminalEvent();
+            assertEquals(1, creator.getChannels().size());
+            creator.getChannels().get(0).assertClosed(1);
+            assertEquals(0, counter.outboundBytes());
+            assertEquals(0, counter.inboundBytes());
+        } finally {
+            client.close();
+            assertEquals(0, testSubscriber.getOnNextEvents().size());
+            assertEquals(0, testSubscriber.getCompletions());
+            assertEquals(1, testSubscriber.getOnErrorEvents().size());
+            nextSensor.assertNotCalled();
+        }
+    }
+    
+    @Test
+    public void testTrafficCounterWhenHttpHappyPathOnce() throws Exception {
+        final String testAddr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
+                responseBy("text/plain", CONTENT),
+                ENABLE_LOGGING);
+
+        final HttpUtil.TrafficCounterFeature counter = HttpUtil.buildTrafficCounterFeature();
+        final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(), 
+                ENABLE_LOGGING,
+                counter);
+        try {
+            final Iterator<HttpObject> itr = 
+                client.defineInteraction(
+                    new LocalAddress(testAddr), 
+                    Observable.just(fullHttpRequest()))
+                .map(RxNettys.<HttpObject>retainer())
+                .toBlocking().toIterable().iterator();
+            
+            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
+            
+            assertTrue(Arrays.equals(bytes, CONTENT));
+            assertTrue(0 < counter.outboundBytes());
+            assertTrue(0 < counter.inboundBytes());
+            LOG.debug("meter.uploadBytes: {}", counter.outboundBytes());
+            LOG.debug("meter.downloadBytes: {}", counter.inboundBytes());
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
     */
     
     /*
@@ -1640,7 +1691,7 @@ public class DefaultHttpClientTestCase {
             assertEquals(0, testSubscriber.getOnCompletedEvents().size());
             assertTrue(testSubscriber.getOnNextEvents().size()>=1);
         }
-    }
+    }    
     */
     
     // TODO, 增加 transfer request 时, 调用 response subscriber.unsubscribe 后，write future是否会被正确取消。 
