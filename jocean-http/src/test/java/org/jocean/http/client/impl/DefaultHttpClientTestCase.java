@@ -18,6 +18,7 @@ import javax.net.ssl.SSLException;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TestHttpUtil;
+import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.HttpClient.InitiatorBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
@@ -739,7 +740,64 @@ public class DefaultHttpClientTestCase {
                         trade.close();
                         
                         subscriber.awaitTerminalEvent();
-                        subscriber.assertError(RuntimeException.class);
+                        subscriber.assertError(TransportException.class);
+                        subscriber.assertNotCompleted();
+                        subscriber.assertNoValues();
+                    }
+                });
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
+    @Test(timeout=5000)
+    public void testInitiatorInteractionDisconnectFromServerAfterConnectedAsHttps() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                enableSSL4ServerWithSelfSigned(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                enableSSL4Client(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            startInteraction(
+                client.initiator().remoteAddress(new LocalAddress(addr)), 
+                Observable.just(fullHttpRequest()),
+                new Interaction() {
+                    @Override
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
+                        response.subscribe(subscriber);
+                        
+                        // server side recv req
+                        final HttpTrade trade = trades.take();
+                        
+                        // recv request from client side
+                        trade.inbound().message().toCompletable().await();
+                        
+                        // disconnect
+                        trade.close();
+                        
+                        subscriber.awaitTerminalEvent();
+                        subscriber.assertError(TransportException.class);
                         subscriber.assertNotCompleted();
                         subscriber.assertNoValues();
                     }
@@ -756,101 +814,6 @@ public class DefaultHttpClientTestCase {
     //       and check if each call generate different channel instance
 
     /* // TODO using initiator
-    //  connected but meet error
-    @Test
-    public void testHttpDisconnectFromServerAfterConnected() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                new Action1<HttpTrade>() {
-                    @Override
-                    public void call(final HttpTrade trade) {
-                        trade.close();
-                    }},
-                ENABLE_LOGGING);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING);
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
-        try {
-            final CountDownLatch unsubscribed = new CountDownLatch(1);
-            client.defineInteraction(
-                new LocalAddress(testAddr),
-                Observable.just(fullHttpRequest()).doOnNext(nextSensor))
-            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-            .subscribe(testSubscriber);
-            unsubscribed.await();
-            testSubscriber.awaitTerminalEvent();
-            
-            //  await for 1 second
-            pool.awaitRecycleChannels(1);
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed(1);
-        } finally {
-            client.close();
-//            server.stop();
-            server.unsubscribe();
-            testSubscriber.assertTerminalEvent();
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-//            assertEquals(RuntimeException.class, 
-//                    testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            //  channel connected, so message has been send
-            nextSensor.assertCalled();
-        }
-    }
-    
-    @Test
-    public void testHttpsDisconnectFromServerAfterConnected() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                new Action1<HttpTrade>() {
-                    @Override
-                    public void call(final HttpTrade trade) {
-                        trade.close();
-                    }},
-                enableSSL4ServerWithSelfSigned(),
-                ENABLE_LOGGING_OVER_SSL);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING_OVER_SSL,
-                enableSSL4Client());
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
-        try {
-            final CountDownLatch unsubscribed = new CountDownLatch(1);
-            client.defineInteraction(
-                new LocalAddress(testAddr), 
-                Observable.just(fullHttpRequest()).doOnNext(nextSensor))
-            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-            .subscribe(testSubscriber);
-            unsubscribed.await();
-            testSubscriber.awaitTerminalEvent();
-            
-            //  await for 1 second
-            pool.awaitRecycleChannels(1);
-            
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed(1);
-        } finally {
-            client.close();
-            server.unsubscribe();
-            testSubscriber.assertTerminalEvent();
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-//            assertEquals(RuntimeException.class, 
-//                    testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            //  channel connected, so message has been send
-            nextSensor.assertCalled();
-        }
-    }
-    
     @Test
     public void testHttpClientCanceledAfterConnected() throws Exception {
         final CountDownLatch serverRecvd = new CountDownLatch(1);
