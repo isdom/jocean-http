@@ -5,6 +5,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.security.cert.CertificateException;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -503,6 +504,67 @@ public class DefaultHttpClientTestCase {
         } finally {
             client.close();
             server.unsubscribe();
+        }
+    }
+    
+    @Test(timeout=5000)
+    public void testInitiatorInteractionNotConnectedAsHttp() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final String addr = UUID.randomUUID().toString();
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            final TestSubscriber<HttpInitiator> subscriber = new TestSubscriber<>();
+            
+            client.initiator().remoteAddress(new LocalAddress(addr)).build().subscribe(subscriber);
+                        
+            subscriber.awaitTerminalEvent();
+            subscriber.assertError(ConnectException.class);
+            subscriber.assertNoValues();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+        } finally {
+            client.close();
+        }
+    }
+    
+    @Test(timeout=5000)
+    public void testInitiatorInteractionNotConnectedAsHttps() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final String addr = UUID.randomUUID().toString();
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                enableSSL4Client(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            final TestSubscriber<HttpInitiator> subscriber = new TestSubscriber<>();
+            
+            client.initiator().remoteAddress(new LocalAddress(addr)).build().subscribe(subscriber);
+                        
+            subscriber.awaitTerminalEvent();
+            subscriber.assertError(ConnectException.class);
+            subscriber.assertNoValues();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+        } finally {
+            client.close();
         }
     }
     
