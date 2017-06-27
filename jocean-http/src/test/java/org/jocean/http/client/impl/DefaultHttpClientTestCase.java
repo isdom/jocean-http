@@ -3,6 +3,8 @@ package org.jocean.http.client.impl;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
 
 import java.io.IOException;
 import java.net.ConnectException;
@@ -35,9 +37,13 @@ import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.local.LocalAddress;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
@@ -810,298 +816,183 @@ public class DefaultHttpClientTestCase {
         }
     }
     
+    @Test(timeout=5000)
+    public void testInitiatorInteractionClientCanceledAsHttp() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            startInteraction(
+                client.initiator().remoteAddress(new LocalAddress(addr)), 
+                Observable.just(fullHttpRequest()),
+                new Interaction() {
+                    @Override
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
+                        final Subscription subscription = response.subscribe(subscriber);
+                        
+                        // server side recv req
+                        final HttpTrade trade = trades.take();
+                        
+                        // recv request from client side
+                        trade.inbound().message().toCompletable().await();
+                        
+                        // server not send response, and client cancel this interaction
+                        subscription.unsubscribe();
+                        
+                        assertFalse(initiator.isActive());
+                        subscriber.assertNoTerminalEvent();
+                        subscriber.assertNoValues();
+                    }
+                });
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
+    @Test(timeout=5000)
+    public void testInitiatorInteractionClientCanceledAsHttps() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                enableSSL4ServerWithSelfSigned(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                enableSSL4Client(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            startInteraction(
+                client.initiator().remoteAddress(new LocalAddress(addr)), 
+                Observable.just(fullHttpRequest()),
+                new Interaction() {
+                    @Override
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
+                        final Subscription subscription = response.subscribe(subscriber);
+                        
+                        // server side recv req
+                        final HttpTrade trade = trades.take();
+                        
+                        // recv request from client side
+                        trade.inbound().message().toCompletable().await();
+                        
+                        // server not send response, and client cancel this interaction
+                        subscription.unsubscribe();
+                        
+                        assertFalse(initiator.isActive());
+                        subscriber.assertNoTerminalEvent();
+                        subscriber.assertNoValues();
+                    }
+                });
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
+    @Test//(timeout=5000)
+    public void testInitiatorInteractionSendPartRequestThenFailedAsHttp() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            final HttpRequest req = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+            req.headers().set(HttpHeaderNames.CONTENT_LENGTH, 100);
+            final Channel ch1 = (Channel)startInteraction(
+                client.initiator().remoteAddress(new LocalAddress(addr)), 
+                Observable.concat(
+                    Observable.<HttpObject>just(req),
+                    Observable.<HttpObject>error(new RuntimeException("test error"))),
+                new Interaction() {
+                    @Override
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        initiator.setFlushPerWrite(true);
+                        final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
+                        response.subscribe(subscriber);
+                        
+                        // server side recv req
+                        final HttpTrade trade = trades.take();
+                        
+                        subscriber.awaitTerminalEvent();
+                        subscriber.assertError(RuntimeException.class);
+                        subscriber.assertNoValues();
+                    }
+                }).transport();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            final Channel ch2 = (Channel)startInteraction(
+                    client.initiator().remoteAddress(new LocalAddress(addr)), 
+                    Observable.just(fullHttpRequest()),
+                    standardInteraction(allocator, trades)).transport();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            assertNotSame(ch1, ch2);
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
     //  TODO, add more multi-call for same interaction define
     //       and check if each call generate different channel instance
 
     /* // TODO using initiator
-    @Test
-    public void testHttpClientCanceledAfterConnected() throws Exception {
-        final CountDownLatch serverRecvd = new CountDownLatch(1);
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                new Action1<HttpTrade>() {
-                    @Override
-                    public void call(final HttpTrade trade) {
-                        LOG.debug("recv request {}, and do nothing.", trade);
-                        serverRecvd.countDown();
-                        //  never send response
-                    }},
-                ENABLE_LOGGING);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(creator);
-        
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
-        try {
-            final Subscription subscription = 
-                client.defineInteraction(
-                    new LocalAddress(testAddr), 
-                    Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
-                .subscribe(testSubscriber);
-            
-            serverRecvd.await();
-            
-            //  server !NOT! send back
-            subscription.unsubscribe();
-            
-            // test if close method has been called.
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed(1);
-        } finally {
-            client.close();
-            server.unsubscribe();
-            
-            testSubscriber.assertNoErrors();
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            //  channel connected, so message has been send
-            nextSensor.assertCalled();
-        }
-    }
 
-    @Test
-    public void testHttpsClientCanceledAfterConnected() throws Exception {
-        final CountDownLatch serverRecvd = new CountDownLatch(1);
-        
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                new Action1<HttpTrade>() {
-                    @Override
-                    public void call(final HttpTrade trade) {
-                        LOG.debug("recv request {}, and do nothing.", trade);
-                        serverRecvd.countDown();
-                        //  never send response
-                    }},
-                enableSSL4ServerWithSelfSigned(),
-                ENABLE_LOGGING_OVER_SSL);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING_OVER_SSL,
-                enableSSL4Client());
-        
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        final OnNextSensor<HttpObject> nextSensor = new OnNextSensor<HttpObject>();
-        try {
-            final Subscription subscription = 
-                client.defineInteraction(
-                    new LocalAddress(testAddr), 
-                    Observable.<HttpObject>just(fullHttpRequest()).doOnNext(nextSensor))
-                .subscribe(testSubscriber);
-            
-            serverRecvd.await();
-            
-//            assertEquals(1, client.getActiveChannelCount());
-            //  server !NOT! send back
-            subscription.unsubscribe();
-            
-            //  await for 1 second
-            pool.awaitRecycleChannels(1);
-            
-            // test if close method has been called.
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertClosed(1);
-        } finally {
-            // 注意: 一个 try-with-resources 语句可以像普通的 try 语句那样有 catch 和 finally 块。 
-            //  在try-with-resources 语句中, 任意的 catch 或者 finally 块都是在声明的资源被关闭以后才运行。 
-			client.close();
-			server.unsubscribe();
-//            assertEquals(0, client.getActiveChannelCount());
-            testSubscriber.assertNoErrors();
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            //  channel connected, so message has been send
-            nextSensor.assertCalled();
-        }
-    }
-
-    @Test(timeout=10000)
-    public void testHttpRequestEmitErrorAfterConnected() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(creator,
-                ENABLE_LOGGING);
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        try {
-            final CountDownLatch unsubscribed = new CountDownLatch(1);
-            client.defineInteraction(
-                new LocalAddress(testAddr), 
-                Observable.<HttpObject>error(new RuntimeException("test error")))
-            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-            .subscribe(testSubscriber);
-            unsubscribed.await();
-            testSubscriber.awaitTerminalEvent();
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertNotClose(1);
-        } finally {
-            client.close();
-            server.unsubscribe();
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            assertEquals(RuntimeException.class, 
-                    testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-        }
-    }
-
-    @Test(timeout=10000)
-    public void testHttpsRequestEmitErrorAfterConnected() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                enableSSL4ServerWithSelfSigned(),
-                ENABLE_LOGGING_OVER_SSL);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING_OVER_SSL,
-                enableSSL4Client());
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        try {
-            final CountDownLatch unsubscribed = new CountDownLatch(1);
-            client.defineInteraction(
-                new LocalAddress(testAddr), 
-                Observable.<HttpObject>error(new RuntimeException("test error")))
-            .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-            .subscribe(testSubscriber);
-            unsubscribed.await();
-            testSubscriber.awaitTerminalEvent();
-            
-            //  await for 1 second
-            pool.awaitRecycleChannels(1);
-            
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertNotClose(1);
-        } finally {
-            client.close();
-            server.unsubscribe();
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            assertEquals(RuntimeException.class, 
-                    testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-        }
-    }
-    
-    @Test(timeout=10000)
-    public void testHttpRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                ENABLE_LOGGING);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING);
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        try {
-            //  first
-            {
-                final CountDownLatch unsubscribed = new CountDownLatch(1);
-                client.defineInteraction(
-                    new LocalAddress(testAddr), 
-                    Observable.<HttpObject>error(new RuntimeException("test error")))
-                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-                .subscribe(testSubscriber);
-                unsubscribed.await();
-                testSubscriber.awaitTerminalEvent();
-                
-                //  await for 1 second
-                pool.awaitRecycleChannels(1);
-            }
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertNotClose(1);
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            assertEquals(RuntimeException.class, 
-                    testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            // second
-            {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new LocalAddress(testAddr), 
-                        Observable.just(fullHttpRequest()))
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
-                
-                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                
-                assertTrue(Arrays.equals(bytes, CONTENT));
-            }
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertNotClose(1);
-        } finally {
-            client.close();
-            server.unsubscribe();
-        }
-    }
-
-    @Test(timeout=10000)
-    public void testHttpsRequestEmitErrorAfterConnectedAndReuse2nd() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                responseBy("text/plain", CONTENT),
-                enableSSL4ServerWithSelfSigned(),
-                ENABLE_LOGGING_OVER_SSL);
-        
-        final TestChannelCreator creator = new TestChannelCreator();
-        final TestChannelPool pool = new TestChannelPool(1);
-        final DefaultHttpClient client = new DefaultHttpClient(creator, pool,
-                ENABLE_LOGGING_OVER_SSL,
-                enableSSL4Client());
-        final TestSubscriber<HttpObject> testSubscriber = new TestSubscriber<HttpObject>();
-        try {
-            //  first
-            {
-                final CountDownLatch unsubscribed = new CountDownLatch(1);
-                client.defineInteraction(
-                    new LocalAddress(testAddr), 
-                    Observable.<HttpObject>error(new RuntimeException("test error")))
-                .compose(RxFunctions.<HttpObject>countDownOnUnsubscribe(unsubscribed))
-                .subscribe(testSubscriber);
-                unsubscribed.await();
-                testSubscriber.awaitTerminalEvent();
-                
-                //  await for 1 second
-                pool.awaitRecycleChannels(1);
-            }
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertNotClose(1);
-            assertEquals(1, testSubscriber.getOnErrorEvents().size());
-            assertEquals(RuntimeException.class, 
-                    testSubscriber.getOnErrorEvents().get(0).getClass());
-            assertEquals(0, testSubscriber.getCompletions());
-            assertEquals(0, testSubscriber.getOnNextEvents().size());
-            // second
-            {
-                final Iterator<HttpObject> itr = 
-                    client.defineInteraction(
-                        new LocalAddress(testAddr), 
-                        Observable.just(fullHttpRequest()))
-                    .map(RxNettys.<HttpObject>retainer())
-                    .toBlocking().toIterable().iterator();
-                
-                final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-                
-                assertTrue(Arrays.equals(bytes, CONTENT));
-            }
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).assertNotClose(1);
-        } finally {
-            client.close();
-            server.unsubscribe();
-        }
-    }
-    
     @Test(timeout=10000)
     public void testHttpClientWriteAndFlushExceptionAfterConnected() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
