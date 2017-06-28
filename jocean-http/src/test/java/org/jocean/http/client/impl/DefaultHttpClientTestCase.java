@@ -1,10 +1,10 @@
 package org.jocean.http.client.impl;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.net.ConnectException;
@@ -27,6 +27,7 @@ import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.TerminateAware;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +41,6 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
@@ -52,6 +52,7 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
+import rx.observables.ConnectableObservable;
 import rx.observers.TestSubscriber;
 
 public class DefaultHttpClientTestCase {
@@ -926,7 +927,7 @@ public class DefaultHttpClientTestCase {
         }
     }
     
-    @Test//(timeout=5000)
+    @Test(timeout=5000)
     public void testInitiatorInteractionSendPartRequestThenFailedAsHttp() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap
@@ -948,11 +949,11 @@ public class DefaultHttpClientTestCase {
         try {
             final HttpRequest req = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
             req.headers().set(HttpHeaderNames.CONTENT_LENGTH, 100);
+            final ConnectableObservable<HttpObject> errorOfEnd = Observable.<HttpObject>error(
+                    new RuntimeException("test error")).publish();
             final Channel ch1 = (Channel)startInteraction(
                 client.initiator().remoteAddress(new LocalAddress(addr)), 
-                Observable.concat(
-                    Observable.<HttpObject>just(req),
-                    Observable.<HttpObject>error(new RuntimeException("test error"))),
+                Observable.concat(Observable.<HttpObject>just(req), errorOfEnd),
                 new Interaction() {
                     @Override
                     public void interact(
@@ -965,10 +966,88 @@ public class DefaultHttpClientTestCase {
                         
                         // server side recv req
                         final HttpTrade trade = trades.take();
+                        assertTrue(trade.isActive());
+                        
+                        // fire error
+                        errorOfEnd.connect();
                         
                         subscriber.awaitTerminalEvent();
                         subscriber.assertError(RuntimeException.class);
                         subscriber.assertNoValues();
+                        
+                        TerminateAware.Util.awaitTerminated(trade);
+                        assertTrue(!trade.isActive());
+                    }
+                }).transport();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            final Channel ch2 = (Channel)startInteraction(
+                    client.initiator().remoteAddress(new LocalAddress(addr)), 
+                    Observable.just(fullHttpRequest()),
+                    standardInteraction(allocator, trades)).transport();
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            assertNotSame(ch1, ch2);
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+
+    @Test(timeout=5000)
+    public void testInitiatorInteractionSendPartRequestThenFailedAsHttps() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                enableSSL4ServerWithSelfSigned(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                enableSSL4Client(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        try {
+            final HttpRequest req = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/");
+            req.headers().set(HttpHeaderNames.CONTENT_LENGTH, 100);
+            final ConnectableObservable<HttpObject> errorOfEnd = Observable.<HttpObject>error(
+                    new RuntimeException("test error")).publish();
+            final Channel ch1 = (Channel)startInteraction(
+                client.initiator().remoteAddress(new LocalAddress(addr)), 
+                Observable.concat(Observable.<HttpObject>just(req), errorOfEnd),
+                new Interaction() {
+                    @Override
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        initiator.setFlushPerWrite(true);
+                        final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
+                        response.subscribe(subscriber);
+                        
+                        // server side recv req
+                        final HttpTrade trade = trades.take();
+                        assertTrue(trade.isActive());
+                        
+                        // fire error
+                        errorOfEnd.connect();
+                        
+                        subscriber.awaitTerminalEvent();
+                        subscriber.assertError(RuntimeException.class);
+                        subscriber.assertNoValues();
+                        
+                        TerminateAware.Util.awaitTerminated(trade);
+                        assertTrue(!trade.isActive());
                     }
                 }).transport();
             
