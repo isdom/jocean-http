@@ -38,12 +38,15 @@ import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.local.LocalAddress;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
@@ -1067,6 +1070,75 @@ public class DefaultHttpClientTestCase {
         }
     }
 
+    @Test(timeout=5000)
+    public void testInitiatorInteractionSuccessAsHttp10ConnectionClose() throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
+        try {
+            final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
+            request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+            startInteraction(client.initiator().remoteAddress(new LocalAddress(addr)), 
+                Observable.just(request),
+                new Interaction() {
+                    @Override
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        final Observable<HttpObject> cached = response.cache();
+                        
+                        cached.subscribe();
+                        
+                        // server side recv req
+                        final HttpTrade trade = trades.take();
+                        
+                        // recv all request
+                        trade.inbound().message().toCompletable().await();
+                        assertEquals(0, allActiveAllocationsCount(allocator));
+                        
+                        final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+                        assertEquals(1, allActiveAllocationsCount(allocator));
+                        
+                        //  for HTTP 1.0 Connection: Close response behavior
+                        final FullHttpResponse fullrespfromsvr = new DefaultFullHttpResponse(
+                                HttpVersion.HTTP_1_0, 
+                                HttpResponseStatus.OK, 
+                                svrRespContent);
+                        fullrespfromsvr.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+                        //  missing Content-Length
+//                        response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                        fullrespfromsvr.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+                        trade.outbound().message(Observable.just(fullrespfromsvr));
+                        
+                        // wait for recv all resp at client side
+                        cached.toCompletable().await();
+                        
+                        svrRespContent.release();
+                        
+                        // holder create clientside resp's content
+                        assertEquals(1, allActiveAllocationsCount(allocator));
+                        
+                        assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
+                    }
+                });
+        } finally {
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
     //  TODO, add more multi-call for same interaction define
     //       and check if each call generate different channel instance
 
