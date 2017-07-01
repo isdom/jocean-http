@@ -1139,57 +1139,76 @@ public class DefaultHttpClientTestCase {
         }
     }
     
-    //  TODO, add more multi-call for same interaction define
-    //       and check if each call generate different channel instance
+    @Test(timeout=5000)
+    public void testInitiatorInteractionSuccessAsHttps10ConnectionClose() throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
 
-    /* // TODO using initiator
-
-    @Test
-    public void testHttp10ConnectionCloseHappyPath() throws Exception {
-        final String testAddr = UUID.randomUUID().toString();
-        final Subscription server = TestHttpUtil.createTestServerWith(testAddr, 
-                new Action1<HttpTrade>() {
-                    @Override
-                    public void call(final HttpTrade trade) {
-                        //  for HTTP 1.0 Connection: Close response behavior
-                        final FullHttpResponse response = new DefaultFullHttpResponse(
-                                HttpVersion.HTTP_1_0, OK, 
-                                Unpooled.wrappedBuffer(CONTENT));
-                        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
-                        //  missing Content-Length
-//                        response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                        response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-                        trade.outbound().message(Observable.just(response));
-                    }
-            
-            },
-            ENABLE_LOGGING);
-    
-        final TestChannelCreator creator = new TestChannelCreator();
-        final DefaultHttpClient client = new DefaultHttpClient(creator,
-                ENABLE_LOGGING);
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                enableSSL4ServerWithSelfSigned(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                enableSSL4Client(),
+                Feature.ENABLE_LOGGING_OVER_SSL);
         try {
             final HttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
             request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-            
-            final Iterator<HttpObject> itr = 
-                client.defineInteraction(
-                    new LocalAddress(testAddr), 
-                    Observable.just(request))
-                .map(RxNettys.<HttpObject>retainer())
-                .toBlocking().toIterable().iterator();
-            
-            final byte[] bytes = RxNettys.httpObjectsAsBytes(itr);
-            
-            assertTrue(Arrays.equals(bytes, CONTENT));
-            assertEquals(1, creator.getChannels().size());
-            creator.getChannels().get(0).awaitClosed();
+            startInteraction(client.initiator().remoteAddress(new LocalAddress(addr)), 
+                Observable.just(request),
+                new Interaction() {
+                    @Override
+                    public void interact(
+                            final HttpInitiator initiator,
+                            final Observable<HttpObject> response, 
+                            final HttpMessageHolder holder) throws Exception {
+                        final Observable<HttpObject> cached = response.cache();
+                        
+                        cached.subscribe();
+                        
+                        // server side recv req
+                        final HttpTrade trade = trades.take();
+                        
+                        // recv all request
+                        trade.inbound().message().toCompletable().await();
+                        
+                        final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+                        
+                        //  for HTTP 1.0 Connection: Close response behavior
+                        final FullHttpResponse fullrespfromsvr = new DefaultFullHttpResponse(
+                                HttpVersion.HTTP_1_0, 
+                                HttpResponseStatus.OK, 
+                                svrRespContent);
+                        fullrespfromsvr.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+                        //  missing Content-Length
+//                        response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
+                        fullrespfromsvr.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
+                        trade.outbound().message(Observable.just(fullrespfromsvr));
+                        
+                        // wait for recv all resp at client side
+                        cached.toCompletable().await();
+                        
+                        svrRespContent.release();
+                        
+                        assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder), CONTENT));
+                    }
+                });
         } finally {
+            assertEquals(0, allActiveAllocationsCount(allocator));
             client.close();
             server.unsubscribe();
         }
     }
+    
+    //  TODO, add more multi-call for same interaction define
+    //       and check if each call generate different channel instance
 
+    /* // TODO using initiator
     @Test
     public void testHttp10ConnectionCloseBadCaseMissingPartContent() throws Exception {
         final String testAddr = UUID.randomUUID().toString();
