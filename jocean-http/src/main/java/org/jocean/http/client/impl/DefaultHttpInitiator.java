@@ -684,14 +684,14 @@ class DefaultHttpInitiator
         }
     }
 
-    private void releaseRespWithError(final Throwable e) {
+    private void releaseRespWithError(final Throwable error) {
         @SuppressWarnings("unchecked")
         final Subscriber<? super HttpObject> respSubscriber = respSubscriberUpdater.getAndSet(this, null);
         if (null != respSubscriber
            && !respSubscriber.isUnsubscribed()) {
             try {
-                respSubscriber.onError(e);
-            } catch (Exception error) {
+                respSubscriber.onError(error);
+            } catch (Exception e) {
                 LOG.warn("exception when invoke {}.onError, detail: {}",
                     respSubscriber, ExceptionUtils.exception2detail(e));
             }
