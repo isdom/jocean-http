@@ -163,6 +163,84 @@ public class DefaultHttpClientTestCase {
     }
 
     @Test(timeout=5000)
+    public void testInitiatorMultiCalldefineInteraction() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
+        try ( final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr))
+                .build().toBlocking().single()) {
+            
+            @SuppressWarnings({ "unchecked", "unused" })
+            final Observable<HttpObject> resp1 = 
+                    (Observable<HttpObject>)initiator.defineInteraction(Observable.just(fullHttpRequest()));
+            
+            @SuppressWarnings({ "unchecked", "unused" })
+            final Observable<HttpObject> resp2 = 
+                    (Observable<HttpObject>)initiator.defineInteraction(Observable.just(fullHttpRequest()));
+            assertEquals(0, allActiveAllocationsCount(allocator));
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
+    @Test(timeout=5000)
+    public void testInitiatorMultiCalldefineInteractionAndSubscribe() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
+        try ( final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr))
+                .build().toBlocking().single()) {
+            
+            @SuppressWarnings("unchecked")
+            final Observable<HttpObject> resp1 = 
+                    (Observable<HttpObject>)initiator.defineInteraction(Observable.just(fullHttpRequest()));
+            
+            @SuppressWarnings("unchecked")
+            final Observable<HttpObject> resp2 = 
+                    (Observable<HttpObject>)initiator.defineInteraction(Observable.just(fullHttpRequest()));
+            resp1.subscribe();
+
+            final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
+            resp2.subscribe(subscriber);
+            
+            subscriber.awaitTerminalEvent();
+            subscriber.assertError(RuntimeException.class);
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+        } finally {
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
+    @Test(timeout=5000)
     public void testInitiatorInteractionSuccessAsHttp() 
         throws Exception {
         //  配置 池化分配器 为 取消缓存，使用 Heap

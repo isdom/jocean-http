@@ -533,7 +533,7 @@ class DefaultHttpInitiator
                 }}));
         } else {
             // _respSubscriber field has already setted
-            subscriber.onError(new RuntimeException("response subscriber already setted."));
+            subscriber.onError(new RuntimeException("Transaction in progress"));
         }
     }
 
