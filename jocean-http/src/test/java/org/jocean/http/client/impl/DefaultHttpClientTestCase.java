@@ -362,6 +362,100 @@ public class DefaultHttpClientTestCase {
         }
     }
     
+    @Test(timeout=5000)
+    public void testInitiatorMultiInteractionSuccessAsHttp() 
+        throws Exception {
+        //  配置 池化分配器 为 取消缓存，使用 Heap
+        configDefaultAllocator();
+
+        final PooledByteBufAllocator allocator = defaultAllocator();
+        
+        assertEquals(0, allActiveAllocationsCount(allocator));
+        
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr, 
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client = 
+                new DefaultHttpClient(new TestChannelCreator(), 
+                Feature.ENABLE_LOGGING);
+        
+        try ( final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build().toBlocking().single()) {
+            {
+                final HttpMessageHolder holder1 = new HttpMessageHolder();
+                holder1.setMaxBlockSize(-1);
+                initiator.doOnTerminate(holder1.closer());
+                
+                final Observable<HttpObject> resp1 = initiator.defineInteraction(Observable.just(fullHttpRequest()))
+                    .compose(holder1.<HttpObject>assembleAndHold()).cache();
+                
+                            
+                resp1.subscribe();
+                
+                // server side recv req
+                final HttpTrade trade = trades.take();
+                            
+                // recv all request
+                trade.inbound().message().toCompletable().await();
+                assertEquals(0, allActiveAllocationsCount(allocator));
+                            
+                final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+                
+                // send back resp
+                trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
+                
+                // wait for recv all resp at client side
+                resp1.toCompletable().await();
+                
+                svrRespContent.release();
+                            
+                assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder1), CONTENT));
+                
+                holder1.closer().call();
+            }
+            
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            
+            {
+                final HttpMessageHolder holder2 = new HttpMessageHolder();
+                holder2.setMaxBlockSize(-1);
+                initiator.doOnTerminate(holder2.closer());
+                
+                final Observable<HttpObject> resp2 = initiator.defineInteraction(Observable.just(fullHttpRequest()))
+                    .compose(holder2.<HttpObject>assembleAndHold()).cache();
+                
+                            
+                resp2.subscribe();
+                
+                // server side recv req
+                final HttpTrade trade = trades.take();
+                            
+                // recv all request
+                trade.inbound().message().toCompletable().await();
+                assertEquals(0, allActiveAllocationsCount(allocator));
+                            
+                final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
+                
+                // send back resp
+                trade.outbound().message(TestHttpUtil.buildByteBufResponse("text/plain", svrRespContent));
+                
+                // wait for recv all resp at client side
+                resp2.toCompletable().await();
+                
+                svrRespContent.release();
+                            
+                assertTrue(Arrays.equals(dumpResponseContentAsBytes(holder2), CONTENT));
+                
+                holder2.closer().call();
+            }
+        } finally {
+            assertEquals(0, allActiveAllocationsCount(allocator));
+            client.close();
+            server.unsubscribe();
+        }
+    }
+    
     private static Interaction standardInteraction(
             final PooledByteBufAllocator allocator,
             final BlockingQueue<HttpTrade> trades) {
