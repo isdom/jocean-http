@@ -517,7 +517,7 @@ class DefaultHttpInitiator
                 protected void channelRead0(final ChannelHandlerContext ctx,
                         final HttpObject respmsg) throws Exception {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("channel({})/handler({}): channelRead0 and call with msg({}).",
+                        LOG.debug("HttpInitiator: channel({})/handler({}): channelRead0 and call with msg({}).",
                             ctx.channel(), ctx.name(), respmsg);
                     }
                     _op.responseOnNext(DefaultHttpInitiator.this, subscriber, respmsg);
