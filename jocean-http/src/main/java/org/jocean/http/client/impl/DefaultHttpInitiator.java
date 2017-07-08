@@ -226,8 +226,8 @@ class DefaultHttpInitiator
     }
     
     @Override
-    public <T extends ChannelHandler> T enable(final HttpHandlers apply, final Object... args) {
-        return _op.enable(this, apply, args);
+    public <T extends ChannelHandler> T enable(final HttpHandlers handlerType, final Object... args) {
+        return _op.enable(this, handlerType, args);
     }
     
     @Override
@@ -363,7 +363,7 @@ class DefaultHttpInitiator
     protected interface Op {
         public <T extends ChannelHandler> T enable(
                 final DefaultHttpInitiator initiator, 
-                final HttpHandlers apply, final Object... args);
+                final HttpHandlers handlerType, final Object... args);
 
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
@@ -395,9 +395,9 @@ class DefaultHttpInitiator
     private static final Op OP_ACTIVE = new Op() {
         public <T extends ChannelHandler> T enable(
                 final DefaultHttpInitiator initiator, 
-                final HttpHandlers apply, final Object... args) {
+                final HttpHandlers handlerType, final Object... args) {
             return Nettys.applyToChannel(initiator.onTerminate(), 
-                    initiator._channel, apply, args);
+                    initiator._channel, handlerType, args);
         }
         
         @Override
@@ -455,7 +455,7 @@ class DefaultHttpInitiator
     private static final Op OP_UNACTIVE = new Op() {
         public <T extends ChannelHandler> T enable(
                 final DefaultHttpInitiator initiator, 
-                final HttpHandlers apply, final Object... args) {
+                final HttpHandlers handlerType, final Object... args) {
             return null;
         }
         

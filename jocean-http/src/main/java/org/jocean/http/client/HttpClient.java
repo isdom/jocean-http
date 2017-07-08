@@ -35,7 +35,7 @@ public interface HttpClient extends AutoCloseable {
         public void close();
         
         //  replace trafficCounter() by enable(...)
-        public <T extends ChannelHandler> T enable(final HttpHandlers apply, final Object... args);
+        public <T extends ChannelHandler> T enable(final HttpHandlers handlerType, final Object... args);
         
         public boolean isActive();
         public long unreadDurationInMs();
