@@ -5,20 +5,27 @@ package org.jocean.http.server.impl;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
 import org.jocean.http.InboundEndpoint;
 import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
+import org.jocean.http.server.HttpServerBuilder.ReadPolicy;
 import org.jocean.http.util.HttpHandlers;
+import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.InboundEndpointSupport;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.OutboundEndpointSupport;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
+import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,15 +33,23 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.DefaultAttributeMap;
+import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
+import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
+import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.ActionN;
+import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -105,14 +120,63 @@ class DefaultHttpTrade extends DefaultAttributeMap
     
     private final InterfaceSelector _selector = new InterfaceSelector();
     
-    @SafeVarargs
-    DefaultHttpTrade(
-        final Channel channel, 
-        final Action1<HttpTrade> ... onTerminates) {
+    DefaultHttpTrade(final Channel channel) {
         
+        if (!channel.eventLoop().inEventLoop()) {
+            throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
+        }
         this._channel = channel;
         this._terminateAwareSupport = 
-                new TerminateAwareSupport<HttpTrade>(_selector);
+            new TerminateAwareSupport<HttpTrade>(_selector);
+        
+        //  begin with erase inboundEndpoint
+        this._holder = new HttpMessageHolder();
+        doOnTerminate(_holder.closer());
+        
+        final Observable<? extends HttpObject> inbound = 
+            Observable.unsafeCreate(new Observable.OnSubscribe<HttpObject>() {
+                @Override
+                public void call(final Subscriber<? super HttpObject> reqSubscriber) {
+                    final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
+                        @Override
+                        protected void channelRead0(final ChannelHandlerContext ctx,
+                                final HttpObject reqmsg) throws Exception {
+                            if (LOG.isDebugEnabled()) {
+                                LOG.debug("HttpTrade: channel({})/handler({}): channelRead0 and call with msg({}).",
+                                    ctx.channel(), ctx.name(), reqmsg);
+                            }
+                            //  TODO, change to _op.requestOnNext
+                            requestOnNext(reqSubscriber, reqmsg);
+                        }};
+                    Nettys.applyHandler(DefaultHttpTrade.this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
+                    DefaultHttpTrade.this._reqHandler = handler;
+                }})
+            .compose(this._holder.<HttpObject>assembleAndHold())
+            .compose(markInboundStateAndCloseOnError())
+    //        .doOnCompleted(new Action0() {
+    //            @Override
+    //            public void call() {
+    //                setMessageCompleted();
+    //            }})
+            .cache()
+            .compose(RxNettys.duplicateHttpContent());
+        
+        inbound.subscribe(
+            RxSubscribers.ignoreNext(),
+            new Action1<Throwable>() {
+                @Override
+                public void call(final Throwable e) {
+                    LOG.warn("HttpTrade: {}'s inbound with onError {}", 
+                        this, ExceptionUtils.exception2detail(e));
+                }});
+        
+        this._cachedInbound = 
+            Observable.unsafeCreate(new OnSubscribe<HttpObject>() {
+                @Override
+                public void call(final Subscriber<? super HttpObject> subscriber) {
+                    subscribeInbound(subscriber, inbound);
+                }});
+        //  end with erase inboundEndpoint
         
         //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
         this._trafficCounter = Nettys.applyToChannel(onTerminate(), 
@@ -144,14 +208,56 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 _trafficCounter,
                 onTerminate());
         
-        for (Action1<HttpTrade> onTerminate : onTerminates) {
-            doOnTerminate(onTerminate);
-        }
         if (!channel.isActive()) {
             fireClosed();
         }
     }
 
+    private void requestOnNext(
+            final Subscriber<? super HttpObject> subscriber,
+            final HttpObject respmsg) {
+//        markStartRecving();
+        try {
+            subscriber.onNext(respmsg);
+        } finally {
+            //  SimpleChannelInboundHandler 设置为 !NOT! autorelease
+            //  因此可在 onNext 之后尽早的 手动 release request's message
+            ReferenceCountUtil.release(respmsg);
+            if (respmsg instanceof LastHttpContent) {
+                /*
+                 * netty 参考代码: https://github.com/netty/netty/blob/netty-
+                 * 4.0.26.Final /codec/src /main/java/io/netty/handler/codec
+                 * /ByteToMessageDecoder .java#L274 https://github.com/netty
+                 * /netty/blob/netty-4.0.26.Final /codec-http /src/main/java
+                 * /io/netty/handler/codec/http/HttpObjectDecoder .java#L398
+                 * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件 currentState ==
+                 * State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() &&
+                 * !chunked 即没有指定Content-Length头域，也不是CHUNKED传输模式
+                 * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
+                 * 因此，无需在channelInactive处，针对该情况做特殊处理
+                 */
+//                    removeRespHandler();
+//                    endTransaction();
+                subscriber.onCompleted();
+//                }
+            }
+        }
+    }
+    
+    private void subscribeInbound(final Subscriber<? super HttpObject> subscriber,
+            final Observable<? extends HttpObject> inbound) {
+        if (!subscriber.isUnsubscribed()) {
+            final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
+            _subscribers.add(serializedSubscriber);
+            serializedSubscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    _subscribers.remove(serializedSubscriber);
+                }}));
+            inbound.subscribe(serializedSubscriber);
+        }
+    }
+    
     @Override
     public Observable<Object> call(final Observable<Object> outboundMessage) {
         return outboundMessage.doOnNext(new Action1<Object>() {
@@ -309,4 +415,45 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
     private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
+
+    @Override
+    public void setReadPolicy(final ReadPolicy readPolicy) {
+        this._readPolicy = readPolicy;
+    }
+
+    @Override
+    public long unreadDurationInMs() {
+        // TODO Auto-generated method stub
+        return 0;
+    }
+
+    @Override
+    public long readingDurationInMS() {
+        // TODO Auto-generated method stub
+        return 0;
+    }
+
+    @Override
+    public Observable<? extends HttpObject> inMessage() {
+        return this._cachedInbound;
+    }
+
+    @Override
+    public HttpMessageHolder inMessageHolder() {
+        return this._holder;
+    }
+    
+    private static final AtomicLongFieldUpdater<DefaultHttpTrade> readBeginUpdater =
+            AtomicLongFieldUpdater.newUpdater(DefaultHttpTrade.class, "_readBegin");
+    
+    @SuppressWarnings("unused")
+    private volatile long _readBegin = 0;
+    
+    private volatile long _unreadBegin = 0;
+    private volatile ReadPolicy _readPolicy = null;
+    private volatile ChannelHandler _reqHandler = null;
+    private final HttpMessageHolder _holder;
+    private final List<Subscriber<? super HttpObject>> _subscribers = 
+            new CopyOnWriteArrayList<>();
+    private final Observable<HttpObject> _cachedInbound;
 }
