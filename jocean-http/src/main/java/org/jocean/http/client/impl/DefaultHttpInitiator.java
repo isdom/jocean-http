@@ -628,10 +628,10 @@ class DefaultHttpInitiator
         }
     }
 
-    private ChannelFuture sendOutbound(final Object reqmsg) {
+    private ChannelFuture sendOutbound(final Object outmsg) {
         return this._isFlushPerWrite
-                ? this._channel.writeAndFlush(ReferenceCountUtil.retain(reqmsg))
-                : this._channel.write(ReferenceCountUtil.retain(reqmsg));
+                ? this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
+                : this._channel.write(ReferenceCountUtil.retain(outmsg));
     }
 
     private void onRequest(final HttpRequest req) {
