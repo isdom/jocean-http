@@ -488,8 +488,7 @@ class DefaultHttpInitiator
         }
         
         @Override
-        public void requestOnCompleted(
-                final DefaultHttpInitiator initiator) {
+        public void requestOnCompleted(final DefaultHttpInitiator initiator) {
         }
         
         @Override
@@ -497,8 +496,8 @@ class DefaultHttpInitiator
         }
 
         @Override
-        public void setWriteBufferWaterMark(DefaultHttpInitiator initiator,
-                int low, int high) {
+        public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
+                final int low, final int high) {
         }
     };
     
@@ -613,16 +612,16 @@ class DefaultHttpInitiator
             }});
     }
 
-    private void onOutboundMsgSended(final Object reqmsg) {
+    private void onOutboundMsgSended(final Object outmsg) {
         final Action1<Object> onSended = this._onSended;
         
         if (null != onSended) {
             try {
-                onSended.call(reqmsg);
+                onSended.call(outmsg);
             } catch (Exception e) {
                 LOG.warn("exception when invoke onSended({}) with msg({}), detail: {}",
                     onSended, 
-                    reqmsg, 
+                    outmsg, 
                     ExceptionUtils.exception2detail(e));
             }
         }
