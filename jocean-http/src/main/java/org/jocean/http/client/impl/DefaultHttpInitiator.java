@@ -558,14 +558,14 @@ class DefaultHttpInitiator
                 @Override
                 public void onCompleted() {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("request invoke onCompleted for connection: {}", DefaultHttpInitiator.this);
+                        LOG.debug("request invoke onCompleted for initiator: {}", DefaultHttpInitiator.this);
                     }
                     _op.requestOnCompleted(DefaultHttpInitiator.this);
                 }
 
                 @Override
                 public void onError(final Throwable e) {
-                    LOG.warn("request invoke onError with ({}), try close connection: {}",
+                    LOG.warn("request invoke onError with ({}), try close initiator: {}",
                             ExceptionUtils.exception2detail(e), DefaultHttpInitiator.this);
                     fireClosed(e);
                 }
