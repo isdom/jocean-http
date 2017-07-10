@@ -236,7 +236,7 @@ class DefaultHttpInitiator
     }
 
     boolean inTransacting() {
-        return transactionStatus() > STATUS_NOTSTART;
+        return transactionStatus() > STATUS_IDLE;
     }
     
     boolean isKeepAlive() {
@@ -347,8 +347,8 @@ class DefaultHttpInitiator
 
     private String transactionStatusAsString() {
         switch(transactionStatus()) {
-        case STATUS_NOTSTART:
-            return "NOTSTART";
+        case STATUS_IDLE:
+            return "IDLE";
         case STATUS_SEND:
             return "SEND";
         case STATUS_RECV:
@@ -716,7 +716,7 @@ class DefaultHttpInitiator
     }
     
     private void markStartSending() {
-        transactionUpdater.compareAndSet(this, STATUS_NOTSTART, STATUS_SEND);
+        transactionUpdater.compareAndSet(this, STATUS_IDLE, STATUS_SEND);
     }
     
     private void markStartRecving() {
@@ -724,7 +724,7 @@ class DefaultHttpInitiator
     }
     
     private void endTransaction() {
-        transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_NOTSTART);
+        transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_IDLE);
     }
     
     private int transactionStatus() {
@@ -751,12 +751,12 @@ class DefaultHttpInitiator
     private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator> transactionUpdater =
             AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator.class, "_transactionStatus");
     
-    private static final int STATUS_NOTSTART = 0;
+    private static final int STATUS_IDLE = 0;
     private static final int STATUS_SEND = 1;
     private static final int STATUS_RECV = 2;
     
     @SuppressWarnings("unused")
-    private volatile int _transactionStatus = STATUS_NOTSTART;
+    private volatile int _transactionStatus = STATUS_IDLE;
     
     private volatile boolean _isKeepAlive = true;
     
