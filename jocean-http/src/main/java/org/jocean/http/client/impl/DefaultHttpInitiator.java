@@ -591,7 +591,7 @@ class DefaultHttpInitiator
         markStartSending();
         
         if (reqmsg instanceof HttpRequest) {
-            onRequest((HttpRequest)reqmsg);
+            onHttpRequest((HttpRequest)reqmsg);
         }
         
         sendOutbound(reqmsg)
@@ -633,7 +633,7 @@ class DefaultHttpInitiator
                 : this._channel.write(ReferenceCountUtil.retain(outmsg));
     }
 
-    private void onRequest(final HttpRequest req) {
+    private void onHttpRequest(final HttpRequest req) {
         this._isKeepAlive = HttpUtil.isKeepAlive(req);
     }
 
