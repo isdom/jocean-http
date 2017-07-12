@@ -30,10 +30,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ServerChannel;
@@ -324,21 +322,14 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             @Override
             public void call(final HttpTrade trade) {
                 removeFromTrades(trade);
+                final DefaultHttpTrade defaultHttpTrade = (DefaultHttpTrade)trade;
                 if (channel.isActive()
-                    && ((DefaultHttpTrade)trade).isEndedWithKeepAlive()
+                    && !defaultHttpTrade.inTransacting()
+                    && defaultHttpTrade.isKeepAlive()
                     && !subscriber.isUnsubscribed()) {
-                    channel.flush();
                     awaitInboundRequest(channel, subscriber, awaitChannels);
                 } else {
-                    //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
-                    //  Detail:
-                    //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
-                    //
-                    //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
-                    //
-                    // See https://github.com/netty/netty/issues/2983 for more information.
-                    channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
-                        .addListener(ChannelFutureListener.CLOSE);
+                    channel.close();
                 }
             }};
     }
@@ -398,7 +389,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private int _inboundRecvBufSize = -1;
     private int _inboundBlockSize = 0;
     
-    private static final Feature2Handler _APPLY_BUILDER;
+    private static final Feature2Handler<HttpHandlers> _APPLY_BUILDER;
     
     private final AtomicLong     _numStartedTrades = new AtomicLong(0);
     private final AtomicLong     _numCompletedTrades = new AtomicLong(0);
@@ -407,7 +398,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private final AtomicInteger  _peakInboundMemory = new AtomicInteger(0);
         
     static {
-        _APPLY_BUILDER = new Feature2Handler();
+        _APPLY_BUILDER = new Feature2Handler<>();
         _APPLY_BUILDER.register(Feature.ENABLE_LOGGING.getClass(), HttpHandlers.LOGGING);
         _APPLY_BUILDER.register(Feature.ENABLE_LOGGING_OVER_SSL.getClass(), HttpHandlers.LOGGING_OVER_SSL);
         _APPLY_BUILDER.register(Feature.ENABLE_COMPRESSOR.getClass(), HttpHandlers.CONTENT_COMPRESSOR);

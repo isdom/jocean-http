@@ -9,11 +9,14 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.InboundEndpoint;
 import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
+import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.HttpServerBuilder.ReadPolicy;
 import org.jocean.http.util.HttpHandlers;
@@ -36,6 +39,7 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.WriteBufferWaterMark;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -43,9 +47,12 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.DefaultAttributeMap;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
+import rx.Observer;
+import rx.Single;
 import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
 import rx.Subscriber;
+import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.ActionN;
@@ -108,7 +115,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 .append(", isResponseSetted=").append(_isResponseSetted.get())
                 .append(", isResponseSended=").append(_isResponseSended.get())
                 .append(", isResponseCompleted=").append(_isResponseCompleted.get())
-                .append(", isKeepAlive=").append(_isKeepAlive.get())
+                .append(", isKeepAlive=").append(_isKeepAlive)
                 .append(", isActive=").append(isActive())
                 .append(", channel=").append(_channel)
                 .append("]");
@@ -117,6 +124,70 @@ class DefaultHttpTrade extends DefaultAttributeMap
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
+    
+    @Override
+    public TrafficCounter trafficCounter() {
+        return this._trafficCounter;
+    }
+    
+    @Override
+    public boolean isActive() {
+        return this._selector.isActive();
+    }
+    
+    @Override
+    public void setReadPolicy(final ReadPolicy readPolicy) {
+        this._readPolicy = readPolicy;
+    }
+
+    @Override
+    public long unreadDurationInMs() {
+        final long begin = this._unreadBegin;
+        return 0 == begin ? 0 : System.currentTimeMillis() - begin;
+    }
+
+    @Override
+    public long readingDurationInMS() {
+        return Math.max(System.currentTimeMillis() - readBeginUpdater.get(this), 1L);
+    }
+
+    @Override
+    public Observable<? extends HttpObject> inmessage() {
+        return this._cachedInbound;
+    }
+
+    @Override
+    public HttpMessageHolder inboundHolder() {
+        return this._holder;
+    }
+    
+    @Override
+    public void setFlushPerWrite(final boolean isFlushPerWrite) {
+        this._isFlushPerWrite = isFlushPerWrite;
+    }
+
+    @Override
+    public void setWriteBufferWaterMark(final int low, final int high) {
+         this._op.setWriteBufferWaterMark(this, low, high);
+    }
+
+    @Override
+    public void setOnSended(final Action1<Object> onSended) {
+        this._onSended = onSended;
+    }
+    
+    @Override
+    public Subscription outbound(final Observable<? extends Object> message) {
+        return this._op.setOutbound(this, message);
+    }
+    
+    boolean inTransacting() {
+        return transactionStatus() > STATUS_IDLE;
+    }
+    
+    boolean isKeepAlive() {
+        return this._isKeepAlive;
+    }
     
     private final InterfaceSelector _selector = new InterfaceSelector();
     
@@ -127,37 +198,27 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
         this._channel = channel;
         this._terminateAwareSupport = 
-            new TerminateAwareSupport<HttpTrade>(_selector);
+            new TerminateAwareSupport<HttpTrade>(this._selector);
         
-        //  begin with erase inboundEndpoint
+        //  begin with remove InboundEndpoint & OutboundEndpoint
         this._holder = new HttpMessageHolder();
-        doOnTerminate(_holder.closer());
+        doOnTerminate(this._holder.closer());
         
         final Observable<? extends HttpObject> inbound = 
             Observable.unsafeCreate(new Observable.OnSubscribe<HttpObject>() {
                 @Override
-                public void call(final Subscriber<? super HttpObject> reqSubscriber) {
+                public void call(final Subscriber<? super HttpObject> subscriber) {
                     final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
                         @Override
                         protected void channelRead0(final ChannelHandlerContext ctx,
-                                final HttpObject reqmsg) throws Exception {
-                            if (LOG.isDebugEnabled()) {
-                                LOG.debug("HttpTrade: channel({})/handler({}): channelRead0 and call with msg({}).",
-                                    ctx.channel(), ctx.name(), reqmsg);
-                            }
-                            //  TODO, change to _op.requestOnNext
-                            requestOnNext(reqSubscriber, reqmsg);
+                                final HttpObject inmsg) throws Exception {
+                            _op.inboundOnNext(DefaultHttpTrade.this, subscriber, inmsg);
                         }};
                     Nettys.applyHandler(DefaultHttpTrade.this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
-                    DefaultHttpTrade.this._reqHandler = handler;
+                    DefaultHttpTrade.this._inboundHandler = handler;
                 }})
             .compose(this._holder.<HttpObject>assembleAndHold())
-            .compose(markInboundStateAndCloseOnError())
-    //        .doOnCompleted(new Action0() {
-    //            @Override
-    //            public void call() {
-    //                setMessageCompleted();
-    //            }})
+//            .compose(markInboundStateAndCloseOnError())
             .cache()
             .compose(RxNettys.duplicateHttpContent());
         
@@ -176,20 +237,39 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 public void call(final Subscriber<? super HttpObject> subscriber) {
                     subscribeInbound(subscriber, inbound);
                 }});
-        //  end with erase inboundEndpoint
+        //  end with remove InboundEndpoint & OutboundEndpoint
         
-        //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
-        this._trafficCounter = Nettys.applyToChannel(onTerminate(), 
+        Nettys.applyToChannel(onTerminate(), 
                 channel, 
-                HttpHandlers.TRAFFICCOUNTER);
+                HttpHandlers.ON_EXCEPTION_CAUGHT,
+                new Action1<Throwable>() {
+                    @Override
+                    public void call(final Throwable cause) {
+                        fireClosed(cause);
+                    }});
+        
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
                 HttpHandlers.ON_CHANNEL_INACTIVE,
                 new Action0() {
                     @Override
                     public void call() {
-                        fireClosed();
+                        onChannelInactive();
                     }});
+        
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
+                HttpHandlers.ON_CHANNEL_READCOMPLETE,
+                new Action0() {
+                    @Override
+                    public void call() {
+                        onReadComplete();
+                    }});
+        
+        //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
+        this._trafficCounter = Nettys.applyToChannel(onTerminate(), 
+                channel, 
+                HttpHandlers.TRAFFICCOUNTER);
         
         this._inboundSupport = 
             new InboundEndpointSupport(
@@ -208,22 +288,32 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 _trafficCounter,
                 onTerminate());
         
+        this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
+        
         if (!channel.isActive()) {
-            fireClosed();
+            fireClosed(new TransportException("channelInactive of " + channel));
         }
     }
 
-    private void requestOnNext(
+    private void inboundOnNext(
             final Subscriber<? super HttpObject> subscriber,
-            final HttpObject respmsg) {
-//        markStartRecving();
+            final HttpObject inmsg) {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("HttpTrade: channel({}) invoke channelRead0 and call with msg({}).",
+                this._channel, inmsg);
+        }
+        markStartRecving();
+        if (inmsg instanceof HttpRequest) {
+            onHttpRequest((HttpRequest)inmsg);
+        }
+        
         try {
-            subscriber.onNext(respmsg);
+            subscriber.onNext(inmsg);
         } finally {
             //  SimpleChannelInboundHandler 设置为 !NOT! autorelease
             //  因此可在 onNext 之后尽早的 手动 release request's message
-            ReferenceCountUtil.release(respmsg);
-            if (respmsg instanceof LastHttpContent) {
+            ReferenceCountUtil.release(inmsg);
+            if (inmsg instanceof LastHttpContent) {
                 /*
                  * netty 参考代码: https://github.com/netty/netty/blob/netty-
                  * 4.0.26.Final /codec/src /main/java/io/netty/handler/codec
@@ -236,10 +326,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
                  * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
                  * 因此，无需在channelInactive处，针对该情况做特殊处理
                  */
-//                    removeRespHandler();
-//                    endTransaction();
+                removeInboundHandler();
                 subscriber.onCompleted();
-//                }
             }
         }
     }
@@ -248,7 +336,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
             final Observable<? extends HttpObject> inbound) {
         if (!subscriber.isUnsubscribed()) {
             final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
-            _subscribers.add(serializedSubscriber);
+            this._subscribers.add(serializedSubscriber);
             serializedSubscriber.add(Subscriptions.create(new Action0() {
                 @Override
                 public void call() {
@@ -256,6 +344,47 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 }}));
             inbound.subscribe(serializedSubscriber);
         }
+    }
+    
+    private void onHttpRequest(final HttpRequest req) {
+        this._requestMethod = req.method().name();
+        this._requestUri = req.uri();
+        this._isKeepAlive = HttpUtil.isKeepAlive(req);
+    }
+    
+    private Subscription setOutbound(final Observable<? extends Object> outbound) {
+        if (this._isOutboundSetted.compareAndSet(false, true)) {
+            final Subscription subscription = outbound.subscribe(buildOutboundObserver());
+            outboundSubscriptionUpdater.set(this, subscription);
+            return subscription;
+        } else {
+            LOG.warn("trade({}) 's outbound message has setted, ignore this outbound({})",
+                    this, outbound);
+            return null;
+        }
+    }
+    
+    private Observer<Object> buildOutboundObserver() {
+        return new Observer<Object>() {
+                @Override
+                public void onCompleted() {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("response invoke onCompleted for trade: {}", DefaultHttpTrade.this);
+                    }
+                    _op.outboundOnCompleted(DefaultHttpTrade.this);
+                }
+
+                @Override
+                public void onError(final Throwable e) {
+                    LOG.warn("response invoke onError with ({}), try close trade: {}",
+                            ExceptionUtils.exception2detail(e), DefaultHttpTrade.this);
+                    fireClosed(e);
+                }
+
+                @Override
+                public void onNext(final Object outmsg) {
+                    _op.outboundOnNext(DefaultHttpTrade.this, outmsg);
+                }};
     }
     
     @Override
@@ -303,7 +432,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                             _requestMethod = ((HttpRequest)msg).method().name();
                             _requestUri = ((HttpRequest)msg).uri();
                             _isRequestReceived.compareAndSet(false, true);
-                            _isKeepAlive.set(HttpUtil.isKeepAlive((HttpRequest)msg));
+                            _isKeepAlive = HttpUtil.isKeepAlive((HttpRequest)msg);
                         } else if (!_isRequestReceived.get()) {
                             LOG.warn("trade {} missing http request and recv httpobj {}", 
                                 DefaultHttpTrade.this, msg);
@@ -324,25 +453,16 @@ class DefaultHttpTrade extends DefaultAttributeMap
             }};
     }
     
-    @Override
-    public TrafficCounter trafficCounter() {
-        return this._trafficCounter;
+    static class CloseException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+        CloseException() {
+            super("close()");
+        }
     }
     
     @Override
-    public boolean isActive() {
-        return this._selector.isActive();
-    }
-
-    public boolean isEndedWithKeepAlive() {
-        return (this._isRequestCompleted.get() 
-            && this._isResponseCompleted.get()
-            && this._isKeepAlive.get());
-    }
-
-    @Override
     public void close() {
-        fireClosed();
+        fireClosed(new CloseException());
     }
 
     @Override
@@ -383,23 +503,82 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private static final ActionN FIRE_CLOSED = new ActionN() {
         @Override
         public void call(final Object... args) {
-            ((DefaultHttpTrade)args[0]).fireClosed0();
+            ((DefaultHttpTrade)args[0]).doClosed((Throwable)args[1]);
         }};
         
+    // TBD: replace by fireClosed(cause)
     private void fireClosed() {
-        this._selector.destroyAndSubmit(FIRE_CLOSED, this);
+        this._selector.destroyAndSubmit(FIRE_CLOSED, this, null);
     }
 
-    private void fireClosed0() {
+    private void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("closing active trade[channel: {}] with isResponseCompleted({})/isEndedWithKeepAlive({})", 
-                    this._channel, this._isResponseCompleted.get(), this.isEndedWithKeepAlive());
+            LOG.debug("closing active trade[channel: {}] "
+                    + "with isRequestCompleted({})"
+                    + "/transactionStatus({})"
+                    + "/isKeepAlive({}),"
+                    + "cause by {}", 
+                    this._channel, 
+                    this._isRequestCompleted, 
+                    this.transactionStatusAsString(),
+                    this.isKeepAlive(),
+                    errorAsString(e));
         }
+        fireAllSubscriberUnactive(e);
+        
         //  TODO add reason
-        this._inboundSupport.fireAllSubscriberUnactive(null);
+        //  TBD, remove inboundSupport
+        this._inboundSupport.fireAllSubscriberUnactive(e);
+        
+        removeInboundHandler();
+        unsubscribeOutbound();
+        
+        //  fire all pending subscribers onError with unactived exception
         this._terminateAwareSupport.fireAllTerminates(this);
     }
 
+    private static String errorAsString(final Throwable e) {
+        return e != null 
+            ?
+                (e instanceof CloseException)
+                ? "close()" 
+                : ExceptionUtils.exception2detail(e)
+            : "none-error"
+            ;
+    }
+
+    private String transactionStatusAsString() {
+        switch(transactionStatus()) {
+        case STATUS_IDLE:
+            return "IDLE";
+        case STATUS_SEND:
+            return "SEND";
+        case STATUS_RECV:
+            return "RECV";
+        default:
+            return "UNKNOWN";
+        }
+    }
+    
+    private void fireAllSubscriberUnactive(final Throwable reason) {
+        this._unactiveReason = null != reason 
+                ? reason 
+                : new RuntimeException("inbound unactived");
+        @SuppressWarnings("unchecked")
+        final Subscriber<? super HttpObject>[] subscribers = 
+            (Subscriber<? super HttpObject>[])this._subscribers.toArray(new Subscriber[0]);
+        for (Subscriber<? super HttpObject> subscriber : subscribers) {
+            if (!subscriber.isUnsubscribed()) {
+                try {
+                    subscriber.onError(_unactiveReason);
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke ({}).onError, detail: {}",
+                            subscriber, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }
+    }
+    
     private final TerminateAwareSupport<HttpTrade> _terminateAwareSupport;
     private final InboundEndpointSupport _inboundSupport;
     private final OutboundEndpointSupport _outboundSupport;
@@ -414,34 +593,166 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final AtomicBoolean _isResponseSetted = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
     private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
-    private final AtomicBoolean _isKeepAlive = new AtomicBoolean(false);
+    
+    private volatile boolean _isKeepAlive = false;
 
-    @Override
-    public void setReadPolicy(final ReadPolicy readPolicy) {
-        this._readPolicy = readPolicy;
+    private void fireClosed(final Throwable e) {
+        this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
+    }
+    
+    private void onChannelInactive() {
+        if (inTransacting()) {
+            fireClosed(new TransportException("channelInactive of " + this._channel));
+        } else {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
+            }
+            // close normally
+            close();
+        }
     }
 
-    @Override
-    public long unreadDurationInMs() {
-        // TODO Auto-generated method stub
-        return 0;
+    private void onReadComplete() {
+        this._unreadBegin = System.currentTimeMillis();
+        if (inTransacting()) {
+            final Single<?> when = whenToRead();
+            if (null != when) {
+                when.subscribe(new Action1<Object>() {
+                    @Override
+                    public void call(final Object nouse) {
+                        _op.readMessage(DefaultHttpTrade.this);
+                    }});
+            } else {
+                //  perform read at once
+                _op.readMessage(DefaultHttpTrade.this);
+            }
+        }
     }
 
-    @Override
-    public long readingDurationInMS() {
-        // TODO Auto-generated method stub
-        return 0;
+    private Single<?> whenToRead() {
+        final ReadPolicy readPolicy = this._readPolicy;
+        return null != readPolicy ? readPolicy.whenToRead(this) : null;
     }
-
-    @Override
-    public Observable<? extends HttpObject> inMessage() {
-        return this._cachedInbound;
+    
+    private void onOutboundMsgSended(final Object outmsg) {
+        final Action1<Object> onSended = this._onSended;
+        
+        if (null != onSended) {
+            try {
+                onSended.call(outmsg);
+            } catch (Exception e) {
+                LOG.warn("exception when invoke onSended({}) with msg({}), detail: {}",
+                    onSended, 
+                    outmsg, 
+                    ExceptionUtils.exception2detail(e));
+            }
+        }
     }
-
-    @Override
-    public HttpMessageHolder inMessageHolder() {
-        return this._holder;
+    
+    private ChannelFuture sendOutbound(final Object outmsg) {
+        return this._isFlushPerWrite
+                ? this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
+                : this._channel.write(ReferenceCountUtil.retain(outmsg));
     }
+    
+    private void outboundOnNext(final Object outmsg) {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("sending http response msg {}", outmsg);
+        }
+        // set in transacting flag
+        markStartSending();
+        
+        sendOutbound(outmsg)
+        .addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(final ChannelFuture future)
+                    throws Exception {
+                if (future.isSuccess()) {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("send http response msg {} success.", outmsg);
+                    }
+                    onOutboundMsgSended(outmsg);
+                } else {
+                    LOG.warn("exception when send http resp: {}, detail: {}",
+                            outmsg, ExceptionUtils.exception2detail(future.cause()));
+                    fireClosed(new TransportException("send response error", future.cause()));
+                }
+            }});
+    }
+    
+    private void outboundOnCompleted() {
+        // force flush for _isFlushPerWrite = false
+        //  reference: https://github.com/netty/netty/commit/789e323b79d642ea2c0a024cb1c839654b7b8fad
+        //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
+        //  Detail:
+        //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
+        //
+        //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+        //
+        // See https://github.com/netty/netty/issues/2983 for more information.
+        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
+        .addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(final ChannelFuture future)
+                    throws Exception {
+                endTransaction();
+                if (future.isSuccess()) {
+                    // close normally
+                    close();
+                } else {
+                    fireClosed(new TransportException("flush response error", future.cause()));
+                }
+            }});
+    }
+    
+    private void readMessage() {
+        if (inTransacting()) {
+            this._channel.read();
+            this._unreadBegin = 0;
+            readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
+        }
+    }
+    
+    private void unsubscribeOutbound() {
+        final Subscription subscription = outboundSubscriptionUpdater.getAndSet(this, null);
+        if (null != subscription
+            && !subscription.isUnsubscribed()) {
+            subscription.unsubscribe();
+        }
+    }
+    
+    private void removeInboundHandler() {
+        final ChannelHandler handler = inboundHandlerUpdater.getAndSet(this, null);
+        if (null != handler) {
+            Nettys.actionToRemoveHandler(this._channel, handler).call();
+        }
+    }
+    
+    private void markStartRecving() {
+        transactionUpdater.compareAndSet(this, STATUS_IDLE, STATUS_RECV);
+    }
+    
+    private void markStartSending() {
+        transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_SEND);
+    }
+    
+    private void endTransaction() {
+        transactionUpdater.compareAndSet(this, STATUS_SEND, STATUS_IDLE);
+    }
+    
+    private int transactionStatus() {
+        return transactionUpdater.get(this);
+    }
+    
+    private static final AtomicIntegerFieldUpdater<DefaultHttpTrade> transactionUpdater =
+            AtomicIntegerFieldUpdater.newUpdater(DefaultHttpTrade.class, "_transactionStatus");
+    
+    private static final int STATUS_IDLE = 0;
+    private static final int STATUS_RECV = 1;
+    private static final int STATUS_SEND = 2;
+    
+    @SuppressWarnings("unused")
+    private volatile int _transactionStatus = STATUS_IDLE;
     
     private static final AtomicLongFieldUpdater<DefaultHttpTrade> readBeginUpdater =
             AtomicLongFieldUpdater.newUpdater(DefaultHttpTrade.class, "_readBegin");
@@ -451,9 +762,150 @@ class DefaultHttpTrade extends DefaultAttributeMap
     
     private volatile long _unreadBegin = 0;
     private volatile ReadPolicy _readPolicy = null;
-    private volatile ChannelHandler _reqHandler = null;
+    
+    private static final AtomicReferenceFieldUpdater<DefaultHttpTrade, ChannelHandler> inboundHandlerUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpTrade.class, ChannelHandler.class, "_inboundHandler");
+    
+    @SuppressWarnings("unused")
+    private volatile ChannelHandler _inboundHandler = null;
+    
     private final HttpMessageHolder _holder;
     private final List<Subscriber<? super HttpObject>> _subscribers = 
             new CopyOnWriteArrayList<>();
+    private volatile Throwable _unactiveReason = null;
     private final Observable<HttpObject> _cachedInbound;
+    
+    private volatile Action1<Object> _onSended = null;
+
+    private volatile boolean _isFlushPerWrite = false;
+    
+    private static final AtomicReferenceFieldUpdater<DefaultHttpTrade, Subscription> outboundSubscriptionUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpTrade.class, Subscription.class, "_outboundSubscription");
+    
+    @SuppressWarnings("unused")
+    private volatile Subscription _outboundSubscription;
+    
+    private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
+    
+    private final Op _op;
+    
+    protected interface Op {
+//        public <T extends ChannelHandler> T enable(
+//                final DefaultHttpTrade trade, 
+//                final HttpHandlers handlerType, final Object... args);
+
+        public void inboundOnNext(
+                final DefaultHttpTrade trade,
+                final Subscriber<? super HttpObject> subscriber,
+                final HttpObject msg);
+        
+        public Subscription setOutbound(final DefaultHttpTrade trade,
+                final Observable<? extends Object> outbound); 
+        
+        public void outboundOnNext(
+                final DefaultHttpTrade trade,
+                final Object msg);
+        
+        public void outboundOnCompleted(
+                final DefaultHttpTrade trade);
+        
+        public void readMessage(final DefaultHttpTrade trade);
+
+        public void setWriteBufferWaterMark(final DefaultHttpTrade trade,
+                final int low, final int high);
+    }
+    
+    private static final Op OP_ACTIVE = new Op() {
+//        public <T extends ChannelHandler> T enable(
+//                final DefaultHttpTrade trade, 
+//                final HttpHandlers handlerType, final Object... args) {
+//            return Nettys.applyToChannel(trade.onTerminate(), 
+//                    trade._channel, handlerType, args);
+//        }
+        
+        public void inboundOnNext(
+                final DefaultHttpTrade trade,
+                final Subscriber<? super HttpObject> subscriber,
+                final HttpObject inmsg) {
+            trade.inboundOnNext(subscriber, inmsg);
+        }
+        
+        @Override
+        public Subscription setOutbound(
+                final DefaultHttpTrade trade,
+                final Observable<? extends Object> outbound) {
+            return trade.setOutbound(outbound);
+        }
+        
+        @Override
+        public void outboundOnNext(
+                final DefaultHttpTrade trade,
+                final Object outmsg) {
+            trade.outboundOnNext(outmsg);
+        }
+        
+        @Override
+        public void outboundOnCompleted(
+                final DefaultHttpTrade trade) {
+            trade.outboundOnCompleted();
+        }
+        
+        @Override
+        public void readMessage(final DefaultHttpTrade trade) {
+            trade.readMessage();
+        }
+
+        @Override
+        public void setWriteBufferWaterMark(final DefaultHttpTrade trade,
+                final int low, final int high) {
+            trade._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
+            if (LOG.isInfoEnabled()) {
+                LOG.info("channel({}) setWriteBufferWaterMark with low:{} high:{}", 
+                    trade._channel, low, high);
+            }
+        }
+    };
+    
+    private static final Op OP_UNACTIVE = new Op() {
+//        public <T extends ChannelHandler> T enable(
+//                final DefaultHttpTrade trade, 
+//                final HttpHandlers handlerType, final Object... args) {
+//            return null;
+//        }
+        public void inboundOnNext(
+                final DefaultHttpTrade trade,
+                final Subscriber<? super HttpObject> subscriber,
+                final HttpObject inmsg) {
+            ReferenceCountUtil.release(inmsg);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("HttpTrade(inactive): channelRead0 and release msg({}).", inmsg);
+            }
+        }
+        
+        @Override
+        public Subscription setOutbound(final DefaultHttpTrade trade,
+                final Observable<? extends Object> outbound) {
+            return null;
+        }
+        
+        @Override
+        public void outboundOnNext(
+                final DefaultHttpTrade trade,
+                final Object outmsg) {
+        }
+        
+        @Override
+        public void outboundOnCompleted(final DefaultHttpTrade trade) {
+        }
+        
+        @Override
+        public void readMessage(final DefaultHttpTrade trade) {
+        }
+
+        @Override
+        public void setWriteBufferWaterMark(final DefaultHttpTrade trade,
+                final int low, final int high) {
+        }
+    };
+
 }

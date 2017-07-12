@@ -17,6 +17,8 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.AttributeMap;
 import rx.Observable;
 import rx.Single;
+import rx.Subscription;
+import rx.functions.Action1;
 import rx.functions.Func0;
 
 /**
@@ -55,10 +57,16 @@ public interface HttpServerBuilder extends Closeable {
         public long unreadDurationInMs();
         public long readingDurationInMS();
         
-        public Observable<? extends HttpObject> inMessage();
-        public HttpMessageHolder inMessageHolder();
+        public Observable<? extends HttpObject> inmessage();
+        public HttpMessageHolder inboundHolder();
         
-        public OutboundEndpoint outbound();
+        public void setFlushPerWrite(final boolean isFlushPerWrite);
+        public void setWriteBufferWaterMark(final int low, final int high);
+        public void setOnSended(final Action1<Object> onSended);
+        
+        public Subscription outbound(final Observable<? extends Object> message);
+        
+       public OutboundEndpoint outbound();
         public InboundEndpoint inbound();
     }
 }
