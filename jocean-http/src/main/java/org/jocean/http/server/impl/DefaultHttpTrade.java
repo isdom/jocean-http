@@ -108,14 +108,14 @@ class DefaultHttpTrade extends DefaultAttributeMap
         builder.append("DefaultHttpTrade [create at:")
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
                 .append(", request subscriber count=").append(_inboundSupport.subscribersCount())
-                .append(", isRequestReceived=").append(_isRequestReceived.get())
-                .append(", requestMethod=").append(_requestMethod)
-                .append(", requestUri=").append(_requestUri)
+                .append(", isRequestReceived=").append(this._isRequestReceived.get())
+                .append(", requestMethod=").append(this._requestMethod)
+                .append(", requestUri=").append(this._requestUri)
                 .append(", isRequestCompleted=").append(_isRequestCompleted.get())
                 .append(", isResponseSetted=").append(_isResponseSetted.get())
                 .append(", isResponseSended=").append(_isResponseSended.get())
                 .append(", isResponseCompleted=").append(_isResponseCompleted.get())
-                .append(", isKeepAlive=").append(_isKeepAlive)
+                .append(", isKeepAlive=").append(isKeepAlive())
                 .append(", isActive=").append(isActive())
                 .append(", channel=").append(_channel)
                 .append("]");
@@ -181,6 +181,46 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return this._op.setOutbound(this, message);
     }
     
+    @Override
+    public void close() {
+        fireClosed(new CloseException());
+    }
+
+    @Override
+    public Object transport() {
+        return this._channel;
+    }
+    
+    @Override
+    public OutboundEndpoint outbound() {
+        return this._outboundSupport;
+    }
+    
+    @Override
+    public InboundEndpoint inbound() {
+        return this._inboundSupport;
+    }
+
+    @Override
+    public Action1<Action0> onTerminate() {
+        return this._terminateAwareSupport.onTerminate(this);
+    }
+
+    @Override
+    public Action1<Action1<HttpTrade>> onTerminateOf() {
+        return this._terminateAwareSupport.onTerminateOf(this);
+    }
+
+    @Override
+    public Action0 doOnTerminate(Action0 onTerminate) {
+        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
+    }
+
+    @Override
+    public Action0 doOnTerminate(Action1<HttpTrade> onTerminate) {
+        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
+    }
+    
     boolean inTransacting() {
         return transactionStatus() > STATUS_IDLE;
     }
@@ -208,17 +248,9 @@ class DefaultHttpTrade extends DefaultAttributeMap
             Observable.unsafeCreate(new Observable.OnSubscribe<HttpObject>() {
                 @Override
                 public void call(final Subscriber<? super HttpObject> subscriber) {
-                    final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
-                        @Override
-                        protected void channelRead0(final ChannelHandlerContext ctx,
-                                final HttpObject inmsg) throws Exception {
-                            _op.inboundOnNext(DefaultHttpTrade.this, subscriber, inmsg);
-                        }};
-                    Nettys.applyHandler(DefaultHttpTrade.this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
-                    DefaultHttpTrade.this._inboundHandler = handler;
+                    initInboundHandler(subscriber);
                 }})
             .compose(this._holder.<HttpObject>assembleAndHold())
-//            .compose(markInboundStateAndCloseOnError())
             .cache()
             .compose(RxNettys.duplicateHttpContent());
         
@@ -293,6 +325,17 @@ class DefaultHttpTrade extends DefaultAttributeMap
         if (!channel.isActive()) {
             fireClosed(new TransportException("channelInactive of " + channel));
         }
+    }
+
+    private void initInboundHandler(final Subscriber<? super HttpObject> subscriber) {
+        final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
+            @Override
+            protected void channelRead0(final ChannelHandlerContext ctx,
+                    final HttpObject inmsg) throws Exception {
+                _op.inboundOnNext(DefaultHttpTrade.this, subscriber, inmsg);
+            }};
+        Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
+        this._inboundHandler = handler;
     }
 
     private void inboundOnNext(
@@ -460,46 +503,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
     
-    @Override
-    public void close() {
-        fireClosed(new CloseException());
-    }
-
-    @Override
-    public Object transport() {
-        return this._channel;
-    }
-    
-    @Override
-    public OutboundEndpoint outbound() {
-        return this._outboundSupport;
-    }
-    
-    @Override
-    public InboundEndpoint inbound() {
-        return this._inboundSupport;
-    }
-
-    @Override
-    public Action1<Action0> onTerminate() {
-        return this._terminateAwareSupport.onTerminate(this);
-    }
-
-    @Override
-    public Action1<Action1<HttpTrade>> onTerminateOf() {
-        return this._terminateAwareSupport.onTerminateOf(this);
-    }
-
-    @Override
-    public Action0 doOnTerminate(Action0 onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
-    }
-
-    @Override
-    public Action0 doOnTerminate(Action1<HttpTrade> onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
-    }
-    
     private static final ActionN FIRE_CLOSED = new ActionN() {
         @Override
         public void call(final Object... args) {
@@ -570,7 +573,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         for (Subscriber<? super HttpObject> subscriber : subscribers) {
             if (!subscriber.isUnsubscribed()) {
                 try {
-                    subscriber.onError(_unactiveReason);
+                    subscriber.onError(this._unactiveReason);
                 } catch (Exception e) {
                     LOG.warn("exception when invoke ({}).onError, detail: {}",
                             subscriber, ExceptionUtils.exception2detail(e));
@@ -579,23 +582,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
     
-    private final TerminateAwareSupport<HttpTrade> _terminateAwareSupport;
-    private final InboundEndpointSupport _inboundSupport;
-    private final OutboundEndpointSupport _outboundSupport;
-    
-    private final Channel _channel;
-    private final long _createTimeMillis = System.currentTimeMillis();
-    private final TrafficCounter _trafficCounter;
-    private String _requestMethod;
-    private String _requestUri;
-    private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
-    private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
-    private final AtomicBoolean _isResponseSetted = new AtomicBoolean(false);
-    private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
-    private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
-    
-    private volatile boolean _isKeepAlive = false;
-
     private void fireClosed(final Throwable e) {
         this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
     }
@@ -787,6 +773,22 @@ class DefaultHttpTrade extends DefaultAttributeMap
     
     private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
     
+    private final TerminateAwareSupport<HttpTrade> _terminateAwareSupport;
+    private final InboundEndpointSupport _inboundSupport;
+    private final OutboundEndpointSupport _outboundSupport;
+    
+    private final Channel _channel;
+    private final long _createTimeMillis = System.currentTimeMillis();
+    private final TrafficCounter _trafficCounter;
+    private String _requestMethod;
+    private String _requestUri;
+    private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
+    private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
+    private final AtomicBoolean _isResponseSetted = new AtomicBoolean(false);
+    private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
+    private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
+    
+    private volatile boolean _isKeepAlive = false;
     private final Op _op;
     
     protected interface Op {
