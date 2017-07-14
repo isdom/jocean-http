@@ -65,7 +65,7 @@ import rx.subscriptions.Subscriptions;
 class DefaultHttpTrade extends DefaultAttributeMap 
     implements HttpTrade,  Comparable<DefaultHttpTrade>, Transformer<Object, Object>  {
     
-    private static final AtomicInteger _IDSRC = new AtomicInteger(0);
+    private static final AtomicInteger _IDSRC = new AtomicInteger(1);
     
     private final int _id = _IDSRC.getAndIncrement();
     
@@ -240,7 +240,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         this._terminateAwareSupport = 
             new TerminateAwareSupport<HttpTrade>(this._selector);
         
-        //  begin with remove InboundEndpoint & OutboundEndpoint
         this._holder = new HttpMessageHolder();
         doOnTerminate(this._holder.closer());
         
@@ -269,7 +268,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 public void call(final Subscriber<? super HttpObject> subscriber) {
                     subscribeInbound(subscriber, inbound);
                 }});
-        //  end with remove InboundEndpoint & OutboundEndpoint
         
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
@@ -327,6 +325,20 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
 
+    private void subscribeInbound(final Subscriber<? super HttpObject> subscriber,
+            final Observable<? extends HttpObject> inbound) {
+        if (!subscriber.isUnsubscribed()) {
+            final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
+            this._subscribers.add(serializedSubscriber);
+            serializedSubscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    _subscribers.remove(serializedSubscriber);
+                }}));
+            inbound.subscribe(serializedSubscriber);
+        }
+    }
+    
     private void initInboundHandler(final Subscriber<? super HttpObject> subscriber) {
         final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
             @Override
@@ -372,20 +384,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 removeInboundHandler();
                 subscriber.onCompleted();
             }
-        }
-    }
-    
-    private void subscribeInbound(final Subscriber<? super HttpObject> subscriber,
-            final Observable<? extends HttpObject> inbound) {
-        if (!subscriber.isUnsubscribed()) {
-            final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
-            this._subscribers.add(serializedSubscriber);
-            serializedSubscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _subscribers.remove(serializedSubscriber);
-                }}));
-            inbound.subscribe(serializedSubscriber);
         }
     }
     
