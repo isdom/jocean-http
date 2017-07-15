@@ -107,7 +107,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         final StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpTrade [create at:")
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
-                .append(", request subscriber count=").append(_inboundSupport.subscribersCount())
+//                .append(", request subscriber count=").append(_inboundSupport.subscribersCount())
                 .append(", isRequestReceived=").append(this._isRequestReceived.get())
                 .append(", requestMethod=").append(this._requestMethod)
                 .append(", requestUri=").append(this._requestUri)
@@ -296,11 +296,12 @@ class DefaultHttpTrade extends DefaultAttributeMap
                         onReadComplete();
                     }});
         
-        //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
         this._trafficCounter = Nettys.applyToChannel(onTerminate(), 
                 channel, 
                 HttpHandlers.TRAFFICCOUNTER);
         
+        //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
+        /*
         this._inboundSupport = 
             new InboundEndpointSupport(
                 _createTimeMillis,
@@ -317,6 +318,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 this,
                 _trafficCounter,
                 onTerminate());
+        */
         
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
         
@@ -529,7 +531,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         
         //  TODO add reason
         //  TBD, remove inboundSupport
-        this._inboundSupport.fireAllSubscriberUnactive(e);
+        // this._inboundSupport.fireAllSubscriberUnactive(e);
         
         removeInboundHandler();
         unsubscribeOutbound();
@@ -772,8 +774,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
     
     private final TerminateAwareSupport<HttpTrade> _terminateAwareSupport;
-    private final InboundEndpointSupport _inboundSupport;
-    private final OutboundEndpointSupport _outboundSupport;
+    private InboundEndpointSupport _inboundSupport = null;
+    private OutboundEndpointSupport _outboundSupport = null;
     
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
