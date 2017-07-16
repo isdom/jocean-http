@@ -105,7 +105,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(onClosed.get());
         assertTrue(trade.isActive());
         
-        trade.outbound().message(Observable.<HttpObject>error(new RuntimeException("ResponseError")));
+        trade.outbound(Observable.<HttpObject>error(new RuntimeException("ResponseError")));
         
         assertFalse(trade.isActive());
         assertTrue(onClosed.get());
@@ -140,7 +140,7 @@ public class DefaultHttpTradeTestCase {
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         
-        trade.inbound().message().subscribe(reqSubscriber);
+        trade.inbound().subscribe(reqSubscriber);
         
         trade.close();
         assertFalse(trade.isActive());
@@ -163,7 +163,7 @@ public class DefaultHttpTradeTestCase {
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
         
-        trade.inbound().message().subscribe(reqSubscriber);
+        trade.inbound().subscribe(reqSubscriber);
         
         writeToInboundAndFlush(channel, request);
         
@@ -191,7 +191,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
-        trade.inbound().message().subscribe(reqSubscriber);
+        trade.inbound().subscribe(reqSubscriber);
         
         reqSubscriber.assertTerminalEvent();
         reqSubscriber.assertError(Exception.class);
@@ -207,10 +207,10 @@ public class DefaultHttpTradeTestCase {
         
         final EmbeddedChannel channel = new EmbeddedChannel();
         final HttpTrade trade = new DefaultHttpTrade(channel);
-        trade.inbound().messageHolder().setMaxBlockSize(-1);
+        trade.inboundHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
-        trade.inbound().message().subscribe(reqSubscriber);
+        trade.inbound().subscribe(reqSubscriber);
         
         writeToInboundAndFlush(channel, request);
         writeToInboundAndFlush(channel, req_contents[0]);
@@ -233,16 +233,16 @@ public class DefaultHttpTradeTestCase {
         
         final EmbeddedChannel channel = new EmbeddedChannel();
         final HttpTrade trade = new DefaultHttpTrade(channel);
-        trade.inbound().messageHolder().setMaxBlockSize(-1);
+        trade.inboundHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<HttpObject> reqSubscriber1 = new TestSubscriber<>();
-        trade.inbound().message().subscribe(reqSubscriber1);
+        trade.inbound().subscribe(reqSubscriber1);
         
         final TestSubscriber<HttpObject> reqSubscriber2 = new TestSubscriber<>();
-        trade.inbound().message().subscribe(reqSubscriber2);
+        trade.inbound().subscribe(reqSubscriber2);
         
         final TestSubscriber<HttpObject> reqSubscriber3 = new TestSubscriber<>();
-        trade.inbound().message().subscribe(reqSubscriber3);
+        trade.inbound().subscribe(reqSubscriber3);
         
         writeToInboundAndFlush(channel, request);
         writeToInboundAndFlush(channel, req_contents[0]);
@@ -268,10 +268,10 @@ public class DefaultHttpTradeTestCase {
         
         final EmbeddedChannel channel = new EmbeddedChannel();
         final HttpTrade trade = new DefaultHttpTrade(channel);
-        trade.inbound().messageHolder().setMaxBlockSize(-1);
+        trade.inboundHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<HttpObject> reqSubscriber1 = new TestSubscriber<>();
-        trade.inbound().message().subscribe(reqSubscriber1);
+        trade.inbound().subscribe(reqSubscriber1);
         
         writeToInboundAndFlush(channel, request);
         
@@ -279,7 +279,7 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber1.assertValues(request);
         
         final TestSubscriber<HttpObject> reqSubscriber2 = new TestSubscriber<>();
-        trade.inbound().message().subscribe(reqSubscriber2);
+        trade.inbound().subscribe(reqSubscriber2);
         
         writeToInboundAndFlush(channel, req_contents[0]);
         
@@ -290,7 +290,7 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber2.assertValues(request, req_contents[0]);
         
         final TestSubscriber<HttpObject> reqSubscriber3 = new TestSubscriber<>();
-        trade.inbound().message().subscribe(reqSubscriber3);
+        trade.inbound().subscribe(reqSubscriber3);
         
         reqSubscriber1.assertValueCount(2);
         reqSubscriber1.assertValues(request, req_contents[0]);
@@ -310,7 +310,7 @@ public class DefaultHttpTradeTestCase {
         
         final EmbeddedChannel channel = new EmbeddedChannel();
         final HttpTrade trade = new DefaultHttpTrade(channel);
-        trade.inbound().messageHolder().setMaxBlockSize(-1);
+        trade.inboundHolder().setMaxBlockSize(-1);
         
         writeToInboundAndFlush(channel, request);
         
@@ -318,7 +318,7 @@ public class DefaultHttpTradeTestCase {
         
         final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
         
-        trade.outbound().message(Observable.<HttpObject>just(response));
+        trade.outbound(Observable.<HttpObject>just(response));
         
         assertFalse(trade.isActive());
     }
@@ -349,7 +349,7 @@ public class DefaultHttpTradeTestCase {
         
         final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
         
-        trade.outbound().message(Observable.<HttpObject>just(response));
+        trade.outbound(Observable.<HttpObject>just(response));
         
         assertFalse(trade.isActive());
     }
@@ -372,10 +372,10 @@ public class DefaultHttpTradeTestCase {
         
         final EmbeddedChannel channel = new EmbeddedChannel();
         final HttpTrade trade = new DefaultHttpTrade(channel);
-        trade.inbound().messageHolder().setMaxBlockSize(-1);
+        trade.inboundHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<HttpObject> reqSubscriber = new TestSubscriber<>();
-        trade.inbound().message().subscribe(reqSubscriber);
+        trade.inbound().subscribe(reqSubscriber);
         
         Observable.<HttpObject>concat(
             Observable.<HttpObject>just(request),
@@ -409,7 +409,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
         
         final SubscriberHolder<HttpObject> subsholder = new SubscriberHolder<>();
-        final Subscription subscription = trade.outbound().message(Observable.create(subsholder));
+        final Subscription subscription = trade.outbound(Observable.unsafeCreate(subsholder));
         
         assertNull(subscription);
         assertEquals(0, subsholder.getSubscriberCount());
@@ -422,7 +422,7 @@ public class DefaultHttpTradeTestCase {
         assertTrue(trade.isActive());
         
         final SubscriberHolder<HttpObject> subsholder1 = new SubscriberHolder<>();
-        final Subscription subscription1 = trade.outbound().message(Observable.create(subsholder1));
+        final Subscription subscription1 = trade.outbound(Observable.unsafeCreate(subsholder1));
     
         assertNotNull(subscription1);
         
@@ -438,7 +438,7 @@ public class DefaultHttpTradeTestCase {
         assertTrue(trade.isActive());
         
         final SubscriberHolder<HttpObject> subsholder1 = new SubscriberHolder<>();
-        final Subscription subscription1 = trade.outbound().message(Observable.create(subsholder1));
+        final Subscription subscription1 = trade.outbound(Observable.unsafeCreate(subsholder1));
     
         assertNotNull(subscription1);
         
@@ -471,7 +471,7 @@ public class DefaultHttpTradeTestCase {
         //      io.netty.handler.codec.http.HttpContent
         //  inbound.subscribe();    double subscribe holder.assembleAndHold()
         
-        final FullHttpRequest recvreq = trade.inbound().messageHolder()
+        final FullHttpRequest recvreq = trade.inboundHolder()
                 .fullOf(RxNettys.BUILD_FULL_REQUEST).call();
         
         try {
@@ -523,7 +523,7 @@ public class DefaultHttpTradeTestCase {
         .syncUninterruptibly();
         
         final Func0<FullHttpRequest> fullRequestBuilder = 
-            trade.inbound().messageHolder().fullOf(RxNettys.BUILD_FULL_REQUEST);
+            trade.inboundHolder().fullOf(RxNettys.BUILD_FULL_REQUEST);
         
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
             fullRequestBuilder, REQ_CONTENT.getBytes(Charsets.UTF_8), 0);
@@ -543,7 +543,7 @@ public class DefaultHttpTradeTestCase {
         writeToInboundAndFlush(channel, request);
         
         final Func0<FullHttpRequest> fullRequestBuilder = 
-            trade.inbound().messageHolder().fullOf(RxNettys.BUILD_FULL_REQUEST);
+            trade.inboundHolder().fullOf(RxNettys.BUILD_FULL_REQUEST);
         
         //  expected refCnt, request -- 1 + HttpMessageHolder -- 1, total refcnt is 2
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
@@ -568,7 +568,7 @@ public class DefaultHttpTradeTestCase {
         writeToInboundAndFlush(channel, lastcontent);
         
         final Func0<FullHttpRequest> fullRequestBuilder = 
-            trade.inbound().messageHolder().fullOf(RxNettys.BUILD_FULL_REQUEST);
+            trade.inboundHolder().fullOf(RxNettys.BUILD_FULL_REQUEST);
         
         //  expected refCnt, request -- 1 + HttpMessageHolder -- 1, total refcnt is 2
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
@@ -589,7 +589,7 @@ public class DefaultHttpTradeTestCase {
         
         final AtomicReference<DefaultFullHttpRequest> ref1 = 
                 new AtomicReference<DefaultFullHttpRequest>();
-        trade.inbound().message().subscribe(new Action1<HttpObject>() {
+        trade.inbound().subscribe(new Action1<HttpObject>() {
             @Override
             public void call(HttpObject httpobj) {
                 ref1.set((DefaultFullHttpRequest)httpobj);
@@ -599,7 +599,7 @@ public class DefaultHttpTradeTestCase {
         final AtomicReference<DefaultFullHttpRequest> ref2 = 
                 new AtomicReference<DefaultFullHttpRequest>();
             
-        trade.inbound().message().subscribe(new Action1<HttpObject>() {
+        trade.inbound().subscribe(new Action1<HttpObject>() {
             @Override
             public void call(HttpObject httpobj) {
                 ref2.set((DefaultFullHttpRequest)httpobj);

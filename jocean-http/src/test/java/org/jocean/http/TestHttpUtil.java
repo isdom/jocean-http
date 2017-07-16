@@ -58,11 +58,10 @@ public class TestHttpUtil {
                 @Override
                 public void call(final HttpTrade trade) {
                     trade.inbound()
-                        .message()
                         .subscribe(RxSubscribers.ignoreNext(),
                             RxSubscribers.ignoreError(),
                             RxActions.bindParameter(onRequestCompleted,
-                                trade.inbound().messageHolder()
+                                trade.inboundHolder()
                                     .fullOf(RxNettys.BUILD_FULL_REQUEST), 
                                 trade));
                 }});
@@ -77,7 +76,6 @@ public class TestHttpUtil {
                 @Override
                 public void call(final HttpTrade trade) {
                     trade.inbound()
-                        .message()
                         .doOnCompleted(RxActions.bindParameter(onRequestCompleted, trade))
                         .subscribe();
                 }});

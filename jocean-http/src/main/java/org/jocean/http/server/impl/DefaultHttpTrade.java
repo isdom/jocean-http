@@ -63,7 +63,7 @@ import rx.subscriptions.Subscriptions;
  *
  */
 class DefaultHttpTrade extends DefaultAttributeMap 
-    implements HttpTrade,  Comparable<DefaultHttpTrade>, Transformer<Object, Object>  {
+    implements HttpTrade,  Comparable<DefaultHttpTrade> {//, Transformer<Object, Object>  {
     
     private static final AtomicInteger _IDSRC = new AtomicInteger(1);
     
@@ -152,7 +152,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
 
     @Override
-    public Observable<? extends HttpObject> inmessage() {
+    public Observable<? extends HttpObject> inbound() {
         return this._cachedInbound;
     }
 
@@ -191,15 +191,15 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return this._channel;
     }
     
-    @Override
-    public OutboundEndpoint outbound() {
-        return this._outboundSupport;
-    }
-    
-    @Override
-    public InboundEndpoint inbound() {
-        return this._inboundSupport;
-    }
+//    @Override
+//    public OutboundEndpoint outbound() {
+//        return this._outboundSupport;
+//    }
+//    
+//    @Override
+//    public InboundEndpoint inbound() {
+//        return this._inboundSupport;
+//    }
 
     @Override
     public Action1<Action0> onTerminate() {
@@ -430,6 +430,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 }};
     }
     
+    /*
     @Override
     public Observable<Object> call(final Observable<Object> outboundMessage) {
         return outboundMessage.doOnNext(new Action1<Object>() {
@@ -495,6 +496,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                     }});
             }};
     }
+    */
     
     static class CloseException extends RuntimeException {
         private static final long serialVersionUID = 1L;
@@ -774,8 +776,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
     
     private final TerminateAwareSupport<HttpTrade> _terminateAwareSupport;
-    private InboundEndpointSupport _inboundSupport = null;
-    private OutboundEndpointSupport _outboundSupport = null;
+//    private InboundEndpointSupport _inboundSupport = null;
+//    private OutboundEndpointSupport _outboundSupport = null;
     
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();

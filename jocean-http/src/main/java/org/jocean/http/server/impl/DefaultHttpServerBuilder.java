@@ -295,7 +295,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
         
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
         
-        trade.inmessage().subscribe(new Action1<HttpObject>() {
+        trade.inbound().subscribe(new Action1<HttpObject>() {
             @Override
             public void call(final HttpObject msg) {
                 final int currentsize = trade.inboundHolder().retainedByteBufSize();

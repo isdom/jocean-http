@@ -45,7 +45,7 @@ public class HttpServerForCloopen {
                 @Override
                 public void call(final HttpTrade trade) {
                     final HttpMessageHolder holder = new HttpMessageHolder();
-                    trade.inbound().message().compose(holder.<HttpObject>assembleAndHold()).subscribe(new Subscriber<HttpObject>() {
+                    trade.inbound().compose(holder.<HttpObject>assembleAndHold()).subscribe(new Subscriber<HttpObject>() {
                         @Override
                         public void onCompleted() {
                             final FullHttpRequest req = holder.fullOf(RxNettys.BUILD_FULL_REQUEST).call();
@@ -68,7 +68,7 @@ public class HttpServerForCloopen {
                                     Unpooled.wrappedBuffer(bytes));
                             response.headers().set(CONTENT_TYPE, "text/plain");
                             response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                            trade.outbound().message(Observable.<HttpObject>just(response));
+                            trade.outbound(Observable.<HttpObject>just(response));
                         }
                         @Override
                         public void onError(Throwable e) {

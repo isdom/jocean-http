@@ -7,8 +7,6 @@ import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
-import org.jocean.http.InboundEndpoint;
-import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.idiom.TerminateAware;
@@ -57,7 +55,7 @@ public interface HttpServerBuilder extends Closeable {
         public long unreadDurationInMs();
         public long readingDurationInMS();
         
-        public Observable<? extends HttpObject> inmessage();
+        public Observable<? extends HttpObject> inbound();
         public HttpMessageHolder inboundHolder();
         
         public void setFlushPerWrite(final boolean isFlushPerWrite);
@@ -65,8 +63,7 @@ public interface HttpServerBuilder extends Closeable {
         public void setOnSended(final Action1<Object> onSended);
         
         public Subscription outbound(final Observable<? extends Object> message);
-        
-       public OutboundEndpoint outbound();
-        public InboundEndpoint inbound();
+//       public OutboundEndpoint outbound();
+//        public InboundEndpoint inbound();
     }
 }

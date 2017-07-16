@@ -64,7 +64,7 @@ public class UnpoolHttpClientTestCase {
         return new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade trade) {
-                trade.outbound().message(TestHttpUtil.buildBytesResponse(contentType, bodyAsBytes));
+                trade.outbound(TestHttpUtil.buildBytesResponse(contentType, bodyAsBytes));
             }};
     }
     

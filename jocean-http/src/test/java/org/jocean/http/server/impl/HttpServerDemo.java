@@ -76,7 +76,7 @@ public class HttpServerDemo {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    trade.inbound().message().subscribe(new Subscriber<HttpObject>() {
+                    trade.inbound().subscribe(new Subscriber<HttpObject>() {
                         private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
                         
                         @Override
@@ -88,7 +88,7 @@ public class HttpServerDemo {
                                             Unpooled.wrappedBuffer(Nettys.dumpByteBufAsBytes(req.content())));
                                     response.headers().set(CONTENT_TYPE, "text/plain");
                                     response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                                    trade.outbound().message(Observable.<HttpObject>just(response));
+                                    trade.outbound(Observable.<HttpObject>just(response));
                                 } catch (IOException e) {
                                     e.printStackTrace();
                                 } finally {

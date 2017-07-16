@@ -64,7 +64,7 @@ public class DefaultHttpServerBuilderTestCase {
                     transportRef.set(trade.transport());
                 }
                 final HttpMessageHolder holder = new HttpMessageHolder();
-                trade.inbound().message().compose(holder.assembleAndHold()).subscribe(
+                trade.inbound().compose(holder.assembleAndHold()).subscribe(
                     RxSubscribers.ignoreNext(),
                     RxSubscribers.ignoreError(),
                     new Action0() {
@@ -81,7 +81,7 @@ public class DefaultHttpServerBuilderTestCase {
                                         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
                                         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
                                                 response.content().readableBytes());
-                                        trade.outbound().message(Observable.<HttpObject>just(response));
+                                        trade.outbound(Observable.<HttpObject>just(response));
                                     }
                                 } catch (IOException e) {
                                     e.printStackTrace();
@@ -243,9 +243,9 @@ public class DefaultHttpServerBuilderTestCase {
             initiator.defineInteraction(Observable.just(reqToSend1)).subscribe();
             final HttpTrade trade1 = trades.take();
             // trade receive all inbound msg
-            trade1.inbound().message().toCompletable().await();
+            trade1.inbound().toCompletable().await();
             
-            final FullHttpRequest reqReceived1 = trade1.inbound().messageHolder().
+            final FullHttpRequest reqReceived1 = trade1.inboundHolder().
                     fullOf(RxNettys.BUILD_FULL_REQUEST).call();
             assertEquals(reqToSend1, reqReceived1);
             
@@ -262,7 +262,7 @@ public class DefaultHttpServerBuilderTestCase {
             final FullHttpResponse responseToSend1 = new DefaultFullHttpResponse(HTTP_1_1, OK, 
                     Unpooled.wrappedBuffer(CONTENT));
             
-            trade1.outbound().message(Observable.<HttpObject>just(responseToSend1));
+            trade1.outbound(Observable.<HttpObject>just(responseToSend1));
             
 //            initiator.inbound().message().toCompletable().await();
 //            final FullHttpResponse resp = initiator.inbound().messageHolder().
@@ -271,9 +271,9 @@ public class DefaultHttpServerBuilderTestCase {
             final HttpTrade trade2 = trades.take();
             
             //  receive all inbound msg
-            trade2.inbound().message().toCompletable().await();
+            trade2.inbound().toCompletable().await();
             
-            final FullHttpRequest reqReceived2 = trade2.inbound().messageHolder().
+            final FullHttpRequest reqReceived2 = trade2.inboundHolder().
                     fullOf(RxNettys.BUILD_FULL_REQUEST).call();
             assertEquals(reqToSend2, reqReceived2);
         } finally {
