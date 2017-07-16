@@ -10,4 +10,6 @@ public interface HandlerPrototype {
     public FuncN<ChannelHandler> factory();
     
     public ToOrdinal toOrdinal();
+    
+    public String name();
 }

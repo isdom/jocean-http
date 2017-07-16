@@ -119,7 +119,7 @@ public class DefaultRedisClient implements RedisClient {
                 .group(new NioEventLoopGroup(processThreadNumber))
                 .channel(NioSocketChannel.class);
             }},
-            new DefaultChannelPool());
+            new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
     }
     
     public DefaultRedisClient(
@@ -130,7 +130,7 @@ public class DefaultRedisClient implements RedisClient {
             protected void initializeBootstrap(final Bootstrap bootstrap) {
                 bootstrap.group(eventLoopGroup).channel(channelType);
             }},
-            new DefaultChannelPool());
+            new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
     }
     
     public DefaultRedisClient(
@@ -141,12 +141,12 @@ public class DefaultRedisClient implements RedisClient {
             protected void initializeBootstrap(final Bootstrap bootstrap) {
                 bootstrap.group(eventLoopGroup).channelFactory(channelFactory);
             }},
-            new DefaultChannelPool());
+            new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
     }
     
     public DefaultRedisClient(
             final ChannelCreator channelCreator) {
-        this(channelCreator, new DefaultChannelPool());
+        this(channelCreator, new DefaultChannelPool(RedisHandlers.ON_CHANNEL_INACTIVE));
     }
     
     public DefaultRedisClient(

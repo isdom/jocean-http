@@ -52,6 +52,7 @@ public class InboundEndpointSupport extends DefaultAttributeMap
         this._holder = new HttpMessageHolder();
         onTerminate.call(_holder.closer());
         
+        /*
         final Observable<? extends HttpObject> message = 
                 RxNettys.inboundFromChannel(channel, onTerminate)
                 .compose(_holder.<HttpObject>assembleAndHold())
@@ -73,10 +74,11 @@ public class InboundEndpointSupport extends DefaultAttributeMap
                     LOG.warn("inbound({})'s internal request subscriber invoke with onError {}", 
                             this, ExceptionUtils.exception2detail(e));
                 }});
+        */
         
         this._channel = channel;
         this._trafficCounter = trafficCounter;
-        this._inboundProxy = buildProxy(message);
+        this._inboundProxy = buildProxy(null);//message);
         
         Nettys.applyToChannel(
             onTerminate, 

@@ -21,7 +21,7 @@ public enum HttpHandlers implements HandlerPrototype {
     CONTENT_DECOMPRESSOR(HttpFuncs.CONTENT_DECOMPRESSOR_FUNCN),
     CONTENT_COMPRESSOR(HttpFuncs.CONTENT_COMPRESSOR_FUNCN),
     CHUNKED_WRITER(HttpFuncs.CHUNKED_WRITER_FUNCN),
-    HTTPOBJ_SUBSCRIBER(Functions.fromFunc(HttpFuncs.HTTPOBJ_SUBSCRIBER_FUNC1)),
+    // HTTPOBJ_SUBSCRIBER(Functions.fromFunc(HttpFuncs.HTTPOBJ_SUBSCRIBER_FUNC1)),
     
     ON_MESSAGE(Functions.fromFunc(CommonFuncs.ON_MESSAGE_FUNC1)),
     ON_EXCEPTION_CAUGHT(Functions.fromFunc(CommonFuncs.ON_EXCEPTION_CAUGHT_FUNC1)),

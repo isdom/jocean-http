@@ -389,7 +389,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private int _inboundRecvBufSize = -1;
     private int _inboundBlockSize = 0;
     
-    private static final Feature2Handler<HttpHandlers> _APPLY_BUILDER;
+    private static final Feature2Handler _APPLY_BUILDER;
     
     private final AtomicLong     _numStartedTrades = new AtomicLong(0);
     private final AtomicLong     _numCompletedTrades = new AtomicLong(0);
@@ -398,7 +398,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private final AtomicInteger  _peakInboundMemory = new AtomicInteger(0);
         
     static {
-        _APPLY_BUILDER = new Feature2Handler<>();
+        _APPLY_BUILDER = new Feature2Handler();
         _APPLY_BUILDER.register(Feature.ENABLE_LOGGING.getClass(), HttpHandlers.LOGGING);
         _APPLY_BUILDER.register(Feature.ENABLE_LOGGING_OVER_SSL.getClass(), HttpHandlers.LOGGING_OVER_SSL);
         _APPLY_BUILDER.register(Feature.ENABLE_COMPRESSOR.getClass(), HttpHandlers.CONTENT_COMPRESSOR);

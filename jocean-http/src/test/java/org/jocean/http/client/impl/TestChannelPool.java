@@ -6,9 +6,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.jocean.http.util.HttpHandlers;
+
 public class TestChannelPool extends DefaultChannelPool {
 
     public TestChannelPool(final int recycleChannelCount) {
+        super(HttpHandlers.ON_CHANNEL_INACTIVE);
         this._countdownRef.set(new CountDownLatch(recycleChannelCount));
     }
 

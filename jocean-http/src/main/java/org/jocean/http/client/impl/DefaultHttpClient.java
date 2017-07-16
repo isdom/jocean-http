@@ -290,7 +290,7 @@ public class DefaultHttpClient implements HttpClient {
                 .group(new NioEventLoopGroup(processThreadNumber))
                 .channel(NioSocketChannel.class);
             }},
-            pooled ? new DefaultChannelPool() : Nettys.unpoolChannels(), 
+            pooled ? new DefaultChannelPool(HttpHandlers.ON_CHANNEL_INACTIVE) : Nettys.unpoolChannels(), 
             defaultFeatures);
     }
     
@@ -303,7 +303,7 @@ public class DefaultHttpClient implements HttpClient {
             protected void initializeBootstrap(final Bootstrap bootstrap) {
                 bootstrap.group(eventLoopGroup).channel(channelType);
             }},
-            new DefaultChannelPool(),
+            new DefaultChannelPool(HttpHandlers.ON_CHANNEL_INACTIVE),
             defaultFeatures);
     }
     
@@ -316,14 +316,14 @@ public class DefaultHttpClient implements HttpClient {
             protected void initializeBootstrap(final Bootstrap bootstrap) {
                 bootstrap.group(eventLoopGroup).channelFactory(channelFactory);
             }},
-            new DefaultChannelPool(),
+            new DefaultChannelPool(HttpHandlers.ON_CHANNEL_INACTIVE),
             defaultFeatures);
     }
     
     public DefaultHttpClient(
             final ChannelCreator channelCreator,
             final Feature... defaultFeatures) {
-        this(channelCreator, new DefaultChannelPool(), defaultFeatures);
+        this(channelCreator, new DefaultChannelPool(HttpHandlers.ON_CHANNEL_INACTIVE), defaultFeatures);
     }
     
     public DefaultHttpClient(
@@ -349,19 +349,19 @@ public class DefaultHttpClient implements HttpClient {
     private final ChannelCreator _channelCreator;
     private final Feature[] _defaultFeatures;
     
-    static final Feature2Handler<HttpHandlers> _FOR_INTERACTION;
+    static final Feature2Handler _FOR_INTERACTION;
     
-    static final Feature2Handler<HttpHandlers> _FOR_CHANNEL;
+    static final Feature2Handler _FOR_CHANNEL;
 
     static {
-        _FOR_INTERACTION = new Feature2Handler<>();
+        _FOR_INTERACTION = new Feature2Handler();
         _FOR_INTERACTION.register(Feature.ENABLE_LOGGING.getClass(), HttpHandlers.LOGGING);
         _FOR_INTERACTION.register(Feature.ENABLE_LOGGING_OVER_SSL.getClass(), HttpHandlers.LOGGING_OVER_SSL);
         _FOR_INTERACTION.register(Feature.ENABLE_COMPRESSOR.getClass(), HttpHandlers.CONTENT_DECOMPRESSOR);
         _FOR_INTERACTION.register(Feature.ENABLE_CLOSE_ON_IDLE.class, HttpHandlers.CLOSE_ON_IDLE);
         _FOR_INTERACTION.register(Outbound.ENABLE_MULTIPART.getClass(), HttpHandlers.CHUNKED_WRITER);
         
-        _FOR_CHANNEL = new Feature2Handler<>();
+        _FOR_CHANNEL = new Feature2Handler();
         _FOR_CHANNEL.register(Feature.ENABLE_SSL.class, HttpHandlers.SSL);
     }
 }

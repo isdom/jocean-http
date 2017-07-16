@@ -155,31 +155,31 @@ public class Nettys {
     }
     
     
-    public static <H extends Enum<H>> ChannelHandler applyHandler(
+    public static ChannelHandler applyHandler(
             final ChannelPipeline pipeline, 
-            final H handlerType, final Object ... args) {
-        final HandlerPrototype prototype = (HandlerPrototype)handlerType;
+            final HandlerPrototype prototype, 
+            final Object ... args) {
         if (null==prototype 
             || null==prototype.factory()) {
-            throw new UnsupportedOperationException("HandlerType's factory is null");
+            throw new UnsupportedOperationException("HandlerPrototype's factory is null");
         }
         return Nettys.insertHandler(
             pipeline,
-            handlerType.name(), 
+            prototype.name(), 
             prototype.factory().call(args), 
             prototype.toOrdinal());
     }
     
-    public static <H extends Enum<H>> boolean isHandlerApplied(
+    public static boolean isHandlerApplied(
             final ChannelPipeline pipeline, 
-            final H handlerType) {
-        return (pipeline.names().indexOf(handlerType.name()) >= 0);
+            final HandlerPrototype prototype) {
+        return (pipeline.names().indexOf(prototype.name()) >= 0);
     }
 
-    public static <H extends Enum<H>> boolean removeHandler(
+    public static boolean removeHandler(
             final ChannelPipeline pipeline, 
-            final H handlerType) {
-        final ChannelHandlerContext ctx = pipeline.context(handlerType.name());
+            final HandlerPrototype prototype) {
+        final ChannelHandlerContext ctx = pipeline.context(prototype.name());
         if (ctx != null) {
             pipeline.remove(ctx.handler());
             if (LOG.isDebugEnabled()) {
@@ -215,10 +215,10 @@ public class Nettys {
     public static <T extends ChannelHandler,H extends Enum<H>> T applyToChannel(
             final Action1<Action0> onTerminate,
             final Channel channel,
-            final H handlerType, 
+            final HandlerPrototype prototype, 
             final Object... args) {
         final ChannelHandler handler = 
-            Nettys.applyHandler(channel.pipeline(), handlerType, args);
+            Nettys.applyHandler(channel.pipeline(), prototype, args);
         
         if (null!=onTerminate) {
             onTerminate.call(Nettys.actionToRemoveHandler(channel, handler));

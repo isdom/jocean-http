@@ -9,22 +9,22 @@ import java.util.Map;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.HandlerBuilder;
 
-public class Feature2Handler<H extends Enum<H>> implements HandlerBuilder {
+public class Feature2Handler implements HandlerBuilder {
 
-    public void register(final Class<?> cls, final H handlerType) {
-        this._cls2htype.put(cls, handlerType);
+    public void register(final Class<?> cls, final HandlerPrototype prototype) {
+        this._cls2prototype.put(cls, prototype);
     }
     
     @Override
     public ChannelHandler build(final Feature feature, final ChannelPipeline pipeline,
             final Object... args) {
-        final H handlerType = this._cls2htype.get(feature.getClass());
-        if (null!=handlerType) {
-            return Nettys.applyHandler(pipeline, handlerType, args);
+        final HandlerPrototype prototype = this._cls2prototype.get(feature.getClass());
+        if (null!=prototype) {
+            return Nettys.applyHandler(pipeline, prototype, args);
         } else {
             return null;
         }
     }
     
-    private final Map<Class<?>, H> _cls2htype = new HashMap<>();
+    private final Map<Class<?>, HandlerPrototype> _cls2prototype = new HashMap<>();
 }

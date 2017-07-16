@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 
-import org.jocean.http.util.HttpHandlers;
+import org.jocean.http.util.HandlerPrototype;
 import org.jocean.http.util.Nettys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +19,10 @@ public class DefaultChannelPool extends AbstractChannelPool {
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultChannelPool.class);
 
+    public DefaultChannelPool(final HandlerPrototype onChannelInactive) {
+        this._onChannelInactive = onChannelInactive;
+    }
+    
     @Override
     protected Channel findActiveChannel(final SocketAddress address) {
         final Queue<Channel> channels = getChannels(address);
@@ -34,7 +38,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
                         LOG.debug("fetch active channel({}) from pool, try to reuse.", channel);
                     }
                     // 移除对 channel inactive 时的缺省处理 Handler
-                    Nettys.removeHandler(channel.pipeline(), HttpHandlers.ON_CHANNEL_INACTIVE);
+                    Nettys.removeHandler(channel.pipeline(), this._onChannelInactive);
                     break;
                 } else {
                     LOG.info("fetch inactive channel({}) from pool, drop it and fetch next from pool.", channel);
@@ -69,7 +73,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
             if (null!=address) {
                 final Queue<Channel> channels = getOrCreateChannels(address);
                 channels.add(channel);
-                Nettys.applyHandler(channel.pipeline(), HttpHandlers.ON_CHANNEL_INACTIVE,
+                Nettys.applyHandler(channel.pipeline(), _onChannelInactive,
                     new Action0() {
                         @Override
                         public void call() {
@@ -89,4 +93,5 @@ public class DefaultChannelPool extends AbstractChannelPool {
 
     private final ConcurrentMap<SocketAddress, Queue<Channel>> _channels = 
             new ConcurrentHashMap<>();
+    private final HandlerPrototype _onChannelInactive;
 }

@@ -444,6 +444,7 @@ public class RxNettys {
         return CHANNELFUTURE_CHANNEL;
     }
     
+    /*
     public static Observable<? extends HttpObject> inboundFromChannel(
         final Channel channel,
         final Action1<Action0> onTerminate) {
@@ -466,4 +467,5 @@ public class RxNettys {
             }} )
             .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
     }
+    */
 }
