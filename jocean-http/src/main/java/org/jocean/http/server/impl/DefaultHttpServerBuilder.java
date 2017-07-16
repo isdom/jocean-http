@@ -159,12 +159,11 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
         }
     }
     
-    @SuppressWarnings("deprecation")
     public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress, 
             final Func0<Feature[]> featuresBuilder,
             final Feature... features) {
-        return Observable.create(new Observable.OnSubscribe<HttpTrade>() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<HttpTrade>() {
             @Override
             public void call(final Subscriber<? super HttpTrade> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
@@ -179,8 +178,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                                         channel, Nettys.dumpChannelConfig(channel.config()));
                             }
                             if ( _inboundRecvBufSize > 0) {
-                                if (LOG.isInfoEnabled()) {
-                                    LOG.info("channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
+                                if (LOG.isDebugEnabled()) {
+                                    LOG.debug("channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
                                             channel, 
                                             channel.config().getOption(ChannelOption.SO_RCVBUF), 
                                             _inboundRecvBufSize);
