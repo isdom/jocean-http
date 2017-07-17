@@ -221,10 +221,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
     }
     
-    boolean inTransacting() {
-        return transactionStatus() > STATUS_IDLE;
-    }
-    
     boolean isKeepAlive() {
         return this._isKeepAlive;
     }
@@ -383,6 +379,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                  * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
                  * 因此，无需在channelInactive处，针对该情况做特殊处理
                  */
+                markEndofRecving();
                 removeInboundHandler();
                 subscriber.onCompleted();
             }
@@ -512,9 +509,9 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }};
         
     // TBD: replace by fireClosed(cause)
-    private void fireClosed() {
-        this._selector.destroyAndSubmit(FIRE_CLOSED, this, null);
-    }
+//    private void fireClosed() {
+//        this._selector.destroyAndSubmit(FIRE_CLOSED, this, null);
+//    }
 
     private void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
@@ -560,6 +557,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
             return "SEND";
         case STATUS_RECV:
             return "RECV";
+        case STATUS_RECV_END:
+            return "RECV_END";
         default:
             return "UNKNOWN";
         }
@@ -602,7 +601,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
 
     private void onReadComplete() {
         this._unreadBegin = System.currentTimeMillis();
-        if (inTransacting()) {
+        if (inRecving()) {
             final Single<?> when = whenToRead();
             if (null != when) {
                 when.subscribe(new Action1<Object>() {
@@ -694,7 +693,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
     
     private void readMessage() {
-        if (inTransacting()) {
+        if (inRecving()) {
             this._channel.read();
             this._unreadBegin = 0;
             readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
@@ -720,8 +719,12 @@ class DefaultHttpTrade extends DefaultAttributeMap
         transactionUpdater.compareAndSet(this, STATUS_IDLE, STATUS_RECV);
     }
     
+    private void markEndofRecving() {
+        transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_RECV_END);
+    }
+    
     private void markStartSending() {
-        transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_SEND);
+        transactionUpdater.compareAndSet(this, STATUS_RECV_END, STATUS_SEND);
     }
     
     private void endTransaction() {
@@ -732,12 +735,21 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return transactionUpdater.get(this);
     }
     
+    private boolean inRecving() {
+        return transactionStatus() == STATUS_RECV;
+    }
+    
+    boolean inTransacting() {
+        return transactionStatus() > STATUS_IDLE;
+    }
+    
     private static final AtomicIntegerFieldUpdater<DefaultHttpTrade> transactionUpdater =
             AtomicIntegerFieldUpdater.newUpdater(DefaultHttpTrade.class, "_transactionStatus");
     
     private static final int STATUS_IDLE = 0;
     private static final int STATUS_RECV = 1;
-    private static final int STATUS_SEND = 2;
+    private static final int STATUS_RECV_END = 2;
+    private static final int STATUS_SEND = 3;
     
     @SuppressWarnings("unused")
     private volatile int _transactionStatus = STATUS_IDLE;

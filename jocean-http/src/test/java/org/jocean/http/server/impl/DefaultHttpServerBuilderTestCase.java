@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.SynchronousQueue;
@@ -17,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
+import org.jocean.http.TestHttpUtil;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
@@ -25,9 +27,12 @@ import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.RxFunctions;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
@@ -54,6 +59,8 @@ import rx.functions.Action1;
 
 public class DefaultHttpServerBuilderTestCase {
     
+    private static final Logger LOG =
+            LoggerFactory.getLogger(DefaultHttpServerBuilderTestCase.class);
     public static final byte[] CONTENT = { 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd' };
     
     private Action1<HttpTrade> echoReactor(final AtomicReference<Object> transportRef) {
@@ -221,7 +228,7 @@ public class DefaultHttpServerBuilderTestCase {
                 bootstrap.channel(LocalServerChannel.class);
             }});
 
-        final BlockingQueue<HttpTrade> trades = new SynchronousQueue<>();
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(2);
         
         final Subscription testServer = 
                 server.defineServer(new LocalAddress(testAddr),
@@ -230,7 +237,13 @@ public class DefaultHttpServerBuilderTestCase {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    trades.offer(trade);
+                    LOG.debug("on trade {}", trade);
+                    try {
+                        trades.put(trade);
+                        LOG.debug("after offer trade {}", trade);
+                    } catch (InterruptedException e) {
+                        LOG.warn("exception when put trade, detail: {}", ExceptionUtils.exception2detail(e));
+                    }
                 }});
         
         final TestChannelPool pool = new TestChannelPool(1);
