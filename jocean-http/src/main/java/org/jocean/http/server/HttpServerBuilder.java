@@ -63,7 +63,5 @@ public interface HttpServerBuilder extends Closeable {
         public void setOnSended(final Action1<Object> onSended);
         
         public Subscription outbound(final Observable<? extends Object> message);
-//       public OutboundEndpoint outbound();
-//        public InboundEndpoint inbound();
     }
 }
