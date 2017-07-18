@@ -13,17 +13,13 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
-import org.jocean.http.InboundEndpoint;
-import org.jocean.http.OutboundEndpoint;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.HttpServerBuilder.ReadPolicy;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.HttpMessageHolder;
-import org.jocean.http.util.InboundEndpointSupport;
 import org.jocean.http.util.Nettys;
-import org.jocean.http.util.OutboundEndpointSupport;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
@@ -47,10 +43,9 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.DefaultAttributeMap;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
+import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Single;
-import rx.Observable.OnSubscribe;
-import rx.Observable.Transformer;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -107,7 +102,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         final StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpTrade [create at:")
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
-//                .append(", request subscriber count=").append(_inboundSupport.subscribersCount())
                 .append(", isRequestReceived=").append(this._isRequestReceived.get())
                 .append(", requestMethod=").append(this._requestMethod)
                 .append(", requestUri=").append(this._requestUri)
@@ -191,16 +185,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return this._channel;
     }
     
-//    @Override
-//    public OutboundEndpoint outbound() {
-//        return this._outboundSupport;
-//    }
-//    
-//    @Override
-//    public InboundEndpoint inbound() {
-//        return this._inboundSupport;
-//    }
-
     @Override
     public Action1<Action0> onTerminate() {
         return this._terminateAwareSupport.onTerminate(this);
@@ -296,26 +280,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 channel, 
                 HttpHandlers.TRAFFICCOUNTER);
         
-        //  在 HTTPOBJ_SUBSCRIBER 添加到 channel.pipeline 后, 再添加 channelInactive 的处理 Handler
-        /*
-        this._inboundSupport = 
-            new InboundEndpointSupport(
-                _createTimeMillis,
-                _selector,
-                channel,
-                markInboundStateAndCloseOnError(),
-                _trafficCounter,
-                onTerminate());
-        
-        this._outboundSupport = 
-            new OutboundEndpointSupport(
-                _selector,
-                channel,
-                this,
-                _trafficCounter,
-                onTerminate());
-        */
-        
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
         
         if (!channel.isActive()) {
@@ -345,6 +309,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 _op.inboundOnNext(DefaultHttpTrade.this, subscriber, inmsg);
             }};
         Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
+        // TBD, check _inboundHandler's status, at most only once
         this._inboundHandler = handler;
     }
 
@@ -508,11 +473,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
             ((DefaultHttpTrade)args[0]).doClosed((Throwable)args[1]);
         }};
         
-    // TBD: replace by fireClosed(cause)
-//    private void fireClosed() {
-//        this._selector.destroyAndSubmit(FIRE_CLOSED, this, null);
-//    }
-
     private void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("closing active trade[channel: {}] "
@@ -527,10 +487,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
                     errorAsString(e));
         }
         fireAllSubscriberUnactive(e);
-        
-        //  TODO add reason
-        //  TBD, remove inboundSupport
-        // this._inboundSupport.fireAllSubscriberUnactive(e);
         
         removeInboundHandler();
         unsubscribeOutbound();

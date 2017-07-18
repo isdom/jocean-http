@@ -10,7 +10,6 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ProxyBuilder;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
-import org.jocean.idiom.rx.RxObservables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -443,29 +442,4 @@ public class RxNettys {
     public static Observable.Transformer<ChannelFuture, Channel> channelFutureToChannel() {
         return CHANNELFUTURE_CHANNEL;
     }
-    
-    /*
-    public static Observable<? extends HttpObject> inboundFromChannel(
-        final Channel channel,
-        final Action1<Action0> onTerminate) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<HttpObject>() {
-            @Override
-            public void call(final Subscriber<? super HttpObject> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    if (null != channel.pipeline().get(HttpHandlers.HTTPOBJ_SUBSCRIBER.name()) ) {
-                        // already add HTTPOBJ_SUBSCRIBER Handler, so throw exception
-                        LOG.warn("channel ({}) already add HTTPOBJ_SUBSCRIBER handler, internal error",
-                                channel);
-                        throw new RuntimeException("Channel[" + channel + "]already add HTTPOBJ_SUBSCRIBER handler.");
-                    }
-                    onTerminate.call(
-                        Nettys.actionToRemoveHandler(channel, 
-                            Nettys.applyHandler(channel.pipeline(), HttpHandlers.HTTPOBJ_SUBSCRIBER, subscriber)));
-                } else {
-                    LOG.warn("subscriber {} isUnsubscribed, can't used as HTTPOBJ_SUBSCRIBER ", subscriber);
-                }
-            }} )
-            .compose(RxObservables.<HttpObject>ensureSubscribeAtmostOnce());
-    }
-    */
 }
