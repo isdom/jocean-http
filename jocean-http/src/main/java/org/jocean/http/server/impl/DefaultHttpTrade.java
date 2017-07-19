@@ -105,6 +105,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 .append(", requestMethod=").append(this._requestMethod)
                 .append(", requestUri=").append(this._requestUri)
                 .append(", isKeepAlive=").append(isKeepAlive())
+                .append(", transactionStatus=").append(transactionStatus())
                 .append(", isActive=").append(isActive())
                 .append(", channel=").append(_channel)
                 .append("]");
@@ -427,7 +428,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 (e instanceof CloseException)
                 ? "close()" 
                 : ExceptionUtils.exception2detail(e)
-            : "none-error"
+            : "no error"
             ;
     }
 
@@ -670,8 +671,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
     
     private final TerminateAwareSupport<HttpTrade> _terminateAwareSupport;
-//    private InboundEndpointSupport _inboundSupport = null;
-//    private OutboundEndpointSupport _outboundSupport = null;
     
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
