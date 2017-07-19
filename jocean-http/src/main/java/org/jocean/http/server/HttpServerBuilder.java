@@ -16,6 +16,7 @@ import io.netty.util.AttributeMap;
 import rx.Observable;
 import rx.Single;
 import rx.Subscription;
+import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 
@@ -44,16 +45,19 @@ public interface HttpServerBuilder extends Closeable {
     
     public interface HttpTrade 
         extends AutoCloseable, TerminateAware<HttpTrade>, AttributeMap {
+        public Object transport();
+        
+        public Action0 closer();
         //  try to abort trade explicit
         public void close();
         
         public TrafficCounter trafficCounter();
-        public Object transport();
         public boolean isActive();
         
-        public void setReadPolicy(final ReadPolicy readPolicy);
         public long unreadDurationInMs();
         public long readingDurationInMS();
+        
+        public void setReadPolicy(final ReadPolicy readPolicy);
         
         public Observable<? extends HttpObject> inbound();
         public HttpMessageHolder inboundHolder();

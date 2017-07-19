@@ -177,6 +177,15 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
 
     @Override
+    public Action0 closer() {
+        return new Action0() {
+            @Override
+            public void call() {
+                close();
+            }};
+    }
+    
+    @Override
     public Object transport() {
         return this._channel;
     }
