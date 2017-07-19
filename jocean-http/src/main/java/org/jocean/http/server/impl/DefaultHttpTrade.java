@@ -102,13 +102,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
         final StringBuilder builder = new StringBuilder();
         builder.append("DefaultHttpTrade [create at:")
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
-                .append(", isRequestReceived=").append(this._isRequestReceived.get())
                 .append(", requestMethod=").append(this._requestMethod)
                 .append(", requestUri=").append(this._requestUri)
-                .append(", isRequestCompleted=").append(_isRequestCompleted.get())
-                .append(", isResponseSetted=").append(_isResponseSetted.get())
-                .append(", isResponseSended=").append(_isResponseSended.get())
-                .append(", isResponseCompleted=").append(_isResponseCompleted.get())
                 .append(", isKeepAlive=").append(isKeepAlive())
                 .append(", isActive=").append(isActive())
                 .append(", channel=").append(_channel)
@@ -392,74 +387,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 }};
     }
     
-    /*
-    @Override
-    public Observable<Object> call(final Observable<Object> outboundMessage) {
-        return outboundMessage.doOnNext(new Action1<Object>() {
-            @Override
-            public void call(final Object msg) {
-                _isResponseSended.compareAndSet(false, true);
-            }})
-            .doOnCompleted(new Action0() {
-                @Override
-                public void call() {
-                    _isResponseCompleted.compareAndSet(false, true);
-                    _channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
-                    .addListener(new ChannelFutureListener() {
-                        @Override
-                        public void operationComplete(final ChannelFuture future)
-                                throws Exception {
-                            //  TODO, flush success or failed
-                            try {
-                                fireClosed();
-                            } catch (Exception e) {
-                                LOG.warn("exception when ({}).doClose, detail:{}",
-                                        this, ExceptionUtils.exception2detail(e));
-                            }
-                        }});
-                }})
-            .doOnError(new Action1<Throwable>() {
-                @Override
-                public void call(Throwable e) {
-                    LOG.warn("trade({})'s outbound.onError, invoke fireClosed() and detail:{}",
-                            DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-                    fireClosed();
-                }});
-    }
-    
-    private Transformer<HttpObject, HttpObject> markInboundStateAndCloseOnError() {
-        return new Transformer<HttpObject, HttpObject>() {
-            @Override
-            public Observable<HttpObject> call(final Observable<HttpObject> src) {
-                return src.doOnNext(new Action1<HttpObject>() {
-                    @Override
-                    public void call(final HttpObject msg) {
-                        if (msg instanceof HttpRequest) {
-                            _requestMethod = ((HttpRequest)msg).method().name();
-                            _requestUri = ((HttpRequest)msg).uri();
-                            _isRequestReceived.compareAndSet(false, true);
-                            _isKeepAlive = HttpUtil.isKeepAlive((HttpRequest)msg);
-                        } else if (!_isRequestReceived.get()) {
-                            LOG.warn("trade {} missing http request and recv httpobj {}", 
-                                DefaultHttpTrade.this, msg);
-                        }
-                    }})
-                .doOnCompleted(new Action0() {
-                    @Override
-                    public void call() {
-                        _isRequestCompleted.set(true);
-                    }})
-                .doOnError(new Action1<Throwable>() {
-                    @Override
-                    public void call(Throwable e) {
-                        LOG.warn("trade({})'s inbound.onError, invoke fireClosed() and detail:{}",
-                                DefaultHttpTrade.this, ExceptionUtils.exception2detail(e));
-                        fireClosed();
-                    }});
-            }};
-    }
-    */
-    
     static class CloseException extends RuntimeException {
         private static final long serialVersionUID = 1L;
         CloseException() {
@@ -476,12 +403,11 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("closing active trade[channel: {}] "
-                    + "with isRequestCompleted({})"
+                    + "with "
                     + "/transactionStatus({})"
                     + "/isKeepAlive({}),"
                     + "cause by {}", 
                     this._channel, 
-                    this._isRequestCompleted, 
                     this.transactionStatusAsString(),
                     this.isKeepAlive(),
                     errorAsString(e));
@@ -752,11 +678,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final TrafficCounter _trafficCounter;
     private String _requestMethod;
     private String _requestUri;
-    private final AtomicBoolean _isRequestReceived = new AtomicBoolean(false);
-    private final AtomicBoolean _isRequestCompleted = new AtomicBoolean(false);
-    private final AtomicBoolean _isResponseSetted = new AtomicBoolean(false);
-    private final AtomicBoolean _isResponseSended = new AtomicBoolean(false);
-    private final AtomicBoolean _isResponseCompleted = new AtomicBoolean(false);
     
     private volatile boolean _isKeepAlive = false;
     private final Op _op;
