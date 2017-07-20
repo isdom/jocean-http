@@ -191,12 +191,12 @@ class DefaultHttpInitiator
     }
 
     private Single<?> whenToRead() {
-        final ReadPolicy<HttpInitiator> readPolicy = this._readPolicy;
+        final ReadPolicy readPolicy = this._readPolicy;
         return null != readPolicy ? readPolicy.whenToRead(this) : null;
     }
 
     @Override
-    public void setReadPolicy(final ReadPolicy<HttpInitiator> readPolicy) {
+    public void setReadPolicy(final ReadPolicy readPolicy) {
         this._readPolicy = readPolicy;
     }
     
@@ -259,6 +259,7 @@ class DefaultHttpInitiator
         return Math.max(System.currentTimeMillis() - readBeginUpdater.get(this), 1L);
     }
     
+    @Override
     public long inboundBytes() {
         return this._traffic.inboundBytes();
     }
@@ -781,7 +782,7 @@ class DefaultHttpInitiator
 
     private volatile boolean _isFlushPerWrite = false;
     private volatile boolean _isRequestCompleted = false;
-    private volatile ReadPolicy<HttpInitiator> _readPolicy = null;
+    private volatile ReadPolicy _readPolicy = null;
     
     private final InterfaceSelector _selector;
 

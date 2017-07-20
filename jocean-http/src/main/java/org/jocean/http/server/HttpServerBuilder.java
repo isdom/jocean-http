@@ -7,6 +7,7 @@ import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
+import org.jocean.http.Inboundable;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.idiom.TerminateAware;
@@ -14,7 +15,6 @@ import org.jocean.idiom.TerminateAware;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.AttributeMap;
 import rx.Observable;
-import rx.Single;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
@@ -39,12 +39,8 @@ public interface HttpServerBuilder extends Closeable {
             final Func0<Feature[]> featuresBuilder,
             final Feature ... features);
     
-    public interface ReadPolicy {
-        public Single<?> whenToRead(final HttpTrade trade);
-    }
-    
     public interface HttpTrade 
-        extends AutoCloseable, TerminateAware<HttpTrade>, AttributeMap {
+        extends Inboundable, AutoCloseable, TerminateAware<HttpTrade>, AttributeMap {
         public Object transport();
         
         public Action0 closer();
@@ -56,6 +52,7 @@ public interface HttpServerBuilder extends Closeable {
         
         public long unreadDurationInMs();
         public long readingDurationInMS();
+        public long inboundBytes();
         
         public void setReadPolicy(final ReadPolicy readPolicy);
         

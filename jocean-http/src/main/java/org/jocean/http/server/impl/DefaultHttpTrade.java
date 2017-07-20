@@ -16,7 +16,6 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.http.server.HttpServerBuilder.ReadPolicy;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
@@ -117,7 +116,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     
     @Override
     public TrafficCounter traffic() {
-        return this._trafficCounter;
+        return this._traffic;
     }
     
     @Override
@@ -141,6 +140,11 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return Math.max(System.currentTimeMillis() - readBeginUpdater.get(this), 1L);
     }
 
+    @Override
+    public long inboundBytes() {
+        return this._traffic.inboundBytes();
+    }
+    
     @Override
     public Observable<? extends HttpObject> inbound() {
         return this._cachedInbound;
@@ -281,7 +285,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                         onReadComplete();
                     }});
 
-        this._trafficCounter = Nettys.applyToChannel(onTerminate(), 
+        this._traffic = Nettys.applyToChannel(onTerminate(), 
                 channel, 
                 HttpHandlers.TRAFFICCOUNTER);
         
@@ -683,7 +687,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
-    private final TrafficCounter _trafficCounter;
+    private final TrafficCounter _traffic;
     private String _requestMethod;
     private String _requestUri;
     

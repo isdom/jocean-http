@@ -23,7 +23,7 @@ public interface HttpClient extends AutoCloseable {
     public void close();
     
     public interface HttpInitiator
-    extends Inboundable<HttpInitiator>, AutoCloseable, TerminateAware<HttpInitiator> {
+    extends Inboundable, AutoCloseable, TerminateAware<HttpInitiator> {
         public Object transport();
         
         public Action0 closer();
@@ -38,7 +38,7 @@ public interface HttpClient extends AutoCloseable {
         public long readingDurationInMS();
         public long inboundBytes();
         
-        public void setReadPolicy(final ReadPolicy<HttpInitiator> readPolicy);
+        public void setReadPolicy(final ReadPolicy readPolicy);
         
         public void setFlushPerWrite(final boolean isFlushPerWrite);
         public void setWriteBufferWaterMark(final int low, final int high);
