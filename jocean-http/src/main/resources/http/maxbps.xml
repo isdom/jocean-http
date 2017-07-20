@@ -4,10 +4,7 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd">
         
-    <bean id="inboundSpeedController" class="org.jocean.http.util.InboundSpeedController">
-        <property name="timer">
-            <bean class="io.netty.util.HashedWheelTimer"/>
-        </property>
+    <bean id="policy" class="org.jocean.http.MaxBPSReadPolicy">
         <property name="maxBytesPerSecond" value="${in.maxBPS:1048576}"/>
         <property name="maxDelay" value="${in.maxdelay:500}"/>
     </bean>
