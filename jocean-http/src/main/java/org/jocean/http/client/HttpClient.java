@@ -6,13 +6,12 @@ package org.jocean.http.client;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
-import org.jocean.http.util.HttpHandlers;
+import org.jocean.http.Inboundable;
+import org.jocean.http.TrafficCounter;
 import org.jocean.idiom.TerminateAware;
 
-import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
-import rx.Single;
 import rx.functions.Action0;
 import rx.functions.Action1;
 
@@ -23,25 +22,23 @@ import rx.functions.Action1;
 public interface HttpClient extends AutoCloseable {
     public void close();
     
-    public interface ReadPolicy {
-        public Single<?> whenToRead(final HttpInitiator initiator);
-    }
-    
     public interface HttpInitiator
-    extends AutoCloseable, TerminateAware<HttpInitiator> {
+    extends Inboundable<HttpInitiator>, AutoCloseable, TerminateAware<HttpInitiator> {
         public Object transport();
         
         public Action0 closer();
         public void close();
         
-        //  replace trafficCounter() by enable(...)
-        public <T extends ChannelHandler> T enable(final HttpHandlers handlerType, final Object... args);
+//        public <T extends ChannelHandler> T enable(final HttpHandlers handlerType, final Object... args);
+        
+        public TrafficCounter traffic();
         
         public boolean isActive();
         public long unreadDurationInMs();
         public long readingDurationInMS();
+        public long inboundBytes();
         
-        public void setReadPolicy(final ReadPolicy readPolicy);
+        public void setReadPolicy(final ReadPolicy<HttpInitiator> readPolicy);
         
         public void setFlushPerWrite(final boolean isFlushPerWrite);
         public void setWriteBufferWaterMark(final int low, final int high);

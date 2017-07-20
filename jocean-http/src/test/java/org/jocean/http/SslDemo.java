@@ -102,7 +102,7 @@ public class SslDemo {
                 .toBlocking()
                 .single();
         
-        final TrafficCounter counter = initiator.enable(HttpHandlers.TRAFFICCOUNTER);
+        final TrafficCounter counter = initiator.traffic();
         final String resp1 = sendAndRecv(initiator, request).toBlocking().single();
         LOG.debug("1 interaction: {}", resp1);
         

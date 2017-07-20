@@ -10,9 +10,9 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
-import org.jocean.http.client.HttpClient.ReadPolicy;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.ExceptionUtils;
@@ -125,10 +125,6 @@ class DefaultHttpInitiator
         this._terminateAwareSupport = 
             new TerminateAwareSupport<HttpInitiator>(this._selector);
         
-//        this._trafficCounter = RxNettys.applyToChannelWithUninstall(channel, 
-//                onTerminate(), 
-//                APPLY.TRAFFICCOUNTER);
-        
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
                 HttpHandlers.ON_EXCEPTION_CAUGHT,
@@ -155,6 +151,10 @@ class DefaultHttpInitiator
                     public void call() {
                         onReadComplete();
                     }});
+
+        this._traffic = Nettys.applyToChannel(onTerminate(), 
+                channel, 
+                HttpHandlers.TRAFFICCOUNTER);
         
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
         
@@ -191,12 +191,12 @@ class DefaultHttpInitiator
     }
 
     private Single<?> whenToRead() {
-        final ReadPolicy readPolicy = this._readPolicy;
+        final ReadPolicy<HttpInitiator> readPolicy = this._readPolicy;
         return null != readPolicy ? readPolicy.whenToRead(this) : null;
     }
 
     @Override
-    public void setReadPolicy(final ReadPolicy readPolicy) {
+    public void setReadPolicy(final ReadPolicy<HttpInitiator> readPolicy) {
         this._readPolicy = readPolicy;
     }
     
@@ -225,9 +225,14 @@ class DefaultHttpInitiator
             }});
     }
     
+//    @Override
+//    public <T extends ChannelHandler> T enable(final HttpHandlers handlerType, final Object... args) {
+//        return _op.enable(this, handlerType, args);
+//    }
+    
     @Override
-    public <T extends ChannelHandler> T enable(final HttpHandlers handlerType, final Object... args) {
-        return _op.enable(this, handlerType, args);
+    public TrafficCounter traffic() {
+        return this._traffic;
     }
     
     @Override
@@ -252,6 +257,10 @@ class DefaultHttpInitiator
     @Override
     public long readingDurationInMS() {
         return Math.max(System.currentTimeMillis() - readBeginUpdater.get(this), 1L);
+    }
+    
+    public long inboundBytes() {
+        return this._traffic.inboundBytes();
     }
     
     @Override
@@ -361,9 +370,9 @@ class DefaultHttpInitiator
     private final Op _op;
     
     protected interface Op {
-        public <T extends ChannelHandler> T enable(
-                final DefaultHttpInitiator initiator, 
-                final HttpHandlers handlerType, final Object... args);
+//        public <T extends ChannelHandler> T enable(
+//                final DefaultHttpInitiator initiator, 
+//                final HttpHandlers handlerType, final Object... args);
 
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
@@ -393,12 +402,12 @@ class DefaultHttpInitiator
     }
     
     private static final Op OP_ACTIVE = new Op() {
-        public <T extends ChannelHandler> T enable(
-                final DefaultHttpInitiator initiator, 
-                final HttpHandlers handlerType, final Object... args) {
-            return Nettys.applyToChannel(initiator.onTerminate(), 
-                    initiator._channel, handlerType, args);
-        }
+//        public <T extends ChannelHandler> T enable(
+//                final DefaultHttpInitiator initiator, 
+//                final HttpHandlers handlerType, final Object... args) {
+//            return Nettys.applyToChannel(initiator.onTerminate(), 
+//                    initiator._channel, handlerType, args);
+//        }
         
         @Override
         public void subscribeResponse(
@@ -453,11 +462,11 @@ class DefaultHttpInitiator
     };
     
     private static final Op OP_UNACTIVE = new Op() {
-        public <T extends ChannelHandler> T enable(
-                final DefaultHttpInitiator initiator, 
-                final HttpHandlers handlerType, final Object... args) {
-            return null;
-        }
+//        public <T extends ChannelHandler> T enable(
+//                final DefaultHttpInitiator initiator, 
+//                final HttpHandlers handlerType, final Object... args) {
+//            return null;
+//        }
         
         @Override
         public void subscribeResponse(
@@ -772,7 +781,7 @@ class DefaultHttpInitiator
 
     private volatile boolean _isFlushPerWrite = false;
     private volatile boolean _isRequestCompleted = false;
-    private volatile ReadPolicy _readPolicy = null;
+    private volatile ReadPolicy<HttpInitiator> _readPolicy = null;
     
     private final InterfaceSelector _selector;
 
@@ -780,4 +789,5 @@ class DefaultHttpInitiator
 
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
+    private final TrafficCounter _traffic;
 }

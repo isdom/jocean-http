@@ -51,7 +51,7 @@ public interface HttpServerBuilder extends Closeable {
         //  try to abort trade explicit
         public void close();
         
-        public TrafficCounter trafficCounter();
+        public TrafficCounter traffic();
         public boolean isActive();
         
         public long unreadDurationInMs();

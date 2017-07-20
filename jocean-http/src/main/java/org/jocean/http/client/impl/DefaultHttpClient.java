@@ -17,7 +17,6 @@ import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.http.util.TrafficCounterAware;
-import org.jocean.http.util.TrafficCounterHandler;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.ReflectUtils;
@@ -190,8 +189,7 @@ public class DefaultHttpClient implements HttpClient {
                             (Object[])features);
                 if (null!=trafficCounterAware) {
                     try {
-                        trafficCounterAware.setTrafficCounter(
-                            (TrafficCounterHandler)initiator.enable(HttpHandlers.TRAFFICCOUNTER));
+                        trafficCounterAware.setTrafficCounter(initiator.traffic());
                     } catch (Exception e) {
                         LOG.warn("exception when invoke setTrafficCounter for channel ({}), detail: {}",
                                 channel, ExceptionUtils.exception2detail(e));

@@ -116,7 +116,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
     @Override
-    public TrafficCounter trafficCounter() {
+    public TrafficCounter traffic() {
         return this._trafficCounter;
     }
     
@@ -280,7 +280,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                     public void call() {
                         onReadComplete();
                     }});
-        
+
         this._trafficCounter = Nettys.applyToChannel(onTerminate(), 
                 channel, 
                 HttpHandlers.TRAFFICCOUNTER);
