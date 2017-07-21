@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
@@ -249,13 +250,13 @@ class DefaultHttpInitiator
     }
     
     @Override
-    public long unreadDurationInMs() {
+    public long durationFromRead() {
         final long begin = this._unreadBegin;
         return 0 == begin ? 0 : System.currentTimeMillis() - begin;
     }
     
     @Override
-    public long readingDurationInMS() {
+    public long durationFromBegin() {
         return Math.max(System.currentTimeMillis() - readBeginUpdater.get(this), 1L);
     }
     

@@ -7,7 +7,8 @@ import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
-import org.jocean.http.Inboundable;
+import org.jocean.http.ReadPolicy;
+import org.jocean.http.ReadPolicy.Inboundable;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.idiom.TerminateAware;
@@ -50,8 +51,8 @@ public interface HttpServerBuilder extends Closeable {
         public TrafficCounter traffic();
         public boolean isActive();
         
-        public long unreadDurationInMs();
-        public long readingDurationInMS();
+        public long durationFromRead();
+        public long durationFromBegin();
         public long inboundBytes();
         
         public void setReadPolicy(final ReadPolicy readPolicy);

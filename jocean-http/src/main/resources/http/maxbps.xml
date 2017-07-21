@@ -3,10 +3,11 @@
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd">
-        
-    <bean id="policy" class="org.jocean.http.MaxBPSReadPolicy">
-        <property name="maxBytesPerSecond" value="${in.maxBPS:1048576}"/>
-        <property name="maxDelay" value="${in.maxdelay:500}"/>
+
+    <bean class="org.jocean.http.ReadPolicies"
+        factory-method="maxbps">
+        <constructor-arg name="maxBytesPerSecond" value="${in.maxBPS:1048576}"/>
+        <constructor-arg name="maxDelay" value="${in.maxdelay:500}"/>
     </bean>
     
 </beans>
