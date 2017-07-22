@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.ReadPolicy;
+import org.jocean.http.ReadPolicy.Inboundable;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
@@ -127,23 +128,28 @@ class DefaultHttpTrade extends DefaultAttributeMap
     
     @Override
     public void setReadPolicy(final ReadPolicy readPolicy) {
-        this._readPolicy = readPolicy;
+        this._whenToRead = null != readPolicy 
+                ? readPolicy.whenToRead(buildInboundable()) 
+                : null;
     }
 
-    @Override
-    public long durationFromRead() {
-        final long begin = this._unreadBegin;
-        return 0 == begin ? 0 : System.currentTimeMillis() - begin;
-    }
-
-    @Override
-    public long durationFromBegin() {
-        return Math.max(System.currentTimeMillis() - readBeginUpdater.get(this), 1L);
-    }
-
-    @Override
-    public long inboundBytes() {
-        return this._traffic.inboundBytes();
+    private Inboundable buildInboundable() {
+        return new Inboundable() {
+            @Override
+            public long durationFromRead() {
+                final long begin = _unreadBegin;
+                return 0 == begin ? 0 : System.currentTimeMillis() - begin;
+            }
+            
+            @Override
+            public long durationFromBegin() {
+                return Math.max(System.currentTimeMillis() - readBeginUpdater.get(DefaultHttpTrade.this), 1L);
+            }
+            
+            @Override
+            public long inboundBytes() {
+                return _traffic.inboundBytes();
+            }};
     }
     
     @Override
@@ -499,7 +505,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private void onReadComplete() {
         this._unreadBegin = System.currentTimeMillis();
         if (inRecving()) {
-            final Single<?> when = whenToRead();
+            final Single<?> when = this._whenToRead;
             if (null != when) {
                 when.subscribe(new Action1<Object>() {
                     @Override
@@ -513,11 +519,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
 
-    private Single<?> whenToRead() {
-        final ReadPolicy readPolicy = this._readPolicy;
-        return null != readPolicy ? readPolicy.whenToRead(this) : null;
-    }
-    
     private void onOutboundMsgSended(final Object outmsg) {
         final Action1<Object> onSended = this._onSended;
         
@@ -658,7 +659,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private volatile long _readBegin = 0;
     
     private volatile long _unreadBegin = 0;
-    private volatile ReadPolicy _readPolicy = null;
+    private volatile Single<?> _whenToRead = null;
     
     private static final AtomicReferenceFieldUpdater<DefaultHttpTrade, ChannelHandler> inboundHandlerUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpTrade.class, ChannelHandler.class, "_inboundHandler");
