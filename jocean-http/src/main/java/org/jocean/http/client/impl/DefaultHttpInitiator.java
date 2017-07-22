@@ -37,6 +37,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
+import io.netty.util.concurrent.Future;
 import rx.Observable;
 import rx.Observer;
 import rx.Single;
@@ -71,7 +72,7 @@ class DefaultHttpInitiator
     private static final AtomicInteger _IDSRC = new AtomicInteger(0);
     
     private final int _id = _IDSRC.getAndIncrement();
-    
+
     @Override
     public int compareTo(final DefaultHttpInitiator o) {
         return this._id - o._id;
@@ -153,6 +154,15 @@ class DefaultHttpInitiator
                     public void call() {
                         onReadComplete();
                     }});
+        
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
+                HttpHandlers.ON_CHANNEL_WRITABILITYCHANGED,
+                new Action0() {
+                    @Override
+                    public void call() {
+                        onWritabilityChanged();
+                    }});
 
         this._traffic = Nettys.applyToChannel(onTerminate(), 
                 channel, 
@@ -192,11 +202,35 @@ class DefaultHttpInitiator
         }
     }
 
+    private void onWritabilityChanged() {
+        final Action1<Boolean> onWritabilityChanged = this._onWritabilityChanged;
+        
+        if (null != onWritabilityChanged) {
+            try {
+                onWritabilityChanged.call(this._op.isWritable(this));
+            } catch (Exception e) {
+                LOG.warn("exception when invoke onWritabilityChanged({}), detail: {}",
+                    onWritabilityChanged,
+                    ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+
     @Override
     public void setReadPolicy(final ReadPolicy readPolicy) {
         this._whenToRead = null != readPolicy 
                 ? readPolicy.whenToRead(buildInboundable()) 
                 : null;
+    }
+    
+    @Override
+    public void setOnWritabilityChanged(final Action1<Boolean> onWritabilityChanged) {
+        this._onWritabilityChanged = onWritabilityChanged;
+        this._op.runAtEventLoop(this, new Runnable() {
+            @Override
+            public void run() {
+                onWritabilityChanged();
+            }});
     }
     
     @Override
@@ -402,6 +436,10 @@ class DefaultHttpInitiator
 
         public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
                 final int low, final int high);
+        
+        public boolean isWritable(final DefaultHttpInitiator initiator);
+        
+        public Future<?> runAtEventLoop(final DefaultHttpInitiator initiator, final Runnable task);
     }
     
     private static final Op OP_ACTIVE = new Op() {
@@ -462,6 +500,16 @@ class DefaultHttpInitiator
                     initiator._channel, low, high);
             }
         }
+        
+        @Override
+        public boolean isWritable(final DefaultHttpInitiator initiator) {
+            return initiator._channel.isWritable();
+        }
+        
+        @Override
+        public Future<?> runAtEventLoop(final DefaultHttpInitiator initiator, final Runnable task) {
+            return initiator._channel.eventLoop().submit(task);
+        }
     };
     
     private static final Op OP_UNACTIVE = new Op() {
@@ -510,6 +558,16 @@ class DefaultHttpInitiator
         @Override
         public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
                 final int low, final int high) {
+        }
+        
+        @Override
+        public boolean isWritable(final DefaultHttpInitiator initiator) {
+            return false;
+        }
+        
+        @Override
+        public Future<?> runAtEventLoop(final DefaultHttpInitiator initiator, final Runnable task) {
+            return null;
         }
     };
     
@@ -781,6 +839,8 @@ class DefaultHttpInitiator
     private volatile long _unreadBegin = 0;
     
     private volatile Action1<Object> _onSended = null;
+    private volatile Action1<Boolean> _onWritabilityChanged = null;
+    
 
     private volatile boolean _isFlushPerWrite = false;
     private volatile boolean _isRequestCompleted = false;
