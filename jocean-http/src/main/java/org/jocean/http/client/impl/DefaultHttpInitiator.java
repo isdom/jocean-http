@@ -17,9 +17,11 @@ import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
+import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
+import org.jocean.idiom.rx.Action1_N;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -202,18 +204,22 @@ class DefaultHttpInitiator
         }
     }
 
-    private void onWritabilityChanged() {
-        final Action1<Boolean> onWritabilityChanged = this._onWritabilityChanged;
-        
-        if (null != onWritabilityChanged) {
-            try {
-                onWritabilityChanged.call(this._op.isWritable(this));
-            } catch (Exception e) {
-                LOG.warn("exception when invoke onWritabilityChanged({}), detail: {}",
-                    onWritabilityChanged,
-                    ExceptionUtils.exception2detail(e));
+    private static final Action1_N<Subscriber<? super Boolean>> ON_NEXT = new Action1_N<Subscriber<? super Boolean>>() {
+        @Override
+        public void call(final Subscriber<? super Boolean> subscriber, final Object... args) {
+            final Boolean isWritable = (Boolean)args[0];
+            if (!subscriber.isUnsubscribed()) {
+                try {
+                    subscriber.onNext(isWritable);
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke onNext({}), detail: {}",
+                        subscriber,
+                        ExceptionUtils.exception2detail(e));
+                }
             }
-        }
+        }};
+    private void onWritabilityChanged() {
+        this._writabilityObserver.foreachComponent(ON_NEXT, this._op.isWritable(this));
     }
 
     @Override
@@ -223,14 +229,39 @@ class DefaultHttpInitiator
                 : null;
     }
     
+//    @Override
+//    public void setOnWritabilityChanged(final Action1<Boolean> onWritabilityChanged) {
+//        this._onWritabilityChanged = onWritabilityChanged;
+//        this._op.runAtEventLoop(this, new Runnable() {
+//            @Override
+//            public void run() {
+//                onWritabilityChanged();
+//            }});
+//    }
+    
     @Override
-    public void setOnWritabilityChanged(final Action1<Boolean> onWritabilityChanged) {
-        this._onWritabilityChanged = onWritabilityChanged;
-        this._op.runAtEventLoop(this, new Runnable() {
+    public Observable<Boolean> writability() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<Boolean>() {
             @Override
-            public void run() {
-                onWritabilityChanged();
+            public void call(final Subscriber<? super Boolean> subscriber) {
+                _op.runAtEventLoop(DefaultHttpInitiator.this, new Runnable() {
+                    @Override
+                    public void run() {
+                        addWritabilitySubscriber(subscriber);
+                    }});
             }});
+    }
+
+    private void addWritabilitySubscriber(final Subscriber<? super Boolean> subscriber) {
+        if (!subscriber.isUnsubscribed()) {
+            subscriber.onNext(this._op.isWritable(this));
+            this._writabilityObserver.addComponent(subscriber);
+            subscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    _writabilityObserver.removeComponent(subscriber);
+                }}));
+        }
     }
     
     @Override
@@ -839,7 +870,7 @@ class DefaultHttpInitiator
     private volatile long _unreadBegin = 0;
     
     private volatile Action1<Object> _onSended = null;
-    private volatile Action1<Boolean> _onWritabilityChanged = null;
+//    private volatile Action1<Boolean> _onWritabilityChanged = null;
     
 
     private volatile boolean _isFlushPerWrite = false;
@@ -850,6 +881,9 @@ class DefaultHttpInitiator
 
     private final TerminateAwareSupport<HttpInitiator> _terminateAwareSupport;
 
+    private final COWCompositeSupport<Subscriber<? super Boolean>> _writabilityObserver = 
+            new COWCompositeSupport<>();
+    
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
     private final TrafficCounter _traffic;

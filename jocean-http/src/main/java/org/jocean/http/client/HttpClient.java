@@ -39,7 +39,8 @@ public interface HttpClient extends AutoCloseable {
         
         public void setFlushPerWrite(final boolean isFlushPerWrite);
         public void setWriteBufferWaterMark(final int low, final int high);
-        public void setOnWritabilityChanged(final Action1<Boolean> onWritabilityChanged);
+        
+        public Observable<Boolean> writability();
         public void setOnSended(final Action1<Object> onSended);
         
         public Observable<? extends HttpObject> defineInteraction(

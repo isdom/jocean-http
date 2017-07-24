@@ -31,7 +31,7 @@ public class ReadPolicies {
     }
     
     public static ReadPolicy byoutbound(final long maxDelay, final HttpInitiator initiator) {
-        return new ByOutbound(maxDelay, initiator);
+        return new ByOutbound(initiator);
     }
     
     public static ReadPolicy composite(final ReadPolicy policy1, final ReadPolicy policy2) {
@@ -51,7 +51,6 @@ public class ReadPolicies {
     
     static class MaxBPS implements ReadPolicy {
         
-
         MaxBPS(final long maxBytesPerSecond, final long maxDelay) {
             this._maxBytesPerSecond = maxBytesPerSecond;
             this._maxDelay = maxDelay;
@@ -104,8 +103,7 @@ public class ReadPolicies {
 
     static class ByOutbound implements ReadPolicy {
         
-        ByOutbound(final long maxDelay, final HttpInitiator initiator) {
-            this._maxDelay = maxDelay;
+        ByOutbound(final HttpInitiator initiator) {
             this._initiator = initiator;
         }
         
@@ -115,22 +113,16 @@ public class ReadPolicies {
                 @Override
                 public void call(final SingleSubscriber<? super Object> subscriber) {
                     if (!subscriber.isUnsubscribed()) {
-                        ctrlSpeed(inbound, subscriber, _initiator, _maxDelay);
+                        ctrlSpeed(inbound, subscriber, _initiator);
                     }
                 }});
         }
         
         private static void ctrlSpeed(final Inboundable inbound, 
                 final SingleSubscriber<? super Object> subscriber,
-                final HttpInitiator initiator, 
-                final long maxDelay) {
-            if (inbound.durationFromRead() > maxDelay - 50) {
-                LOG.info("inbound {} wait {} MILLISECONDS, then perform read", 
-                        inbound, inbound.durationFromRead());
-                subscriber.onSuccess(_NOTIFIER);
-                return;
-            }
-            initiator.setOnWritabilityChanged(new Action1<Boolean>() {
+                final HttpInitiator initiator) {
+            // TBD: unsubscribe writability()
+            initiator.writability().subscribe(new Action1<Boolean>() {
                 @Override
                 public void call(final Boolean iswritable) {
                     if (iswritable) {
@@ -139,11 +131,13 @@ public class ReadPolicies {
                         if (!subscriber.isUnsubscribed()) {
                             subscriber.onSuccess(_NOTIFIER);
                         }
+                    } else {
+                        LOG.info("inbound {} 's peer outbound {} CAN'T write, then waiting", 
+                                inbound, initiator);
                     }
                 }});
         }
 
-        private final long _maxDelay;
         private final HttpInitiator _initiator;
     }
 }
