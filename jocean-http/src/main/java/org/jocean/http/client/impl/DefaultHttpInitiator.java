@@ -262,13 +262,7 @@ class DefaultHttpInitiator
         return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
             @Override
             public void call(final Subscriber<? super Object> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    _op.runAtEventLoop(DefaultHttpInitiator.this, new Runnable() {
-                        @Override
-                        public void run() {
-                            addSendedSubscriber(subscriber);
-                        }});
-                }
+                addSendedSubscriber(subscriber);
             }});
     }
     
