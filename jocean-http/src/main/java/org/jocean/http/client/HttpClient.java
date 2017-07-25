@@ -13,7 +13,6 @@ import org.jocean.idiom.TerminateAware;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 import rx.functions.Action0;
-import rx.functions.Action1;
 
 /**
  * @author isdom
@@ -42,7 +41,6 @@ public interface HttpClient extends AutoCloseable {
         
         public Observable<Boolean> writability();
         public Observable<Object> sended();
-        public void setOnSended(final Action1<Object> onSended);
         
         public Observable<? extends HttpObject> defineInteraction(
                 final Observable<? extends Object> request);

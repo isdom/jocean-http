@@ -288,11 +288,6 @@ class DefaultHttpInitiator
     }
     
     @Override
-    public void setOnSended(final Action1<Object> onSended) {
-        this._onSended = onSended;
-    }
-    
-    @Override
     public Observable<? extends HttpObject> defineInteraction(
             final Observable<? extends Object> request) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<HttpObject>() {
@@ -742,22 +737,7 @@ class DefaultHttpInitiator
         }};
 
     private void onOutboundMsgSended(final Object outmsg) {
-//        final Action1<Object> onSended = this._onSended;
-        
         this._sendedObserver.foreachComponent(ON_SENDED, outmsg);
-        
-        /*
-        if (null != onSended) {
-            try {
-                onSended.call(outmsg);
-            } catch (Exception e) {
-                LOG.warn("exception when invoke onSended({}) with msg({}), detail: {}",
-                    onSended, 
-                    outmsg, 
-                    ExceptionUtils.exception2detail(e));
-            }
-        }
-        */
     }
 
     private ChannelFuture sendOutbound(final Object outmsg) {
@@ -901,8 +881,6 @@ class DefaultHttpInitiator
     
     private volatile long _unreadBegin = 0;
     
-    private volatile Action1<Object> _onSended = null;
-
     private volatile boolean _isFlushPerWrite = false;
     private volatile boolean _isRequestCompleted = false;
     private volatile Single<?> _whenToRead = null;
