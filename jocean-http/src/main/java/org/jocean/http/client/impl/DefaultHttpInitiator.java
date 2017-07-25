@@ -218,6 +218,7 @@ class DefaultHttpInitiator
                 }
             }
         }};
+        
     private void onWritabilityChanged() {
         this._writabilityObserver.foreachComponent(ON_NEXT, this._op.isWritable(this));
     }
@@ -229,26 +230,18 @@ class DefaultHttpInitiator
                 : null;
     }
     
-//    @Override
-//    public void setOnWritabilityChanged(final Action1<Boolean> onWritabilityChanged) {
-//        this._onWritabilityChanged = onWritabilityChanged;
-//        this._op.runAtEventLoop(this, new Runnable() {
-//            @Override
-//            public void run() {
-//                onWritabilityChanged();
-//            }});
-//    }
-    
     @Override
     public Observable<Boolean> writability() {
         return Observable.unsafeCreate(new Observable.OnSubscribe<Boolean>() {
             @Override
             public void call(final Subscriber<? super Boolean> subscriber) {
-                _op.runAtEventLoop(DefaultHttpInitiator.this, new Runnable() {
-                    @Override
-                    public void run() {
-                        addWritabilitySubscriber(subscriber);
-                    }});
+                if (!subscriber.isUnsubscribed()) {
+                    _op.runAtEventLoop(DefaultHttpInitiator.this, new Runnable() {
+                        @Override
+                        public void run() {
+                            addWritabilitySubscriber(subscriber);
+                        }});
+                }
             }});
     }
 
@@ -260,6 +253,32 @@ class DefaultHttpInitiator
                 @Override
                 public void call() {
                     _writabilityObserver.removeComponent(subscriber);
+                }}));
+        }
+    }
+    
+    @Override
+    public Observable<Object> sended() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
+            @Override
+            public void call(final Subscriber<? super Object> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    _op.runAtEventLoop(DefaultHttpInitiator.this, new Runnable() {
+                        @Override
+                        public void run() {
+                            addSendedSubscriber(subscriber);
+                        }});
+                }
+            }});
+    }
+    
+    private void addSendedSubscriber(final Subscriber<? super Object> subscriber) {
+        if (!subscriber.isUnsubscribed()) {
+            this._sendedObserver.addComponent(subscriber);
+            subscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    _sendedObserver.removeComponent(subscriber);
                 }}));
         }
     }
@@ -713,9 +732,27 @@ class DefaultHttpInitiator
             }});
     }
 
+    private static final Action1_N<Subscriber<? super Object>> ON_SENDED = new Action1_N<Subscriber<? super Object>>() {
+        @Override
+        public void call(final Subscriber<? super Object> subscriber, final Object... args) {
+            final Object outmsg = args[0];
+            if (!subscriber.isUnsubscribed()) {
+                try {
+                    subscriber.onNext(outmsg);
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke onNext({}), detail: {}",
+                        subscriber,
+                        ExceptionUtils.exception2detail(e));
+                }
+            }
+        }};
+
     private void onOutboundMsgSended(final Object outmsg) {
-        final Action1<Object> onSended = this._onSended;
+//        final Action1<Object> onSended = this._onSended;
         
+        this._sendedObserver.foreachComponent(ON_SENDED, outmsg);
+        
+        /*
         if (null != onSended) {
             try {
                 onSended.call(outmsg);
@@ -726,6 +763,7 @@ class DefaultHttpInitiator
                     ExceptionUtils.exception2detail(e));
             }
         }
+        */
     }
 
     private ChannelFuture sendOutbound(final Object outmsg) {
@@ -870,8 +908,6 @@ class DefaultHttpInitiator
     private volatile long _unreadBegin = 0;
     
     private volatile Action1<Object> _onSended = null;
-//    private volatile Action1<Boolean> _onWritabilityChanged = null;
-    
 
     private volatile boolean _isFlushPerWrite = false;
     private volatile boolean _isRequestCompleted = false;
@@ -882,6 +918,9 @@ class DefaultHttpInitiator
     private final TerminateAwareSupport<HttpInitiator> _terminateAwareSupport;
 
     private final COWCompositeSupport<Subscriber<? super Boolean>> _writabilityObserver = 
+            new COWCompositeSupport<>();
+    
+    private final COWCompositeSupport<Subscriber<? super Object>> _sendedObserver = 
             new COWCompositeSupport<>();
     
     private final Channel _channel;
