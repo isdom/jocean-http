@@ -7,6 +7,7 @@ import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
+import org.jocean.http.IntrafficController;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.util.HttpMessageHolder;
@@ -40,7 +41,7 @@ public interface HttpServerBuilder extends Closeable {
             final Feature ... features);
     
     public interface HttpTrade 
-        extends AutoCloseable, TerminateAware<HttpTrade>, AttributeMap {
+        extends IntrafficController, AutoCloseable, TerminateAware<HttpTrade>, AttributeMap {
         public Object transport();
         
         public Action0 closer();
@@ -50,8 +51,6 @@ public interface HttpServerBuilder extends Closeable {
         public TrafficCounter traffic();
         public boolean isActive();
         
-        public void setReadPolicy(final ReadPolicy readPolicy);
-        
         public Observable<? extends HttpObject> inbound();
         public HttpMessageHolder inboundHolder();
         
@@ -60,5 +59,8 @@ public interface HttpServerBuilder extends Closeable {
         public void setOnSended(final Action1<Object> onSended);
         
         public Subscription outbound(final Observable<? extends Object> message);
+        
+        // from IntrafficController
+        public void setReadPolicy(final ReadPolicy readPolicy);
     }
 }

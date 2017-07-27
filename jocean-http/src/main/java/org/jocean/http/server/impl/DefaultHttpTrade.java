@@ -126,6 +126,9 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return this._selector.isActive();
     }
     
+    /* (non-Javadoc)
+     * @see IntrafficController#setReadPolicy(org.jocean.http.ReadPolicy)
+     */
     @Override
     public void setReadPolicy(final ReadPolicy readPolicy) {
         this._whenToRead = null != readPolicy 

@@ -6,6 +6,7 @@ package org.jocean.http.client;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
+import org.jocean.http.IntrafficController;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
 import org.jocean.idiom.TerminateAware;
@@ -22,7 +23,7 @@ public interface HttpClient extends AutoCloseable {
     public void close();
     
     public interface HttpInitiator
-    extends AutoCloseable, TerminateAware<HttpInitiator> {
+    extends IntrafficController, AutoCloseable, TerminateAware<HttpInitiator> {
         public Object transport();
         
         public Action0 closer();
@@ -34,8 +35,6 @@ public interface HttpClient extends AutoCloseable {
         
         public boolean isActive();
         
-        public void setReadPolicy(final ReadPolicy readPolicy);
-        
         public void setFlushPerWrite(final boolean isFlushPerWrite);
         public void setWriteBufferWaterMark(final int low, final int high);
         
@@ -44,6 +43,9 @@ public interface HttpClient extends AutoCloseable {
         
         public Observable<? extends HttpObject> defineInteraction(
                 final Observable<? extends Object> request);
+        
+        // from IntrafficController
+        public void setReadPolicy(final ReadPolicy readPolicy);
     }
 
     public interface InitiatorBuilder {

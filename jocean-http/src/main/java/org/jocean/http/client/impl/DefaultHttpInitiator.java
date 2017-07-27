@@ -223,6 +223,9 @@ class DefaultHttpInitiator
         this._writabilityObserver.foreachComponent(ON_NEXT, this._op.isWritable(this));
     }
 
+    /* (non-Javadoc)
+     * @see IntrafficController#setReadPolicy(org.jocean.http.ReadPolicy)
+     */
     @Override
     public void setReadPolicy(final ReadPolicy readPolicy) {
         this._whenToRead = null != readPolicy 
