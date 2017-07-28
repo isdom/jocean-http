@@ -169,11 +169,11 @@ public class DefaultHttpClient implements HttpClient {
 //                    initiator.inbound().messageHolder().setMaxBlockSize(_inboundBlockSize);
                 
                 //  set water mark's low/high
-                if (_lowWaterMark >= 0 
-                    && _highWaterMark >= 0
-                    && _highWaterMark >= _lowWaterMark) {
-                    initiator.setWriteBufferWaterMark(_lowWaterMark, _highWaterMark);
-                }
+//                if (_lowWaterMark >= 0 
+//                    && _highWaterMark >= 0
+//                    && _highWaterMark >= _lowWaterMark) {
+//                    initiator.setWriteBufferWaterMark(_lowWaterMark, _highWaterMark);
+//                }
                 
                 //  apply features per interaction
                 Nettys.applyFeaturesToChannel(

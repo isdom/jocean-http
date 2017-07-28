@@ -2,7 +2,7 @@ package org.jocean.http;
 
 import java.util.concurrent.TimeUnit;
 
-import org.jocean.http.client.HttpClient.HttpInitiator;
+import org.jocean.http.WritePolicy.Outboundable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,8 +30,8 @@ public class ReadPolicies {
         return new MaxBPS(maxBytesPerSecond, maxDelay);
     }
     
-    public static ReadPolicy byoutbound(final long maxDelay, final HttpInitiator initiator) {
-        return new ByOutbound(initiator);
+    public static ReadPolicy byoutbound(final long maxDelay, final Outboundable outboundable) {
+        return new ByOutbound(outboundable);
     }
     
     public static ReadPolicy composite(final ReadPolicy policy1, final ReadPolicy policy2) {
@@ -103,8 +103,8 @@ public class ReadPolicies {
 
     static class ByOutbound implements ReadPolicy {
         
-        ByOutbound(final HttpInitiator initiator) {
-            this._initiator = initiator;
+        ByOutbound(final Outboundable outboundable) {
+            this._outboundable = outboundable;
         }
         
         @Override
@@ -113,31 +113,31 @@ public class ReadPolicies {
                 @Override
                 public void call(final SingleSubscriber<? super Object> subscriber) {
                     if (!subscriber.isUnsubscribed()) {
-                        ctrlSpeed(inbound, subscriber, _initiator);
+                        ctrlSpeed(inbound, subscriber, _outboundable);
                     }
                 }});
         }
         
         private static void ctrlSpeed(final Inboundable inbound, 
                 final SingleSubscriber<? super Object> subscriber,
-                final HttpInitiator initiator) {
+                final Outboundable outboundable) {
             // TBD: unsubscribe writability()
-            initiator.writability().subscribe(new Action1<Boolean>() {
+            outboundable.writability().subscribe(new Action1<Boolean>() {
                 @Override
                 public void call(final Boolean iswritable) {
                     if (iswritable) {
                         LOG.info("inbound {} 's peer outbound {} can write, then perform read", 
-                                inbound, initiator);
+                                inbound, outboundable);
                         if (!subscriber.isUnsubscribed()) {
                             subscriber.onSuccess(_NOTIFIER);
                         }
                     } else {
                         LOG.info("inbound {} 's peer outbound {} CAN'T write, then waiting", 
-                                inbound, initiator);
+                                inbound, outboundable);
                     }
                 }});
         }
 
-        private final HttpInitiator _initiator;
+        private final Outboundable _outboundable;
     }
 }

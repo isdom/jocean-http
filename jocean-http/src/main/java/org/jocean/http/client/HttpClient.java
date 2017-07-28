@@ -9,6 +9,7 @@ import org.jocean.http.Feature;
 import org.jocean.http.IntrafficController;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
+import org.jocean.http.WritePolicy;
 import org.jocean.idiom.TerminateAware;
 
 import io.netty.handler.codec.http.HttpObject;
@@ -35,14 +36,19 @@ public interface HttpClient extends AutoCloseable {
         
         public boolean isActive();
         
+        /*
         public void setFlushPerWrite(final boolean isFlushPerWrite);
         public void setWriteBufferWaterMark(final int low, final int high);
         
         public Observable<Boolean> writability();
         public Observable<Object> sended();
-        
+        */
+
         public Observable<? extends HttpObject> defineInteraction(
                 final Observable<? extends Object> request);
+        
+        public Observable<? extends HttpObject> defineInteraction(
+                final Observable<? extends Object> request, final WritePolicy writePolicy);
         
         // from IntrafficController
         public void setReadPolicy(final ReadPolicy readPolicy);

@@ -22,6 +22,7 @@ import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TestHttpUtil;
 import org.jocean.http.TransportException;
+import org.jocean.http.WritePolicy;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.HttpClient.InitiatorBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
@@ -149,19 +150,27 @@ public class DefaultHttpClientTestCase {
             final InitiatorBuilder builder,
             final Observable<? extends Object> request, 
             final Interaction interaction ) throws Exception {
+        return startInteraction(builder, request, null, interaction);
+    }
+
+    private static HttpInitiator startInteraction(
+            final InitiatorBuilder builder,
+            final Observable<? extends Object> request, 
+            final WritePolicy writePolicy,
+            final Interaction interaction ) throws Exception {
         try ( final HttpInitiator initiator = builder.build().toBlocking().single()) {
             final HttpMessageHolder holder = new HttpMessageHolder();
             holder.setMaxBlockSize(-1);
             initiator.doOnTerminate(holder.closer());
             
             interaction.interact(initiator,
-                initiator.defineInteraction(request)
+                initiator.defineInteraction(request, writePolicy)
                     .compose(holder.<HttpObject>assembleAndHold()), 
                 holder);
             return initiator;
         }
     }
-
+    
     @Test(timeout=5000)
     public void testInitiatorMultiCalldefineInteraction() 
         throws Exception {
@@ -1208,13 +1217,17 @@ public class DefaultHttpClientTestCase {
             final Channel ch1 = (Channel)startInteraction(
                 client.initiator().remoteAddress(new LocalAddress(addr)), 
                 Observable.concat(Observable.<HttpObject>just(req), errorOfEnd),
+                new WritePolicy() {
+                    @Override
+                    public void applyTo(final Outboundable outboundable) {
+                        outboundable.setFlushPerWrite(true);
+                    }},
                 new Interaction() {
                     @Override
                     public void interact(
                             final HttpInitiator initiator,
                             final Observable<HttpObject> response, 
                             final HttpMessageHolder holder) throws Exception {
-                        initiator.setFlushPerWrite(true);
                         final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
                         response.subscribe(subscriber);
                         
@@ -1279,13 +1292,17 @@ public class DefaultHttpClientTestCase {
             final Channel ch1 = (Channel)startInteraction(
                 client.initiator().remoteAddress(new LocalAddress(addr)), 
                 Observable.concat(Observable.<HttpObject>just(req), errorOfEnd),
+                new WritePolicy() {
+                    @Override
+                    public void applyTo(final Outboundable outboundable) {
+                        outboundable.setFlushPerWrite(true);
+                    }},
                 new Interaction() {
                     @Override
                     public void interact(
                             final HttpInitiator initiator,
                             final Observable<HttpObject> response, 
                             final HttpMessageHolder holder) throws Exception {
-                        initiator.setFlushPerWrite(true);
                         final TestSubscriber<HttpObject> subscriber = new TestSubscriber<>();
                         response.subscribe(subscriber);
                         
