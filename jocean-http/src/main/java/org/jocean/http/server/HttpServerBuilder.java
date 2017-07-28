@@ -10,6 +10,7 @@ import org.jocean.http.Feature;
 import org.jocean.http.IntrafficController;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
+import org.jocean.http.WritePolicy;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.idiom.TerminateAware;
 
@@ -18,7 +19,6 @@ import io.netty.util.AttributeMap;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action0;
-import rx.functions.Action1;
 import rx.functions.Func0;
 
 /**
@@ -54,11 +54,14 @@ public interface HttpServerBuilder extends Closeable {
         public Observable<? extends HttpObject> inbound();
         public HttpMessageHolder inboundHolder();
         
-        public void setFlushPerWrite(final boolean isFlushPerWrite);
-        public void setWriteBufferWaterMark(final int low, final int high);
-        public void setOnSended(final Action1<Object> onSended);
+//        public void setFlushPerWrite(final boolean isFlushPerWrite);
+//        public void setWriteBufferWaterMark(final int low, final int high);
+//        public void setOnSended(final Action1<Object> onSended);
         
         public Subscription outbound(final Observable<? extends Object> message);
+        
+        public Subscription outbound(final Observable<? extends Object> message,
+                final WritePolicy writePolicy);
         
         // from IntrafficController
         public void setReadPolicy(final ReadPolicy readPolicy);

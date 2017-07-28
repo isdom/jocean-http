@@ -290,7 +290,6 @@ class DefaultHttpInitiator
     
     private Outboundable buildOutboundable() {
         return new Outboundable() {
-
             @Override
             public void setFlushPerWrite(final boolean isFlushPerWrite) {
                 _isFlushPerWrite = isFlushPerWrite;
