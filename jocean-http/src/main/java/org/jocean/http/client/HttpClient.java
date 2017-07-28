@@ -30,19 +30,9 @@ public interface HttpClient extends AutoCloseable {
         public Action0 closer();
         public void close();
         
-//        public <T extends ChannelHandler> T enable(final HttpHandlers handlerType, final Object... args);
-        
         public TrafficCounter traffic();
         
         public boolean isActive();
-        
-        /*
-        public void setFlushPerWrite(final boolean isFlushPerWrite);
-        public void setWriteBufferWaterMark(final int low, final int high);
-        
-        public Observable<Boolean> writability();
-        public Observable<Object> sended();
-        */
 
         public Observable<? extends HttpObject> defineInteraction(
                 final Observable<? extends Object> request);

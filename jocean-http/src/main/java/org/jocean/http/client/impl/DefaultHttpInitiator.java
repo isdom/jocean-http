@@ -235,63 +235,6 @@ class DefaultHttpInitiator
                 : null;
     }
     
-//    @Override
-//    public Observable<Boolean> writability() {
-//        return Observable.unsafeCreate(new Observable.OnSubscribe<Boolean>() {
-//            @Override
-//            public void call(final Subscriber<? super Boolean> subscriber) {
-//                if (!subscriber.isUnsubscribed()) {
-//                    _op.runAtEventLoop(DefaultHttpInitiator.this, new Runnable() {
-//                        @Override
-//                        public void run() {
-//                            addWritabilitySubscriber(subscriber);
-//                        }});
-//                }
-//            }});
-//    }
-
-    private void addWritabilitySubscriber(final Subscriber<? super Boolean> subscriber) {
-        if (!subscriber.isUnsubscribed()) {
-            subscriber.onNext(this._op.isWritable(this));
-            this._writabilityObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _writabilityObserver.removeComponent(subscriber);
-                }}));
-        }
-    }
-    
-//    @Override
-//    public Observable<Object> sended() {
-//        return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
-//            @Override
-//            public void call(final Subscriber<? super Object> subscriber) {
-//                addSendedSubscriber(subscriber);
-//            }});
-//    }
-    
-    private void addSendedSubscriber(final Subscriber<? super Object> subscriber) {
-        if (!subscriber.isUnsubscribed()) {
-            this._sendedObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _sendedObserver.removeComponent(subscriber);
-                }}));
-        }
-    }
-    
-//    @Override
-//    public void setFlushPerWrite(final boolean isFlushPerWrite) {
-//        this._isFlushPerWrite = isFlushPerWrite;
-//    }
-//    
-//    @Override
-//    public void setWriteBufferWaterMark(final int low, final int high) {
-//        this._op.setWriteBufferWaterMark(this, low, high);
-//    }
-    
     @Override
     public Observable<? extends HttpObject> defineInteraction(
             final Observable<? extends Object> request) {
@@ -307,11 +250,6 @@ class DefaultHttpInitiator
                 _op.subscribeResponse(DefaultHttpInitiator.this, request, subscriber, writePolicy);
             }});
     }
-    
-//    @Override
-//    public <T extends ChannelHandler> T enable(final HttpHandlers handlerType, final Object... args) {
-//        return _op.enable(this, handlerType, args);
-//    }
     
     @Override
     public TrafficCounter traffic() {
@@ -388,6 +326,29 @@ class DefaultHttpInitiator
             }};
     }
 
+    private void addWritabilitySubscriber(final Subscriber<? super Boolean> subscriber) {
+        if (!subscriber.isUnsubscribed()) {
+            subscriber.onNext(this._op.isWritable(this));
+            this._writabilityObserver.addComponent(subscriber);
+            subscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    _writabilityObserver.removeComponent(subscriber);
+                }}));
+        }
+    }
+    
+    private void addSendedSubscriber(final Subscriber<? super Object> subscriber) {
+        if (!subscriber.isUnsubscribed()) {
+            this._sendedObserver.addComponent(subscriber);
+            subscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    _sendedObserver.removeComponent(subscriber);
+                }}));
+        }
+    }
+    
     @Override
     public Action0 closer() {
         return new Action0() {
