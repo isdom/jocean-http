@@ -170,21 +170,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return this._holder;
     }
     
-//    @Override
-//    public void setFlushPerWrite(final boolean isFlushPerWrite) {
-//        this._isFlushPerWrite = isFlushPerWrite;
-//    }
-//
-//    @Override
-//    public void setWriteBufferWaterMark(final int low, final int high) {
-//         this._op.setWriteBufferWaterMark(this, low, high);
-//    }
-//
-//    @Override
-//    public void setOnSended(final Action1<Object> onSended) {
-//        this._onSended = onSended;
-//    }
-    
     @Override
     public Subscription outbound(final Observable<? extends Object> message) {
         return this._op.setOutbound(this, message, null);

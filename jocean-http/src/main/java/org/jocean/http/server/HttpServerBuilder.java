@@ -54,10 +54,6 @@ public interface HttpServerBuilder extends Closeable {
         public Observable<? extends HttpObject> inbound();
         public HttpMessageHolder inboundHolder();
         
-//        public void setFlushPerWrite(final boolean isFlushPerWrite);
-//        public void setWriteBufferWaterMark(final int low, final int high);
-//        public void setOnSended(final Action1<Object> onSended);
-        
         public Subscription outbound(final Observable<? extends Object> message);
         
         public Subscription outbound(final Observable<? extends Object> message,
