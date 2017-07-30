@@ -140,4 +140,13 @@ public class ReadPolicies {
 
         private final Outboundable _outboundable;
     }
+    
+    static class OnlyHttpRequest implements ReadPolicy {
+        @Override
+        public Single<?> whenToRead(final Inboundable inboundable) {
+            // TODO Auto-generated method stub
+            return null;
+        }
+        
+    }
 }
