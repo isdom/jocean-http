@@ -194,7 +194,8 @@ class DefaultHttpInitiator
         if (inTransacting()) {
             final Single<?> when = this._whenToRead;
             if (null != when) {
-                when.subscribe(new Action1<Object>() {
+                //  TBD, try to record subscription and unsubscribe then
+                final Subscription subscription = when.subscribe(new Action1<Object>() {
                     @Override
                     public void call(final Object nouse) {
                         _op.readMessage(DefaultHttpInitiator.this);
