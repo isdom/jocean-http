@@ -207,7 +207,7 @@ class DefaultHttpInitiator
         }
     }
 
-    private static final Action1_N<Subscriber<? super Boolean>> ON_NEXT = new Action1_N<Subscriber<? super Boolean>>() {
+    private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = new Action1_N<Subscriber<? super Boolean>>() {
         @Override
         public void call(final Subscriber<? super Boolean> subscriber, final Object... args) {
             final Boolean isWritable = (Boolean)args[0];
@@ -223,7 +223,7 @@ class DefaultHttpInitiator
         }};
         
     private void onWritabilityChanged() {
-        this._writabilityObserver.foreachComponent(ON_NEXT, this._op.isWritable(this));
+        this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._op.isWritable(this));
     }
 
     /* (non-Javadoc)
