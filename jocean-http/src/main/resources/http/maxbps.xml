@@ -4,7 +4,7 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd">
 
-    <bean class="org.jocean.http.ReadPolicies"
+    <bean class="org.jocean.http.ReadPolicy.Util"
         factory-method="maxbps">
         <constructor-arg name="maxBytesPerSecond" value="${in.maxBPS:1048576}"/>
         <constructor-arg name="maxDelay" value="${in.maxdelay:500}"/>
