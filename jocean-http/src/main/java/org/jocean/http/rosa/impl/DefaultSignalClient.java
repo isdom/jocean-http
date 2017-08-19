@@ -685,7 +685,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                 }
                 if (null != bodyType) {
                     if (bodyType.equals(String.class)) {
-                        return (Observable<RESP>)Observable.just(new String(bytes, Charsets.UTF_8));
+                        return (Observable<RESP>)Observable.just(new String(bytes, CharsetUtil.UTF_8));
                     } else {
                         return Observable.just(JSON.<RESP>parseObject(bytes, bodyType));
                     }
