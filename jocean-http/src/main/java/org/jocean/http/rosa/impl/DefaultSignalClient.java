@@ -48,6 +48,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
+import com.google.common.base.Charsets;
 
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.DefaultLastHttpContent;
@@ -661,6 +662,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         this._beanHolder = beanHolder;
     }
     
+    @SuppressWarnings("unchecked")
     private <RESP> Observable<RESP> toRESP(
             final Func0<FullHttpResponse> messageBuilder,
             final Class<?> respType,
@@ -682,9 +684,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     return Observable.just(DefaultSignalClient.<RESP>convertResponseTo(fullresp, bytes, respType));
                 }
                 if (null != bodyType) {
-                    return Observable.just(JSON.<RESP>parseObject(bytes, bodyType));
+                    if (bodyType.equals(String.class)) {
+                        return (Observable<RESP>)Observable.just(new String(bytes, Charsets.UTF_8));
+                    } else {
+                        return Observable.just(JSON.<RESP>parseObject(bytes, bodyType));
+                    }
                 } else {
-                    @SuppressWarnings("unchecked")
                     final RESP respObj = (RESP)bytes;
                     return Observable.just(respObj);
                 }
