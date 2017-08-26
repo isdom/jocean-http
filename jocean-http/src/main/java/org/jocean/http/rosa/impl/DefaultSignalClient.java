@@ -283,6 +283,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         final Feature[] fullfeatures = Feature.Util.union(RosaProfiles._DEFAULT_PROFILE, features);
         final URI uri = req2uri(signalBean, fullfeatures);
         return _httpClient.initiator()
+        //  TODO delay using uri
         .remoteAddress(safeGetAddress(signalBean, uri))
         .feature(genFeatures4HttpClient(signalBean, fullfeatures))
         .build()

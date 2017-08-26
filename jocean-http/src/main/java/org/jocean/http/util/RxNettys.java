@@ -282,6 +282,14 @@ public class RxNettys {
         return Observable.<HttpObject>just(response);
     }
     
+    public static Observable<HttpObject> response404NOTFOUND(
+            final HttpVersion version) {
+        final HttpResponse response = new DefaultFullHttpResponse(
+                version, HttpResponseStatus.NOT_FOUND);
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
+        return Observable.<HttpObject>just(response);
+    }
+    
     public static Func1<HttpObject[], FullHttpRequest> BUILD_FULL_REQUEST = new Func1<HttpObject[], FullHttpRequest>() {
         @Override
         public FullHttpRequest call(final HttpObject[] httpobjs) {
