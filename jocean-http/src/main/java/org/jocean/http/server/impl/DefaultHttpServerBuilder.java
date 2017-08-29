@@ -217,12 +217,12 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                                     }
                                 }
                             }}));
-                        if (null != features) {
+//                        if (null != features) {
                             final ServerChannelAware serverChannelAware = serverChannelAwareOf(features);
                             if (null != serverChannelAware) {
                                 serverChannelAware.setServerChannel((ServerChannel)future.channel());
                             }
-                        }
+//                        }
                     } catch (Exception e) {
                         subscriber.onError(e);
                     }
