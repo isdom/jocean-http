@@ -407,7 +407,7 @@ public class RxNettys {
                         if (httpobj instanceof HttpRequest) {
                             return (HttpRequest)httpobj;
                         } else {
-                            return null;
+                            throw new RuntimeException("First HttpObject is not HttpRequest.");
                         }
                     }});
             }};
@@ -426,7 +426,7 @@ public class RxNettys {
                             if (httpobj instanceof HttpResponse) {
                                 return (HttpResponse)httpobj;
                             } else {
-                                return null;
+                                throw new RuntimeException("First HttpObject is not HttpResponse.");
                             }
                         }});
                 }};

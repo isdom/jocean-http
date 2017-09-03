@@ -15,6 +15,7 @@ import org.junit.Test;
 
 import com.google.common.base.Charsets;
 
+import io.netty.handler.codec.DecoderResult;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -25,6 +26,8 @@ import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
@@ -220,5 +223,55 @@ public class RxNettysTestCase {
         
         final FullHttpResponse fullresp = RxNettys.BUILD_FULL_RESPONSE.call(resps.toArray(new HttpObject[0]));
         assertNull(fullresp);
+    }
+
+    @Test
+    public final void testAsHttpRequestOp() {
+        final TestSubscriber<HttpRequest> testSubscriber = new TestSubscriber<>();
+        Observable.<HttpObject>just(new HttpObject() {
+            @Override
+            public DecoderResult decoderResult() {
+                return null;
+            }
+
+            @Override
+            public void setDecoderResult(DecoderResult result) {
+            }
+
+            @Override
+            public DecoderResult getDecoderResult() {
+                return null;
+            }})
+        .compose(RxNettys.asHttpRequest())
+        .subscribe(testSubscriber);
+        
+        testSubscriber.assertNoValues();
+        testSubscriber.assertNotCompleted();
+        testSubscriber.assertError(RuntimeException.class);
+    }
+
+    @Test
+    public final void testAsHttpResponseOp() {
+        final TestSubscriber<HttpResponse> testSubscriber = new TestSubscriber<>();
+        Observable.<HttpObject>just(new HttpObject() {
+            @Override
+            public DecoderResult decoderResult() {
+                return null;
+            }
+
+            @Override
+            public void setDecoderResult(DecoderResult result) {
+            }
+
+            @Override
+            public DecoderResult getDecoderResult() {
+                return null;
+            }})
+        .compose(RxNettys.asHttpResponse())
+        .subscribe(testSubscriber);
+        
+        testSubscriber.assertNoValues();
+        testSubscriber.assertNotCompleted();
+        testSubscriber.assertError(RuntimeException.class);
     }
 }
