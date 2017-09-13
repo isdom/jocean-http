@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+import org.jocean.http.DoFlush;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.ReadPolicy.Inboundable;
 import org.jocean.http.WritePolicy.Outboundable;
@@ -642,22 +643,26 @@ class DefaultHttpTrade extends DefaultAttributeMap
         // set in transacting flag
         markStartSending();
         
-        sendOutbound(outmsg)
-        .addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(final ChannelFuture future)
-                    throws Exception {
-                if (future.isSuccess()) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("send http response msg {} success.", outmsg);
+        if (outmsg instanceof DoFlush) {
+            this._channel.flush();
+        } else {
+            sendOutbound(outmsg)
+            .addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(final ChannelFuture future)
+                        throws Exception {
+                    if (future.isSuccess()) {
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("send http response msg {} success.", outmsg);
+                        }
+                        onOutboundMsgSended(outmsg);
+                    } else {
+                        LOG.warn("exception when send http resp: {}, detail: {}",
+                                outmsg, ExceptionUtils.exception2detail(future.cause()));
+                        fireClosed(new TransportException("send response error", future.cause()));
                     }
-                    onOutboundMsgSended(outmsg);
-                } else {
-                    LOG.warn("exception when send http resp: {}, detail: {}",
-                            outmsg, ExceptionUtils.exception2detail(future.cause()));
-                    fireClosed(new TransportException("send response error", future.cause()));
-                }
-            }});
+                }});
+        }
     }
     
     private void outboundOnCompleted() {
