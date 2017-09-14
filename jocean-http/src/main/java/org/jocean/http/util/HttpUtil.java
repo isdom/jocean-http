@@ -1,6 +1,14 @@
 package org.jocean.http.util;
 
+import java.lang.annotation.Annotation;
 import java.util.concurrent.atomic.AtomicReference;
+
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.HEAD;
+import javax.ws.rs.OPTIONS;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
@@ -90,6 +98,25 @@ public class HttpUtil {
             return HttpMethod.valueOf(rsHttpMethod.value());
         } else {
             return defaultMethod;
+        }
+    }
+    
+    public static Class<? extends Annotation> toJSR331Type(final HttpMethod method) {
+        switch(method.name()) {
+        case javax.ws.rs.HttpMethod.GET:
+            return GET.class;
+        case javax.ws.rs.HttpMethod.POST:
+            return POST.class;
+        case javax.ws.rs.HttpMethod.PUT:
+            return PUT.class;
+        case javax.ws.rs.HttpMethod.HEAD:
+            return HEAD.class;
+        case javax.ws.rs.HttpMethod.DELETE:
+            return DELETE.class;
+        case javax.ws.rs.HttpMethod.OPTIONS:
+            return OPTIONS.class;
+        default:
+            return null;
         }
     }
 }
