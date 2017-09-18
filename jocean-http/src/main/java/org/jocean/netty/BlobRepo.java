@@ -5,6 +5,7 @@ import java.io.InputStream;
 
 import io.netty.util.ReferenceCounted;
 import rx.Observable;
+import rx.functions.Func0;
 import rx.functions.Func1;
 
 public interface BlobRepo {
@@ -106,6 +107,10 @@ public interface BlobRepo {
             final Blob blob);
     
     public Observable<Blob> getBlob(final String key);
+    
+    public Observable<String> putBlob(
+            final String key,
+            final Func0<? extends Blob> blobProducer);
     
     public static class Util {
         private static Func1<PutResult, Blob> _RESULT2BLOB = new Func1<PutResult, Blob>() {
