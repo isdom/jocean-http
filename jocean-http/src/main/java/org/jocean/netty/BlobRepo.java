@@ -112,7 +112,7 @@ public interface BlobRepo {
             final String key,
             final Func0<? extends Blob> blobProducer);
     
-    public Observable<String> copyBlob(final String fromkey, final String tokey);
+    public Observable<String> copyBlob(final String sourceKey, final String destinationKey);
     
     public static class Util {
         private static Func1<PutResult, Blob> _RESULT2BLOB = new Func1<PutResult, Blob>() {
