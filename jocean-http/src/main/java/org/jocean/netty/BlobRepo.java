@@ -114,6 +114,8 @@ public interface BlobRepo {
     
     public Observable<String> copyBlob(final String sourceKey, final String destinationKey);
     
+    public Observable<String> deleteBlob(final String key);
+    
     public static class Util {
         private static Func1<PutResult, Blob> _RESULT2BLOB = new Func1<PutResult, Blob>() {
             @Override
