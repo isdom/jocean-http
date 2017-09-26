@@ -272,7 +272,7 @@ public class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
             }
 
             @Override
-            public Observable<? extends HttpContent> content() {
+            public Observable<? extends ByteBuf> content() {
                 return null;
             }};
     }

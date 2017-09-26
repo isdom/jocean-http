@@ -3,7 +3,7 @@ package org.jocean.netty;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 
-import io.netty.handler.codec.http.HttpContent;
+import io.netty.buffer.ByteBuf;
 import io.netty.util.ReferenceCounted;
 import rx.Observable;
 import rx.functions.Func0;
@@ -17,7 +17,7 @@ public interface BlobRepo {
         public int contentLength();
         public InputStream inputStream();
         
-        public Observable<? extends HttpContent> content();
+        public Observable<? extends ByteBuf> content();
         
         @Override
         Blob retain();
@@ -97,7 +97,7 @@ public interface BlobRepo {
                         return content.length;
                     }
                     @Override
-                    public Observable<? extends HttpContent> content() {
+                    public Observable<? extends ByteBuf> content() {
                         return null;
                     }};
             }
