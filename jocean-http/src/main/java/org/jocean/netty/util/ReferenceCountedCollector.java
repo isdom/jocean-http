@@ -3,6 +3,9 @@ package org.jocean.netty.util;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.util.ReferenceCounted;
 import rx.functions.Action1;
 
@@ -11,6 +14,8 @@ public interface ReferenceCountedCollector {
     public void forAll(final Action1<ReferenceCounted> check);
     
     public static class Util {
+        private static final Logger LOG
+            = LoggerFactory.getLogger(Util.class);
         static private final ReferenceCountedCollector _EMPTY = new ReferenceCountedCollector() {
             @Override
             public void add(ReferenceCounted referenceCounted) {
@@ -33,9 +38,11 @@ public interface ReferenceCountedCollector {
                 
                 @Override
                 public void forAll(final Action1<ReferenceCounted> check) {
+                    LOG.info("begin to enumerate all ReferenceCounted instance ...");
                     for (ReferenceCounted referenceCounted : refs) {
                         check.call(referenceCounted);
                     }
+                    LOG.info("end of all ReferenceCounted instance ...");
                 }};
         }
     }
