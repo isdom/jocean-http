@@ -290,6 +290,13 @@ class DefaultHttpTrade extends DefaultAttributeMap
                         }});
                 }})
             .cache()
+            .doOnNext(new Action1<HttpObjectWrapper>() {
+                @Override
+                public void call(final HttpObjectWrapper wrapper) {
+                    if (wrapper.isDisposed()) {
+                        throw new RuntimeException("httpobject wrapper is disposed!");
+                    }
+                }})
             .map(_DUPLICATE_WRAPCONTENT);
         
         final Observable<? extends HttpObject> inbound = 

@@ -20,6 +20,7 @@ import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.COWCompositeSupport;
+import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
@@ -757,7 +758,10 @@ class DefaultHttpInitiator
         this._sendedObserver.foreachComponent(ON_SENDED, outmsg);
     }
 
-    private ChannelFuture sendOutbound(final Object outmsg) {
+    private ChannelFuture sendOutbound(Object outmsg) {
+        while (outmsg instanceof DisposableWrapper) {
+            outmsg = ((DisposableWrapper<?>)outmsg).unwrap();
+        }
         return this._isFlushPerWrite
                 ? this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
                 : this._channel.write(ReferenceCountUtil.retain(outmsg));
