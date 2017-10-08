@@ -7,6 +7,7 @@ import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
+import org.jocean.http.HttpObjectWrapper;
 import org.jocean.http.IntrafficController;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
@@ -53,6 +54,8 @@ public interface HttpServerBuilder extends Closeable {
         
         public Observable<? extends HttpObject> inbound();
         public HttpMessageHolder inboundHolder();
+        
+        public Observable<? extends HttpObjectWrapper> obsrequest();
         
         public Subscription outbound(final Observable<? extends Object> message);
         

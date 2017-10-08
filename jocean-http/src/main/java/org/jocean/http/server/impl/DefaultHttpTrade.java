@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.DoFlush;
+import org.jocean.http.HttpObjectWrapper;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.ReadPolicy.Inboundable;
 import org.jocean.http.WritePolicy.Outboundable;
@@ -42,6 +43,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -58,6 +60,7 @@ import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.ActionN;
+import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
 /**
@@ -65,8 +68,36 @@ import rx.subscriptions.Subscriptions;
  *
  */
 class DefaultHttpTrade extends DefaultAttributeMap 
-    implements HttpTrade,  Comparable<DefaultHttpTrade> {//, Transformer<Object, Object>  {
+    implements HttpTrade,  Comparable<DefaultHttpTrade> {
     
+    private final Func1<HttpObjectWrapper, HttpObject> _UNWRAP = new Func1<HttpObjectWrapper, HttpObject>() {
+        @Override
+        public HttpObject call(final HttpObjectWrapper wrapper) {
+            return wrapper.unwrap();
+        }};
+    private final Func1<HttpObjectWrapper, HttpObjectWrapper> _DUPLICATE_WRAPCONTENT = new Func1<HttpObjectWrapper, HttpObjectWrapper>() {
+        @Override
+        public HttpObjectWrapper call(final HttpObjectWrapper wrapper) {
+            if (wrapper.unwrap() instanceof HttpContent) {
+                final HttpContent duplicated = ((HttpContent)wrapper.unwrap()).duplicate();
+                return new HttpObjectWrapper() {
+                    @Override
+                    public HttpObject unwrap() {
+                        return duplicated;
+                    }
+                    @Override
+                    public void dispose() {
+                        wrapper.dispose();
+                    }
+                    @Override
+                    public boolean isDisposed() {
+                        return wrapper.isDisposed();
+                    }};
+            } else {
+                return wrapper;
+            }
+        }};
+        
     private static final AtomicInteger _IDSRC = new AtomicInteger(1);
     
     private final int _id = _IDSRC.getAndIncrement();
@@ -167,6 +198,11 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
 
     @Override
+    public Observable<? extends HttpObjectWrapper> obsrequest() {
+        return this._obsRequest;
+    }
+    
+    @Override
     public HttpMessageHolder inboundHolder() {
         return this._holder;
     }
@@ -238,12 +274,27 @@ class DefaultHttpTrade extends DefaultAttributeMap
         this._holder = new HttpMessageHolder();
         doOnTerminate(this._holder.closer());
         
-        final Observable<? extends HttpObject> inbound = 
-            Observable.unsafeCreate(new Observable.OnSubscribe<HttpObject>() {
+        this._obsRequest = 
+            Observable.unsafeCreate(new Observable.OnSubscribe<HttpObjectWrapper>() {
                 @Override
-                public void call(final Subscriber<? super HttpObject> subscriber) {
+                public void call(final Subscriber<? super HttpObjectWrapper> subscriber) {
                     initInboundHandler(subscriber);
                 }})
+            .doOnNext(new Action1<HttpObjectWrapper>() {
+                @Override
+                public void call(final HttpObjectWrapper wrapper) {
+                    doOnTerminate(new Action0() {
+                        @Override
+                        public void call() {
+                            wrapper.dispose();
+                        }});
+                }})
+            .cache()
+            .map(_DUPLICATE_WRAPCONTENT);
+        
+        final Observable<? extends HttpObject> inbound = 
+            this._obsRequest
+            .map(_UNWRAP)
             .compose(this._holder.<HttpObject>assembleAndHold())
             .cache()
             .compose(RxNettys.duplicateHttpContent());
@@ -325,7 +376,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
     
-    private void initInboundHandler(final Subscriber<? super HttpObject> subscriber) {
+    private void initInboundHandler(final Subscriber<? super HttpObjectWrapper> subscriber) {
         final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
             @Override
             protected void channelRead0(final ChannelHandlerContext ctx,
@@ -338,7 +389,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
 
     private void inboundOnNext(
-            final Subscriber<? super HttpObject> subscriber,
+            final Subscriber<? super HttpObjectWrapper> subscriber,
             final HttpObject inmsg) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("HttpTrade: channel({}) invoke channelRead0 and call with msg({}).",
@@ -350,11 +401,11 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
         
         try {
-            subscriber.onNext(inmsg);
+            subscriber.onNext(wrap(inmsg));
         } finally {
             //  SimpleChannelInboundHandler 设置为 !NOT! autorelease
             //  因此可在 onNext 之后尽早的 手动 release request's message
-            ReferenceCountUtil.release(inmsg);
+//            ReferenceCountUtil.release(inmsg);
             if (inmsg instanceof LastHttpContent) {
                 /*
                  * netty 参考代码: https://github.com/netty/netty/blob/netty-
@@ -375,6 +426,30 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
     
+    private static HttpObjectWrapper wrap(final HttpObject inmsg) {
+        final Subscription  subscription = Subscriptions.create(new Action0() {
+            @Override
+            public void call() {
+                ReferenceCountUtil.release(inmsg);
+            }});
+        return new HttpObjectWrapper() {
+
+            @Override
+            public HttpObject unwrap() {
+                return inmsg;
+            }
+
+            @Override
+            public void dispose() {
+                subscription.unsubscribe();
+            }
+
+            @Override
+            public boolean isDisposed() {
+                return subscription.isUnsubscribed();
+            }};
+    }
+
     private void onHttpRequest(final HttpRequest req) {
         this._requestMethod = req.method().name();
         this._requestUri = req.uri();
@@ -772,6 +847,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
             new CopyOnWriteArrayList<>();
     private volatile Throwable _unactiveReason = null;
     private final Observable<HttpObject> _cachedInbound;
+    private final Observable<? extends HttpObjectWrapper> _obsRequest;
     
     private volatile boolean _isFlushPerWrite = false;
     
@@ -808,7 +884,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
 
         public void inboundOnNext(
                 final DefaultHttpTrade trade,
-                final Subscriber<? super HttpObject> subscriber,
+                final Subscriber<? super HttpObjectWrapper> subscriber,
                 final HttpObject msg);
         
         public Subscription setOutbound(final DefaultHttpTrade trade,
@@ -842,7 +918,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         
         public void inboundOnNext(
                 final DefaultHttpTrade trade,
-                final Subscriber<? super HttpObject> subscriber,
+                final Subscriber<? super HttpObjectWrapper> subscriber,
                 final HttpObject inmsg) {
             trade.inboundOnNext(subscriber, inmsg);
         }
@@ -902,7 +978,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
 //        }
         public void inboundOnNext(
                 final DefaultHttpTrade trade,
-                final Subscriber<? super HttpObject> subscriber,
+                final Subscriber<? super HttpObjectWrapper> subscriber,
                 final HttpObject inmsg) {
             ReferenceCountUtil.release(inmsg);
             if (LOG.isDebugEnabled()) {
