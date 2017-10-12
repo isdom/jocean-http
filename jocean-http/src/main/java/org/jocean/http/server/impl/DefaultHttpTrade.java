@@ -70,7 +70,7 @@ import rx.subscriptions.Subscriptions;
 class DefaultHttpTrade extends DefaultAttributeMap 
     implements HttpTrade,  Comparable<DefaultHttpTrade> {
     
-    private final Func1<HttpObjectWrapper, HttpObject> _UNWRAP = new Func1<HttpObjectWrapper, HttpObject>() {
+    private static final Func1<HttpObjectWrapper, HttpObject> _UNWRAP = new Func1<HttpObjectWrapper, HttpObject>() {
         @Override
         public HttpObject call(final HttpObjectWrapper wrapper) {
             return wrapper.unwrap();

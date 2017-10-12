@@ -3,8 +3,10 @@ package org.jocean.http.util;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketAddress;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ProxyBuilder;
@@ -288,6 +290,48 @@ public class RxNettys {
                 version, HttpResponseStatus.NOT_FOUND);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
         return Observable.<HttpObject>just(response);
+    }
+    
+    private static final Func1<List<HttpObject>, FullHttpRequest> _HTTPOBJS2FULLREQ = 
+    new Func1<List<HttpObject>, FullHttpRequest>() {
+        @Override
+        public FullHttpRequest call(final List<HttpObject> httpobjs) {
+            if (httpobjs.size() > 0 
+            && (httpobjs.get(0) instanceof HttpRequest) 
+            && (httpobjs.get(httpobjs.size()-1) instanceof LastHttpContent)) {
+                if (httpobjs.get(0) instanceof FullHttpRequest) {
+                    return ((FullHttpRequest)httpobjs.get(0)).retainedDuplicate();
+                }
+                
+                final List<ByteBuf> torelease = new ArrayList<>();
+                try {
+                    final HttpRequest req = (HttpRequest)httpobjs.get(0);
+                    final ByteBuf[] bufs = new ByteBuf[httpobjs.size()-1];
+                    for (int idx = 1; idx<httpobjs.size(); idx++) {
+                        bufs[idx-1] = ((HttpContent)httpobjs.get(idx)).content().retain();
+                        torelease.add(bufs[idx-1]);
+                    }
+                    final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
+                            req.protocolVersion(), 
+                            req.method(), 
+                            req.uri(), 
+                            Unpooled.wrappedBuffer(bufs));
+                    fullreq.headers().add(req.headers());
+                    //  ? need update Content-Length header field ?
+                    return fullreq;
+                } catch (Throwable e) {
+                    for (ByteBuf b : torelease) {
+                        b.release();
+                    }
+                    throw e;
+                }
+            } else {
+                throw new RuntimeException("invalid HttpObjects");
+            }
+        }};
+        
+    public static Func1<List<HttpObject>, FullHttpRequest> httpobjs2fullreq() {
+        return _HTTPOBJS2FULLREQ;
     }
     
     public static Func1<HttpObject[], FullHttpRequest> BUILD_FULL_REQUEST = new Func1<HttpObject[], FullHttpRequest>() {
