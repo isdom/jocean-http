@@ -303,13 +303,13 @@ public class RxNettys {
                     return ((FullHttpRequest)httpobjs.get(0)).retainedDuplicate();
                 }
                 
-                final List<ByteBuf> torelease = new ArrayList<>();
+                final List<ByteBuf> freewhenfailed = new ArrayList<>();
                 try {
                     final HttpRequest req = (HttpRequest)httpobjs.get(0);
                     final ByteBuf[] bufs = new ByteBuf[httpobjs.size()-1];
                     for (int idx = 1; idx<httpobjs.size(); idx++) {
                         bufs[idx-1] = ((HttpContent)httpobjs.get(idx)).content().retain();
-                        torelease.add(bufs[idx-1]);
+                        freewhenfailed.add(bufs[idx-1]);
                     }
                     final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
                             req.protocolVersion(), 
@@ -320,7 +320,7 @@ public class RxNettys {
                     //  ? need update Content-Length header field ?
                     return fullreq;
                 } catch (Throwable e) {
-                    for (ByteBuf b : torelease) {
+                    for (ByteBuf b : freewhenfailed) {
                         b.release();
                     }
                     throw e;
@@ -332,6 +332,47 @@ public class RxNettys {
         
     public static Func1<List<HttpObject>, FullHttpRequest> httpobjs2fullreq() {
         return _HTTPOBJS2FULLREQ;
+    }
+    
+    private static final Func1<List<HttpObject>, FullHttpResponse> _HTTPOBJS2FULLRESP = 
+    new Func1<List<HttpObject>, FullHttpResponse>() {
+        @Override
+        public FullHttpResponse call(final List<HttpObject> httpobjs) {
+            if (httpobjs.size() > 0 
+            && (httpobjs.get(0) instanceof HttpResponse) 
+            && (httpobjs.get(httpobjs.size()-1) instanceof LastHttpContent)) {
+                if (httpobjs.get(0) instanceof FullHttpResponse) {
+                    return ((FullHttpResponse)httpobjs.get(0)).retainedDuplicate();
+                }
+                
+                final List<ByteBuf> freewhenfailed = new ArrayList<>();
+                try {
+                    final HttpResponse resp = (HttpResponse)httpobjs.get(0);
+                    final ByteBuf[] bufs = new ByteBuf[httpobjs.size()-1];
+                    for (int idx = 1; idx<httpobjs.size(); idx++) {
+                        bufs[idx-1] = ((HttpContent)httpobjs.get(idx)).content().retain();
+                        freewhenfailed.add(bufs[idx-1]);
+                    }
+                    final DefaultFullHttpResponse fullresp = new DefaultFullHttpResponse(
+                            resp.protocolVersion(), 
+                            resp.status(),
+                            Unpooled.wrappedBuffer(bufs));
+                    fullresp.headers().add(resp.headers());
+                    //  ? need update Content-Length header field ?
+                    return fullresp;
+                } catch (Throwable e) {
+                    for (ByteBuf b : freewhenfailed) {
+                        b.release();
+                    }
+                    throw e;
+                }
+            } else {
+                throw new RuntimeException("invalid HttpObjects");
+            }
+        }};
+        
+    public static Func1<List<HttpObject>, FullHttpResponse> httpobjs2fullresp() {
+        return _HTTPOBJS2FULLRESP;
     }
     
     public static Func1<HttpObject[], FullHttpRequest> BUILD_FULL_REQUEST = new Func1<HttpObject[], FullHttpRequest>() {

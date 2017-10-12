@@ -7,6 +7,7 @@ import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
 
 import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 import rx.Observable.Transformer;
@@ -30,6 +31,14 @@ public interface HttpObjectWrapper extends DisposableWrapper<HttpObject> {
                 @Override
                 public Observable<FullHttpRequest> call(final Observable<HttpObjectWrapper> obsrequest) {
                     return obsrequest.map(_UNWRAP).toList().map(RxNettys.httpobjs2fullreq());
+                }};
+        }
+        
+        public static Transformer<HttpObjectWrapper,  FullHttpResponse> toFullResponse() {
+            return new Transformer<HttpObjectWrapper,  FullHttpResponse>() {
+                @Override
+                public Observable<FullHttpResponse> call(final Observable<HttpObjectWrapper> obsresponse) {
+                    return obsresponse.map(_UNWRAP).toList().map(RxNettys.httpobjs2fullresp());
                 }};
         }
     }

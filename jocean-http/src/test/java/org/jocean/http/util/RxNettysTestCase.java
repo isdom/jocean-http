@@ -196,7 +196,7 @@ public class RxNettysTestCase {
         subscriber.assertNotCompleted();
         subscriber.assertError(IllegalReferenceCountException.class);
         
-        RxActions.applyArrayBy(Arrays.copyOfRange(req_contents, 1, req_contents.length) , 
+        RxActions.applyArrayBy(Arrays.copyOfRange(req_contents, 1, req_contents.length), 
                 new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
@@ -236,7 +236,214 @@ public class RxNettysTestCase {
         subscriber.assertNotCompleted();
         subscriber.assertError(IllegalReferenceCountException.class);
         
-        RxActions.applyArrayBy(Arrays.copyOfRange(req_contents, 0, req_contents.length - 1) , 
+        RxActions.applyArrayBy(Arrays.copyOfRange(req_contents, 0, req_contents.length - 1), 
+                new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.content().refCnt());
+            }});
+    }
+    
+    @Test
+    public final void test_httpobjs2fullresp_success() throws Exception {
+        final DefaultHttpResponse response = 
+                new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+        
+        final HttpContent[] resp_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final List<HttpObject> resps = new ArrayList<HttpObject>() {
+            private static final long serialVersionUID = 1L;
+        {
+            this.add(response);
+            this.addAll(Arrays.asList(resp_contents));
+            this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+        }};
+        
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.content().refCnt());
+            }});
+        
+        final FullHttpResponse fullresp = Observable.just(resps).map(RxNettys.httpobjs2fullresp()).toBlocking().single();
+        
+        assertNotNull(fullresp);
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(2, c.content().refCnt());
+            }});
+        assertEquals(REQ_CONTENT, new String(Nettys.dumpByteBufAsBytes(fullresp.content()), Charsets.UTF_8));
+        
+        fullresp.release();
+        
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.content().refCnt());
+            }});
+    }
+    
+    @Test
+    public final void test_httpobjs2fullresp_success2() throws Exception {
+        final FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, OK,
+                Nettys4Test.buildByteBuf(REQ_CONTENT));
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        
+        assertEquals(1, response.refCnt());
+        
+        final FullHttpResponse fullresp = Observable.just(Arrays.<HttpObject>asList(response))
+                .map(RxNettys.httpobjs2fullresp()).toBlocking().single();
+        assertNotNull(fullresp);
+        assertEquals(REQ_CONTENT, new String(Nettys.dumpByteBufAsBytes(fullresp.content()), Charsets.UTF_8));
+        assertEquals(2, response.refCnt());
+        
+        fullresp.release();
+        assertEquals(1, response.refCnt());
+    }
+    
+    @Test
+    public final void test_httpobjs2fullresp_misshttpresp() throws Exception {
+        final HttpContent[] resp_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final List<HttpObject> resps = new ArrayList<HttpObject>() {
+            private static final long serialVersionUID = 1L;
+        {
+            this.addAll(Arrays.asList(resp_contents));
+            this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+        }};
+        
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.content().refCnt());
+            }});
+        
+        final TestSubscriber<FullHttpResponse> subscriber = new TestSubscriber<>();
+        Observable.just(resps)
+        .map(RxNettys.httpobjs2fullresp())
+        .subscribe(subscriber);
+        
+        subscriber.assertNoValues();
+        subscriber.assertNotCompleted();
+        subscriber.assertError(RuntimeException.class);
+        
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.content().refCnt());
+            }});
+    }
+    
+    @Test
+    public final void test_httpobjs2fullresp_misslastcontent() throws Exception {
+        final DefaultHttpResponse response = 
+                new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+        final HttpContent[] resp_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final List<HttpObject> resps = new ArrayList<HttpObject>() {
+            private static final long serialVersionUID = 1L;
+        {
+            this.add(response);
+            this.addAll(Arrays.asList(resp_contents));
+        }};
+        
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.content().refCnt());
+            }});
+        
+        final TestSubscriber<FullHttpResponse> subscriber = new TestSubscriber<>();
+        Observable.just(resps)
+        .map(RxNettys.httpobjs2fullresp())
+        .subscribe(subscriber);
+        
+        subscriber.assertNoValues();
+        subscriber.assertNotCompleted();
+        subscriber.assertError(RuntimeException.class);
+        
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.content().refCnt());
+            }});
+    }
+    
+    @Test
+    public final void test_httpobjs2fullresp_firstcontentdisposed() throws Exception {
+        final DefaultHttpResponse response = 
+                new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+        final HttpContent[] resp_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final List<HttpObject> resps = new ArrayList<HttpObject>() {
+            private static final long serialVersionUID = 1L;
+        {
+            this.add(response);
+            this.addAll(Arrays.asList(resp_contents));
+            this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+        }};
+        
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.content().refCnt());
+            }});
+        
+        // release [0]'s content
+        resp_contents[0].release();
+        
+        final TestSubscriber<FullHttpResponse> subscriber = new TestSubscriber<>();
+        Observable.just(resps)
+        .map(RxNettys.httpobjs2fullresp())
+        .subscribe(subscriber);
+        
+        subscriber.assertNoValues();
+        subscriber.assertNotCompleted();
+        subscriber.assertError(IllegalReferenceCountException.class);
+        
+        RxActions.applyArrayBy(Arrays.copyOfRange(resp_contents, 1, resp_contents.length), 
+                new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.content().refCnt());
+            }});
+    }
+    
+    @Test
+    public final void test_httpobjs2fullresp_latercontentdisposed() throws Exception {
+        final DefaultHttpResponse response = 
+                new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+        final HttpContent[] resp_contents = Nettys4Test.buildContentArray(REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
+        
+        final List<HttpObject> resps = new ArrayList<HttpObject>() {
+            private static final long serialVersionUID = 1L;
+        {
+            this.add(response);
+            this.addAll(Arrays.asList(resp_contents));
+            this.add(LastHttpContent.EMPTY_LAST_CONTENT);
+        }};
+        
+        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+            @Override
+            public void call(final HttpContent c) {
+                assertEquals(1, c.content().refCnt());
+            }});
+        
+        // release [0]'s content
+        resp_contents[resp_contents.length-1].release();
+        
+        final TestSubscriber<FullHttpResponse> subscriber = new TestSubscriber<>();
+        Observable.just(resps)
+        .map(RxNettys.httpobjs2fullresp())
+        .subscribe(subscriber);
+        
+        subscriber.assertNoValues();
+        subscriber.assertNotCompleted();
+        subscriber.assertError(IllegalReferenceCountException.class);
+        
+        RxActions.applyArrayBy(Arrays.copyOfRange(resp_contents, 0, resp_contents.length - 1), 
                 new Action1<HttpContent>() {
             @Override
             public void call(final HttpContent c) {
