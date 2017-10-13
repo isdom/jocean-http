@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
-import org.jocean.http.HttpObjectWrapper;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.ReadPolicy.Inboundable;
 import org.jocean.http.TrafficCounter;
@@ -239,13 +238,13 @@ class DefaultHttpInitiator
     }
     
     @Override
-    public Observable<? extends HttpObjectWrapper> defineInteraction2(Observable<? extends Object> request) {
+    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(Observable<? extends Object> request) {
         // TODO Auto-generated method stub
         return null;
     }
 
     @Override
-    public Observable<? extends HttpObjectWrapper> defineInteraction2(Observable<? extends Object> request,
+    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(Observable<? extends Object> request,
             WritePolicy writePolicy) {
         // TODO Auto-generated method stub
         return null;

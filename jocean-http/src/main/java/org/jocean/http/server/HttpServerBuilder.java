@@ -7,12 +7,12 @@ import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
-import org.jocean.http.HttpObjectWrapper;
 import org.jocean.http.IntrafficController;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.WritePolicy;
 import org.jocean.http.util.HttpMessageHolder;
+import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.TerminateAware;
 
 import io.netty.handler.codec.http.HttpObject;
@@ -55,7 +55,7 @@ public interface HttpServerBuilder extends Closeable {
         public Observable<? extends HttpObject> inbound();
         public HttpMessageHolder inboundHolder();
         
-        public Observable<? extends HttpObjectWrapper> obsrequest();
+        public Observable<? extends DisposableWrapper<HttpObject>> obsrequest();
         
         public Subscription outbound(final Observable<? extends Object> message);
         

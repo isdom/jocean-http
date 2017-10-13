@@ -6,11 +6,11 @@ package org.jocean.http.client;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
-import org.jocean.http.HttpObjectWrapper;
 import org.jocean.http.IntrafficController;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.WritePolicy;
+import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.TerminateAware;
 
 import io.netty.handler.codec.http.HttpObject;
@@ -41,10 +41,10 @@ public interface HttpClient extends AutoCloseable {
         public Observable<? extends HttpObject> defineInteraction(
                 final Observable<? extends Object> request, final WritePolicy writePolicy);
         
-        public Observable<? extends HttpObjectWrapper> defineInteraction2(
+        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(
                 final Observable<? extends Object> request);
         
-        public Observable<? extends HttpObjectWrapper> defineInteraction2(
+        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(
                 final Observable<? extends Object> request, final WritePolicy writePolicy);
         
         // from IntrafficController

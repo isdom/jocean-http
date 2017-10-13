@@ -17,7 +17,7 @@ import rx.functions.Func1;
  * @author isdom
  *
  */
-public interface HttpObjectWrapper extends DisposableWrapper<HttpObject> {
+public interface HttpObjectWrapper2 extends DisposableWrapper<HttpObject> {
 //    public static class Util {
 //        private static final Func1<HttpObjectWrapper, HttpObject> _UNWRAP = 
 //        new Func1<HttpObjectWrapper, HttpObject>() {
