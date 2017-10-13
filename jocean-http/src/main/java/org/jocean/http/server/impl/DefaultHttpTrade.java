@@ -408,7 +408,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
         
         try {
-            subscriber.onNext(wrap(inmsg));
+            subscriber.onNext((HttpObjectWrapper)RxNettys.wrap(inmsg));
         } finally {
             //  SimpleChannelInboundHandler 设置为 !NOT! autorelease
             //  因此可在 onNext 之后尽早的 手动 release request's message

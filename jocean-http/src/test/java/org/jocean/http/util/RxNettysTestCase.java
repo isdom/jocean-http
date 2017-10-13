@@ -4,14 +4,16 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 import org.jocean.idiom.rx.RxActions;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import com.google.common.base.Charsets;
 
@@ -60,7 +62,7 @@ public class RxNettysTestCase {
                 assertEquals(1, c.content().refCnt());
             }});
         
-        final FullHttpRequest fullreq = Observable.just(reqs).map(RxNettys.httpobjs2fullreq()).toBlocking().single();
+        final FullHttpRequest fullreq = RxNettys.httpobjs2fullreq(reqs);
         
         assertNotNull(fullreq);
         RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
@@ -82,12 +84,13 @@ public class RxNettysTestCase {
     @Test
     public final void test_httpobjs2fullreq_success2() throws Exception {
         final DefaultFullHttpRequest request = 
-                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf(REQ_CONTENT));
+                new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", 
+                        Nettys4Test.buildByteBuf(REQ_CONTENT));
         
         assertEquals(1, request.refCnt());
         
-        final FullHttpRequest fullreq = Observable.just(Arrays.<HttpObject>asList(request))
-                .map(RxNettys.httpobjs2fullreq()).toBlocking().single();
+        final FullHttpRequest fullreq = RxNettys.httpobjs2fullreq(Arrays.<HttpObject>asList(request));
+        
         assertNotNull(fullreq);
         assertEquals(REQ_CONTENT, new String(Nettys.dumpByteBufAsBytes(fullreq.content()), Charsets.UTF_8));
         assertEquals(2, request.refCnt());
@@ -95,6 +98,9 @@ public class RxNettysTestCase {
         fullreq.release();
         assertEquals(1, request.refCnt());
     }
+    
+    @Rule 
+    public ExpectedException thrown= ExpectedException.none();
     
     @Test
     public final void test_httpobjs2fullreq_misshttpreq() throws Exception {
@@ -113,20 +119,18 @@ public class RxNettysTestCase {
                 assertEquals(1, c.content().refCnt());
             }});
         
-        final TestSubscriber<FullHttpRequest> subscriber = new TestSubscriber<>();
-        Observable.just(reqs)
-        .map(RxNettys.httpobjs2fullreq())
-        .subscribe(subscriber);
-        
-        subscriber.assertNoValues();
-        subscriber.assertNotCompleted();
-        subscriber.assertError(RuntimeException.class);
-        
-        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.content().refCnt());
-            }});
+        FullHttpRequest fullreq = null;
+        thrown.expect(RuntimeException.class);
+        try {
+            fullreq = RxNettys.httpobjs2fullreq(reqs);
+        } finally {
+            assertNull(fullreq);
+            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.content().refCnt());
+                }});
+        }
     }
     
     @Test
@@ -148,20 +152,18 @@ public class RxNettysTestCase {
                 assertEquals(1, c.content().refCnt());
             }});
         
-        final TestSubscriber<FullHttpRequest> subscriber = new TestSubscriber<>();
-        Observable.just(reqs)
-        .map(RxNettys.httpobjs2fullreq())
-        .subscribe(subscriber);
-        
-        subscriber.assertNoValues();
-        subscriber.assertNotCompleted();
-        subscriber.assertError(RuntimeException.class);
-        
-        RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.content().refCnt());
-            }});
+        FullHttpRequest fullreq = null;
+        thrown.expect(RuntimeException.class);
+        try {
+            fullreq = RxNettys.httpobjs2fullreq(reqs);
+        } finally {
+            assertNull(fullreq);
+            RxActions.applyArrayBy(req_contents, new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.content().refCnt());
+                }});
+        }
     }
     
     @Test
@@ -187,21 +189,19 @@ public class RxNettysTestCase {
         // release [0]'s content
         req_contents[0].release();
         
-        final TestSubscriber<FullHttpRequest> subscriber = new TestSubscriber<>();
-        Observable.just(reqs)
-        .map(RxNettys.httpobjs2fullreq())
-        .subscribe(subscriber);
-        
-        subscriber.assertNoValues();
-        subscriber.assertNotCompleted();
-        subscriber.assertError(IllegalReferenceCountException.class);
-        
-        RxActions.applyArrayBy(Arrays.copyOfRange(req_contents, 1, req_contents.length), 
-                new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.content().refCnt());
-            }});
+        FullHttpRequest fullreq = null;
+        thrown.expect(IllegalReferenceCountException.class);
+        try {
+            fullreq = RxNettys.httpobjs2fullreq(reqs);
+        } finally {
+            assertNull(fullreq);
+            RxActions.applyArrayBy(Arrays.copyOfRange(req_contents, 1, req_contents.length), 
+                    new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.content().refCnt());
+                }});
+        }
     }
     
     @Test
@@ -227,21 +227,19 @@ public class RxNettysTestCase {
         // release [0]'s content
         req_contents[req_contents.length-1].release();
         
-        final TestSubscriber<FullHttpRequest> subscriber = new TestSubscriber<>();
-        Observable.just(reqs)
-        .map(RxNettys.httpobjs2fullreq())
-        .subscribe(subscriber);
-        
-        subscriber.assertNoValues();
-        subscriber.assertNotCompleted();
-        subscriber.assertError(IllegalReferenceCountException.class);
-        
-        RxActions.applyArrayBy(Arrays.copyOfRange(req_contents, 0, req_contents.length - 1), 
-                new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.content().refCnt());
-            }});
+        FullHttpRequest fullreq = null;
+        thrown.expect(IllegalReferenceCountException.class);
+        try {
+            fullreq = RxNettys.httpobjs2fullreq(reqs);
+        } finally {
+            assertNull(fullreq);
+            RxActions.applyArrayBy(Arrays.copyOfRange(req_contents, 0, req_contents.length - 1), 
+                    new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.content().refCnt());
+                }});
+        }
     }
     
     @Test
@@ -265,7 +263,7 @@ public class RxNettysTestCase {
                 assertEquals(1, c.content().refCnt());
             }});
         
-        final FullHttpResponse fullresp = Observable.just(resps).map(RxNettys.httpobjs2fullresp()).toBlocking().single();
+        final FullHttpResponse fullresp = RxNettys.httpobjs2fullresp(resps);
         
         assertNotNull(fullresp);
         RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
@@ -293,8 +291,7 @@ public class RxNettysTestCase {
         
         assertEquals(1, response.refCnt());
         
-        final FullHttpResponse fullresp = Observable.just(Arrays.<HttpObject>asList(response))
-                .map(RxNettys.httpobjs2fullresp()).toBlocking().single();
+        final FullHttpResponse fullresp = RxNettys.httpobjs2fullresp(Arrays.<HttpObject>asList(response));
         assertNotNull(fullresp);
         assertEquals(REQ_CONTENT, new String(Nettys.dumpByteBufAsBytes(fullresp.content()), Charsets.UTF_8));
         assertEquals(2, response.refCnt());
@@ -320,20 +317,18 @@ public class RxNettysTestCase {
                 assertEquals(1, c.content().refCnt());
             }});
         
-        final TestSubscriber<FullHttpResponse> subscriber = new TestSubscriber<>();
-        Observable.just(resps)
-        .map(RxNettys.httpobjs2fullresp())
-        .subscribe(subscriber);
-        
-        subscriber.assertNoValues();
-        subscriber.assertNotCompleted();
-        subscriber.assertError(RuntimeException.class);
-        
-        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.content().refCnt());
-            }});
+        FullHttpResponse fullresp = null;
+        thrown.expect(RuntimeException.class);
+        try {
+            fullresp = RxNettys.httpobjs2fullresp(resps);
+        } finally {
+            assertNull(fullresp);
+            RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.content().refCnt());
+                }});
+        }
     }
     
     @Test
@@ -355,20 +350,18 @@ public class RxNettysTestCase {
                 assertEquals(1, c.content().refCnt());
             }});
         
-        final TestSubscriber<FullHttpResponse> subscriber = new TestSubscriber<>();
-        Observable.just(resps)
-        .map(RxNettys.httpobjs2fullresp())
-        .subscribe(subscriber);
-        
-        subscriber.assertNoValues();
-        subscriber.assertNotCompleted();
-        subscriber.assertError(RuntimeException.class);
-        
-        RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.content().refCnt());
-            }});
+        FullHttpResponse fullresp = null;
+        thrown.expect(RuntimeException.class);
+        try {
+            fullresp = RxNettys.httpobjs2fullresp(resps);
+        } finally {
+            assertNull(fullresp);
+            RxActions.applyArrayBy(resp_contents, new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.content().refCnt());
+                }});
+        }
     }
     
     @Test
@@ -394,21 +387,19 @@ public class RxNettysTestCase {
         // release [0]'s content
         resp_contents[0].release();
         
-        final TestSubscriber<FullHttpResponse> subscriber = new TestSubscriber<>();
-        Observable.just(resps)
-        .map(RxNettys.httpobjs2fullresp())
-        .subscribe(subscriber);
-        
-        subscriber.assertNoValues();
-        subscriber.assertNotCompleted();
-        subscriber.assertError(IllegalReferenceCountException.class);
-        
-        RxActions.applyArrayBy(Arrays.copyOfRange(resp_contents, 1, resp_contents.length), 
-                new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.content().refCnt());
-            }});
+        FullHttpResponse fullresp = null;
+        thrown.expect(IllegalReferenceCountException.class);
+        try {
+            fullresp = RxNettys.httpobjs2fullresp(resps);
+        } finally {
+            assertNull(fullresp);
+            RxActions.applyArrayBy(Arrays.copyOfRange(resp_contents, 1, resp_contents.length), 
+                    new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.content().refCnt());
+                }});
+        }
     }
     
     @Test
@@ -434,25 +425,23 @@ public class RxNettysTestCase {
         // release [0]'s content
         resp_contents[resp_contents.length-1].release();
         
-        final TestSubscriber<FullHttpResponse> subscriber = new TestSubscriber<>();
-        Observable.just(resps)
-        .map(RxNettys.httpobjs2fullresp())
-        .subscribe(subscriber);
-        
-        subscriber.assertNoValues();
-        subscriber.assertNotCompleted();
-        subscriber.assertError(IllegalReferenceCountException.class);
-        
-        RxActions.applyArrayBy(Arrays.copyOfRange(resp_contents, 0, resp_contents.length - 1), 
-                new Action1<HttpContent>() {
-            @Override
-            public void call(final HttpContent c) {
-                assertEquals(1, c.content().refCnt());
-            }});
+        FullHttpResponse fullresp = null;
+        thrown.expect(IllegalReferenceCountException.class);
+        try {
+            fullresp = RxNettys.httpobjs2fullresp(resps);
+        } finally {
+            assertNull(fullresp);
+            RxActions.applyArrayBy(Arrays.copyOfRange(resp_contents, 0, resp_contents.length - 1), 
+                    new Action1<HttpContent>() {
+                @Override
+                public void call(final HttpContent c) {
+                    assertEquals(1, c.content().refCnt());
+                }});
+        }
     }
     
     @Test
-    public final void test_BUILD_FULL_REQUEST_ForSingleFullRequest() {
+    public final void test_BUILD_FULL_REQUEST_ForSingleFullRequest() throws IOException {
         final DefaultFullHttpRequest request = 
                 new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", Nettys4Test.buildByteBuf(REQ_CONTENT));
         
@@ -460,7 +449,7 @@ public class RxNettysTestCase {
         
         final FullHttpRequest fullreq = RxNettys.BUILD_FULL_REQUEST.call(new HttpObject[]{request});
         assertNotNull(fullreq);
-        assertSame(request, fullreq);
+        assertEquals(REQ_CONTENT, new String(Nettys.dumpByteBufAsBytes(fullreq.content()), Charsets.UTF_8));
         assertEquals(2, request.refCnt());
     }
     
@@ -563,7 +552,7 @@ public class RxNettysTestCase {
     }
 
     @Test
-    public final void test_BUILD_FULL_RESPONSE_ForSingleFullResponse() {
+    public final void test_BUILD_FULL_RESPONSE_ForSingleFullResponse() throws IOException {
         final DefaultFullHttpResponse response = 
                 new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, Nettys4Test.buildByteBuf(REQ_CONTENT));
         
@@ -571,7 +560,7 @@ public class RxNettysTestCase {
         
         final FullHttpResponse fullresp = RxNettys.BUILD_FULL_RESPONSE.call(new HttpObject[]{response});
         assertNotNull(fullresp);
-        assertSame(response, fullresp);
+        assertEquals(REQ_CONTENT, new String(Nettys.dumpByteBufAsBytes(fullresp.content()), Charsets.UTF_8));
         assertEquals(2, response.refCnt());
     }
 
