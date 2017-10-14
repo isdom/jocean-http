@@ -278,7 +278,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
                     initInboundHandler(subscriber);
                 }})
-            .doOnNext(DisposableWrapperUtil.disposeOn(this))
+            .doOnNext(DisposableWrapperUtil.<HttpObject>disposeOn(this))
             .cache()
             .doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
                 @Override
