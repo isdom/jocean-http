@@ -5,7 +5,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.net.SocketAddress;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map.Entry;
 
 import org.jocean.http.Feature;
@@ -25,13 +27,23 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ServerChannel;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCounted;
 import rx.functions.Action0;
@@ -313,5 +325,85 @@ public class Nettys {
     
     public static boolean isSupportCompress(final Channel channel) {
         return isHandlerApplied(channel.pipeline(), HttpHandlers.CONTENT_DECOMPRESSOR);
+    }
+
+    private static ByteBuf tobuf(final List<HttpObject> httpobjs) {
+        final List<ByteBuf> freeonfailed = new ArrayList<>();
+        try {
+            final ByteBuf[] bufs = new ByteBuf[httpobjs.size()-1];
+            for (int idx = 1; idx<httpobjs.size(); idx++) {
+                bufs[idx-1] = ((HttpContent)httpobjs.get(idx)).content().retain();
+                freeonfailed.add(bufs[idx-1]);
+            }
+            return Unpooled.wrappedBuffer(bufs);
+        } catch (Throwable e) {
+            for (ByteBuf b : freeonfailed) {
+                b.release();
+            }
+            throw e;
+        }
+    }
+    
+    //  retain when build fullreq
+    public static FullHttpRequest httpobjs2fullreq(final List<HttpObject> httpobjs) {
+        if (httpobjs.size() > 0 
+            && (httpobjs.get(0) instanceof HttpRequest) 
+            && (httpobjs.get(httpobjs.size()-1) instanceof LastHttpContent)) {
+            if (httpobjs.get(0) instanceof FullHttpRequest) {
+                return ((FullHttpRequest)httpobjs.get(0)).retainedDuplicate();
+            }
+            
+            final HttpRequest req = (HttpRequest)httpobjs.get(0);
+            final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
+                    req.protocolVersion(), 
+                    req.method(), 
+                    req.uri(), 
+                    tobuf(httpobjs));
+            fullreq.headers().add(req.headers());
+            //  ? need update Content-Length header field ?
+            return fullreq;
+        } else {
+            throw new RuntimeException("invalid HttpObjects");
+        }
+    }
+
+    //  retain when build fullresp
+    public static FullHttpResponse httpobjs2fullresp(final List<HttpObject> httpobjs) {
+        if (httpobjs.size() > 0 
+            && (httpobjs.get(0) instanceof HttpResponse) 
+            && (httpobjs.get(httpobjs.size()-1) instanceof LastHttpContent)) {
+            if (httpobjs.get(0) instanceof FullHttpResponse) {
+                return ((FullHttpResponse)httpobjs.get(0)).retainedDuplicate();
+            }
+            
+            final HttpResponse resp = (HttpResponse)httpobjs.get(0);
+            final DefaultFullHttpResponse fullresp = new DefaultFullHttpResponse(
+                    resp.protocolVersion(), 
+                    resp.status(),
+                    tobuf(httpobjs));
+            fullresp.headers().add(resp.headers());
+            //  ? need update Content-Length header field ?
+            return fullresp;
+        } else {
+            throw new RuntimeException("invalid HttpObjects");
+        }
+    }
+    
+    //  retain when build composite buf
+    public static ByteBuf composite(final List<ByteBuf> bufs) {
+        final List<ByteBuf> freeonfailed = new ArrayList<>();
+        try {
+            final ByteBuf[] cbufs = new ByteBuf[bufs.size()];
+            int idx = 0;
+            for (ByteBuf b : bufs) {
+                freeonfailed.add(cbufs[idx++] = b.retain());
+            }
+            return Unpooled.wrappedBuffer(cbufs);
+        } catch (Throwable e) {
+            for (ByteBuf b : freeonfailed) {
+                b.release();
+            }
+            throw e;
+        }
     }
 }
