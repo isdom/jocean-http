@@ -27,6 +27,7 @@ import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.DisposableWrapper;
+import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
@@ -70,11 +71,7 @@ import rx.subscriptions.Subscriptions;
 class DefaultHttpTrade extends DefaultAttributeMap 
     implements HttpTrade,  Comparable<DefaultHttpTrade> {
     
-    private static final Func1<DisposableWrapper<HttpObject>, HttpObject> _UNWRAP = new Func1<DisposableWrapper<HttpObject>, HttpObject>() {
-        @Override
-        public HttpObject call(final DisposableWrapper<HttpObject> wrapper) {
-            return wrapper.unwrap();
-        }};
+    private static final Func1<DisposableWrapper<HttpObject>, HttpObject> _UNWRAP = DisposableWrapperUtil.unwrap();
     private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_WRAPCONTENT = 
         new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
         @Override
@@ -281,15 +278,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
                     initInboundHandler(subscriber);
                 }})
-            .doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
-                @Override
-                public void call(final DisposableWrapper<HttpObject> wrapper) {
-                    doOnTerminate(new Action0() {
-                        @Override
-                        public void call() {
-                            wrapper.dispose();
-                        }});
-                }})
+            .doOnNext(DisposableWrapperUtil.disposeOn(this))
             .cache()
             .doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
                 @Override
