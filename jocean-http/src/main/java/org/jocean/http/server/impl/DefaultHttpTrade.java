@@ -90,6 +90,10 @@ class DefaultHttpTrade extends DefaultAttributeMap
                     @Override
                     public boolean isDisposed() {
                         return wrapper.isDisposed();
+                    }
+                    @Override
+                    public String toString() {
+                        return "duplicated DisposableWrapper<HttpObject>[" + duplicated + "]";
                     }};
             } else {
                 return wrapper;

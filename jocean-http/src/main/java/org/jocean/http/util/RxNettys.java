@@ -310,6 +310,11 @@ public class RxNettys {
                     @Override
                     public boolean isDisposed() {
                         return dwh.isDisposed();
+                    }
+                    
+                    @Override
+                    public String toString() {
+                        return "DisposableWrapper<ByteBuf>[" + dwh.toString() + "]";
                     }});
             } else {
                 return Observable.empty();
