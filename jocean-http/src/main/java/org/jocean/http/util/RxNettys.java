@@ -355,6 +355,35 @@ public class RxNettys {
         }
     }
     
+    private final static Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>> _MSGTOBODY = 
+            new Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>>() {
+        @Override
+        public Observable<? extends DisposableWrapper<ByteBuf>> call(final DisposableWrapper<HttpObject> dwh) {
+            if (dwh.unwrap() instanceof HttpContent ) {
+                return Observable.just(new DisposableWrapper<ByteBuf>() {
+                    @Override
+                    public ByteBuf unwrap() {
+                        return ((HttpContent)dwh.unwrap()).content();
+                    }
+
+                    @Override
+                    public void dispose() {
+                        dwh.dispose();
+                    }
+
+                    @Override
+                    public boolean isDisposed() {
+                        return dwh.isDisposed();
+                    }});
+            } else {
+                return Observable.empty();
+            }
+        }};
+        
+    public static Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>> message2body() {
+        return _MSGTOBODY;
+    }
+    
     public static Func1<HttpObject[], FullHttpRequest> BUILD_FULL_REQUEST = new Func1<HttpObject[], FullHttpRequest>() {
         @Override
         public FullHttpRequest call(final HttpObject[] httpobjs) {
