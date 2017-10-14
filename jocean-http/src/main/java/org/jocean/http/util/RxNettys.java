@@ -502,6 +502,11 @@ public class RxNettys {
             @Override
             public boolean isDisposed() {
                 return subscription.isUnsubscribed();
+            }
+            
+            @Override
+            public String toString() {
+                return "DisposableWrapper[" + unwrap.toString() + "]";
             }};
     }
 }
