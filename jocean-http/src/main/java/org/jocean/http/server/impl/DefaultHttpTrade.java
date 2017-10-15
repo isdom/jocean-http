@@ -4,6 +4,7 @@
 package org.jocean.http.server.impl;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -36,6 +37,7 @@ import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -44,7 +46,9 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
+import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -276,22 +280,22 @@ class DefaultHttpTrade extends DefaultAttributeMap
         this._holder = new HttpMessageHolder();
         doOnTerminate(this._holder.closer());
         
-        this._obsRequest = 
-            Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
-                @Override
-                public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-                    initInboundHandler(subscriber);
-                }})
-            .doOnNext(DisposableWrapperUtil.<HttpObject>disposeOn(this))
-            .cache()
-            .doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
-                @Override
-                public void call(final DisposableWrapper<HttpObject> wrapper) {
-                    if (wrapper.isDisposed()) {
-                        throw new RuntimeException("httpobject wrapper is disposed!");
+        final Observable<? extends DisposableWrapper<HttpObject>> dwh = Observable
+                .unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
+                    @Override
+                    public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+                        initInboundHandler(subscriber);
                     }
-                }})
-            .map(_DUPLICATE_WRAPCONTENT);
+                }).share();
+        this._obsRequest = dwh.buffer(dwh.flatMap(maxBufferSize())).flatMap(assemble()).cache()
+                .doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
+                    @Override
+                    public void call(final DisposableWrapper<HttpObject> wrapper) {
+                        if (wrapper.isDisposed()) {
+                            throw new RuntimeException("httpobject wrapper is disposed!");
+                        }
+                    }
+                }).map(_DUPLICATE_WRAPCONTENT);
         
         final Observable<? extends HttpObject> inbound = 
             this._obsRequest
@@ -363,6 +367,65 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
 
+    private Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>> assemble() {
+        return new Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>>() {
+            @Override
+            public Observable<? extends DisposableWrapper<HttpObject>> call(
+                    final List<? extends DisposableWrapper<HttpObject>> wrappers) {
+                final List<DisposableWrapper<HttpObject>> assembled = new ArrayList<>();
+                final List<ByteBuf> bufs = new ArrayList<>();
+                for (DisposableWrapper<HttpObject> src : wrappers) {
+                    if ( src.unwrap() instanceof HttpMessage) {
+                        assembled.add(src);
+                    } else if (src.unwrap() instanceof LastHttpContent) {
+                        final DisposableWrapper<HttpObject> dwh = bufs2dwh(bufs);
+                        if (null != dwh) {
+                            assembled.add(DisposableWrapperUtil.disposeOn(DefaultHttpTrade.this, dwh));
+                        }
+                        assembled.add(src);
+                    } else if (src.unwrap() instanceof HttpContent){
+                        bufs.add(((HttpContent)src.unwrap()).content());
+                    }
+                }
+                final DisposableWrapper<HttpObject> dwh = bufs2dwh(bufs);
+                if (null != dwh) {
+                    assembled.add(DisposableWrapperUtil.disposeOn(DefaultHttpTrade.this, dwh));
+                }
+                return Observable.from(assembled);
+            }
+        };
+    }
+
+    private static DisposableWrapper<HttpObject> bufs2dwh(final List<ByteBuf> bufs) {
+        if (!bufs.isEmpty()) {
+            try {
+                return RxNettys.wrap(new DefaultHttpContent(Nettys.composite(bufs)));
+            } finally {
+                bufs.clear();
+            }
+        } else {
+            return null;
+        }
+    }
+
+    private Func1<DisposableWrapper<HttpObject>, Observable<? extends Integer>> maxBufferSize() {
+        final AtomicInteger size = new AtomicInteger(0);
+        
+        return new Func1<DisposableWrapper<HttpObject>, Observable<? extends Integer>>() {
+            @Override
+            public Observable<? extends Integer> call(final DisposableWrapper<HttpObject> wrapper) {
+                if (wrapper.unwrap() instanceof HttpContent) {
+                    if ( size.addAndGet(
+                    ((HttpContent)wrapper.unwrap()).content().readableBytes()) > 1024 * 100) {
+                        // reset size counter
+                        size.set(0);
+                        return Observable.just(0);
+                    }
+                }
+                return Observable.empty();
+            }};
+    }
+
     private void subscribeInbound(final Subscriber<? super HttpObject> subscriber,
             final Observable<? extends HttpObject> inbound) {
         if (!subscriber.isUnsubscribed()) {
@@ -402,11 +465,9 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
         
         try {
-            subscriber.onNext(RxNettys.wrap(inmsg));
+            // retain of create transfer to DisposableWrapper<HttpObject>
+            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap(inmsg)));
         } finally {
-            //  SimpleChannelInboundHandler 设置为 !NOT! autorelease
-            //  因此可在 onNext 之后尽早的 手动 release request's message
-//            ReferenceCountUtil.release(inmsg);
             if (inmsg instanceof LastHttpContent) {
                 /*
                  * netty 参考代码: https://github.com/netty/netty/blob/netty-
