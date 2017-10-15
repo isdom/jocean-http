@@ -399,7 +399,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private static DisposableWrapper<HttpObject> bufs2dwh(final List<ByteBuf> bufs) {
         if (!bufs.isEmpty()) {
             try {
-                return RxNettys.wrap((HttpContent)new DefaultHttpContent(Nettys.composite(bufs)));
+                return RxNettys.wrap((HttpObject)new DefaultHttpContent(Nettys.composite(bufs)));
             } finally {
                 bufs.clear();
             }
