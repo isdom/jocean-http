@@ -269,6 +269,10 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final InterfaceSelector _selector = new InterfaceSelector();
     
     DefaultHttpTrade(final Channel channel) {
+        this(channel, 0);
+    }
+    
+    DefaultHttpTrade(final Channel channel, final int maxBufSize) {
         
         if (!channel.eventLoop().inEventLoop()) {
             throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
@@ -280,14 +284,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         this._holder = new HttpMessageHolder();
         doOnTerminate(this._holder.closer());
         
-        final Observable<? extends DisposableWrapper<HttpObject>> dwh = Observable
-                .unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
-                    @Override
-                    public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-                        initInboundHandler(subscriber);
-                    }
-                }).share();
-        this._obsRequest = dwh.buffer(dwh.flatMap(maxBufferSize())).flatMap(assemble()).cache()
+        this._obsRequest = buildObsRequest(maxBufSize).cache()
                 .doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
                     @Override
                     public void call(final DisposableWrapper<HttpObject> wrapper) {
@@ -367,6 +364,21 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
 
+    private Observable<? extends DisposableWrapper<HttpObject>> buildObsRequest(final int maxBufSize) {
+        final Observable<? extends DisposableWrapper<HttpObject>> dwh = Observable
+                .unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
+                    @Override
+                    public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+                        initInboundHandler(subscriber);
+                    }
+                }).share();
+        if (maxBufSize > 0) {
+            return dwh.buffer(dwh.flatMap(maxBufferSize(maxBufSize))).flatMap(assemble());
+        } else {
+            return dwh;
+        }
+    }
+
     private Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>> assemble() {
         return new Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>>() {
             @Override
@@ -408,7 +420,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
 
-    private Func1<DisposableWrapper<HttpObject>, Observable<? extends Integer>> maxBufferSize() {
+    private static Func1<DisposableWrapper<HttpObject>, Observable<? extends Integer>> maxBufferSize(final int maxBufSize) {
         final AtomicInteger size = new AtomicInteger(0);
         
         return new Func1<DisposableWrapper<HttpObject>, Observable<? extends Integer>>() {
@@ -416,7 +428,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
             public Observable<? extends Integer> call(final DisposableWrapper<HttpObject> wrapper) {
                 if (wrapper.unwrap() instanceof HttpContent) {
                     if ( size.addAndGet(
-                    ((HttpContent)wrapper.unwrap()).content().readableBytes()) > 1024 * 100) {
+                    ((HttpContent)wrapper.unwrap()).content().readableBytes()) > maxBufSize) {
                         // reset size counter
                         size.set(0);
                         return Observable.just(0);

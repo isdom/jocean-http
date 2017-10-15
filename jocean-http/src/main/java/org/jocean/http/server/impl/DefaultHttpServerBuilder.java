@@ -285,7 +285,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private final HttpTrade httpTradeOf(final Channel channel, 
         final Action1<HttpTrade> ... onTerminates) {
         this._numStartedTrades.incrementAndGet();
-        final DefaultHttpTrade trade = new DefaultHttpTrade(channel);
+        final DefaultHttpTrade trade = new DefaultHttpTrade(channel, this._inboundBlockSize);
         
         addToTrades(trade);
         for (Action1<HttpTrade> onTerminate : onTerminates) {
