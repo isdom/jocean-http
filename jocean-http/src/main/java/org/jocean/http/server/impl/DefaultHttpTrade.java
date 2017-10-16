@@ -47,6 +47,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
 import io.netty.handler.codec.http.DefaultHttpContent;
+import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
@@ -385,38 +386,48 @@ class DefaultHttpTrade extends DefaultAttributeMap
             public Observable<? extends DisposableWrapper<HttpObject>> call(
                     final List<? extends DisposableWrapper<HttpObject>> wrappers) {
                 final List<DisposableWrapper<HttpObject>> assembled = new ArrayList<>();
-                final List<ByteBuf> bufs = new ArrayList<>();
+                final List<DisposableWrapper<ByteBuf>> dwbs = new ArrayList<>();
                 for (DisposableWrapper<HttpObject> src : wrappers) {
                     if ( src.unwrap() instanceof HttpMessage) {
                         assembled.add(src);
                     } else if (src.unwrap() instanceof LastHttpContent) {
-                        final DisposableWrapper<HttpObject> dwh = bufs2dwh(bufs);
-                        if (null != dwh) {
-                            assembled.add(DisposableWrapperUtil.disposeOn(DefaultHttpTrade.this, dwh));
-                        }
-                        assembled.add(src);
+                        dwbs.add(RxNettys.dwc2dwb(src));
+                        add2dwhs(dwbs2dwh(dwbs, true), assembled);
                     } else if (src.unwrap() instanceof HttpContent){
-                        bufs.add(((HttpContent)src.unwrap()).content());
+                        dwbs.add(RxNettys.dwc2dwb(src));
                     }
                 }
-                final DisposableWrapper<HttpObject> dwh = bufs2dwh(bufs);
-                if (null != dwh) {
-                    assembled.add(DisposableWrapperUtil.disposeOn(DefaultHttpTrade.this, dwh));
-                }
+                add2dwhs(dwbs2dwh(dwbs, false), assembled);
                 return Observable.from(assembled);
             }
         };
     }
 
-    private static DisposableWrapper<HttpObject> bufs2dwh(final List<ByteBuf> bufs) {
-        if (!bufs.isEmpty()) {
+    private static DisposableWrapper<HttpObject> dwbs2dwh(final List<DisposableWrapper<ByteBuf>> dwbs, 
+            final boolean islast) {
+        if (!dwbs.isEmpty()) {
             try {
-                return RxNettys.wrap((HttpObject)new DefaultHttpContent(Nettys.composite(bufs)));
+                final HttpObject hobj = islast ? new DefaultLastHttpContent(Nettys.dwbs2buf(dwbs))
+                        : new DefaultHttpContent(Nettys.dwbs2buf(dwbs));
+                return RxNettys.wrap(hobj);
             } finally {
-                bufs.clear();
+                for (DisposableWrapper<ByteBuf> dwb : dwbs) {
+                    try {
+                        dwb.dispose();
+                    } catch (Exception e) {
+                    }
+                }
+                dwbs.clear();
             }
         } else {
             return null;
+        }
+    }
+
+    private void add2dwhs(final DisposableWrapper<HttpObject> dwh,
+            final List<DisposableWrapper<HttpObject>> assembled) {
+        if (null != dwh) {
+            assembled.add(DisposableWrapperUtil.disposeOn(DefaultHttpTrade.this, dwh));
         }
     }
 

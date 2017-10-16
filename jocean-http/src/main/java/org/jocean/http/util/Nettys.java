@@ -16,6 +16,7 @@ import org.jocean.http.Feature.HandlerBuilder;
 import org.jocean.http.client.impl.AbstractChannelPool;
 import org.jocean.http.client.impl.ChannelPool;
 import org.jocean.idiom.AnnotationWrapper;
+import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Ordered;
 import org.jocean.idiom.PairedVisitor;
@@ -397,6 +398,24 @@ public class Nettys {
             int idx = 0;
             for (ByteBuf b : bufs) {
                 freeonfailed.add(cbufs[idx++] = b.retain());
+            }
+            return Unpooled.wrappedBuffer(cbufs);
+        } catch (Throwable e) {
+            for (ByteBuf b : freeonfailed) {
+                b.release();
+            }
+            throw e;
+        }
+    }
+
+    //  retain when build composite buf
+    public static ByteBuf dwbs2buf(final List<DisposableWrapper<ByteBuf>> dwbs) {
+        final List<ByteBuf> freeonfailed = new ArrayList<>();
+        try {
+            final ByteBuf[] cbufs = new ByteBuf[dwbs.size()];
+            int idx = 0;
+            for (DisposableWrapper<ByteBuf> dwb : dwbs) {
+                freeonfailed.add(cbufs[idx++] = dwb.unwrap().retain());
             }
             return Unpooled.wrappedBuffer(cbufs);
         } catch (Throwable e) {
