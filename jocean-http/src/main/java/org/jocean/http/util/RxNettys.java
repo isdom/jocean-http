@@ -293,29 +293,11 @@ public class RxNettys {
     
     private final static Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>> _MSGTOBODY = 
             new Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>>() {
+        @SuppressWarnings("unchecked")
         @Override
         public Observable<? extends DisposableWrapper<ByteBuf>> call(final DisposableWrapper<HttpObject> dwh) {
             if (dwh.unwrap() instanceof HttpContent ) {
-                return Observable.just(new DisposableWrapper<ByteBuf>() {
-                    @Override
-                    public ByteBuf unwrap() {
-                        return ((HttpContent)dwh.unwrap()).content();
-                    }
-
-                    @Override
-                    public void dispose() {
-                        dwh.dispose();
-                    }
-
-                    @Override
-                    public boolean isDisposed() {
-                        return dwh.isDisposed();
-                    }
-                    
-                    @Override
-                    public String toString() {
-                        return "DisposableWrapper<ByteBuf>[" + dwh.toString() + "]";
-                    }});
+                return Observable.just(dwc2dwb((DisposableWrapper<? extends HttpContent>) dwh));
             } else {
                 return Observable.empty();
             }
@@ -512,6 +494,29 @@ public class RxNettys {
             @Override
             public String toString() {
                 return "DisposableWrapper[" + unwrap.toString() + "]";
+            }};
+    }
+
+    public static DisposableWrapper<ByteBuf> dwc2dwb(final DisposableWrapper<? extends HttpContent> dwc) {
+        return new DisposableWrapper<ByteBuf>() {
+            @Override
+            public ByteBuf unwrap() {
+                return dwc.unwrap().content();
+            }
+
+            @Override
+            public void dispose() {
+                dwc.dispose();
+            }
+
+            @Override
+            public boolean isDisposed() {
+                return dwc.isDisposed();
+            }
+            
+            @Override
+            public String toString() {
+                return "DisposableWrapper<ByteBuf>[" + dwc.toString() + "]";
             }};
     }
 }
