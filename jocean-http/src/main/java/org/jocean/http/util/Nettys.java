@@ -6,9 +6,12 @@ import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.net.SocketAddress;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Queue;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
@@ -392,7 +395,7 @@ public class Nettys {
     
     //  retain when build composite buf
     public static ByteBuf composite(final List<ByteBuf> bufs) {
-        final List<ByteBuf> freeonfailed = new ArrayList<>();
+        final Queue<ByteBuf> freeonfailed = new LinkedList<>();
         try {
             final ByteBuf[] cbufs = new ByteBuf[bufs.size()];
             int idx = 0;
@@ -409,8 +412,8 @@ public class Nettys {
     }
 
     //  retain when build composite buf
-    public static ByteBuf dwbs2buf(final List<DisposableWrapper<ByteBuf>> dwbs) {
-        final List<ByteBuf> freeonfailed = new ArrayList<>();
+    public static ByteBuf dwbs2buf(final Collection<DisposableWrapper<ByteBuf>> dwbs) {
+        final Queue<ByteBuf> freeonfailed = new LinkedList<>();
         try {
             final ByteBuf[] cbufs = new ByteBuf[dwbs.size()];
             int idx = 0;

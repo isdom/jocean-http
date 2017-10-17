@@ -31,6 +31,7 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
+import org.jocean.idiom.TerminateAware;
 import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.RxSubscribers;
@@ -384,32 +385,38 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return new Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>>() {
             @Override
             public Observable<? extends DisposableWrapper<HttpObject>> call(
-                    final List<? extends DisposableWrapper<HttpObject>> wrappers) {
+                    final List<? extends DisposableWrapper<HttpObject>> dwhs) {
                 final List<DisposableWrapper<HttpObject>> assembled = new ArrayList<>();
                 final List<DisposableWrapper<ByteBuf>> dwbs = new ArrayList<>();
-                for (DisposableWrapper<HttpObject> src : wrappers) {
-                    if ( src.unwrap() instanceof HttpMessage) {
-                        assembled.add(src);
-                    } else if (src.unwrap() instanceof LastHttpContent) {
-                        dwbs.add(RxNettys.dwc2dwb(src));
-                        add2dwhs(dwbs2dwh(dwbs, true), assembled);
-                    } else if (src.unwrap() instanceof HttpContent){
-                        dwbs.add(RxNettys.dwc2dwb(src));
+                for (DisposableWrapper<HttpObject> dwh : dwhs) {
+                    if ( dwh.unwrap() instanceof HttpMessage) {
+                        assembled.add(dwh);
+                    } else if (dwh.unwrap() instanceof LastHttpContent) {
+                        dwbs.add(RxNettys.dwc2dwb(dwh));
+                        add2dwhs(dwbs2dwh(dwbs, true, DefaultHttpTrade.this), assembled);
+                    } else if (dwh.unwrap() instanceof HttpContent){
+                        dwbs.add(RxNettys.dwc2dwb(dwh));
                     }
                 }
-                add2dwhs(dwbs2dwh(dwbs, false), assembled);
+                add2dwhs(dwbs2dwh(dwbs, false, DefaultHttpTrade.this), assembled);
                 return Observable.from(assembled);
             }
         };
     }
 
-    private static DisposableWrapper<HttpObject> dwbs2dwh(final List<DisposableWrapper<ByteBuf>> dwbs, 
-            final boolean islast) {
+    private static DisposableWrapper<HttpObject> dwbs2dwh(
+            final List<DisposableWrapper<ByteBuf>> dwbs, 
+            final boolean islast,
+            final TerminateAware<?> terminateAware) {
         if (!dwbs.isEmpty()) {
             try {
                 final HttpObject hobj = islast ? new DefaultLastHttpContent(Nettys.dwbs2buf(dwbs))
                         : new DefaultHttpContent(Nettys.dwbs2buf(dwbs));
-                return RxNettys.wrap(hobj);
+                if (null!=terminateAware) {
+                    return DisposableWrapperUtil.disposeOn(terminateAware, RxNettys.wrap(hobj));
+                } else {
+                    return RxNettys.wrap(hobj);
+                }
             } finally {
                 for (DisposableWrapper<ByteBuf> dwb : dwbs) {
                     try {
@@ -427,7 +434,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private void add2dwhs(final DisposableWrapper<HttpObject> dwh,
             final List<DisposableWrapper<HttpObject>> assembled) {
         if (null != dwh) {
-            assembled.add(DisposableWrapperUtil.disposeOn(DefaultHttpTrade.this, dwh));
+            assembled.add(dwh);
         }
     }
 
