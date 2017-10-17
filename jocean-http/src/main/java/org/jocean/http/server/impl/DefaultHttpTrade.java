@@ -4,9 +4,11 @@
 package org.jocean.http.server.impl;
 
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -375,37 +377,38 @@ class DefaultHttpTrade extends DefaultAttributeMap
                     }
                 }).share();
         if (maxBufSize > 0) {
-            return dwh.buffer(dwh.flatMap(maxBufferSize(maxBufSize))).flatMap(assemble());
+            return dwh.buffer(dwh.flatMap(maxBufferSize(maxBufSize))).flatMap(assemble(DefaultHttpTrade.this));
         } else {
             return dwh;
         }
     }
 
-    private Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>> assemble() {
+    private static Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>> assemble(
+            final TerminateAware<?> terminateAware) {
         return new Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>>() {
             @Override
             public Observable<? extends DisposableWrapper<HttpObject>> call(
                     final List<? extends DisposableWrapper<HttpObject>> dwhs) {
-                final List<DisposableWrapper<HttpObject>> assembled = new ArrayList<>();
-                final List<DisposableWrapper<ByteBuf>> dwbs = new ArrayList<>();
+                final Queue<DisposableWrapper<HttpObject>> assembled = new LinkedList<>();
+                final Queue<DisposableWrapper<ByteBuf>> dwbs = new LinkedList<>();
                 for (DisposableWrapper<HttpObject> dwh : dwhs) {
-                    if ( dwh.unwrap() instanceof HttpMessage) {
+                    if (dwh.unwrap() instanceof HttpMessage) {
                         assembled.add(dwh);
                     } else if (dwh.unwrap() instanceof LastHttpContent) {
                         dwbs.add(RxNettys.dwc2dwb(dwh));
-                        add2dwhs(dwbs2dwh(dwbs, true, DefaultHttpTrade.this), assembled);
-                    } else if (dwh.unwrap() instanceof HttpContent){
+                        add2dwhs(dwbs2dwh(dwbs, true, terminateAware), assembled);
+                    } else if (dwh.unwrap() instanceof HttpContent) {
                         dwbs.add(RxNettys.dwc2dwb(dwh));
                     }
                 }
-                add2dwhs(dwbs2dwh(dwbs, false, DefaultHttpTrade.this), assembled);
+                add2dwhs(dwbs2dwh(dwbs, false, terminateAware), assembled);
                 return Observable.from(assembled);
             }
         };
     }
 
     private static DisposableWrapper<HttpObject> dwbs2dwh(
-            final List<DisposableWrapper<ByteBuf>> dwbs, 
+            final Collection<DisposableWrapper<ByteBuf>> dwbs, 
             final boolean islast,
             final TerminateAware<?> terminateAware) {
         if (!dwbs.isEmpty()) {
@@ -431,8 +434,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
 
-    private void add2dwhs(final DisposableWrapper<HttpObject> dwh,
-            final List<DisposableWrapper<HttpObject>> assembled) {
+    private static void add2dwhs(final DisposableWrapper<HttpObject> dwh,
+            final Collection<DisposableWrapper<HttpObject>> assembled) {
         if (null != dwh) {
             assembled.add(dwh);
         }
