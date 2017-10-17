@@ -480,7 +480,17 @@ public class RxNettys {
         final Subscription subscription = Subscriptions.create(new Action0() {
             @Override
             public void call() {
-                ReferenceCountUtil.release(unwrap);
+                String logmsg = null;
+                if (LOG.isDebugEnabled()) {
+                    logmsg = unwrap.toString() + " disposed at \r\n" +
+                        ExceptionUtils.dumpCallStack(new Throwable(), null, 1) + 
+                        "\r\n and release with ({})"
+                    ;
+                }
+                final boolean released = ReferenceCountUtil.release(unwrap);
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug(logmsg, released);
+                }
             }});
         return new DisposableWrapper<T>() {
 
