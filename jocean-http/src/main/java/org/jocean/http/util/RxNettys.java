@@ -482,8 +482,8 @@ public class RxNettys {
             public void call() {
                 String logmsg = null;
                 if (LOG.isDebugEnabled()) {
-                    logmsg = unwrap.toString() + " disposed at \r\n" +
-                        ExceptionUtils.dumpCallStack(new Throwable(), null, 1) + 
+                    logmsg = unwrap.toString() + " disposed at " +
+                        ExceptionUtils.dumpCallStack(new Throwable(), null, 2) + 
                         "\r\n and release with ({})"
                     ;
                 }
