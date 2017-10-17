@@ -4,11 +4,8 @@
 package org.jocean.http.server.impl;
 
 import java.text.SimpleDateFormat;
-import java.util.Collection;
 import java.util.Date;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,14 +30,12 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
-import org.jocean.idiom.TerminateAware;
 import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -49,10 +44,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
-import io.netty.handler.codec.http.DefaultHttpContent;
-import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.HttpContent;
-import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -80,7 +72,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     implements HttpTrade,  Comparable<DefaultHttpTrade> {
     
     private static final Func1<DisposableWrapper<HttpObject>, HttpObject> _UNWRAP = DisposableWrapperUtil.unwrap();
-    private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_WRAPCONTENT = 
+    private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = 
         new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
         @Override
         public DisposableWrapper<HttpObject> call(final DisposableWrapper<HttpObject> wrapper) {
@@ -296,7 +288,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                             throw new RuntimeException("httpobject wrapper is disposed!");
                         }
                     }
-                }).map(_DUPLICATE_WRAPCONTENT);
+                }).map(_DUPLICATE_CONTENT);
         
         final Observable<? extends HttpObject> inbound = 
             this._obsRequest
@@ -369,94 +361,12 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
 
     private Observable<? extends DisposableWrapper<HttpObject>> buildObsRequest(final int maxBufSize) {
-        final Observable<? extends DisposableWrapper<HttpObject>> dwh = Observable
-                .unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
-                    @Override
-                    public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-                        initInboundHandler(subscriber);
-                    }
-                }).share();
-        if (maxBufSize > 0) {
-            return dwh.buffer(dwh.flatMap(maxBufferSize(maxBufSize))).flatMap(assemble(DefaultHttpTrade.this));
-        } else {
-            return dwh;
-        }
-    }
-
-    private static Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>> assemble(
-            final TerminateAware<?> terminateAware) {
-        return new Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>>() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
             @Override
-            public Observable<? extends DisposableWrapper<HttpObject>> call(
-                    final List<? extends DisposableWrapper<HttpObject>> dwhs) {
-                final Queue<DisposableWrapper<HttpObject>> assembled = new LinkedList<>();
-                final Queue<DisposableWrapper<ByteBuf>> dwbs = new LinkedList<>();
-                for (DisposableWrapper<HttpObject> dwh : dwhs) {
-                    if (dwh.unwrap() instanceof HttpMessage) {
-                        assembled.add(dwh);
-                    } else if (dwh.unwrap() instanceof LastHttpContent) {
-                        dwbs.add(RxNettys.dwc2dwb(dwh));
-                        add2dwhs(dwbs2dwh(dwbs, true, terminateAware), assembled);
-                    } else if (dwh.unwrap() instanceof HttpContent) {
-                        dwbs.add(RxNettys.dwc2dwb(dwh));
-                    }
-                }
-                add2dwhs(dwbs2dwh(dwbs, false, terminateAware), assembled);
-                return Observable.from(assembled);
+            public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+                initInboundHandler(subscriber);
             }
-        };
-    }
-
-    private static DisposableWrapper<HttpObject> dwbs2dwh(
-            final Collection<DisposableWrapper<ByteBuf>> dwbs, 
-            final boolean islast,
-            final TerminateAware<?> terminateAware) {
-        if (!dwbs.isEmpty()) {
-            try {
-                final HttpObject hobj = islast ? new DefaultLastHttpContent(Nettys.dwbs2buf(dwbs))
-                        : new DefaultHttpContent(Nettys.dwbs2buf(dwbs));
-                if (null!=terminateAware) {
-                    return DisposableWrapperUtil.disposeOn(terminateAware, RxNettys.wrap(hobj));
-                } else {
-                    return RxNettys.wrap(hobj);
-                }
-            } finally {
-                for (DisposableWrapper<ByteBuf> dwb : dwbs) {
-                    try {
-                        dwb.dispose();
-                    } catch (Exception e) {
-                    }
-                }
-                dwbs.clear();
-            }
-        } else {
-            return null;
-        }
-    }
-
-    private static void add2dwhs(final DisposableWrapper<HttpObject> dwh,
-            final Collection<DisposableWrapper<HttpObject>> assembled) {
-        if (null != dwh) {
-            assembled.add(dwh);
-        }
-    }
-
-    private static Func1<DisposableWrapper<HttpObject>, Observable<? extends Integer>> maxBufferSize(final int maxBufSize) {
-        final AtomicInteger size = new AtomicInteger(0);
-        
-        return new Func1<DisposableWrapper<HttpObject>, Observable<? extends Integer>>() {
-            @Override
-            public Observable<? extends Integer> call(final DisposableWrapper<HttpObject> wrapper) {
-                if (wrapper.unwrap() instanceof HttpContent) {
-                    if ( size.addAndGet(
-                    ((HttpContent)wrapper.unwrap()).content().readableBytes()) > maxBufSize) {
-                        // reset size counter
-                        size.set(0);
-                        return Observable.just(0);
-                    }
-                }
-                return Observable.empty();
-            }};
+        }).compose(RxNettys.assembleTo(maxBufSize, DefaultHttpTrade.this));
     }
 
     private void subscribeInbound(final Subscriber<? super HttpObject> subscriber,

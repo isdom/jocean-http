@@ -5,10 +5,16 @@ import java.io.InputStream;
 import java.net.SocketAddress;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.idiom.DisposableWrapper;
+import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ProxyBuilder;
+import org.jocean.idiom.TerminateAware;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
 import org.slf4j.Logger;
@@ -23,11 +29,14 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.DefaultHttpContent;
+import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.FullHttpMessage;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
@@ -521,6 +530,99 @@ public class RxNettys {
             };
         } else {
             return null;
+        }
+    }
+
+    public static Observable.Transformer<? super DisposableWrapper<HttpObject>, ? extends DisposableWrapper<HttpObject>> assembleTo(
+            final int maxBufSize, final TerminateAware<?> terminateAware) {
+        return new Observable.Transformer<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
+            @Override
+            public Observable<DisposableWrapper<HttpObject>> call(
+                    final Observable<DisposableWrapper<HttpObject>> obsdwh) {
+                if (maxBufSize > 0) {
+                    final Observable<DisposableWrapper<HttpObject>> shared = obsdwh.share();
+                    return shared.buffer(shared.flatMap(limitBufferSizeTo(maxBufSize))).flatMap(assemble(terminateAware));
+                } else {
+                    return obsdwh;
+                }
+            }
+        };
+    }
+    
+    private static Func1<DisposableWrapper<HttpObject>, Observable<? extends Integer>> limitBufferSizeTo(
+            final int maxBufSize) {
+        final AtomicInteger size = new AtomicInteger(0);
+
+        return new Func1<DisposableWrapper<HttpObject>, Observable<? extends Integer>>() {
+            @Override
+            public Observable<? extends Integer> call(final DisposableWrapper<HttpObject> wrapper) {
+                if (wrapper.unwrap() instanceof HttpContent) {
+                    if (size.addAndGet(((HttpContent) wrapper.unwrap()).content().readableBytes()) > maxBufSize) {
+                        // reset size counter
+                        size.set(0);
+                        return Observable.just(0);
+                    }
+                }
+                return Observable.empty();
+            }
+        };
+    }
+    
+    private static Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>> assemble(
+            final TerminateAware<?> terminateAware) {
+        return new Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>>() {
+            @Override
+            public Observable<? extends DisposableWrapper<HttpObject>> call(
+                    final List<? extends DisposableWrapper<HttpObject>> dwhs) {
+                final Queue<DisposableWrapper<HttpObject>> assembled = new LinkedList<>();
+                final Queue<DisposableWrapper<ByteBuf>> dwbs = new LinkedList<>();
+                for (DisposableWrapper<HttpObject> dwh : dwhs) {
+                    if (dwh.unwrap() instanceof HttpMessage) {
+                        assembled.add(dwh);
+                    } else if (dwh.unwrap() instanceof LastHttpContent) {
+                        dwbs.add(RxNettys.dwc2dwb(dwh));
+                        add2dwhs(dwbs2dwh(dwbs, true, terminateAware), assembled);
+                    } else if (dwh.unwrap() instanceof HttpContent) {
+                        dwbs.add(RxNettys.dwc2dwb(dwh));
+                    }
+                }
+                add2dwhs(dwbs2dwh(dwbs, false, terminateAware), assembled);
+                return Observable.from(assembled);
+            }
+        };
+    }
+
+    private static DisposableWrapper<HttpObject> dwbs2dwh(
+            final Collection<DisposableWrapper<ByteBuf>> dwbs, 
+            final boolean islast,
+            final TerminateAware<?> terminateAware) {
+        if (!dwbs.isEmpty()) {
+            try {
+                final HttpObject hobj = islast ? new DefaultLastHttpContent(Nettys.dwbs2buf(dwbs))
+                        : new DefaultHttpContent(Nettys.dwbs2buf(dwbs));
+                if (null!=terminateAware) {
+                    return DisposableWrapperUtil.disposeOn(terminateAware, RxNettys.wrap(hobj));
+                } else {
+                    return RxNettys.wrap(hobj);
+                }
+            } finally {
+                for (DisposableWrapper<ByteBuf> dwb : dwbs) {
+                    try {
+                        dwb.dispose();
+                    } catch (Exception e) {
+                    }
+                }
+                dwbs.clear();
+            }
+        } else {
+            return null;
+        }
+    }
+
+    private static void add2dwhs(final DisposableWrapper<HttpObject> dwh,
+            final Collection<DisposableWrapper<HttpObject>> assembled) {
+        if (null != dwh) {
+            assembled.add(dwh);
         }
     }
 }
