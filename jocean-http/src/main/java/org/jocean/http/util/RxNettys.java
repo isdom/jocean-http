@@ -481,15 +481,15 @@ public class RxNettys {
             @Override
             public void call() {
                 String logmsg = null;
-                if (LOG.isDebugEnabled()) {
+                if (LOG.isTraceEnabled()) {
                     logmsg = unwrap.toString() + " disposed at " +
                         ExceptionUtils.dumpCallStack(new Throwable(), null, 2) + 
                         "\r\n and release with ({})"
                     ;
                 }
                 final boolean released = ReferenceCountUtil.release(unwrap);
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug(logmsg, released);
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace(logmsg, released);
                 }
             }});
         return new DisposableWrapper<T>() {
