@@ -3,9 +3,10 @@ package org.jocean.netty;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 
+import org.jocean.http.WritePolicy;
+
 import io.netty.util.ReferenceCounted;
 import rx.Observable;
-import rx.functions.Func0;
 import rx.functions.Func1;
 
 public interface BlobRepo {
@@ -102,15 +103,29 @@ public interface BlobRepo {
         public Blob   blob();
     }
     
-    public Observable<PutResult> putBlob(
-            final String key,
-            final Blob blob);
+    public interface PutObjectBuilder {
+        
+        //  required
+        public PutObjectBuilder objectName(final String objectName);
+        
+        //  required
+        public PutObjectBuilder contentLength(final long length);
+        
+        //  required
+        public PutObjectBuilder contentType(final String contentType);
+        
+        //  required
+        public PutObjectBuilder content(final Observable<?> content);
+        
+        //  optional
+        public PutObjectBuilder writePolicy(final WritePolicy writePolicy);
+        
+        public Observable<String> build();
+    }
+    
+    public PutObjectBuilder putObject();
     
     public Observable<Blob> getBlob(final String key);
-    
-    public Observable<String> putBlob(
-            final String key,
-            final Func0<? extends Blob> blobProducer);
     
     public Observable<String> copyBlob(final String sourceKey, final String destinationKey);
     
