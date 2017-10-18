@@ -125,6 +125,9 @@ public interface BlobRepo {
     
     public PutObjectBuilder putObject();
     
+    public Observable<PutResult> putBlob(final String key, 
+            final Blob blob);
+    
     public Observable<Blob> getBlob(final String key);
     
     public Observable<String> copyBlob(final String sourceKey, final String destinationKey);
