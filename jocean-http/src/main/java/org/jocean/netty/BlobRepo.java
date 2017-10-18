@@ -109,7 +109,7 @@ public interface BlobRepo {
         public PutObjectBuilder objectName(final String objectName);
         
         //  required
-        public PutObjectBuilder contentLength(final long length);
+        public PutObjectBuilder contentLength(final long contentLength);
         
         //  required
         public PutObjectBuilder contentType(final String contentType);
