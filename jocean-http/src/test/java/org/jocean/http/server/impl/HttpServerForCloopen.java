@@ -1,7 +1,5 @@
 package org.jocean.http.server.impl;
 
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
@@ -9,9 +7,9 @@ import java.net.InetSocketAddress;
 
 import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,11 +20,11 @@ import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpObject;
-import rx.Observable;
-import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action1;
+import rx.functions.Func1;
 
 public class HttpServerForCloopen {
     
@@ -44,38 +42,29 @@ public class HttpServerForCloopen {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    final HttpMessageHolder holder = new HttpMessageHolder();
-                    trade.inbound().compose(holder.<HttpObject>assembleAndHold()).subscribe(new Subscriber<HttpObject>() {
-                        @Override
-                        public void onCompleted() {
-                            final FullHttpRequest req = holder.fullOf(RxNettys.BUILD_FULL_REQUEST).call();
-                            if (null!=req) {
-                                try {
-                                    final byte[] bytes = Nettys.dumpByteBufAsBytes(req.content());
-                                    final String reqcontent = bytes.length > 0 ? new String(bytes, Charsets.UTF_8) : "empty";
-                                    LOG.debug("receive HttpRequest: {}\ncontent:\n{}", 
-                                            req, reqcontent);
-                                } catch (Exception e) {
-                                    LOG.warn("exception when dump http req content, detail:{}", 
-                                            ExceptionUtils.exception2detail(e));
-                                } finally {
-                                    req.release();
-                                }
-                            }
-                            byte[] bytes = new String("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><statuscode>000000</statuscode></Response>").getBytes(Charsets.UTF_8);
+//                    final HttpMessageHolder holder = new HttpMessageHolder();
+                    trade.outbound(trade.obsrequest().compose(RxNettys.message2fullreq(trade))
+                            .map(DisposableWrapperUtil.unwrap()).map(new Func1<FullHttpRequest, HttpObject>() {
+                                @Override
+                                public HttpObject call(final FullHttpRequest fullreq) {
+                                    try {
+                                        final byte[] bytes = Nettys.dumpByteBufAsBytes(fullreq.content());
+                                        final String reqcontent = bytes.length > 0 ? new String(bytes, Charsets.UTF_8) : "empty";
+                                        LOG.debug("receive HttpRequest: {}\ncontent:\n{}", 
+                                                fullreq, reqcontent);
+                                    } catch (Exception e) {
+                                        LOG.warn("exception when dump http req content, detail:{}", 
+                                                ExceptionUtils.exception2detail(e));
+                                    }
+                                    byte[] bytes = new String("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><statuscode>000000</statuscode></Response>").getBytes(Charsets.UTF_8);
 
-                            final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
-                                    Unpooled.wrappedBuffer(bytes));
-                            response.headers().set(CONTENT_TYPE, "text/plain");
-                            response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                            trade.outbound(Observable.<HttpObject>just(response));
-                        }
-                        @Override
-                        public void onError(Throwable e) {
-                        }
-                        @Override
-                        public void onNext(final HttpObject msg) {
-                        }});
+                                    final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
+                                            Unpooled.wrappedBuffer(bytes));
+                                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+                                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+                                    return response;
+                                }
+                            }));
                 }});
     }
 }

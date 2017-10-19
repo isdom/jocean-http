@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.net.SocketAddress;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -332,7 +331,7 @@ public class Nettys {
     }
 
     private static ByteBuf tobuf(final List<HttpObject> httpobjs) {
-        final List<ByteBuf> freeonfailed = new ArrayList<>();
+        final Queue<ByteBuf> freeonfailed = new LinkedList<>();
         try {
             final ByteBuf[] bufs = new ByteBuf[httpobjs.size()-1];
             for (int idx = 1; idx<httpobjs.size(); idx++) {

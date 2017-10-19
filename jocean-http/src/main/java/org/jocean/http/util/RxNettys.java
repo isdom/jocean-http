@@ -315,6 +315,24 @@ public class RxNettys {
         return _MSGTOBODY;
     }
     
+    public static Observable.Transformer<? super DisposableWrapper<HttpObject>, ? extends DisposableWrapper<FullHttpRequest>> message2fullreq(
+            final TerminateAware<?> terminateAware) {
+        return new Observable.Transformer<DisposableWrapper<HttpObject>, DisposableWrapper<FullHttpRequest>>() {
+            @Override
+            public Observable<DisposableWrapper<FullHttpRequest>> call(
+                    final Observable<DisposableWrapper<HttpObject>> dwhs) {
+                return dwhs.map(DisposableWrapperUtil.unwrap()).toList()
+                        .map(new Func1<List<HttpObject>, DisposableWrapper<FullHttpRequest>>() {
+                            @Override
+                            public DisposableWrapper<FullHttpRequest> call(final List<HttpObject> hobjs) {
+                                return DisposableWrapperUtil.disposeOn(terminateAware,
+                                        RxNettys.wrap(Nettys.httpobjs2fullreq(hobjs)));
+                            }
+                        });
+            }
+        };
+    }
+    
     public static Func1<HttpObject[], FullHttpRequest> BUILD_FULL_REQUEST = new Func1<HttpObject[], FullHttpRequest>() {
         @Override
         public FullHttpRequest call(final HttpObject[] httpobjs) {
@@ -495,6 +513,16 @@ public class RxNettys {
         return new DisposableWrapper<T>() {
 
             @Override
+            public int hashCode() {
+                return unwrap().hashCode();
+            }
+
+            @Override
+            public boolean equals(final Object o) {
+                return unwrap().equals(DisposableWrapperUtil.unwrap(o));
+            }
+            
+            @Override
             public T unwrap() {
                 return unwrap;
             }
@@ -518,6 +546,16 @@ public class RxNettys {
     public static DisposableWrapper<ByteBuf> dwc2dwb(final DisposableWrapper<? extends HttpObject> dwh) {
         if (dwh.unwrap() instanceof HttpContent) {
             return new DisposableWrapper<ByteBuf>() {
+                @Override
+                public int hashCode() {
+                    return unwrap().hashCode();
+                }
+
+                @Override
+                public boolean equals(final Object o) {
+                    return unwrap().equals(DisposableWrapperUtil.unwrap(o));
+                }
+                
                 @Override
                 public ByteBuf unwrap() {
                     return ((HttpContent) dwh.unwrap()).content();

@@ -292,10 +292,11 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
             trade.doOnTerminate(onTerminate);
         }
         
-        trade.inboundHolder().setMaxBlockSize(this._inboundBlockSize);
+//        trade.inboundHolder().setMaxBlockSize(this._inboundBlockSize);
         
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
         
+        /* TBD FIX TODO
         trade.inbound().subscribe(new Action1<HttpObject>() {
             @Override
             public void call(final HttpObject msg) {
@@ -307,6 +308,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                     //  TODO? set lastsize (== -1) back to _lastAddedSize ?
                 }
             }});
+            */
         trade.doOnTerminate(new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade t) {

@@ -283,7 +283,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
                         
                         // recv all request
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         assertEquals(0, allActiveAllocationsCount(allocator));
                         
                         final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
@@ -349,7 +349,7 @@ public class DefaultHttpClientTestCase {
                         LOG.debug("after get tarde");
                         
                         // recv all request
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         
                         final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
                         
@@ -407,7 +407,7 @@ public class DefaultHttpClientTestCase {
                 final HttpTrade trade = trades.take();
                             
                 // recv all request
-                trade.inbound().toCompletable().await();
+                trade.obsrequest().toCompletable().await();
                 assertEquals(0, allActiveAllocationsCount(allocator));
                             
                 final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
@@ -442,7 +442,7 @@ public class DefaultHttpClientTestCase {
                 final HttpTrade trade = trades.take();
                             
                 // recv all request
-                trade.inbound().toCompletable().await();
+                trade.obsrequest().toCompletable().await();
                 assertEquals(0, allActiveAllocationsCount(allocator));
                             
                 final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
@@ -504,7 +504,7 @@ public class DefaultHttpClientTestCase {
                 final HttpTrade trade = trades.take();
                             
                 // recv all request
-                trade.inbound().toCompletable().await();
+                trade.obsrequest().toCompletable().await();
                             
                 final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
                 
@@ -538,7 +538,7 @@ public class DefaultHttpClientTestCase {
                 final HttpTrade trade = trades.take();
                             
                 // recv all request
-                trade.inbound().toCompletable().await();
+                trade.obsrequest().toCompletable().await();
                             
                 final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
                 
@@ -577,7 +577,7 @@ public class DefaultHttpClientTestCase {
                 final HttpTrade trade = trades.take();
                 
                 // recv all request
-                trade.inbound().toCompletable().await();
+                trade.obsrequest().toCompletable().await();
                 
                 final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
                 
@@ -1001,7 +1001,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
                         
                         // recv request from client side
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         
                         // disconnect
                         trade.close();
@@ -1058,7 +1058,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
                         
                         // recv request from client side
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         
                         // disconnect
                         trade.close();
@@ -1113,7 +1113,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
                         
                         // recv request from client side
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         
                         // server not send response, and client cancel this interaction
                         subscription.unsubscribe();
@@ -1169,7 +1169,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
                         
                         // recv request from client side
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         
                         // server not send response, and client cancel this interaction
                         subscription.unsubscribe();
@@ -1372,7 +1372,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
                         
                         // recv all request
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         assertEquals(0, allActiveAllocationsCount(allocator));
                         
                         final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
@@ -1443,7 +1443,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
                         
                         // recv all request
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         
                         final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
                         
@@ -1507,7 +1507,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
                         
                         // recv all request
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         
                         final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
                         
@@ -1577,7 +1577,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
                         
                         // recv all request
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         
                         final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
                         
@@ -1654,7 +1654,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
                         
                         // recv all request
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         
                         final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
                         
@@ -1731,7 +1731,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
                         
                         // recv all request
-                        trade.inbound().toCompletable().await();
+                        trade.obsrequest().toCompletable().await();
                         
                         final ByteBuf svrRespContent = allocator.buffer(CONTENT.length).writeBytes(CONTENT);
                         

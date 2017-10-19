@@ -52,8 +52,8 @@ public interface HttpServerBuilder extends Closeable {
         public TrafficCounter traffic();
         public boolean isActive();
         
-        public Observable<? extends HttpObject> inbound();
-        public HttpMessageHolder inboundHolder();
+//        public Observable<? extends HttpObject> inbound();
+//        public HttpMessageHolder inboundHolder();
         
         public Observable<? extends DisposableWrapper<HttpObject>> obsrequest();
         

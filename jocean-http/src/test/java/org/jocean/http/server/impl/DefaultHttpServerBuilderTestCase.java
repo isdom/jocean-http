@@ -27,6 +27,7 @@ import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.RxFunctions;
 import org.jocean.idiom.rx.RxSubscribers;
@@ -70,8 +71,27 @@ public class DefaultHttpServerBuilderTestCase {
                 if (null!=transportRef) {
                     transportRef.set(trade.transport());
                 }
-                final HttpMessageHolder holder = new HttpMessageHolder();
-                trade.inbound().compose(holder.assembleAndHold()).subscribe(
+//                final HttpMessageHolder holder = new HttpMessageHolder();
+                trade.obsrequest().compose(RxNettys.message2fullreq(trade))
+                .subscribe(new Action1<DisposableWrapper<FullHttpRequest>>() {
+                    @Override
+                    public void call(final DisposableWrapper<FullHttpRequest> dwreq) {
+                        try (final InputStream is = new ByteBufInputStream(dwreq.unwrap().content())) {
+                            final byte[] bytes = new byte[is.available()];
+                            is.read(bytes);
+                            final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
+                                    Unpooled.wrappedBuffer(bytes));
+                            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+                            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 
+                                    response.content().readableBytes());
+                            trade.outbound(Observable.<HttpObject>just(response));
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }});
+                
+                /*
+                .inbound().compose(holder.assembleAndHold()).subscribe(
                     RxSubscribers.ignoreNext(),
                     RxSubscribers.ignoreError(),
                     new Action0() {
@@ -96,7 +116,7 @@ public class DefaultHttpServerBuilderTestCase {
                                     req.release();
                                 }
                             }
-                        }});
+                        }});*/
             }};
     }
 
@@ -256,10 +276,10 @@ public class DefaultHttpServerBuilderTestCase {
             initiator.defineInteraction(Observable.just(reqToSend1)).subscribe();
             final HttpTrade trade1 = trades.take();
             // trade receive all inbound msg
-            trade1.inbound().toCompletable().await();
+//            trade1.obsrequest().toCompletable().await();
             
-            final FullHttpRequest reqReceived1 = trade1.inboundHolder().
-                    fullOf(RxNettys.BUILD_FULL_REQUEST).call();
+            final FullHttpRequest reqReceived1 = trade1.obsrequest().compose(RxNettys.message2fullreq(trade1))
+                    .toBlocking().single().unwrap();
             assertEquals(reqToSend1, reqReceived1);
             
             final Channel channel = (Channel)initiator.transport();
@@ -284,10 +304,10 @@ public class DefaultHttpServerBuilderTestCase {
             final HttpTrade trade2 = trades.take();
             
             //  receive all inbound msg
-            trade2.inbound().toCompletable().await();
+//            trade2.obsrequest().toCompletable().await();
             
-            final FullHttpRequest reqReceived2 = trade2.inboundHolder().
-                    fullOf(RxNettys.BUILD_FULL_REQUEST).call();
+            final FullHttpRequest reqReceived2 = trade2.obsrequest().compose(RxNettys.message2fullreq(trade2))
+                    .toBlocking().single().unwrap();
             assertEquals(reqToSend2, reqReceived2);
         } finally {
             client.close();

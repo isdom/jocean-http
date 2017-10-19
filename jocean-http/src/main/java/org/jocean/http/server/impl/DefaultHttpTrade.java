@@ -80,6 +80,16 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 final HttpContent duplicated = ((HttpContent)wrapper.unwrap()).duplicate();
                 return new DisposableWrapper<HttpObject>() {
                     @Override
+                    public int hashCode() {
+                        return unwrap().hashCode();
+                    }
+
+                    @Override
+                    public boolean equals(final Object o) {
+                        return unwrap().equals(DisposableWrapperUtil.unwrap(o));
+                    }
+                    
+                    @Override
                     public HttpObject unwrap() {
                         return duplicated;
                     }
@@ -195,19 +205,19 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
     
     @Override
-    public Observable<? extends HttpObject> inbound() {
-        return this._cachedInbound;
-    }
-
-    @Override
     public Observable<? extends DisposableWrapper<HttpObject>> obsrequest() {
         return this._obsRequest;
     }
     
-    @Override
-    public HttpMessageHolder inboundHolder() {
-        return this._holder;
-    }
+//    @Override
+//    public Observable<? extends HttpObject> inbound() {
+//        return this._cachedInbound;
+//    }
+//
+//    @Override
+//    public HttpMessageHolder inboundHolder() {
+//        return this._holder;
+//    }
     
     @Override
     public Subscription outbound(final Observable<? extends Object> message) {
@@ -306,12 +316,12 @@ class DefaultHttpTrade extends DefaultAttributeMap
                         this, ExceptionUtils.exception2detail(e));
                 }});
         
-        this._cachedInbound = 
-            Observable.unsafeCreate(new OnSubscribe<HttpObject>() {
-                @Override
-                public void call(final Subscriber<? super HttpObject> subscriber) {
-                    subscribeInbound(subscriber, inbound);
-                }});
+//        this._cachedInbound = 
+//            Observable.unsafeCreate(new OnSubscribe<HttpObject>() {
+//                @Override
+//                public void call(final Subscriber<? super HttpObject> subscriber) {
+//                    subscribeInbound(subscriber, inbound);
+//                }});
         
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
@@ -369,19 +379,19 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }).compose(RxNettys.assembleTo(maxBufSize, DefaultHttpTrade.this));
     }
 
-    private void subscribeInbound(final Subscriber<? super HttpObject> subscriber,
-            final Observable<? extends HttpObject> inbound) {
-        if (!subscriber.isUnsubscribed()) {
-            final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
-            this._subscribers.add(serializedSubscriber);
-            serializedSubscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _subscribers.remove(serializedSubscriber);
-                }}));
-            inbound.subscribe(serializedSubscriber);
-        }
-    }
+//    private void subscribeInbound(final Subscriber<? super HttpObject> subscriber,
+//            final Observable<? extends HttpObject> inbound) {
+//        if (!subscriber.isUnsubscribed()) {
+//            final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
+//            this._subscribers.add(serializedSubscriber);
+//            serializedSubscriber.add(Subscriptions.create(new Action0() {
+//                @Override
+//                public void call() {
+//                    _subscribers.remove(serializedSubscriber);
+//                }}));
+//            inbound.subscribe(serializedSubscriber);
+//        }
+//    }
     
     private void initInboundHandler(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
         final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
@@ -827,7 +837,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private final List<Subscriber<? super HttpObject>> _subscribers = 
             new CopyOnWriteArrayList<>();
     private volatile Throwable _unactiveReason = null;
-    private final Observable<HttpObject> _cachedInbound;
+//    private final Observable<HttpObject> _cachedInbound;
     private final Observable<? extends DisposableWrapper<HttpObject>> _obsRequest;
     
     private volatile boolean _isFlushPerWrite = false;

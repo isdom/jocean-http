@@ -64,7 +64,6 @@ import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Action2;
-import rx.functions.Func0;
 import rx.functions.Func1;
 
 public class DefaultSignalClientTestCase {
@@ -401,19 +400,14 @@ public class DefaultSignalClientTestCase {
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
         final AtomicReference<String> reqbeanReceivedRef = new AtomicReference<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<FullHttpRequest, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<FullHttpRequest, HttpTrade>() {
             @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpRequest req = genFullHttpRequest.call();
-                try {
-                    reqMethodReceivedRef.set(req.method());
-                    final QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
-                    reqpathReceivedRef.set(decoder.path());
-                    reqbeanReceivedRef.set(decoder.parameters().get("id").get(0));
-                } finally {
-                    req.release();
-                }
+            public void call(final FullHttpRequest req, final HttpTrade trade) {
+                reqMethodReceivedRef.set(req.method());
+                final QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
+                reqpathReceivedRef.set(decoder.path());
+                reqbeanReceivedRef.set(decoder.parameters().get("id").get(0));
                 trade.outbound(buildResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
@@ -518,19 +512,14 @@ public class DefaultSignalClientTestCase {
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
         final AtomicReference<String> reqbeanReceivedRef = new AtomicReference<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<FullHttpRequest, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<FullHttpRequest, HttpTrade>() {
             @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpRequest req = genFullHttpRequest.call();
-                try {
-                    reqMethodReceivedRef.set(req.method());
-                    final QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
-                    reqpathReceivedRef.set(decoder.path());
-                    reqbeanReceivedRef.set(decoder.parameters().get("id").get(0));
-                } finally {
-                    req.release();
-                }
+            public void call(final FullHttpRequest req, final HttpTrade trade) {
+                reqMethodReceivedRef.set(req.method());
+                final QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
+                reqpathReceivedRef.set(decoder.path());
+                reqbeanReceivedRef.set(decoder.parameters().get("id").get(0));
                 trade.outbound(buildBytesResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
@@ -579,19 +568,14 @@ public class DefaultSignalClientTestCase {
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
         final AtomicReference<String> reqbeanReceivedRef = new AtomicReference<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<FullHttpRequest, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<FullHttpRequest, HttpTrade>() {
             @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpRequest req = genFullHttpRequest.call();
-                try {
-                    reqMethodReceivedRef.set(req.method());
-                    final QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
-                    reqpathReceivedRef.set(decoder.path());
-                    reqbeanReceivedRef.set(decoder.parameters().get("id").get(0));
-                } finally {
-                    req.release();
-                }
+            public void call(final FullHttpRequest req, final HttpTrade trade) {
+                reqMethodReceivedRef.set(req.method());
+                final QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
+                reqpathReceivedRef.set(decoder.path());
+                reqbeanReceivedRef.set(decoder.parameters().get("id").get(0));
                 trade.outbound(buildResponse(respToSendback, trade.onTerminate()));
             }};
         final String testAddr = UUID.randomUUID().toString();
@@ -641,11 +625,10 @@ public class DefaultSignalClientTestCase {
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
         final AtomicReference<TestRequestByPost> reqbeanReceivedRef = new AtomicReference<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<FullHttpRequest, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<FullHttpRequest, HttpTrade>() {
             @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpRequest req = genFullHttpRequest.call();
+            public void call(final FullHttpRequest req, final HttpTrade trade) {
                 try {
                     reqMethodReceivedRef.set(req.method());
                     reqpathReceivedRef.set(req.uri());
@@ -655,8 +638,6 @@ public class DefaultSignalClientTestCase {
                 } catch (IOException e) {
                     LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
                             ExceptionUtils.exception2detail(e));
-                } finally {
-                    req.release();
                 }
                 trade.outbound(buildResponse(respToSendback, trade.onTerminate()));
             }};
@@ -706,11 +687,10 @@ public class DefaultSignalClientTestCase {
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
         final AtomicReference<TestRequestByPost> reqbeanReceivedRef = new AtomicReference<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<FullHttpRequest, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<FullHttpRequest, HttpTrade>() {
             @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpRequest req = genFullHttpRequest.call();
+            public void call(final FullHttpRequest req, final HttpTrade trade) {
                 try {
                     reqMethodReceivedRef.set(req.method());
                     reqpathReceivedRef.set(req.uri());
@@ -720,8 +700,6 @@ public class DefaultSignalClientTestCase {
                 } catch (IOException e) {
                     LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
                             ExceptionUtils.exception2detail(e));
-                } finally {
-                    req.release();
                 }
                 trade.outbound(buildBytesResponse(respToSendback, trade.onTerminate()));
             }};
@@ -772,11 +750,10 @@ public class DefaultSignalClientTestCase {
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
         final AtomicReference<TestRequestByPost> reqbeanReceivedRef = new AtomicReference<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<FullHttpRequest, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<FullHttpRequest, HttpTrade>() {
             @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpRequest req = genFullHttpRequest.call();
+            public void call(final FullHttpRequest req, final HttpTrade trade) {
                 try {
                     reqMethodReceivedRef.set(req.method());
                     reqpathReceivedRef.set(req.uri());
@@ -786,8 +763,6 @@ public class DefaultSignalClientTestCase {
                 } catch (IOException e) {
                     LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
                             ExceptionUtils.exception2detail(e));
-                } finally {
-                    req.release();
                 }
                 trade.outbound(buildBytesResponse(respToSendback, trade.onTerminate()));
             }};
@@ -834,11 +809,10 @@ public class DefaultSignalClientTestCase {
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
         final AtomicReference<TestRequestByPost> reqbeanReceivedRef = new AtomicReference<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<FullHttpRequest, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<FullHttpRequest, HttpTrade>() {
             @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpRequest req = genFullHttpRequest.call();
+            public void call(final FullHttpRequest req, final HttpTrade trade) {
                 try {
                     reqMethodReceivedRef.set(req.method());
                     reqpathReceivedRef.set(req.uri());
@@ -848,8 +822,6 @@ public class DefaultSignalClientTestCase {
                 } catch (IOException e) {
                     LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
                             ExceptionUtils.exception2detail(e));
-                } finally {
-                    req.release();
                 }
                 trade.outbound(buildBytesResponse(respToSendback, trade.onTerminate()));
             }};
@@ -896,11 +868,10 @@ public class DefaultSignalClientTestCase {
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
         final AtomicReference<TestRequestByPost> reqbeanReceivedRef = new AtomicReference<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<FullHttpRequest, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<FullHttpRequest, HttpTrade>() {
             @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpRequest req = genFullHttpRequest.call();
+            public void call(final FullHttpRequest req, final HttpTrade trade) {
                 try {
                     reqMethodReceivedRef.set(req.method());
                     reqpathReceivedRef.set(req.uri());
@@ -910,8 +881,6 @@ public class DefaultSignalClientTestCase {
                 } catch (IOException e) {
                     LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
                             ExceptionUtils.exception2detail(e));
-                } finally {
-                    req.release();
                 }
                 trade.outbound(buildResponse(respToSendback, trade.onTerminate()));
             }};
@@ -1030,11 +999,10 @@ public class DefaultSignalClientTestCase {
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
         final AtomicReference<TestRequestByPostWithQueryParam> reqbeanReceivedRef = new AtomicReference<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<FullHttpRequest, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<FullHttpRequest, HttpTrade>() {
             @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpRequest req = genFullHttpRequest.call();
+            public void call(final FullHttpRequest req, final HttpTrade trade) {
                 try {
                     reqMethodReceivedRef.set(req.method());
                     final QueryStringDecoder decoder = new QueryStringDecoder(req.uri());
@@ -1046,8 +1014,6 @@ public class DefaultSignalClientTestCase {
                 } catch (IOException e) {
                     LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
                             ExceptionUtils.exception2detail(e));
-                } finally {
-                    req.release();
                 }
                 trade.outbound(buildResponse(respToSendback, trade.onTerminate()));
             }};
@@ -1167,11 +1133,10 @@ public class DefaultSignalClientTestCase {
         final AtomicReference<String> reqpathReceivedRef = new AtomicReference<>();
         final AtomicReference<TestRequestByPostWithHeaderParam> reqbeanReceivedRef = new AtomicReference<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<FullHttpRequest, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<FullHttpRequest, HttpTrade>() {
             @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpRequest req = genFullHttpRequest.call();
+            public void call(final FullHttpRequest req, final HttpTrade trade) {
                 try {
                     reqMethodReceivedRef.set(req.method());
                     reqpathReceivedRef.set(req.uri());
@@ -1182,8 +1147,6 @@ public class DefaultSignalClientTestCase {
                 } catch (IOException e) {
                     LOG.warn("exception when Nettys.dumpByteBufAsBytes, detail: {}",
                             ExceptionUtils.exception2detail(e));
-                } finally {
-                    req.release();
                 }
                 trade.outbound(buildResponse(respToSendback, trade.onTerminate()));
             }};
@@ -1235,40 +1198,35 @@ public class DefaultSignalClientTestCase {
         final AtomicReference<TestRequestByPost> reqbeanReceivedRef = new AtomicReference<>();
         final List<FileUpload> uploads = new ArrayList<>();
         
-        final Action2<Func0<FullHttpRequest>, HttpTrade> requestAndTradeAwareWhenCompleted = 
-            new Action2<Func0<FullHttpRequest>, HttpTrade>() {
+        final Action2<FullHttpRequest, HttpTrade> requestAndTradeAwareWhenCompleted = 
+            new Action2<FullHttpRequest, HttpTrade>() {
             @Override
-            public void call(final Func0<FullHttpRequest> genFullHttpRequest, final HttpTrade trade) {
-                final FullHttpRequest req = genFullHttpRequest.call();
-                try {
-                    reqMethodReceivedRef.set(req.method());
-                    reqpathReceivedRef.set(req.uri());
-                    HttpPostRequestDecoder decoder = new HttpPostRequestDecoder(
-                            HTTP_DATA_FACTORY, req);
-                    //  first is signal
-                    boolean isfirst = true;
-                    while (decoder.hasNext()) {
-                        final InterfaceHttpData data = decoder.next();
-                        if (!isfirst) {
-                            if (data instanceof FileUpload) {
-                                uploads.add((FileUpload)data);
-                            }
-                        } else {
-                            isfirst = false;
-                            try {
-                                reqbeanReceivedRef.set(
-                                        (TestRequestByPost) JSON.parseObject(Nettys.dumpByteBufAsBytes(((FileUpload)data).content()), 
-                                                TestRequestByPost.class));
-                            } catch (Exception e) {
-                                LOG.warn("exception when JSON.parseObject, detail: {}",
-                                        ExceptionUtils.exception2detail(e));
-                            }
+            public void call(final FullHttpRequest req, final HttpTrade trade) {
+                reqMethodReceivedRef.set(req.method());
+                reqpathReceivedRef.set(req.uri());
+                HttpPostRequestDecoder decoder = new HttpPostRequestDecoder(
+                        HTTP_DATA_FACTORY, req);
+                //  first is signal
+                boolean isfirst = true;
+                while (decoder.hasNext()) {
+                    final InterfaceHttpData data = decoder.next();
+                    if (!isfirst) {
+                        if (data instanceof FileUpload) {
+                            uploads.add((FileUpload)data);
+                        }
+                    } else {
+                        isfirst = false;
+                        try {
+                            reqbeanReceivedRef.set(
+                                    (TestRequestByPost) JSON.parseObject(Nettys.dumpByteBufAsBytes(((FileUpload)data).content()), 
+                                            TestRequestByPost.class));
+                        } catch (Exception e) {
+                            LOG.warn("exception when JSON.parseObject, detail: {}",
+                                    ExceptionUtils.exception2detail(e));
                         }
                     }
-                    trade.outbound(buildResponse(respToSendback, trade.onTerminate()));
-                } finally {
-                    req.release();
                 }
+                trade.outbound(buildResponse(respToSendback, trade.onTerminate()));
             }};
             
         //  launch test server for attachment send

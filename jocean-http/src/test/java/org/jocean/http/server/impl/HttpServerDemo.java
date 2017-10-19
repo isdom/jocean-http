@@ -1,14 +1,7 @@
 package org.jocean.http.server.impl;
 
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_LENGTH;
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.impl.DefaultHttpClient;
@@ -17,6 +10,7 @@ import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.DisposableWrapperUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,20 +25,18 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
-import io.netty.util.ReferenceCountUtil;
-import rx.Observable;
-import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action1;
+import rx.functions.Func1;
 
 public class HttpServerDemo {
     
@@ -71,65 +63,28 @@ public class HttpServerDemo {
             );
         
         @SuppressWarnings("unused")
-        final Subscription subscription = 
-        server.defineServer(new LocalAddress("test"))
-            .subscribe(new Action1<HttpTrade>() {
-                @Override
-                public void call(final HttpTrade trade) {
-                    trade.inbound().subscribe(new Subscriber<HttpObject>() {
-                        private final List<HttpObject> _reqHttpObjects = new ArrayList<>();
-                        
-                        @Override
-                        public void onCompleted() {
-                            final FullHttpRequest req = retainFullHttpRequest();
-                            if (null!=req) {
-                                try {
-                                    final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK, 
-                                            Unpooled.wrappedBuffer(Nettys.dumpByteBufAsBytes(req.content())));
-                                    response.headers().set(CONTENT_TYPE, "text/plain");
-                                    response.headers().set(CONTENT_LENGTH, response.content().readableBytes());
-                                    trade.outbound(Observable.<HttpObject>just(response));
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                } finally {
-                                    req.release();
-                                }
-                            }
-                        }
-                        @Override
-                        public void onError(Throwable e) {
-                        }
-                        private FullHttpRequest retainFullHttpRequest() {
-                            if (this._reqHttpObjects.size()>0) {
-                                if (this._reqHttpObjects.get(0) instanceof FullHttpRequest) {
-                                    return ((FullHttpRequest)this._reqHttpObjects.get(0)).retain();
-                                }
-                                
-                                final HttpRequest req = (HttpRequest)this._reqHttpObjects.get(0);
-                                final ByteBuf[] bufs = new ByteBuf[this._reqHttpObjects.size()-1];
-                                for (int idx = 1; idx<this._reqHttpObjects.size(); idx++) {
-                                    bufs[idx-1] = ((HttpContent)this._reqHttpObjects.get(idx)).content().retain();
-                                }
-                                return new DefaultFullHttpRequest(
-                                        req.protocolVersion(), 
-                                        req.method(), 
-                                        req.uri(), 
-                                        Unpooled.wrappedBuffer(bufs));
-                            } else {
-                                return null;
-                            }
-                        }
-                        @Override
-                        public void onNext(final HttpObject msg) {
-                            this._reqHttpObjects.add(ReferenceCountUtil.retain(msg));
-                        }});
-                }});
-        
-//        Services.lookupOrCreateTimerService("demo").schedule(new Runnable() {
-//            @Override
-//            public void run() {
-//                subscription.unsubscribe();
-//            }}, 10 * 1000);
+        final Subscription subscription = server.defineServer(new LocalAddress("test"))
+                .subscribe(new Action1<HttpTrade>() {
+                    @Override
+                    public void call(final HttpTrade trade) {
+                        trade.outbound(trade.obsrequest().compose(RxNettys.message2fullreq(trade))
+                                .map(DisposableWrapperUtil.unwrap()).map(new Func1<FullHttpRequest, HttpObject>() {
+                                    @Override
+                                    public HttpObject call(final FullHttpRequest fullreq) {
+                                        try {
+                                            final FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                                    Unpooled.wrappedBuffer(
+                                                            Nettys.dumpByteBufAsBytes(fullreq.content())));
+                                            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+                                            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+                                            return response;
+                                        } catch (Exception e) {
+                                            throw new RuntimeException(e);
+                                        }
+                                    }
+                                }));
+                    }
+                });
         
         @SuppressWarnings("resource")
         final DefaultHttpClient client = new DefaultHttpClient(new TestChannelCreator(),
@@ -141,7 +96,7 @@ public class HttpServerDemo {
             content.writeBytes("test content".getBytes("UTF-8"));
             final DefaultFullHttpRequest request = 
                     new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/", content);
-            HttpHeaders.setContentLength(request, content.readableBytes());
+            HttpUtil.setContentLength(request, content.readableBytes());
             
             /* // TODO using initiator
             final Iterator<HttpObject> itr =

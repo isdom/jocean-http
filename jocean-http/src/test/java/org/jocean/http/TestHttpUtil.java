@@ -2,14 +2,17 @@ package org.jocean.http;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 
-import org.jocean.http.client.impl.DefaultHttpClientTestCase;
 import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.impl.AbstractBootstrapCreator;
 import org.jocean.http.server.impl.DefaultHttpServerBuilder;
+import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.DisposableWrapper;
+import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.RxActions;
 import org.jocean.idiom.rx.RxSubscribers;
@@ -34,6 +37,7 @@ import rx.Subscription;
 import rx.functions.Action1;
 import rx.functions.Action2;
 import rx.functions.Func0;
+import rx.functions.Func1;
 
 public class TestHttpUtil {
     
@@ -49,36 +53,28 @@ public class TestHttpUtil {
             bootstrap.channel(LocalServerChannel.class);
         }});
 
-    public static Subscription createTestServerWith(
-            final String acceptId,
-            final Action2<Func0<FullHttpRequest>, HttpTrade> onRequestCompleted,
-            final Feature... features) {
+    public static Subscription createTestServerWith(final String acceptId,
+            final Action2<FullHttpRequest, HttpTrade> onRequestCompleted, final Feature... features) {
         return TEST_SERVER_BUILDER.defineServer(new LocalAddress(acceptId), features)
-            .subscribe(new Action1<HttpTrade>() {
-                @Override
-                public void call(final HttpTrade trade) {
-                    trade.inbound()
-                        .subscribe(RxSubscribers.ignoreNext(),
-                            RxSubscribers.ignoreError(),
-                            RxActions.bindParameter(onRequestCompleted,
-                                trade.inboundHolder()
-                                    .fullOf(RxNettys.BUILD_FULL_REQUEST), 
-                                trade));
-                }});
+                .subscribe(new Action1<HttpTrade>() {
+                    @Override
+                    public void call(final HttpTrade trade) {
+                        trade.obsrequest().compose(RxNettys.message2fullreq(trade)).map(DisposableWrapperUtil.unwrap())
+                                .subscribe(RxActions.bindLastParameter(onRequestCompleted, trade));
+                    }
+                });
     }
     
-    public static Subscription createTestServerWith(
-            final String acceptId,
-            final Action1<HttpTrade> onRequestCompleted,
+    public static Subscription createTestServerWith(final String acceptId, final Action1<HttpTrade> onRequestCompleted,
             final Feature... features) {
         return TEST_SERVER_BUILDER.defineServer(new LocalAddress(acceptId), features)
-            .subscribe(new Action1<HttpTrade>() {
-                @Override
-                public void call(final HttpTrade trade) {
-                    trade.inbound()
-                        .doOnCompleted(RxActions.bindParameter(onRequestCompleted, trade))
-                        .subscribe();
-                }});
+                .subscribe(new Action1<HttpTrade>() {
+                    @Override
+                    public void call(final HttpTrade trade) {
+                        trade.obsrequest().last().subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError(),
+                                RxActions.bindParameter(onRequestCompleted, trade));
+                    }
+                });
     }
     
     public static Subscription createTestServerWith(
