@@ -321,7 +321,7 @@ public class RxNettys {
             @Override
             public Observable<DisposableWrapper<FullHttpRequest>> call(
                     final Observable<DisposableWrapper<HttpObject>> dwhs) {
-                return dwhs.<HttpObject>map(DisposableWrapperUtil.unwrap()).toList()
+                return dwhs.<HttpObject>map(DisposableWrapperUtil.<HttpObject>unwrap()).toList()
                         .map(new Func1<List<HttpObject>, DisposableWrapper<FullHttpRequest>>() {
                             @Override
                             public DisposableWrapper<FullHttpRequest> call(final List<HttpObject> hobjs) {
