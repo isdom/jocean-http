@@ -431,11 +431,11 @@ public class RxNettys {
         @Override
         public Observable<? extends DisposableWrapper<HttpObject>> call(final DisposableWrapper<HttpObject> dwh) {
             if (dwh.unwrap() instanceof FullHttpRequest) {
-                return Observable.just(wrap(requestOf((HttpRequest) dwh.unwrap()), dwh),
-                        wrap(lastContentOf((FullHttpMessage) dwh.unwrap()), dwh));
+                return Observable.just(RxNettys.<HttpObject>wrap(requestOf((HttpRequest) dwh.unwrap()), dwh),
+                        RxNettys.<HttpObject>wrap(lastContentOf((FullHttpMessage) dwh.unwrap()), dwh));
             } else if (dwh.unwrap() instanceof FullHttpResponse) {
-                return Observable.just(wrap(responseOf((HttpResponse) dwh.unwrap()), dwh),
-                        wrap(lastContentOf((FullHttpMessage) dwh.unwrap()), dwh));
+                return Observable.just(RxNettys.<HttpObject>wrap(responseOf((HttpResponse) dwh.unwrap()), dwh),
+                        RxNettys.<HttpObject>wrap(lastContentOf((FullHttpMessage) dwh.unwrap()), dwh));
             } else {
                 return Observable.just(dwh);
             }
