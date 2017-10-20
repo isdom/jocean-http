@@ -423,6 +423,25 @@ public class RxNettys {
         return new ProxyBuilder<>(LastHttpContent.class, msg).buildProxy();
     }
 
+    public static Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<HttpObject>>> splitdwhs() {
+        return SPLIT_DWHS;
+    }
+
+    private final static Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<HttpObject>>> SPLIT_DWHS = new Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<HttpObject>>>() {
+        @Override
+        public Observable<? extends DisposableWrapper<HttpObject>> call(final DisposableWrapper<HttpObject> dwh) {
+            if (dwh.unwrap() instanceof FullHttpRequest) {
+                return Observable.just(wrap(requestOf((HttpRequest) dwh.unwrap()), dwh),
+                        wrap(lastContentOf((FullHttpMessage) dwh.unwrap()), dwh));
+            } else if (dwh.unwrap() instanceof FullHttpResponse) {
+                return Observable.just(wrap(responseOf((HttpResponse) dwh.unwrap()), dwh),
+                        wrap(lastContentOf((FullHttpMessage) dwh.unwrap()), dwh));
+            } else {
+                return Observable.just(dwh);
+            }
+        }
+    };
+            
     //  对 HttpMessage 中的 HttpContent 产生独立的 readIndex & writeIndex
     public static Observable.Transformer<? super HttpObject, ? extends HttpObject> duplicateHttpContent() {
         return new Observable.Transformer<HttpObject, HttpObject>() {
@@ -543,6 +562,40 @@ public class RxNettys {
             }};
     }
 
+    public static <T> DisposableWrapper<T> wrap(final T unwrap, final DisposableWrapper<?> org) {
+        return new DisposableWrapper<T>() {
+
+            @Override
+            public int hashCode() {
+                return unwrap().hashCode();
+            }
+
+            @Override
+            public boolean equals(final Object o) {
+                return unwrap().equals(DisposableWrapperUtil.unwrap(o));
+            }
+            
+            @Override
+            public T unwrap() {
+                return unwrap;
+            }
+
+            @Override
+            public void dispose() {
+                org.dispose();
+            }
+
+            @Override
+            public boolean isDisposed() {
+                return org.isDisposed();
+            }
+            
+            @Override
+            public String toString() {
+                return "DisposableWrapper[" + unwrap.toString() + "]";
+            }};
+    }
+    
     public static DisposableWrapper<ByteBuf> dwc2dwb(final DisposableWrapper<? extends HttpObject> dwh) {
         if (dwh.unwrap() instanceof HttpContent) {
             return new DisposableWrapper<ByteBuf>() {
