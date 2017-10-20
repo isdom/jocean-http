@@ -22,7 +22,6 @@ import org.jocean.http.WritePolicy;
 import org.jocean.http.WritePolicy.Outboundable;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpHandlers;
-import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.COWCompositeSupport;
@@ -53,7 +52,6 @@ import io.netty.util.DefaultAttributeMap;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import rx.Observable;
-import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Single;
 import rx.Subscriber;
@@ -71,7 +69,7 @@ import rx.subscriptions.Subscriptions;
 class DefaultHttpTrade extends DefaultAttributeMap 
     implements HttpTrade,  Comparable<DefaultHttpTrade> {
     
-    private static final Func1<DisposableWrapper<HttpObject>, HttpObject> _UNWRAP = DisposableWrapperUtil.unwrap();
+//    private static final Func1<DisposableWrapper<HttpObject>, HttpObject> _UNWRAP = DisposableWrapperUtil.unwrap();
     private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = 
         new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
         @Override
@@ -287,34 +285,40 @@ class DefaultHttpTrade extends DefaultAttributeMap
         this._terminateAwareSupport = 
             new TerminateAwareSupport<HttpTrade>(this._selector);
         
-        this._holder = new HttpMessageHolder();
-        doOnTerminate(this._holder.closer());
+//        this._holder = new HttpMessageHolder();
+//        doOnTerminate(this._holder.closer());
         
-        this._obsRequest = buildObsRequest(maxBufSize).cache()
-                .doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
-                    @Override
-                    public void call(final DisposableWrapper<HttpObject> wrapper) {
-                        if (wrapper.isDisposed()) {
-                            throw new RuntimeException("httpobject wrapper is disposed!");
-                        }
-                    }
-                }).map(_DUPLICATE_CONTENT);
+        this._obsRequest = buildObsRequest(maxBufSize).cache().doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
+            @Override
+            public void call(final DisposableWrapper<HttpObject> wrapper) {
+                if (wrapper.isDisposed()) {
+                    throw new RuntimeException("httpobject wrapper is disposed!");
+                }
+            }
+        }).map(_DUPLICATE_CONTENT);
+
+        this._obsRequest.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
+            @Override
+            public void call(final Throwable e) {
+                LOG.warn("HttpTrade: {}'s inbound with onError {}", this, ExceptionUtils.exception2detail(e));
+            }
+        });
         
-        final Observable<? extends HttpObject> inbound = 
-            this._obsRequest
-            .map(_UNWRAP)
-            .compose(this._holder.<HttpObject>assembleAndHold())
-            .cache()
-            .compose(RxNettys.duplicateHttpContent());
+//        final Observable<? extends HttpObject> inbound = 
+//            this._obsRequest
+//            .map(_UNWRAP)
+//            .compose(this._holder.<HttpObject>assembleAndHold())
+//            .cache()
+//            .compose(RxNettys.duplicateHttpContent());
         
-        inbound.subscribe(
-            RxSubscribers.ignoreNext(),
-            new Action1<Throwable>() {
-                @Override
-                public void call(final Throwable e) {
-                    LOG.warn("HttpTrade: {}'s inbound with onError {}", 
-                        this, ExceptionUtils.exception2detail(e));
-                }});
+//        inbound.subscribe(
+//            RxSubscribers.ignoreNext(),
+//            new Action1<Throwable>() {
+//                @Override
+//                public void call(final Throwable e) {
+//                    LOG.warn("HttpTrade: {}'s inbound with onError {}", 
+//                        this, ExceptionUtils.exception2detail(e));
+//                }});
         
 //        this._cachedInbound = 
 //            Observable.unsafeCreate(new OnSubscribe<HttpObject>() {
@@ -833,7 +837,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     @SuppressWarnings("unused")
     private volatile ChannelHandler _inboundHandler = null;
     
-    private final HttpMessageHolder _holder;
+//    private final HttpMessageHolder _holder;
     private final List<Subscriber<? super HttpObject>> _subscribers = 
             new CopyOnWriteArrayList<>();
     private volatile Throwable _unactiveReason = null;
