@@ -69,7 +69,6 @@ import rx.subscriptions.Subscriptions;
 class DefaultHttpTrade extends DefaultAttributeMap 
     implements HttpTrade,  Comparable<DefaultHttpTrade> {
     
-//    private static final Func1<DisposableWrapper<HttpObject>, HttpObject> _UNWRAP = DisposableWrapperUtil.unwrap();
     private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = 
         new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
         @Override

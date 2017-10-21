@@ -333,6 +333,24 @@ public class RxNettys {
         };
     }
     
+    public static Observable.Transformer<? super DisposableWrapper<HttpObject>, ? extends DisposableWrapper<FullHttpResponse>> message2fullresp(
+            final TerminateAware<?> terminateAware) {
+        return new Observable.Transformer<DisposableWrapper<HttpObject>, DisposableWrapper<FullHttpResponse>>() {
+            @Override
+            public Observable<DisposableWrapper<FullHttpResponse>> call(
+                    final Observable<DisposableWrapper<HttpObject>> dwhs) {
+                return dwhs.<HttpObject>map(DisposableWrapperUtil.<HttpObject>unwrap()).toList()
+                        .map(new Func1<List<HttpObject>, DisposableWrapper<FullHttpResponse>>() {
+                            @Override
+                            public DisposableWrapper<FullHttpResponse> call(final List<HttpObject> hobjs) {
+                                return DisposableWrapperUtil.disposeOn(terminateAware,
+                                        RxNettys.wrap(Nettys.httpobjs2fullresp(hobjs)));
+                            }
+                        });
+            }
+        };
+    }
+    
     public static Func1<HttpObject[], FullHttpRequest> BUILD_FULL_REQUEST = new Func1<HttpObject[], FullHttpRequest>() {
         @Override
         public FullHttpRequest call(final HttpObject[] httpobjs) {

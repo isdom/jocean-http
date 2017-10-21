@@ -19,8 +19,10 @@ import org.jocean.http.WritePolicy.Outboundable;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.DisposableWrapper;
+import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
@@ -238,16 +240,18 @@ class DefaultHttpInitiator
     }
     
     @Override
-    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(Observable<? extends Object> request) {
-        // TODO Auto-generated method stub
-        return null;
+    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(final Observable<? extends Object> request) {
+        return defineInteraction2(request, null);
     }
 
     @Override
-    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(Observable<? extends Object> request,
-            WritePolicy writePolicy) {
-        // TODO Auto-generated method stub
-        return null;
+    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(final Observable<? extends Object> request,
+            final WritePolicy writePolicy) {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
+            @Override
+            public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+                _op.subscribeResponse(DefaultHttpInitiator.this, request, subscriber, writePolicy);
+            }});
     }
     
     @Override
@@ -259,11 +263,7 @@ class DefaultHttpInitiator
     @Override
     public Observable<? extends HttpObject> defineInteraction(
             final Observable<? extends Object> request, final WritePolicy writePolicy) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<HttpObject>() {
-            @Override
-            public void call(final Subscriber<? super HttpObject> subscriber) {
-                _op.subscribeResponse(DefaultHttpInitiator.this, request, subscriber, writePolicy);
-            }});
+        return defineInteraction2(request, writePolicy).map(DisposableWrapperUtil.<HttpObject>unwrap());
     }
     
     @Override
@@ -477,17 +477,17 @@ class DefaultHttpInitiator
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
-                final Subscriber<? super HttpObject> subscriber, 
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber, 
                 final WritePolicy writePolicy);
         
         public void responseOnNext(
                 final DefaultHttpInitiator initiator,
-                final Subscriber<? super HttpObject> subscriber,
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject msg);
         
         public void doOnUnsubscribeResponse(
                 final DefaultHttpInitiator initiator,
-                final Subscriber<? super HttpObject> subscriber);
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber);
         
         public void requestOnNext(
                 final DefaultHttpInitiator initiator,
@@ -518,7 +518,7 @@ class DefaultHttpInitiator
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
-                final Subscriber<? super HttpObject> subscriber,
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final WritePolicy writePolicy) {
             initiator.subscribeResponse(request, subscriber, writePolicy);
         }
@@ -526,7 +526,7 @@ class DefaultHttpInitiator
         @Override
         public void responseOnNext(
                 final DefaultHttpInitiator initiator,
-                final Subscriber<? super HttpObject> subscriber,
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject msg) {
             initiator.responseOnNext(subscriber, msg);
         }
@@ -534,7 +534,7 @@ class DefaultHttpInitiator
         @Override
         public void doOnUnsubscribeResponse(
                 final DefaultHttpInitiator initiator,
-                final Subscriber<? super HttpObject> subscriber) {
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
             initiator.doOnUnsubscribeResponse(subscriber);
         }
         
@@ -588,7 +588,7 @@ class DefaultHttpInitiator
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
-                final Subscriber<? super HttpObject> subscriber,
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final WritePolicy writePolicy) {
             subscriber.onError(new RuntimeException("http connection unactive."));
         }
@@ -596,7 +596,7 @@ class DefaultHttpInitiator
         @Override
         public void responseOnNext(
                 final DefaultHttpInitiator initiator,
-                final Subscriber<? super HttpObject> subscriber,
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject msg) {
             ReferenceCountUtil.release(msg);
         }
@@ -604,7 +604,7 @@ class DefaultHttpInitiator
         @Override
         public void doOnUnsubscribeResponse(
                 final DefaultHttpInitiator initiator,
-                final Subscriber<? super HttpObject> subscriber) {
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
         }
 
         @Override
@@ -639,7 +639,7 @@ class DefaultHttpInitiator
     
     private void subscribeResponse(
             final Observable<? extends Object> request,
-            final Subscriber<? super HttpObject> subscriber, 
+            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber, 
             final WritePolicy writePolicy) {
         if (subscriber.isUnsubscribed()) {
             LOG.info("response subscriber ({}) has been unsubscribed, ignore", 
@@ -785,13 +785,12 @@ class DefaultHttpInitiator
     }
 
     private void responseOnNext(
-            final Subscriber<? super HttpObject> subscriber,
+            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
             final HttpObject respmsg) {
         markStartRecving();
         try {
-            subscriber.onNext(respmsg);
+            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap(respmsg)));
         } finally {
-            ReferenceCountUtil.release(respmsg);
             if (respmsg instanceof LastHttpContent) {
                 /*
                  * netty 参考代码: https://github.com/netty/netty/blob/netty-
@@ -815,7 +814,7 @@ class DefaultHttpInitiator
     }
 
     private void doOnUnsubscribeResponse(
-            final Subscriber<? super HttpObject> subscriber) {
+            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
         if (unholdRespSubscriber(subscriber)) {
             removeRespHandler();
             // unsubscribe before OnCompleted or OnError
@@ -852,13 +851,11 @@ class DefaultHttpInitiator
         }
     }
 
-    private boolean holdRespSubscriber(
-            final Subscriber<? super HttpObject> subscriber) {
+    private boolean holdRespSubscriber(final Subscriber<?> subscriber) {
         return respSubscriberUpdater.compareAndSet(this, null, subscriber);
     }
 
-    private boolean unholdRespSubscriber(
-            final Subscriber<? super HttpObject> subscriber) {
+    private boolean unholdRespSubscriber(final Subscriber<?> subscriber) {
         return respSubscriberUpdater.compareAndSet(this, subscriber, null);
     }
     

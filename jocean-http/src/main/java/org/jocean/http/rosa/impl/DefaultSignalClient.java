@@ -32,12 +32,12 @@ import org.jocean.http.rosa.impl.internal.Facades.ResponseTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.UriSource;
 import org.jocean.http.rosa.impl.internal.RosaProfiles;
 import org.jocean.http.util.FeaturesBuilder;
-import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.PayloadCounterAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.BeanHolder;
 import org.jocean.idiom.BeanHolderAware;
+import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.Ordered;
@@ -290,21 +290,22 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         .flatMap(new Func1<HttpInitiator, Observable<RESP>>() {
             @Override
             public Observable<RESP> call(final HttpInitiator initiator) {
-                final HttpMessageHolder holder = new HttpMessageHolder();
-                initiator.doOnTerminate(holder.closer());
-                return initiator.defineInteraction(
+                return initiator.defineInteraction2(
                     outboundMessageOf(signalBean, 
                             initRequestOf(uri),
                             fullfeatures,
                             initiator.onTerminate()))
-                    .compose(holder.<HttpObject>assembleAndHold())
-                    .last()
-                    .flatMap(new Func1<HttpObject, Observable<RESP>>() {
+                    .compose(RxNettys.message2fullresp(initiator))
+                    .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
                         @Override
-                        public Observable<RESP> call(HttpObject t) {
-                            return toRESP(holder.fullOf(RxNettys.BUILD_FULL_RESPONSE),
-                                safeGetResponseType(fullfeatures),
-                                safeGetResponseBodyType(signalBean, fullfeatures));
+                        public RESP call(final DisposableWrapper<FullHttpResponse> dwresp) {
+                            try {
+                                return toRESP(dwresp.unwrap(),
+                                    safeGetResponseType(fullfeatures),
+                                    safeGetResponseBodyType(signalBean, fullfeatures));
+                            } finally {
+                                dwresp.dispose();
+                            }
                         }})
                     .doOnUnsubscribe(initiator.closer())
                     ;
@@ -663,12 +664,11 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     
     @SuppressWarnings("unchecked")
-    private <RESP> Observable<RESP> toRESP(
-            final Func0<FullHttpResponse> messageBuilder,
+    private <RESP> RESP toRESP(
+            final FullHttpResponse fullresp,
             final Class<?> respType,
             final Class<?> bodyType
             ) {
-        final FullHttpResponse fullresp = messageBuilder.call();
         if (null!=fullresp) {
             try {
                 final byte[] bytes = Nettys.dumpByteBufAsBytes(fullresp.content());
@@ -681,31 +681,25 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     }
                 }
                 if (null != respType) {
-                    return Observable.just(DefaultSignalClient.<RESP>convertResponseTo(fullresp, bytes, respType));
+                    return DefaultSignalClient.<RESP>convertResponseTo(fullresp, bytes, respType);
                 }
                 if (null != bodyType) {
                     if (bodyType.equals(String.class)) {
-                        return (Observable<RESP>)Observable.just(new String(bytes, CharsetUtil.UTF_8));
+                        return (RESP)new String(bytes, CharsetUtil.UTF_8);
                     } else {
-                        return Observable.just(JSON.<RESP>parseObject(bytes, bodyType));
+                        return JSON.<RESP>parseObject(bytes, bodyType);
                     }
                 } else {
                     final RESP respObj = (RESP)bytes;
-                    return Observable.just(respObj);
+                    return respObj;
                 }
             } catch (Exception e) {
                 LOG.warn("exception when parse response {}, detail:{}",
                         fullresp, ExceptionUtils.exception2detail(e));
-                return Observable.error(e);
-            } finally {
-                final boolean released = fullresp.release();
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("HttpResponse({}) released({}) after toRESP", 
-                        fullresp, released);
-                }
+                throw new RuntimeException(e);
             }
         }
-        return Observable.error(new RuntimeException("invalid response"));
+        throw new RuntimeException("invalid response");
     }
 
     private static <RESP> RESP convertResponseTo(
