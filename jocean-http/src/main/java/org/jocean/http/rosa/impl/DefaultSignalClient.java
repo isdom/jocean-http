@@ -290,7 +290,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         .flatMap(new Func1<HttpInitiator, Observable<RESP>>() {
             @Override
             public Observable<RESP> call(final HttpInitiator initiator) {
-                return initiator.defineInteraction2(
+                return initiator.defineInteraction(
                     outboundMessageOf(signalBean, 
                             initRequestOf(uri),
                             fullfeatures,

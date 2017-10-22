@@ -10,6 +10,7 @@ import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
+import org.jocean.idiom.DisposableWrapperUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -135,18 +136,16 @@ public class SslDemo {
         final HttpMessageHolder holder = new HttpMessageHolder();
         initiator.doOnTerminate(holder.closer());
         return initiator.defineInteraction(Observable.just(request))
-            .compose(holder.assembleAndHold())
-            .last().map(new Func1<HttpObject, String>() {
+            .compose(RxNettys.message2fullresp(initiator))
+            .map(DisposableWrapperUtil.unwrap())
+            .map(new Func1<FullHttpResponse, String>() {
                 @Override
-                public String call(HttpObject t) {
-                    final FullHttpResponse resp = holder.fullOf(RxNettys.BUILD_FULL_RESPONSE).call();
+                public String call(FullHttpResponse resp) {
                     try {
                         return new String(Nettys.dumpByteBufAsBytes(resp.content()), Charsets.UTF_8);
                     } catch (IOException e) {
                         e.printStackTrace();
                         return null;
-                    } finally {
-                        resp.release();
                     }
                 }});
     }

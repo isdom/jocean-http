@@ -240,30 +240,18 @@ class DefaultHttpInitiator
     }
     
     @Override
-    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(final Observable<? extends Object> request) {
-        return defineInteraction2(request, null);
+    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
+        return defineInteraction(request, null);
     }
 
     @Override
-    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(final Observable<? extends Object> request,
+    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request,
             final WritePolicy writePolicy) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
             @Override
             public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
                 _op.subscribeResponse(DefaultHttpInitiator.this, request, subscriber, writePolicy);
             }});
-    }
-    
-    @Override
-    public Observable<? extends HttpObject> defineInteraction(
-            final Observable<? extends Object> request) {
-        return defineInteraction(request, null);
-    }
-
-    @Override
-    public Observable<? extends HttpObject> defineInteraction(
-            final Observable<? extends Object> request, final WritePolicy writePolicy) {
-        return defineInteraction2(request, writePolicy).map(DisposableWrapperUtil.<HttpObject>unwrap());
     }
     
     @Override

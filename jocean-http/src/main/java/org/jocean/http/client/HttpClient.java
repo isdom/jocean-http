@@ -35,16 +35,10 @@ public interface HttpClient extends AutoCloseable {
         
         public boolean isActive();
 
-        public Observable<? extends HttpObject> defineInteraction(
+        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(
                 final Observable<? extends Object> request);
         
-        public Observable<? extends HttpObject> defineInteraction(
-                final Observable<? extends Object> request, final WritePolicy writePolicy);
-        
-        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(
-                final Observable<? extends Object> request);
-        
-        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction2(
+        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(
                 final Observable<? extends Object> request, final WritePolicy writePolicy);
         
         // from IntrafficController

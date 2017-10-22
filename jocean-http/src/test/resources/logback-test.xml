@@ -26,6 +26,8 @@
         </encoder>
     </appender>
     
+    <logger name="org.jocean.http.util.RxNettys" level="TRACE"/>
+    
     <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
         <includeCallerData>true</includeCallerData>
         <appender-ref ref="file"/>
