@@ -160,8 +160,8 @@ public class DefaultHttpClientTestCase {
             throws Exception {
         try (final HttpInitiator initiator = builder.build().toBlocking().single()) {
 
-            interaction.interact(initiator,
-                    initiator.defineInteraction(request, writePolicy).compose(RxNettys.message2fullresp(initiator)));
+            interaction.interact(initiator, initiator.defineInteraction(request, writePolicy)
+                    .compose(RxNettys.message2fullresp(initiator, true)));
             return initiator;
         }
     }
@@ -257,7 +257,6 @@ public class DefaultHttpClientTestCase {
                     @Override
                     public void interact(
                             final HttpInitiator initiator,
-//                            final Observable<HttpObject> response, 
                             final Observable<DisposableWrapper<FullHttpResponse>> getresp) throws Exception {
                         final Observable<DisposableWrapper<FullHttpResponse>> cached = getresp.cache();
                         cached.subscribe();

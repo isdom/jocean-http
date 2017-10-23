@@ -777,7 +777,7 @@ class DefaultHttpInitiator
             final HttpObject respmsg) {
         markStartRecving();
         try {
-            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap(respmsg)));
+            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(respmsg)));
         } finally {
             if (respmsg instanceof LastHttpContent) {
                 /*

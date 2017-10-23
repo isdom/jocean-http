@@ -422,7 +422,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         
         try {
             // retain of create transfer to DisposableWrapper<HttpObject>
-            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap(inmsg)));
+            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
         } finally {
             if (inmsg instanceof LastHttpContent) {
                 /*
