@@ -35,7 +35,6 @@ public class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
         LoggerFactory.getLogger(AsBlob.class);
 
     private final ReferenceCountedHolder _holder;
-    private final HttpMessageHolder _msgHolder;
     private final String _contentTypePrefix;
     
     private boolean _isMultipart = false;
@@ -61,11 +60,9 @@ public class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
     }
     
     public AsBlob(final String contentTypePrefix, 
-            final ReferenceCountedHolder holder,
-            final HttpMessageHolder msgHolder) {
+            final ReferenceCountedHolder holder) {
         this._contentTypePrefix = contentTypePrefix;
         this._holder = holder;
-        this._msgHolder = msgHolder;
     }
     
     public void setDiscardThreshold(final int discardThreshold) {
@@ -140,10 +137,6 @@ public class AsBlob implements Func1<HttpObject, Observable<? extends Blob>> {
         } catch (ErrorDataDecoderException e) {
             LOG.warn("exception when postDecoder.offer, detail: {}", 
                     ExceptionUtils.exception2detail(e));
-        } finally {
-            if (null != this._msgHolder) {
-                this._msgHolder.releaseHttpContent(content);
-            }
         }
         final List<Blob> blobs = new ArrayList<>();
         try {

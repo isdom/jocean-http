@@ -6,8 +6,6 @@ import java.net.InetSocketAddress;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.impl.DefaultHttpClient;
-import org.jocean.http.util.HttpHandlers;
-import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapperUtil;
@@ -20,13 +18,10 @@ import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import rx.Observable;
-import rx.functions.Action0;
 import rx.functions.Func1;
 
 public class SslDemo {
@@ -133,8 +128,6 @@ public class SslDemo {
     private static Observable<String> sendAndRecv(
             final HttpInitiator initiator,
             final DefaultFullHttpRequest request) {
-        final HttpMessageHolder holder = new HttpMessageHolder();
-        initiator.doOnTerminate(holder.closer());
         return initiator.defineInteraction(Observable.just(request))
             .compose(RxNettys.message2fullresp(initiator))
             .map(DisposableWrapperUtil.unwrap())
