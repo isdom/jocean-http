@@ -593,7 +593,7 @@ public class RxNettys {
     }
     
     public static <T> DisposableWrapper<T> wrap4release(final T unwrap) {
-        return DisposableWrapperUtil.wrap(unwrap, disposerOf());
+        return DisposableWrapperUtil.wrap(unwrap, RxNettys.<T>disposerOf());
     }
 
     public static DisposableWrapper<ByteBuf> dwc2dwb(final DisposableWrapper<? extends HttpObject> dwh) {
