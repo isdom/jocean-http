@@ -73,7 +73,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         @Override
         public DisposableWrapper<HttpObject> call(final DisposableWrapper<HttpObject> wrapper) {
             if (wrapper.unwrap() instanceof HttpContent) {
-                return DisposableWrapperUtil.wrap(((HttpContent) wrapper.unwrap()).duplicate(), wrapper);
+                return DisposableWrapperUtil.<HttpObject>wrap(((HttpContent) wrapper.unwrap()).duplicate(), wrapper);
             } else {
                 return wrapper;
             }
