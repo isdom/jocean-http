@@ -588,8 +588,12 @@ public class RxNettys {
         }};
     
     @SuppressWarnings("unchecked")
+    public static <T> Action1<T> disposerOf() {
+        return (Action1<T>)DISPOSE_REF;
+    }
+    
     public static <T> DisposableWrapper<T> wrap4release(final T unwrap) {
-        return DisposableWrapperUtil.wrap(unwrap, (Action1<T>)DISPOSE_REF);
+        return DisposableWrapperUtil.wrap(unwrap, disposerOf());
     }
 
     public static DisposableWrapper<ByteBuf> dwc2dwb(final DisposableWrapper<? extends HttpObject> dwh) {
