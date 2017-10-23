@@ -11,7 +11,6 @@ import org.jocean.http.IntrafficController;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.WritePolicy;
-import org.jocean.http.util.HttpMessageHolder;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.TerminateAware;
 
@@ -52,10 +51,7 @@ public interface HttpServerBuilder extends Closeable {
         public TrafficCounter traffic();
         public boolean isActive();
         
-//        public Observable<? extends HttpObject> inbound();
-//        public HttpMessageHolder inboundHolder();
-        
-        public Observable<? extends DisposableWrapper<HttpObject>> obsrequest();
+        public Observable<? extends DisposableWrapper<HttpObject>> inbound();
         
         public Subscription outbound(final Observable<? extends Object> message);
         

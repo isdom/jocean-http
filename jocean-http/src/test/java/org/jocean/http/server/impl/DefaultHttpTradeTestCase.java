@@ -142,7 +142,7 @@ public class DefaultHttpTradeTestCase {
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber = new TestSubscriber<>();
         
-        trade.obsrequest().subscribe(reqSubscriber);
+        trade.inbound().subscribe(reqSubscriber);
         
         trade.close();
         assertTrue(!trade.isActive());
@@ -165,7 +165,7 @@ public class DefaultHttpTradeTestCase {
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber = new TestSubscriber<>();
         
-        trade.obsrequest().subscribe(reqSubscriber);
+        trade.inbound().subscribe(reqSubscriber);
         
         writeToInboundAndFlush(channel, request);
         
@@ -193,7 +193,7 @@ public class DefaultHttpTradeTestCase {
         assertTrue(!trade.isActive());
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber = new TestSubscriber<>();
-        trade.obsrequest().subscribe(reqSubscriber);
+        trade.inbound().subscribe(reqSubscriber);
         
         reqSubscriber.assertTerminalEvent();
         reqSubscriber.assertError(Exception.class);
@@ -212,7 +212,7 @@ public class DefaultHttpTradeTestCase {
 //        trade.inboundHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber = new TestSubscriber<>();
-        trade.obsrequest().subscribe(reqSubscriber);
+        trade.inbound().subscribe(reqSubscriber);
         
         writeToInboundAndFlush(channel, request);
         writeToInboundAndFlush(channel, req_contents[0]);
@@ -240,13 +240,13 @@ public class DefaultHttpTradeTestCase {
 //        trade.inboundHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber1 = new TestSubscriber<>();
-        trade.obsrequest().subscribe(reqSubscriber1);
+        trade.inbound().subscribe(reqSubscriber1);
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber2 = new TestSubscriber<>();
-        trade.obsrequest().subscribe(reqSubscriber2);
+        trade.inbound().subscribe(reqSubscriber2);
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber3 = new TestSubscriber<>();
-        trade.obsrequest().subscribe(reqSubscriber3);
+        trade.inbound().subscribe(reqSubscriber3);
         
         writeToInboundAndFlush(channel, request);
         writeToInboundAndFlush(channel, req_contents[0]);
@@ -275,7 +275,7 @@ public class DefaultHttpTradeTestCase {
 //        trade.inboundHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber1 = new TestSubscriber<>();
-        trade.obsrequest().subscribe(reqSubscriber1);
+        trade.inbound().subscribe(reqSubscriber1);
         
         writeToInboundAndFlush(channel, request);
         
@@ -283,7 +283,7 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber1.assertValues(RxNettys.wrap4release(request));
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber2 = new TestSubscriber<>();
-        trade.obsrequest().subscribe(reqSubscriber2);
+        trade.inbound().subscribe(reqSubscriber2);
         
         writeToInboundAndFlush(channel, req_contents[0]);
         
@@ -294,7 +294,7 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber2.assertValues(RxNettys.wrap4release(request), RxNettys.wrap4release(req_contents[0]));
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber3 = new TestSubscriber<>();
-        trade.obsrequest().subscribe(reqSubscriber3);
+        trade.inbound().subscribe(reqSubscriber3);
         
         reqSubscriber1.assertValueCount(2);
         reqSubscriber1.assertValues(RxNettys.wrap4release(request), RxNettys.wrap4release(req_contents[0]));
@@ -379,7 +379,7 @@ public class DefaultHttpTradeTestCase {
 //        trade.inboundHolder().setMaxBlockSize(-1);
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber = new TestSubscriber<>();
-        trade.obsrequest().subscribe(reqSubscriber);
+        trade.inbound().subscribe(reqSubscriber);
         
         Observable.<HttpObject>concat(
             Observable.<HttpObject>just(request),
@@ -476,7 +476,7 @@ public class DefaultHttpTradeTestCase {
         //      io.netty.handler.codec.http.HttpContent
         //  inbound.subscribe();    double subscribe holder.assembleAndHold()
         
-        final FullHttpRequest recvreq = trade.obsrequest().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap();
+        final FullHttpRequest recvreq = trade.inbound().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap();
         
         assertNotNull(recvreq);
         
@@ -519,10 +519,10 @@ public class DefaultHttpTradeTestCase {
         .syncUninterruptibly();
 
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
-                trade.obsrequest().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
+                trade.inbound().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
                 REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
-                trade.obsrequest().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
+                trade.inbound().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
                 REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
     }
 
@@ -540,11 +540,11 @@ public class DefaultHttpTradeTestCase {
         //  expected refCnt, request -- 1 + HttpMessageHolder -- 1, total refcnt is 2
         // TODO, why 4 & 5 refCnt ?
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
-            trade.obsrequest().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
+            trade.inbound().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
             REQ_CONTENT.getBytes(Charsets.UTF_8), 4);
         
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
-                trade.obsrequest().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
+                trade.inbound().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
             REQ_CONTENT.getBytes(Charsets.UTF_8), 5);
     }
     
@@ -568,11 +568,11 @@ public class DefaultHttpTradeTestCase {
         //  expected refCnt, request -- 1 + HttpMessageHolder -- 1, total refcnt is 2
         // TODO, why 4 & 5 refCnt ?
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
-                trade.obsrequest().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
+                trade.inbound().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
                 REQ_CONTENT.getBytes(Charsets.UTF_8), 4);
         
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
-                trade.obsrequest().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
+                trade.inbound().compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(), 
                 REQ_CONTENT.getBytes(Charsets.UTF_8), 5);
     }
 
@@ -587,7 +587,7 @@ public class DefaultHttpTradeTestCase {
         
         final AtomicReference<DefaultFullHttpRequest> ref1 = 
                 new AtomicReference<DefaultFullHttpRequest>();
-        trade.obsrequest().subscribe(new Action1<DisposableWrapper<HttpObject>>() {
+        trade.inbound().subscribe(new Action1<DisposableWrapper<HttpObject>>() {
             @Override
             public void call(DisposableWrapper<HttpObject> dwh) {
                 ref1.set((DefaultFullHttpRequest)dwh.unwrap());
@@ -597,7 +597,7 @@ public class DefaultHttpTradeTestCase {
         final AtomicReference<DefaultFullHttpRequest> ref2 = 
                 new AtomicReference<DefaultFullHttpRequest>();
             
-        trade.obsrequest().subscribe(new Action1<DisposableWrapper<HttpObject>>() {
+        trade.inbound().subscribe(new Action1<DisposableWrapper<HttpObject>>() {
             @Override
             public void call(DisposableWrapper<HttpObject> dwh) {
                 ref2.set((DefaultFullHttpRequest)dwh.unwrap());

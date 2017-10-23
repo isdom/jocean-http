@@ -175,7 +175,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
     
     @Override
-    public Observable<? extends DisposableWrapper<HttpObject>> obsrequest() {
+    public Observable<? extends DisposableWrapper<HttpObject>> inbound() {
         return this._obsRequest;
     }
     
