@@ -69,43 +69,16 @@ import rx.subscriptions.Subscriptions;
 class DefaultHttpTrade extends DefaultAttributeMap 
     implements HttpTrade,  Comparable<DefaultHttpTrade> {
     
-    private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = 
-        new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
+    private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
         @Override
         public DisposableWrapper<HttpObject> call(final DisposableWrapper<HttpObject> wrapper) {
             if (wrapper.unwrap() instanceof HttpContent) {
-                final HttpContent duplicated = ((HttpContent)wrapper.unwrap()).duplicate();
-                return new DisposableWrapper<HttpObject>() {
-                    @Override
-                    public int hashCode() {
-                        return unwrap().hashCode();
-                    }
-
-                    @Override
-                    public boolean equals(final Object o) {
-                        return unwrap().equals(DisposableWrapperUtil.unwrap(o));
-                    }
-                    
-                    @Override
-                    public HttpObject unwrap() {
-                        return duplicated;
-                    }
-                    @Override
-                    public void dispose() {
-                        wrapper.dispose();
-                    }
-                    @Override
-                    public boolean isDisposed() {
-                        return wrapper.isDisposed();
-                    }
-                    @Override
-                    public String toString() {
-                        return "duplicated DisposableWrapper<HttpObject>[" + duplicated + "]";
-                    }};
+                return DisposableWrapperUtil.wrap(((HttpContent) wrapper.unwrap()).duplicate(), wrapper);
             } else {
                 return wrapper;
             }
-        }};
+        }
+    };
         
     private static final AtomicInteger _IDSRC = new AtomicInteger(1);
     
