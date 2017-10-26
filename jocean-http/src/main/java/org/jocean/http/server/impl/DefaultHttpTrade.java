@@ -179,16 +179,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return this._obsRequest;
     }
     
-//    @Override
-//    public Observable<? extends HttpObject> inbound() {
-//        return this._cachedInbound;
-//    }
-//
-//    @Override
-//    public HttpMessageHolder inboundHolder() {
-//        return this._holder;
-//    }
-    
     @Override
     public Subscription outbound(final Observable<? extends Object> message) {
         return this._op.setOutbound(this, message, null);
@@ -257,9 +247,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         this._terminateAwareSupport = 
             new TerminateAwareSupport<HttpTrade>(this._selector);
         
-//        this._holder = new HttpMessageHolder();
-//        doOnTerminate(this._holder.closer());
-        
         this._obsRequest = buildObsRequest(maxBufSize).cache().doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
             @Override
             public void call(final DisposableWrapper<HttpObject> wrapper) {
@@ -275,22 +262,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 LOG.warn("HttpTrade: {}'s inbound with onError {}", this, ExceptionUtils.exception2detail(e));
             }
         });
-        
-//        final Observable<? extends HttpObject> inbound = 
-//            this._obsRequest
-//            .map(_UNWRAP)
-//            .compose(this._holder.<HttpObject>assembleAndHold())
-//            .cache()
-//            .compose(RxNettys.duplicateHttpContent());
-        
-//        inbound.subscribe(
-//            RxSubscribers.ignoreNext(),
-//            new Action1<Throwable>() {
-//                @Override
-//                public void call(final Throwable e) {
-//                    LOG.warn("HttpTrade: {}'s inbound with onError {}", 
-//                        this, ExceptionUtils.exception2detail(e));
-//                }});
         
 //        this._cachedInbound = 
 //            Observable.unsafeCreate(new OnSubscribe<HttpObject>() {
@@ -812,11 +783,9 @@ class DefaultHttpTrade extends DefaultAttributeMap
     @SuppressWarnings("unused")
     private volatile ChannelHandler _inboundHandler = null;
     
-//    private final HttpMessageHolder _holder;
     private final List<Subscriber<? super HttpObject>> _subscribers = 
             new CopyOnWriteArrayList<>();
     private volatile Throwable _unactiveReason = null;
-//    private final Observable<HttpObject> _cachedInbound;
     private final Observable<? extends DisposableWrapper<HttpObject>> _obsRequest;
     
     private volatile boolean _isFlushPerWrite = false;
