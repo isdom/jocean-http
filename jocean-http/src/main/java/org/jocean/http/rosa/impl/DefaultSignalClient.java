@@ -55,7 +55,6 @@ import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
@@ -295,7 +294,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             initRequestOf(uri),
                             fullfeatures,
                             initiator.onTerminate()))
-                    .compose(RxNettys.message2fullresp(initiator))
+                    .compose(RxNettys.message2fullresp(initiator, true))
                     .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
                         @Override
                         public RESP call(final DisposableWrapper<FullHttpResponse> dwresp) {
