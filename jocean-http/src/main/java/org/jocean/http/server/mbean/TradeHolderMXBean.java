@@ -17,4 +17,8 @@ public interface TradeHolderMXBean {
     public int getNumActiveTrades();
     
     public String[] getAllActiveTrade();
+    
+    public int getAcceptThreadCount();
+    
+    public int getWorkThreadCount();
 }

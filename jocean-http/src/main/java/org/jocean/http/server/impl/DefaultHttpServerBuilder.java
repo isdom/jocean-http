@@ -79,6 +79,16 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     }
     
     @Override
+    public int getAcceptThreadCount() {
+        return this._acceptThreadCount;
+    }
+
+    @Override
+    public int getWorkThreadCount() {
+        return this._workThreadCount;
+    }
+    
+    @Override
     public int getCurrentInboundMemoryInBytes() {
         return this._currentInboundMemory.get();
     }
@@ -359,6 +369,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
                 bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
                 bootstrap.channel(NioServerSocketChannel.class);
             }}, defaultFeatures);
+        this._acceptThreadCount = processThreadNumberForAccept;
+        this._workThreadCount = processThreadNumberForWork;
     }
     
     public DefaultHttpServerBuilder(
@@ -398,6 +410,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     private final Set<HttpTrade> _trades = new ConcurrentSkipListSet<HttpTrade>();
     private final AtomicInteger  _currentInboundMemory = new AtomicInteger(0);
     private final AtomicInteger  _peakInboundMemory = new AtomicInteger(0);
+    private int _acceptThreadCount = 0;
+    private int _workThreadCount = 0;
         
     static {
         _APPLY_BUILDER = new Feature2Handler();
