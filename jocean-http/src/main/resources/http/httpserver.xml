@@ -11,13 +11,4 @@
         <property name="inboundRecvBufSize" value="${http.server.inbound.recvbuf:32768}"/>
     </bean>
     
-    <bean class="org.springframework.jmx.export.MBeanExporter"
-          lazy-init="false">
-        <property name="beans">
-            <map>
-                <entry key="org.jocean:name=tradeHolder" value-ref="httpServerBuilder"/>
-            </map>
-        </property>
-    </bean>
-     
 </beans>

@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
 import org.jocean.http.server.HttpServerBuilder;
-import org.jocean.http.server.mbean.TradeHolderMXBean;
+import org.jocean.http.server.mbean.HttpServerMXBean;
 import org.jocean.http.util.Feature2Handler;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
@@ -26,6 +26,8 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.JOArrays;
 import org.jocean.idiom.Ordered;
+import org.jocean.idiom.jmx.MBeanRegister;
+import org.jocean.idiom.jmx.MBeanRegisterAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +52,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderMXBean {
+public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegisterAware {
 
     //放在最顶上，以让NETTY默认使用SLF4J
     static {
@@ -61,6 +63,65 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
     
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpServerBuilder.class);
+    
+    @Override
+    public void setMBeanRegister(final MBeanRegister register) {
+        register.registerMBean("name=httpserver", new HttpServerMXBean() {
+
+            @Override
+            public int getAcceptThreadCount() {
+                return _acceptThreadCount;
+            }
+
+            @Override
+            public int getWorkThreadCount() {
+                return _workThreadCount;
+            }
+            
+            @Override
+            public int getCurrentInboundMemoryInBytes() {
+                return _currentInboundMemory.get();
+            }
+            
+            @Override
+            public int getPeakInboundMemoryInBytes() {
+                return _peakInboundMemory.get();
+            }
+            
+            @Override
+            public float getCurrentInboundMemoryInMBs() {
+                return getCurrentInboundMemoryInBytes() / (float)(1024 * 1024);
+            }
+            
+            @Override
+            public float getPeakInboundMemoryInMBs() {
+                return getPeakInboundMemoryInBytes() / (float)(1024 * 1024);
+            }
+            
+            @Override
+            public int getNumActiveTrades() {
+                return _trades.size();
+            }
+
+            @Override
+            public long getNumStartedTrades() {
+                return _numStartedTrades.get();
+            }
+            
+            @Override
+            public long getNumCompletedTrades() {
+                return _numCompletedTrades.get();
+            }
+            
+            @Override
+            public String[] getAllActiveTrade() {
+                final List<String> infos = new ArrayList<>();
+                for (HttpTrade t : _trades) {
+                    infos.add(t.toString());
+                }
+                return infos.toArray(new String[0]);
+            }});
+    }
     
     public int getInboundBlockSize() {
         return this._inboundBlockSize;
@@ -76,60 +137,6 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, TradeHolderM
 
     public void setInboundRecvBufSize(final int inboundRecvBufSize) {
         this._inboundRecvBufSize = inboundRecvBufSize;
-    }
-    
-    @Override
-    public int getAcceptThreadCount() {
-        return this._acceptThreadCount;
-    }
-
-    @Override
-    public int getWorkThreadCount() {
-        return this._workThreadCount;
-    }
-    
-    @Override
-    public int getCurrentInboundMemoryInBytes() {
-        return this._currentInboundMemory.get();
-    }
-    
-    @Override
-    public int getPeakInboundMemoryInBytes() {
-        return this._peakInboundMemory.get();
-    }
-    
-    @Override
-    public float getCurrentInboundMemoryInMBs() {
-        return getCurrentInboundMemoryInBytes() / (float)(1024 * 1024);
-    }
-    
-    @Override
-    public float getPeakInboundMemoryInMBs() {
-        return getPeakInboundMemoryInBytes() / (float)(1024 * 1024);
-    }
-    
-    @Override
-    public int getNumActiveTrades() {
-        return this._trades.size();
-    }
-
-    @Override
-    public long getNumStartedTrades() {
-        return this._numStartedTrades.get();
-    }
-    
-    @Override
-    public long getNumCompletedTrades() {
-        return this._numCompletedTrades.get();
-    }
-    
-    @Override
-    public String[] getAllActiveTrade() {
-        final List<String> infos = new ArrayList<>();
-        for (HttpTrade t : this._trades) {
-            infos.add(t.toString());
-        }
-        return infos.toArray(new String[0]);
     }
     
     private HttpTrade addToTrades(final HttpTrade trade) {

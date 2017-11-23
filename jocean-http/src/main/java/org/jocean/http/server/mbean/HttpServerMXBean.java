@@ -1,6 +1,6 @@
 package org.jocean.http.server.mbean;
 
-public interface TradeHolderMXBean {
+public interface HttpServerMXBean {
     
     public int getCurrentInboundMemoryInBytes();
     
