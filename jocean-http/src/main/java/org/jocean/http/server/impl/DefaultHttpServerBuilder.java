@@ -64,9 +64,13 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpServerBuilder.class);
     
+    public void setMbeanSuffix(final String mbeanSuffix) {
+        this._mbeanSuffix = mbeanSuffix;
+    }
+    
     @Override
     public void setMBeanRegister(final MBeanRegister register) {
-        register.registerMBean("name=httpserver", new HttpServerMXBean() {
+        register.registerMBean(this._mbeanSuffix, new HttpServerMXBean() {
 
             @Override
             public int getAcceptThreadCount() {
@@ -409,6 +413,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
     
     private int _inboundRecvBufSize = -1;
     private int _inboundBlockSize = 0;
+    private String _mbeanSuffix;
     
     private static final Feature2Handler _APPLY_BUILDER;
     
