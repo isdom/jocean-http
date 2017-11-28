@@ -16,6 +16,8 @@ dependencies {
     
     compile 'javax.ws.rs:javax.ws.rs-api:2.0'
     compile 'com.alibaba:fastjson:1.2.34'
+    compile "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    compile "com.fasterxml.jackson.dataformat:jackson-dataformat-xml:${jacksonVersion}"
 	
 	testCompile 'junit:junit:4.12'
     testCompile 'ch.qos.logback:logback-classic:1.2.2'

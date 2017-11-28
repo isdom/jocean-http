@@ -1,5 +1,11 @@
 package org.jocean.http.rosa.impl.internal;
 
+import java.util.Arrays;
+import java.util.Collection;
+
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
 import org.jocean.http.Feature;
 import org.jocean.http.rosa.impl.BodyBuilder;
 import org.jocean.http.rosa.impl.BodyPreprocessor;
@@ -17,6 +23,13 @@ class DefaultBodyPreprocessor implements Feature, BodyPreprocessor {
         }
         if (null != signal
             && request.method().equals(HttpMethod.POST)) {
+            final Produces produces = signal.getClass().getAnnotation(Produces.class);
+            if (null != produces) {
+                final Collection<String> mimeTypes = Arrays.asList(produces.value());
+                if (mimeTypes.contains(MediaType.APPLICATION_XML)) {
+                    return new XMLBodyBuilder(signal);
+                }
+            }
             return new JSONBodyBuilder(signal);
         } else {
             return null;
