@@ -9,6 +9,8 @@ import java.net.SocketAddress;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.ws.rs.BeanParam;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.HeaderParam;
+import javax.ws.rs.core.MediaType;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeaturesAware;
@@ -48,6 +51,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.deser.DeserializationProblemHandler;
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.DefaultLastHttpContent;
@@ -686,6 +694,31 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                     if (bodyType.equals(String.class)) {
                         return (RESP)new String(bytes, CharsetUtil.UTF_8);
                     } else {
+                        // try need decode as xml
+                        final Consumes consumes = bodyType.getAnnotation(Consumes.class);
+                        if (null != consumes) {
+                            final Collection<String> mimeTypes = Arrays.asList(consumes.value());
+                            if (mimeTypes.contains(MediaType.APPLICATION_XML)) {
+                                final XmlMapper mapper = new XmlMapper();
+                                mapper.addHandler(new DeserializationProblemHandler() {
+                                    @Override
+                                    public boolean handleUnknownProperty(final DeserializationContext ctxt, final JsonParser p,
+                                            final JsonDeserializer<?> deserializer, final Object beanOrClass, final String propertyName)
+                                            throws IOException {
+                                        LOG.warn("UnknownProperty [{}], just skip", propertyName);
+                                        p.skipChildren();
+                                        return true;
+                                    }});
+                                try {
+                                    return (RESP)mapper.readValue(bytes, bodyType);
+                                } catch (Exception e) {
+                                    LOG.warn("exception when parse xml, detail: {}",
+                                            ExceptionUtils.exception2detail(e));
+                                    return null;
+                                }
+                            }
+                        }
+                        // try need decode as json
                         return JSON.<RESP>parseObject(bytes, bodyType);
                     }
                 } else {
