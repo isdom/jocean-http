@@ -125,7 +125,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 .append(", requestMethod=").append(this._requestMethod)
                 .append(", requestUri=").append(this._requestUri)
                 .append(", isKeepAlive=").append(isKeepAlive())
-                .append(", transactionStatus=").append(transactionStatus())
+                .append(", transactionStatus=").append(transactionStatusAsString())
                 .append(", isActive=").append(isActive())
                 .append(", channel=").append(_channel)
                 .append("]");
@@ -430,6 +430,9 @@ class DefaultHttpTrade extends DefaultAttributeMap
 
                 @Override
                 public void onNext(final Object outmsg) {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("response invoke onNext({}) for trade: {}", outmsg, DefaultHttpTrade.this);
+                    }
                     _op.outboundOnNext(DefaultHttpTrade.this, outmsg);
                 }};
     }
