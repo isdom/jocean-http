@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Charsets;
 
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
@@ -130,7 +131,7 @@ public class SslDemo {
             final DefaultFullHttpRequest request) {
         return initiator.defineInteraction(Observable.just(request))
             .compose(RxNettys.message2fullresp(initiator))
-            .map(DisposableWrapperUtil.unwrap())
+            .map(DisposableWrapperUtil.<FullHttpResponse>unwrap())
             .map(new Func1<FullHttpResponse, String>() {
                 @Override
                 public String call(FullHttpResponse resp) {

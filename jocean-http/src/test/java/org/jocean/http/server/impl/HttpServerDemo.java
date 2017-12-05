@@ -68,7 +68,7 @@ public class HttpServerDemo {
                     @Override
                     public void call(final HttpTrade trade) {
                         trade.outbound(trade.inbound().compose(RxNettys.message2fullreq(trade))
-                                .map(DisposableWrapperUtil.unwrap()).map(new Func1<FullHttpRequest, HttpObject>() {
+                                .map(DisposableWrapperUtil.<FullHttpRequest>unwrap()).map(new Func1<FullHttpRequest, HttpObject>() {
                                     @Override
                                     public HttpObject call(final FullHttpRequest fullreq) {
                                         try {

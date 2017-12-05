@@ -406,7 +406,7 @@ public class DefaultHttpClientTestCase {
                 final Observable<? extends DisposableWrapper<HttpObject>> cached = initiator
                         .defineInteraction(Observable.just(fullHttpRequest())).cache();
                 
-                final Observable<HttpObject> resp2 = cached.map(DisposableWrapperUtil.unwrap());
+                final Observable<HttpObject> resp2 = cached.map(DisposableWrapperUtil.<HttpObject>unwrap());
                             
                 resp2.subscribe();
                 

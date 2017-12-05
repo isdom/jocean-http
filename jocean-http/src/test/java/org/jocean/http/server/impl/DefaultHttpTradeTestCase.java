@@ -173,7 +173,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
         
         reqSubscriber.assertValueCount(1);
-        reqSubscriber.assertValue(RxNettys.wrap4release(request));
+        reqSubscriber.assertValue(RxNettys.<HttpObject>wrap4release(request));
         reqSubscriber.assertCompleted();
         reqSubscriber.assertNoErrors();
     }
@@ -225,7 +225,8 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber.assertError(Exception.class);
         */
         reqSubscriber.assertValueCount(2);
-        reqSubscriber.assertValues(RxNettys.wrap4release(request), RxNettys.wrap4release(req_contents[0]));
+        reqSubscriber.assertValues(RxNettys.<HttpObject>wrap4release(request), 
+                RxNettys.<HttpObject>wrap4release(req_contents[0]));
     }
     
     @Test
@@ -252,13 +253,13 @@ public class DefaultHttpTradeTestCase {
         writeToInboundAndFlush(channel, req_contents[0]);
         
         reqSubscriber1.assertValueCount(2);
-        reqSubscriber1.assertValues(RxNettys.wrap4release(request), RxNettys.wrap4release(req_contents[0]));
+        reqSubscriber1.assertValues(RxNettys.<HttpObject>wrap4release(request), RxNettys.<HttpObject>wrap4release(req_contents[0]));
         
         reqSubscriber2.assertValueCount(2);
-        reqSubscriber2.assertValues(RxNettys.wrap4release(request), RxNettys.wrap4release(req_contents[0]));
+        reqSubscriber2.assertValues(RxNettys.<HttpObject>wrap4release(request), RxNettys.<HttpObject>wrap4release(req_contents[0]));
         
         reqSubscriber3.assertValueCount(2);
-        reqSubscriber3.assertValues(RxNettys.wrap4release(request), RxNettys.wrap4release(req_contents[0]));
+        reqSubscriber3.assertValues(RxNettys.<HttpObject>wrap4release(request), RxNettys.<HttpObject>wrap4release(req_contents[0]));
     }
     
     //  3 subscriber subscribe inbound request at different time, 
@@ -280,7 +281,7 @@ public class DefaultHttpTradeTestCase {
         writeToInboundAndFlush(channel, request);
         
         reqSubscriber1.assertValueCount(1);
-        reqSubscriber1.assertValues(RxNettys.wrap4release(request));
+        reqSubscriber1.assertValues(RxNettys.<HttpObject>wrap4release(request));
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber2 = new TestSubscriber<>();
         trade.inbound().subscribe(reqSubscriber2);
@@ -288,22 +289,22 @@ public class DefaultHttpTradeTestCase {
         writeToInboundAndFlush(channel, req_contents[0]);
         
         reqSubscriber1.assertValueCount(2);
-        reqSubscriber1.assertValues(RxNettys.wrap4release(request), RxNettys.wrap4release(req_contents[0]));
+        reqSubscriber1.assertValues(RxNettys.<HttpObject>wrap4release(request), RxNettys.<HttpObject>wrap4release(req_contents[0]));
         
         reqSubscriber2.assertValueCount(2);
-        reqSubscriber2.assertValues(RxNettys.wrap4release(request), RxNettys.wrap4release(req_contents[0]));
+        reqSubscriber2.assertValues(RxNettys.<HttpObject>wrap4release(request), RxNettys.<HttpObject>wrap4release(req_contents[0]));
         
         final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber3 = new TestSubscriber<>();
         trade.inbound().subscribe(reqSubscriber3);
         
         reqSubscriber1.assertValueCount(2);
-        reqSubscriber1.assertValues(RxNettys.wrap4release(request), RxNettys.wrap4release(req_contents[0]));
+        reqSubscriber1.assertValues(RxNettys.<HttpObject>wrap4release(request), RxNettys.<HttpObject>wrap4release(req_contents[0]));
         
         reqSubscriber2.assertValueCount(2);
-        reqSubscriber2.assertValues(RxNettys.wrap4release(request), RxNettys.wrap4release(req_contents[0]));
+        reqSubscriber2.assertValues(RxNettys.<HttpObject>wrap4release(request), RxNettys.<HttpObject>wrap4release(req_contents[0]));
         
         reqSubscriber3.assertValueCount(2);
-        reqSubscriber3.assertValues(RxNettys.wrap4release(request), RxNettys.wrap4release(req_contents[0]));
+        reqSubscriber3.assertValues(RxNettys.<HttpObject>wrap4release(request), RxNettys.<HttpObject>wrap4release(req_contents[0]));
     }
     
     @Test
@@ -368,9 +369,9 @@ public class DefaultHttpTradeTestCase {
         final List<DisposableWrapper<HttpObject>> part_req = new ArrayList<DisposableWrapper<HttpObject>>() {
             private static final long serialVersionUID = 1L;
         {
-            this.add(RxNettys.wrap4release(request));
+            this.add(RxNettys.<HttpObject>wrap4release(request));
             for (int idx = 0; idx < 5; idx++) {
-                this.add(RxNettys.wrap4release(req_contents[idx]));
+                this.add(RxNettys.<HttpObject>wrap4release(req_contents[idx]));
             }
         }};
         

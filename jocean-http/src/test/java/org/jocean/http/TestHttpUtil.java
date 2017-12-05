@@ -59,7 +59,7 @@ public class TestHttpUtil {
                 .subscribe(new Action1<HttpTrade>() {
                     @Override
                     public void call(final HttpTrade trade) {
-                        trade.inbound().compose(RxNettys.message2fullreq(trade)).map(DisposableWrapperUtil.unwrap())
+                        trade.inbound().compose(RxNettys.message2fullreq(trade)).map(DisposableWrapperUtil.<FullHttpRequest>unwrap())
                                 .subscribe(RxActions.bindLastParameter(onRequestCompleted, trade));
                     }
                 });

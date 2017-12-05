@@ -377,7 +377,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             fullfeatures,
                             initiator.onTerminate()))
                     .cache();
-                return dwhs.map(DisposableWrapperUtil.unwrap()).compose(RxNettys.asHttpResponse())
+                return dwhs.map(DisposableWrapperUtil.<HttpObject>unwrap()).compose(RxNettys.asHttpResponse())
                         .map(new Func1<HttpResponse, MessageDecoder>() {
                             @Override
                             public MessageDecoder call(final HttpResponse resp) {
@@ -461,7 +461,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     private static <T> Observable<? extends T> decodeContentAs(
             final Observable<? extends DisposableWrapper<ByteBuf>> content, final Func2<ByteBuf, Class<T>, T> func,
             final Class<T> type) {
-        return content.map(DisposableWrapperUtil.unwrap()).toList().map(new Func1<List<ByteBuf>, T>() {
+        return content.map(DisposableWrapperUtil.<ByteBuf>unwrap()).toList().map(new Func1<List<ByteBuf>, T>() {
             @Override
             public T call(final List<ByteBuf> bufs) {
                 final ByteBuf buf = Nettys.composite(bufs);
