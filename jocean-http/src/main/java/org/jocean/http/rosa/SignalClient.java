@@ -11,6 +11,7 @@ import org.jocean.http.rosa.impl.internal.Facades.PathSource;
 import org.jocean.http.rosa.impl.internal.Facades.ResponseBodyTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.ResponseTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.UriSource;
+import org.jocean.idiom.TerminateAware;
 
 import io.netty.util.CharsetUtil;
 import rx.Observable;
@@ -129,5 +130,5 @@ public interface SignalClient {
         public Observable<MessageDecoder> build();
     }
 
-    public InteractionBuilder2 interaction2();
+    public InteractionBuilder2 interaction2(final TerminateAware<?> terminateAware);
 }

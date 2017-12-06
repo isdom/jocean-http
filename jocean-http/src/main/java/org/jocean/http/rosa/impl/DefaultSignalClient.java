@@ -48,6 +48,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.Ordered;
 import org.jocean.idiom.ReflectUtils;
+import org.jocean.idiom.TerminateAware;
 import org.jocean.idiom.rx.RxObservables;
 import org.jocean.idiom.rx.RxObservables.RetryPolicy;
 import org.slf4j.Logger;
@@ -263,6 +264,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     */
     
+    @Override
     public InteractionBuilder interaction() {
         final AtomicReference<Object> _request = new AtomicReference<>();
         final List<Feature> _features = new ArrayList<>();
@@ -329,7 +331,8 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         ;
     }
     
-    public InteractionBuilder2 interaction2() {
+    @Override
+    public InteractionBuilder2 interaction2(final TerminateAware<?> terminateAware) {
         final AtomicReference<Object> _request = new AtomicReference<>();
         final List<Feature> _features = new ArrayList<>();
         
@@ -353,12 +356,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
             @Override
             public Observable<MessageDecoder> build() {
-                return defineInteraction2(_request.get(), 
+                return defineInteraction2(terminateAware, _request.get(), 
                         _features.toArray(Feature.EMPTY_FEATURES));
             }};
     }
     
     private Observable<MessageDecoder> defineInteraction2(
+            final TerminateAware<?> terminateAware,
             final Object signalBean, 
             final Feature... features) {
         final Feature[] fullfeatures = Feature.Util.union(RosaProfiles._DEFAULT_PROFILE, features);
@@ -371,6 +375,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         .flatMap(new Func1<HttpInitiator, Observable<MessageDecoder>>() {
             @Override
             public Observable<MessageDecoder> call(final HttpInitiator initiator) {
+                terminateAware.doOnTerminate(initiator.closer());
                 final Observable<? extends DisposableWrapper<HttpObject>> dwhs = initiator.defineInteraction(
                     outboundMessageOf(signalBean, 
                             initRequestOf(uri),
@@ -451,7 +456,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                                         return Observable.error(new UnsupportedOperationException());
                                     }};
                             }})
-                    .doOnUnsubscribe(initiator.closer())
                     ;
             }})
         .retryWhen(_RETRY)
