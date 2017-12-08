@@ -24,7 +24,7 @@ import javax.ws.rs.core.MediaType;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeaturesAware;
-import org.jocean.http.MessageDecoder;
+import org.jocean.http.MessageUnit;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient;
@@ -37,7 +37,6 @@ import org.jocean.http.rosa.impl.internal.Facades.UriSource;
 import org.jocean.http.rosa.impl.internal.RosaProfiles;
 import org.jocean.http.util.FeaturesBuilder;
 import org.jocean.http.util.Nettys;
-import org.jocean.http.util.ParamUtil;
 import org.jocean.http.util.PayloadCounterAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.BeanHolder;
@@ -66,7 +65,6 @@ import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
@@ -89,7 +87,6 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
-import rx.functions.Func2;
 
 public class DefaultSignalClient implements SignalClient, BeanHolderAware {
 
@@ -332,7 +329,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
     }
     
     @Override
-    public InteractionBuilder2 interaction2(final TerminateAware<?> terminateAware) {
+    public InteractionBuilder2 interaction(final TerminateAware<?> terminateAware) {
         final AtomicReference<Object> _request = new AtomicReference<>();
         final List<Feature> _features = new ArrayList<>();
         
@@ -355,13 +352,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }
 
             @Override
-            public Observable<MessageDecoder> build() {
-                return defineInteraction2(terminateAware, _request.get(), 
+            public Observable<MessageUnit> build() {
+                return defineInteraction(terminateAware, _request.get(), 
                         _features.toArray(Feature.EMPTY_FEATURES));
             }};
     }
     
-    private Observable<MessageDecoder> defineInteraction2(
+    private Observable<MessageUnit> defineInteraction(
             final TerminateAware<?> terminateAware,
             final Object signalBean, 
             final Feature... features) {
@@ -372,9 +369,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         .remoteAddress(safeGetAddress(signalBean, uri))
         .feature(genFeatures4HttpClient(signalBean, fullfeatures))
         .build()
-        .flatMap(new Func1<HttpInitiator, Observable<MessageDecoder>>() {
+        .flatMap(new Func1<HttpInitiator, Observable<MessageUnit>>() {
             @Override
-            public Observable<MessageDecoder> call(final HttpInitiator initiator) {
+            public Observable<MessageUnit> call(final HttpInitiator initiator) {
                 terminateAware.doOnTerminate(initiator.closer());
                 final Observable<? extends DisposableWrapper<HttpObject>> dwhs = initiator.defineInteraction(
                     outboundMessageOf(signalBean, 
@@ -383,19 +380,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             initiator.onTerminate()))
                     .cache();
                 return dwhs.map(DisposableWrapperUtil.<HttpObject>unwrap()).compose(RxNettys.asHttpResponse())
-                        .map(new Func1<HttpResponse, MessageDecoder>() {
+                        .map(new Func1<HttpResponse, MessageUnit>() {
                             @Override
-                            public MessageDecoder call(final HttpResponse resp) {
-                                return new MessageDecoder() {
-                                    @Override
-                                    public void unsubscribe() {
-                                    }
-
-                                    @Override
-                                    public boolean isUnsubscribed() {
-                                        return false;
-                                    }
-
+                            public MessageUnit call(final HttpResponse resp) {
+                                return new MessageUnit() {
                                     @Override
                                     public String contentType() {
                                         return resp.headers().get(HttpHeaderNames.CONTENT_TYPE);
@@ -409,73 +397,12 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                                     @Override
                                     public Observable<? extends DisposableWrapper<ByteBuf>> content() {
                                         return dwhs.flatMap(RxNettys.message2body());
-                                    }
-
-                                    public <T> Observable<? extends T> decodeAs(final Class<T> type) {
-//                                        if (request.method().equals(HttpMethod.GET)) {
-//                                            // try decoder query string
-//                                            try {
-//                                                final T bean = (T)type.newInstance();
-//                                                ParamUtil.request2QueryParams(request, bean);
-//                                                return Observable.just(bean);
-//                                            } catch (Exception e) {
-//                                                return Observable.error(e);
-//                                            }
-//                                        }
-                                        if (null != contentType()) {
-                                            if (contentType().startsWith(HttpHeaderValues.APPLICATION_JSON.toString())) {
-                                                return decodeJsonAs(type);
-                                            } else if (contentType().startsWith("application/xml")
-                                                || contentType().startsWith("text/xml")) {
-                                                return decodeXmlAs(type);
-                                            }
-                                        }
-                                        return Observable.error(new RuntimeException("can't decodeAs type:" + type));
-                                    }
-                                    
-                                    @Override
-                                    public <T> Observable<? extends T> decodeJsonAs(final Class<T> type) {
-                                        return decodeContentAs(content(), new Func2<ByteBuf, Class<T>, T>() {
-                                            @Override
-                                            public T call(final ByteBuf buf, Class<T> clazz) {
-                                                return ParamUtil.parseContentAsJson(buf, clazz);
-                                            }}, type);
-                                    }
-
-                                    @Override
-                                    public <T> Observable<? extends T> decodeXmlAs(final Class<T> type) {
-                                        return decodeContentAs(content(), new Func2<ByteBuf, Class<T>, T>() {
-                                            @Override
-                                            public T call(final ByteBuf buf, Class<T> clazz) {
-                                                return ParamUtil.parseContentAsXml(buf, clazz);
-                                            }}, type);
-                                    }
-
-                                    @Override
-                                    public <T> Observable<? extends T> decodeFormAs(final Class<T> type) {
-                                        return Observable.error(new UnsupportedOperationException());
                                     }};
                             }})
                     ;
             }})
         .retryWhen(_RETRY)
         ;
-    }
-    
-    private static <T> Observable<? extends T> decodeContentAs(
-            final Observable<? extends DisposableWrapper<ByteBuf>> content, final Func2<ByteBuf, Class<T>, T> func,
-            final Class<T> type) {
-        return content.map(DisposableWrapperUtil.<ByteBuf>unwrap()).toList().map(new Func1<List<ByteBuf>, T>() {
-            @Override
-            public T call(final List<ByteBuf> bufs) {
-                final ByteBuf buf = Nettys.composite(bufs);
-                try {
-                    return func.call(buf, type);
-                } finally {
-                    ReferenceCountUtil.release(buf);
-                }
-            }
-        });
     }
     
     private Feature[] genFeatures4HttpClient(final Object signalBean,

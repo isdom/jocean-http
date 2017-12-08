@@ -4,7 +4,7 @@ import java.lang.annotation.Annotation;
 import java.net.URI;
 
 import org.jocean.http.Feature;
-import org.jocean.http.MessageDecoder;
+import org.jocean.http.MessageUnit;
 import org.jocean.http.rosa.impl.internal.Facades.JSONSource;
 import org.jocean.http.rosa.impl.internal.Facades.MethodSource;
 import org.jocean.http.rosa.impl.internal.Facades.PathSource;
@@ -127,8 +127,8 @@ public interface SignalClient {
         
         public InteractionBuilder2 feature(final Feature... features);
         
-        public Observable<MessageDecoder> build();
+        public Observable<MessageUnit> build();
     }
 
-    public InteractionBuilder2 interaction2(final TerminateAware<?> terminateAware);
+    public InteractionBuilder2 interaction(final TerminateAware<?> terminateAware);
 }
