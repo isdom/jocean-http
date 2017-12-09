@@ -555,6 +555,27 @@ public class RxNettys {
         return AS_HTTPRESP;
     }
         
+    private final static Func1<HttpObject, HttpMessage> _HOBJ2MSG = new Func1<HttpObject, HttpMessage>() {
+        @Override
+        public HttpMessage call(final HttpObject httpobj) {
+            if (httpobj instanceof HttpMessage) {
+                return (HttpMessage)httpobj;
+            } else {
+                throw new RuntimeException("First HttpObject is not HttpMessage.");
+            }
+        }};
+        
+    private final static Observable.Transformer<HttpObject, HttpMessage> _AS_HTTPMSG = 
+            new Observable.Transformer<HttpObject, HttpMessage>() {
+                @Override
+                public Observable<HttpMessage> call(final Observable<HttpObject> hobjs) {
+                    return hobjs.first().map(_HOBJ2MSG);
+                }};
+            
+    public static Observable.Transformer<? super HttpObject, ? extends HttpMessage> asHttpMessage() {
+        return _AS_HTTPMSG;
+    }
+    
     private final static Observable.Transformer<ChannelFuture, Channel> CHANNELFUTURE_CHANNEL = 
             new Observable.Transformer<ChannelFuture, Channel>() {
                 @Override

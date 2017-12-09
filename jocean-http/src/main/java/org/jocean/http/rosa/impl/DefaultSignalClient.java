@@ -25,6 +25,7 @@ import javax.ws.rs.core.MediaType;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeaturesAware;
 import org.jocean.http.MessageBody;
+import org.jocean.http.MessageUtil;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient;
@@ -42,7 +43,6 @@ import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.BeanHolder;
 import org.jocean.idiom.BeanHolderAware;
 import org.jocean.idiom.DisposableWrapper;
-import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.Ordered;
@@ -60,16 +60,13 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.deser.DeserializationProblemHandler;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
@@ -358,51 +355,22 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }};
     }
     
-    private Observable<MessageBody> defineInteraction(
-            final TerminateAware<?> terminateAware,
-            final Object signalBean, 
+    private Observable<MessageBody> defineInteraction(final TerminateAware<?> terminateAware, final Object signalBean,
             final Feature... features) {
         final Feature[] fullfeatures = Feature.Util.union(RosaProfiles._DEFAULT_PROFILE, features);
         final URI uri = req2uri(signalBean, fullfeatures);
         return _httpClient.initiator()
-        //  TODO delay using uri
-        .remoteAddress(safeGetAddress(signalBean, uri))
-        .feature(genFeatures4HttpClient(signalBean, fullfeatures))
-        .build()
-        .flatMap(new Func1<HttpInitiator, Observable<MessageBody>>() {
-            @Override
-            public Observable<MessageBody> call(final HttpInitiator initiator) {
-                terminateAware.doOnTerminate(initiator.closer());
-                final Observable<? extends DisposableWrapper<HttpObject>> dwhs = initiator.defineInteraction(
-                    outboundMessageOf(signalBean, 
-                            initRequestOf(uri),
-                            fullfeatures,
-                            initiator.onTerminate()))
-                    .cache();
-                return dwhs.map(DisposableWrapperUtil.<HttpObject>unwrap()).compose(RxNettys.asHttpResponse())
-                        .map(new Func1<HttpResponse, MessageBody>() {
-                            @Override
-                            public MessageBody call(final HttpResponse resp) {
-                                return new MessageBody() {
-                                    @Override
-                                    public String contentType() {
-                                        return resp.headers().get(HttpHeaderNames.CONTENT_TYPE);
-                                    }
-
-                                    @Override
-                                    public int contentLength() {
-                                        return HttpUtil.getContentLength(resp, -1);
-                                    }
-
-                                    @Override
-                                    public Observable<? extends DisposableWrapper<ByteBuf>> content() {
-                                        return dwhs.flatMap(RxNettys.message2body());
-                                    }};
-                            }})
-                    ;
-            }})
-        .retryWhen(_RETRY)
-        ;
+                // TODO delay using uri
+                .remoteAddress(safeGetAddress(signalBean, uri))
+                .feature(genFeatures4HttpClient(signalBean, fullfeatures)).build()
+                .flatMap(new Func1<HttpInitiator, Observable<MessageBody>>() {
+                    @Override
+                    public Observable<MessageBody> call(final HttpInitiator initiator) {
+                        terminateAware.doOnTerminate(initiator.closer());
+                        return initiator.defineInteraction(outboundMessageOf(signalBean, initRequestOf(uri),
+                                fullfeatures, initiator.onTerminate())).compose(MessageUtil.asMessageBody());
+                    }
+                }).retryWhen(_RETRY);
     }
     
     private Feature[] genFeatures4HttpClient(final Object signalBean,

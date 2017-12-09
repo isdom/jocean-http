@@ -4,17 +4,60 @@ import java.util.List;
 
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.ParamUtil;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpMessage;
+import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
+import rx.Observable.Transformer;
 import rx.functions.Func1;
 import rx.functions.Func2;
 
 public class MessageUtil {
+    private MessageUtil() {
+        throw new IllegalStateException("No instances!");
+    }
+
+    private final static Transformer<DisposableWrapper<HttpObject>, MessageBody> _AS_BODY = new Transformer<DisposableWrapper<HttpObject>, MessageBody>() {
+        @Override
+        public Observable<MessageBody> call(final Observable<DisposableWrapper<HttpObject>> dwhs) {
+            final Observable<? extends DisposableWrapper<HttpObject>> cached = dwhs.cache();
+            return cached.map(DisposableWrapperUtil.<HttpObject>unwrap()).compose(RxNettys.asHttpMessage())
+                    .map(new Func1<HttpMessage, MessageBody>() {
+                        @Override
+                        public MessageBody call(final HttpMessage msg) {
+                            return new MessageBody() {
+                                @Override
+                                public String contentType() {
+                                    return msg.headers().get(HttpHeaderNames.CONTENT_TYPE);
+                                }
+
+                                @Override
+                                public int contentLength() {
+                                    return HttpUtil.getContentLength(msg, -1);
+                                }
+
+                                @Override
+                                public Observable<? extends DisposableWrapper<ByteBuf>> content() {
+                                    return cached.flatMap(RxNettys.message2body());
+                                }
+                            };
+                        }
+                    });
+        }
+    };
+        
+    public static Transformer<DisposableWrapper<HttpObject>, MessageBody> asMessageBody() {
+        return _AS_BODY;
+    }
+    
     public static <T> Observable<? extends T> decodeAs(final MessageBody body, final Class<T> type) {
         if (null != body.contentType()) {
             if (body.contentType().startsWith(HttpHeaderValues.APPLICATION_JSON.toString())) {
