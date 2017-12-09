@@ -24,7 +24,7 @@ import javax.ws.rs.core.MediaType;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeaturesAware;
-import org.jocean.http.MessageUnit;
+import org.jocean.http.MessageBody;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient;
@@ -352,13 +352,13 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }
 
             @Override
-            public Observable<MessageUnit> build() {
+            public Observable<MessageBody> build() {
                 return defineInteraction(terminateAware, _request.get(), 
                         _features.toArray(Feature.EMPTY_FEATURES));
             }};
     }
     
-    private Observable<MessageUnit> defineInteraction(
+    private Observable<MessageBody> defineInteraction(
             final TerminateAware<?> terminateAware,
             final Object signalBean, 
             final Feature... features) {
@@ -369,9 +369,9 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
         .remoteAddress(safeGetAddress(signalBean, uri))
         .feature(genFeatures4HttpClient(signalBean, fullfeatures))
         .build()
-        .flatMap(new Func1<HttpInitiator, Observable<MessageUnit>>() {
+        .flatMap(new Func1<HttpInitiator, Observable<MessageBody>>() {
             @Override
-            public Observable<MessageUnit> call(final HttpInitiator initiator) {
+            public Observable<MessageBody> call(final HttpInitiator initiator) {
                 terminateAware.doOnTerminate(initiator.closer());
                 final Observable<? extends DisposableWrapper<HttpObject>> dwhs = initiator.defineInteraction(
                     outboundMessageOf(signalBean, 
@@ -380,10 +380,10 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             initiator.onTerminate()))
                     .cache();
                 return dwhs.map(DisposableWrapperUtil.<HttpObject>unwrap()).compose(RxNettys.asHttpResponse())
-                        .map(new Func1<HttpResponse, MessageUnit>() {
+                        .map(new Func1<HttpResponse, MessageBody>() {
                             @Override
-                            public MessageUnit call(final HttpResponse resp) {
-                                return new MessageUnit() {
+                            public MessageBody call(final HttpResponse resp) {
+                                return new MessageBody() {
                                     @Override
                                     public String contentType() {
                                         return resp.headers().get(HttpHeaderNames.CONTENT_TYPE);

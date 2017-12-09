@@ -5,7 +5,7 @@ import org.jocean.idiom.DisposableWrapper;
 import io.netty.buffer.ByteBuf;
 import rx.Observable;
 
-public interface MessageUnit {
+public interface MessageBody {
     
     public String contentType();
     

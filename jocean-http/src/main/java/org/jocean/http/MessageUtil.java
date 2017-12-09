@@ -15,19 +15,19 @@ import rx.functions.Func1;
 import rx.functions.Func2;
 
 public class MessageUtil {
-    public static <T> Observable<? extends T> decodeAs(final MessageUnit mu, final Class<T> type) {
-        if (null != mu.contentType()) {
-            if (mu.contentType().startsWith(HttpHeaderValues.APPLICATION_JSON.toString())) {
-                return decodeJsonAs(mu, type);
-            } else if (mu.contentType().startsWith("application/xml") || mu.contentType().startsWith("text/xml")) {
-                return decodeXmlAs(mu, type);
+    public static <T> Observable<? extends T> decodeAs(final MessageBody body, final Class<T> type) {
+        if (null != body.contentType()) {
+            if (body.contentType().startsWith(HttpHeaderValues.APPLICATION_JSON.toString())) {
+                return decodeJsonAs(body, type);
+            } else if (body.contentType().startsWith("application/xml") || body.contentType().startsWith("text/xml")) {
+                return decodeXmlAs(body, type);
             }
         }
         return Observable.error(new RuntimeException("can't decodeAs type:" + type));
     }
 
-    public static <T> Observable<? extends T> decodeJsonAs(final MessageUnit mu, final Class<T> type) {
-        return decodeContentAs(mu.content(), new Func2<ByteBuf, Class<T>, T>() {
+    public static <T> Observable<? extends T> decodeJsonAs(final MessageBody body, final Class<T> type) {
+        return decodeContentAs(body.content(), new Func2<ByteBuf, Class<T>, T>() {
             @Override
             public T call(final ByteBuf buf, Class<T> clazz) {
                 return ParamUtil.parseContentAsJson(buf, clazz);
@@ -35,8 +35,8 @@ public class MessageUtil {
         }, type);
     }
 
-    public static <T> Observable<? extends T> decodeXmlAs(final MessageUnit mu, final Class<T> type) {
-        return decodeContentAs(mu.content(), new Func2<ByteBuf, Class<T>, T>() {
+    public static <T> Observable<? extends T> decodeXmlAs(final MessageBody body, final Class<T> type) {
+        return decodeContentAs(body.content(), new Func2<ByteBuf, Class<T>, T>() {
             @Override
             public T call(final ByteBuf buf, Class<T> clazz) {
                 return ParamUtil.parseContentAsXml(buf, clazz);
