@@ -1,5 +1,8 @@
 package org.jocean.http;
 
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.net.URI;
 import java.util.List;
 
 import org.jocean.http.util.Nettys;
@@ -9,14 +12,20 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMessage;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
+import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.Transformer;
+import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.functions.Func2;
 
@@ -25,6 +34,45 @@ public class MessageUtil {
         throw new IllegalStateException("No instances!");
     }
 
+    public static SocketAddress uri2addr(final URI uri) {
+        final int port = -1 == uri.getPort() ? ( "https".equals(uri.getScheme()) ? 443 : 80 ) : uri.getPort();
+        return new InetSocketAddress(uri.getHost(), port);
+    }
+
+    public static Action1<Object> method(final HttpMethod method) {
+        return new Action1<Object>() {
+            @Override
+            public void call(final Object obj) {
+                if (obj instanceof HttpRequest) {
+                    ((HttpRequest)obj).setMethod(method);
+                }
+            }};
+    }
+    
+    public static Action1<Object> path(final String path) {
+        return new Action1<Object>() {
+            @Override
+            public void call(final Object obj) {
+                if (obj instanceof HttpRequest) {
+                    ((HttpRequest)obj).setUri(path);
+                }
+            }};
+    }
+    
+    public static Action1<Object> host(final URI uri) {
+        return new Action1<Object>() {
+            @Override
+            public void call(final Object obj) {
+                if (obj instanceof HttpRequest) {
+                    ((HttpRequest)obj).headers().set(HttpHeaderNames.HOST, uri.getHost());
+                }
+            }};
+    }
+    
+    public static Observable<Object> fullRequestWithoutBody(final HttpVersion version, final HttpMethod method) {
+        return Observable.just(new DefaultHttpRequest(version, method, ""), LastHttpContent.EMPTY_LAST_CONTENT);
+    }
+    
     private final static Transformer<DisposableWrapper<HttpObject>, MessageBody> _AS_BODY = new Transformer<DisposableWrapper<HttpObject>, MessageBody>() {
         @Override
         public Observable<MessageBody> call(final Observable<DisposableWrapper<HttpObject>> dwhs) {
