@@ -70,7 +70,7 @@ public class MessageUtil {
     }
     
     public static Observable<Object> fullRequestWithoutBody(final HttpVersion version, final HttpMethod method) {
-        return Observable.just(new DefaultHttpRequest(version, method, ""), LastHttpContent.EMPTY_LAST_CONTENT);
+        return Observable.<Object>just(new DefaultHttpRequest(version, method, ""), LastHttpContent.EMPTY_LAST_CONTENT);
     }
     
     private final static Transformer<DisposableWrapper<HttpObject>, MessageBody> _AS_BODY = new Transformer<DisposableWrapper<HttpObject>, MessageBody>() {
