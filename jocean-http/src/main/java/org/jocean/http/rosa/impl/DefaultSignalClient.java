@@ -24,8 +24,6 @@ import javax.ws.rs.core.MediaType;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeaturesAware;
-import org.jocean.http.MessageBody;
-import org.jocean.http.MessageUtil;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient;
@@ -47,7 +45,6 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.Ordered;
 import org.jocean.idiom.ReflectUtils;
-import org.jocean.idiom.TerminateAware;
 import org.jocean.idiom.rx.RxObservables;
 import org.jocean.idiom.rx.RxObservables.RetryPolicy;
 import org.slf4j.Logger;
@@ -323,54 +320,6 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             }})
         .retryWhen(_RETRY)
         ;
-    }
-    
-    @Override
-    public InteractionBuilder2 interaction(final TerminateAware<?> terminateAware) {
-        final AtomicReference<Object> _request = new AtomicReference<>();
-        final List<Feature> _features = new ArrayList<>();
-        
-        return new InteractionBuilder2() {
-
-            @Override
-            public InteractionBuilder2 request(final Object request) {
-                _request.set(request);
-                return this;
-            }
-
-            @Override
-            public InteractionBuilder2 feature(final Feature... features) {
-                for (Feature f : features) {
-                    if (null != f) {
-                        _features.add(f);
-                    }
-                }
-                return this;
-            }
-
-            @Override
-            public Observable<MessageBody> build() {
-                return defineInteraction(terminateAware, _request.get(), 
-                        _features.toArray(Feature.EMPTY_FEATURES));
-            }};
-    }
-    
-    private Observable<MessageBody> defineInteraction(final TerminateAware<?> terminateAware, final Object signalBean,
-            final Feature... features) {
-        final Feature[] fullfeatures = Feature.Util.union(RosaProfiles._DEFAULT_PROFILE, features);
-        final URI uri = req2uri(signalBean, fullfeatures);
-        return _httpClient.initiator()
-                // TODO delay using uri
-                .remoteAddress(safeGetAddress(signalBean, uri))
-                .feature(genFeatures4HttpClient(signalBean, fullfeatures)).build()
-                .flatMap(new Func1<HttpInitiator, Observable<MessageBody>>() {
-                    @Override
-                    public Observable<MessageBody> call(final HttpInitiator initiator) {
-                        terminateAware.doOnTerminate(initiator.closer());
-                        return initiator.defineInteraction(outboundMessageOf(signalBean, initRequestOf(uri),
-                                fullfeatures, initiator.onTerminate())).compose(MessageUtil.asMessageBody());
-                    }
-                }).retryWhen(_RETRY);
     }
     
     private Feature[] genFeatures4HttpClient(final Object signalBean,

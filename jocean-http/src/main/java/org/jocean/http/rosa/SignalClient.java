@@ -4,14 +4,12 @@ import java.lang.annotation.Annotation;
 import java.net.URI;
 
 import org.jocean.http.Feature;
-import org.jocean.http.MessageBody;
 import org.jocean.http.rosa.impl.internal.Facades.JSONSource;
 import org.jocean.http.rosa.impl.internal.Facades.MethodSource;
 import org.jocean.http.rosa.impl.internal.Facades.PathSource;
 import org.jocean.http.rosa.impl.internal.Facades.ResponseBodyTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.ResponseTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.UriSource;
-import org.jocean.idiom.TerminateAware;
 
 import io.netty.util.CharsetUtil;
 import rx.Observable;
@@ -120,15 +118,4 @@ public interface SignalClient {
     }
 
     public InteractionBuilder interaction();
-
-    public interface InteractionBuilder2 {
-        
-        public InteractionBuilder2 request(final Object request);
-        
-        public InteractionBuilder2 feature(final Feature... features);
-        
-        public Observable<MessageBody> build();
-    }
-
-    public InteractionBuilder2 interaction(final TerminateAware<?> terminateAware);
 }
