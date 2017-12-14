@@ -1,15 +1,22 @@
 package org.jocean.http;
 
+import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.util.List;
+
+import javax.ws.rs.QueryParam;
 
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.ParamUtil;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
+import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.ReflectUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -22,6 +29,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.handler.codec.http.QueryStringEncoder;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.Transformer;
@@ -30,6 +38,9 @@ import rx.functions.Func1;
 import rx.functions.Func2;
 
 public class MessageUtil {
+    private static final Logger LOG =
+            LoggerFactory.getLogger(MessageUtil.class);
+    
     private MessageUtil() {
         throw new IllegalStateException("No instances!");
     }
@@ -59,6 +70,41 @@ public class MessageUtil {
             }};
     }
     
+    public static Action1<Object> request(final String path, final Object... beans) {
+        return new Action1<Object>() {
+            @Override
+            public void call(final Object obj) {
+                if (obj instanceof HttpRequest) {
+                    ((HttpRequest)obj).setUri(path);
+                    for (Object bean : beans) {
+                        fillRequest((HttpRequest)obj, bean);
+                    }
+                }
+            }};
+    }
+    
+    private static void fillRequest(final HttpRequest request, final Object bean) {
+        final Field[] queryFields = ReflectUtils.getAnnotationFieldsOf(bean.getClass(), QueryParam.class);
+        if ( queryFields.length > 0 ) {
+            final QueryStringEncoder encoder = new QueryStringEncoder(request.uri());
+            for (Field field : queryFields) {
+                try {
+                    final Object value = field.get(bean);
+                    if ( null != value ) {
+                        final String paramkey = field.getAnnotation(QueryParam.class).value();
+                        encoder.addParam(paramkey, String.valueOf(value));
+                    }
+                }
+                catch (Exception e) {
+                    LOG.warn("exception when get field({})'s value, detail:{}", 
+                            field, ExceptionUtils.exception2detail(e));
+                }
+            }
+            
+            request.setUri(encoder.toString());
+        }
+    }
+
     public static Action1<Object> host(final URI uri) {
         return new Action1<Object>() {
             @Override
