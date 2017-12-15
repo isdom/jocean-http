@@ -6,6 +6,7 @@ import java.net.SocketAddress;
 import java.net.URI;
 import java.util.List;
 
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.QueryParam;
 
 import org.jocean.http.util.Nettys;
@@ -75,15 +76,35 @@ public class MessageUtil {
             @Override
             public void call(final Object obj) {
                 if (obj instanceof HttpRequest) {
-                    ((HttpRequest)obj).setUri(path);
+                    final HttpRequest request = (HttpRequest)obj;
+                    request.setUri(path);
                     for (Object bean : beans) {
-                        fillRequest((HttpRequest)obj, bean);
+                        addQueryParams(request, bean);
+                        addHeaderParams(request, bean);
                     }
                 }
             }};
     }
     
-    private static void fillRequest(final HttpRequest request, final Object bean) {
+    private static void addHeaderParams(final HttpRequest request, final Object bean) {
+        final Field[] headerFields = ReflectUtils.getAnnotationFieldsOf(bean.getClass(), HeaderParam.class);
+        if ( headerFields.length > 0 ) {
+            for ( Field field : headerFields ) {
+                try {
+                    final Object value = field.get(bean);
+                    if ( null != value ) {
+                        final String headername = field.getAnnotation(HeaderParam.class).value();
+                        request.headers().set(headername, value);
+                    }
+                } catch (Exception e) {
+                    LOG.warn("exception when get value from field:[{}], detail:{}",
+                            field, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }
+    }
+
+    private static void addQueryParams(final HttpRequest request, final Object bean) {
         final Field[] queryFields = ReflectUtils.getAnnotationFieldsOf(bean.getClass(), QueryParam.class);
         if ( queryFields.length > 0 ) {
             final QueryStringEncoder encoder = new QueryStringEncoder(request.uri());
