@@ -7,6 +7,7 @@ import java.net.URI;
 import java.util.List;
 
 import javax.ws.rs.HeaderParam;
+import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
 
 import org.jocean.http.util.Nettys;
@@ -51,6 +52,18 @@ public class MessageUtil {
         return new InetSocketAddress(uri.getHost(), port);
     }
 
+    public static SocketAddress bean2addr(final Object bean) {
+        final Path path = bean.getClass().getAnnotation(Path.class);
+        if (null!=path) {
+            try {
+                return uri2addr(new URI(path.value()));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+        throw new RuntimeException("bean class ("+ bean.getClass() +") without @Path annotation");
+    }
+    
     public static Action1<Object> method(final HttpMethod method) {
         return new Action1<Object>() {
             @Override
@@ -71,6 +84,10 @@ public class MessageUtil {
             }};
     }
     
+    public static Action1<Object> request(final Object... beans) {
+        return request("", beans);
+    }
+    
     public static Action1<Object> request(final String path, final Object... beans) {
         return new Action1<Object>() {
             @Override
@@ -79,6 +96,7 @@ public class MessageUtil {
                     final HttpRequest request = (HttpRequest)obj;
                     request.setUri(path);
                     for (Object bean : beans) {
+                        setPathToRequest(request, bean);
                         addQueryParams(request, bean);
                         addHeaderParams(request, bean);
                     }
@@ -86,6 +104,20 @@ public class MessageUtil {
             }};
     }
     
+    private static void setPathToRequest(final HttpRequest request, final Object bean) {
+        final Path apath = bean.getClass().getAnnotation(Path.class);
+        if (null!=apath) {
+            try {
+                final URI uri = new URI(apath.value());
+                final String path = uri.getRawPath();
+                request.setUri(path);
+                request.headers().set(HttpHeaderNames.HOST, uri.getHost());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
     private static void addHeaderParams(final HttpRequest request, final Object bean) {
         final Field[] headerFields = ReflectUtils.getAnnotationFieldsOf(bean.getClass(), HeaderParam.class);
         if ( headerFields.length > 0 ) {
@@ -138,6 +170,10 @@ public class MessageUtil {
     
     public static Observable<Object> fullRequestWithoutBody(final HttpVersion version, final HttpMethod method) {
         return Observable.<Object>just(new DefaultHttpRequest(version, method, ""), LastHttpContent.EMPTY_LAST_CONTENT);
+    }
+    
+    public static Observable<Object> fullRequest(final Object... beans) {
+        return fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET).doOnNext(MessageUtil.request(beans));
     }
     
     private final static Transformer<DisposableWrapper<HttpObject>, MessageBody> _AS_BODY = new Transformer<DisposableWrapper<HttpObject>, MessageBody>() {
