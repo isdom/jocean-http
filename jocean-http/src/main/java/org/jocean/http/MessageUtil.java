@@ -10,6 +10,8 @@ import javax.ws.rs.HeaderParam;
 import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
 
+import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.ParamUtil;
 import org.jocean.http.util.RxNettys;
@@ -17,6 +19,7 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ReflectUtils;
+import org.jocean.idiom.Terminable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +50,18 @@ public class MessageUtil {
         throw new IllegalStateException("No instances!");
     }
 
+    public static Observable<? extends DisposableWrapper<HttpObject>> interaction(final HttpClient client,
+            final Terminable terminable, final Object reqbean, final Feature... features) {
+        return client.initiator().remoteAddress(MessageUtil.bean2addr(reqbean)).feature(features).build()
+                .flatMap(new Func1<HttpInitiator, Observable<? extends DisposableWrapper<HttpObject>>>() {
+                    @Override
+                    public Observable<? extends DisposableWrapper<HttpObject>> call(final HttpInitiator initiator) {
+                        terminable.doOnTerminate(initiator.closer());
+                        return initiator.defineInteraction(MessageUtil.fullRequest(reqbean));
+                    }
+                });
+    }
+    
     public static SocketAddress uri2addr(final URI uri) {
         final int port = -1 == uri.getPort() ? ( "https".equals(uri.getScheme()) ? 443 : 80 ) : uri.getPort();
         return new InetSocketAddress(uri.getHost(), port);
