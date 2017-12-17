@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.DefaultHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMessage;
@@ -50,8 +51,35 @@ public class MessageUtil {
         throw new IllegalStateException("No instances!");
     }
 
+    public static <T> Observable<? extends T> interaction(final HttpClient client,
+            final Object reqbean, 
+            final Class<T> resptype,
+            final Func2<ByteBuf, Class<T>, T> decoder,
+            final Feature... features) {
+        return client.initiator().remoteAddress(MessageUtil.bean2addr(reqbean)).feature(features).build()
+                .flatMap(new Func1<HttpInitiator, Observable<? extends T>>() {
+                    @Override
+                    public Observable<? extends T> call(final HttpInitiator initiator) {
+                        return initiator.defineInteraction(MessageUtil.fullRequest(reqbean))
+                                .compose(RxNettys.message2fullresp(initiator, true))
+                                .map(new Func1<DisposableWrapper<FullHttpResponse>, T>() {
+                                    @Override
+                                    public T call(final DisposableWrapper<FullHttpResponse> dwresp) {
+                                        try {
+                                            return decoder.call(dwresp.unwrap().content(), resptype);
+                                        } finally {
+                                            dwresp.dispose();
+                                        }
+                                    }
+                                }).doOnUnsubscribe(initiator.closer());
+                    }
+                });
+    }
+    
     public static Observable<? extends DisposableWrapper<HttpObject>> interaction(final HttpClient client,
-            final Terminable terminable, final Object reqbean, final Feature... features) {
+            final Terminable terminable, 
+            final Object reqbean, 
+            final Feature... features) {
         return client.initiator().remoteAddress(MessageUtil.bean2addr(reqbean)).feature(features).build()
                 .flatMap(new Func1<HttpInitiator, Observable<? extends DisposableWrapper<HttpObject>>>() {
                     @Override
