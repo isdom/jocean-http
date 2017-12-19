@@ -97,7 +97,7 @@ public class MessageUtil {
 
             private void addQueryParams() {
                 if (!_nvs.isEmpty()) {
-                    updateObsRequest(MessageUtil.paramsAsQuery(_nvs.toArray(new String[0])));
+                    updateObsRequest(MessageUtil.addQueryParam(_nvs.toArray(new String[0])));
                 }
             }
             
@@ -135,7 +135,7 @@ public class MessageUtil {
             
             @Override
             public InteractionBuilder method(final HttpMethod method) {
-                updateObsRequest(MessageUtil.method(method));
+                updateObsRequest(MessageUtil.setMethod(method));
                 return this;
             }
 
@@ -145,7 +145,7 @@ public class MessageUtil {
                     final URI uri = new URI(uriAsString);
                     _initiatorBuilder.remoteAddress(uri2addr(uri));
                     _isAddrSetted.set(true);
-                    updateObsRequest(MessageUtil.host(uri));
+                    updateObsRequest(MessageUtil.setHost(uri));
                 } catch (URISyntaxException e) {
                     throw new RuntimeException(e);
                 }
@@ -154,7 +154,7 @@ public class MessageUtil {
 
             @Override
             public InteractionBuilder path(final String path) {
-                updateObsRequest(MessageUtil.path(path));
+                updateObsRequest(MessageUtil.setPath(path));
                 return this;
             }
 
@@ -167,7 +167,7 @@ public class MessageUtil {
 
             @Override
             public InteractionBuilder reqbean(final Object... reqbeans) {
-                updateObsRequest(MessageUtil.request(reqbeans));
+                updateObsRequest(MessageUtil.toRequest(reqbeans));
                 extractUriWithHost(reqbeans);
                 return this;
             }
@@ -186,7 +186,7 @@ public class MessageUtil {
 
             private Observable<? extends Object> addBody(final Observable<Object> obsreq,
                     final HttpInitiator initiator) {
-                return null != _asbodyRef.get() ? obsreq.compose(MessageUtil.body(_asbodyRef.get().call(initiator)))
+                return null != _asbodyRef.get() ? obsreq.compose(MessageUtil.addBody(_asbodyRef.get().call(initiator)))
                         : obsreq;
             }
             
@@ -245,7 +245,7 @@ public class MessageUtil {
         throw new RuntimeException("bean class ("+ bean.getClass() +") without @Path annotation");
     }
     
-    public static Action1<Object> method(final HttpMethod method) {
+    public static Action1<Object> setMethod(final HttpMethod method) {
         return new Action1<Object>() {
             @Override
             public void call(final Object obj) {
@@ -255,7 +255,7 @@ public class MessageUtil {
             }};
     }
     
-    public static Action1<Object> host(final URI uri) {
+    public static Action1<Object> setHost(final URI uri) {
         return new Action1<Object>() {
             @Override
             public void call(final Object obj) {
@@ -265,7 +265,7 @@ public class MessageUtil {
             }};
     }
     
-    public static Action1<Object> path(final String path) {
+    public static Action1<Object> setPath(final String path) {
         return new Action1<Object>() {
             @Override
             public void call(final Object obj) {
@@ -275,7 +275,7 @@ public class MessageUtil {
             }};
     }
     
-    public static Action1<Object> paramsAsQuery(final String... nvs) {
+    public static Action1<Object> addQueryParam(final String... nvs) {
         return new Action1<Object>() {
             @Override
             public void call(final Object obj) {
@@ -293,7 +293,7 @@ public class MessageUtil {
             }};
     }
     
-    public static Action1<Object> request(final Object... beans) {
+    public static Action1<Object> toRequest(final Object... beans) {
         return new Action1<Object>() {
             @Override
             public void call(final Object obj) {
@@ -366,7 +366,8 @@ public class MessageUtil {
         }
     }
 
-    public static Transformer<Object, Object> body(final Observable<MessageBody> body) {
+    // TODO: support multipart/...
+    public static Transformer<Object, Object> addBody(final Observable<MessageBody> body) {
         return new Transformer<Object, Object>() {
             @Override
             public Observable<Object> call(final Observable<Object> msg) {
@@ -391,7 +392,7 @@ public class MessageUtil {
         };
     }
     
-    public static Func1<Terminable, Observable<MessageBody>> asBody(final Object bean,
+    public static Func1<Terminable, Observable<MessageBody>> beanToBody(final Object bean,
             final String contentType,
             final Action2<Object, ByteBuf> encoder) {
         return new Func1<Terminable, Observable<MessageBody>>() {
@@ -443,7 +444,7 @@ public class MessageUtil {
     }
     
     public static Observable<Object> fullRequest(final Object... beans) {
-        return fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET).doOnNext(MessageUtil.request(beans));
+        return fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET).doOnNext(MessageUtil.toRequest(beans));
     }
     
     private final static Transformer<DisposableWrapper<HttpObject>, MessageBody> _AS_BODY = new Transformer<DisposableWrapper<HttpObject>, MessageBody>() {
@@ -475,7 +476,7 @@ public class MessageUtil {
         }
     };
         
-    public static Transformer<DisposableWrapper<HttpObject>, MessageBody> asMessageBody() {
+    public static Transformer<DisposableWrapper<HttpObject>, MessageBody> asBody() {
         return _AS_BODY;
     }
     
