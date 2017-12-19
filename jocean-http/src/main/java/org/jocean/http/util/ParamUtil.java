@@ -2,6 +2,7 @@ package org.jocean.http.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.util.List;
 
@@ -23,9 +24,11 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
+import io.netty.buffer.ByteBufOutputStream;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.QueryStringDecoder;
+import io.netty.util.CharsetUtil;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
@@ -147,6 +150,22 @@ public class ParamUtil {
             }};
     }
     
+    public static <T> Func1<Func0<FullHttpRequest>, T> decodeJsonContentAs(final Class<T> type) {
+        return new Func1<Func0<FullHttpRequest>, T>() {
+            @Override
+            public T call(final Func0<FullHttpRequest> getfhr) {
+                final FullHttpRequest fhr = getfhr.call();
+                if (null != fhr) {
+                    try {
+                        return parseContentAsJson(fhr.content(), type);
+                    } finally {
+                        fhr.release();
+                    }
+                }
+                return null;
+            }};
+    }
+    
     public static <T> T parseContentAsXml(final ByteBuf buf, final Class<T> type) {
         final XmlMapper mapper = new XmlMapper();
         mapper.addHandler(new DeserializationProblemHandler() {
@@ -167,22 +186,6 @@ public class ParamUtil {
         }
     }
     
-    public static <T> Func1<Func0<FullHttpRequest>, T> decodeJsonContentAs(final Class<T> type) {
-        return new Func1<Func0<FullHttpRequest>, T>() {
-            @Override
-            public T call(final Func0<FullHttpRequest> getfhr) {
-                final FullHttpRequest fhr = getfhr.call();
-                if (null != fhr) {
-                    try {
-                        return parseContentAsJson(fhr.content(), type);
-                    } finally {
-                        fhr.release();
-                    }
-                }
-                return null;
-            }};
-    }
-    
     public static <T> T parseContentAsJson(final ByteBuf buf, final Class<T> type) {
         try {
             return JSON.parseObject(contentAsInputStream(buf), type);
@@ -195,5 +198,37 @@ public class ParamUtil {
     
     private static InputStream contentAsInputStream(final ByteBuf buf) {
         return new ByteBufInputStream(buf.slice());
+    }
+    
+    public static void serializeToXml(final Object bean, final ByteBuf buf) {
+        final XmlMapper mapper = new XmlMapper();
+//        mapper.addHandler(new DeserializationProblemHandler() {
+//            @Override
+//            public boolean handleUnknownProperty(final DeserializationContext ctxt, final JsonParser p,
+//                    final JsonDeserializer<?> deserializer, final Object beanOrClass, final String propertyName)
+//                    throws IOException {
+//                LOG.warn("UnknownProperty [{}], just skip", propertyName);
+//                p.skipChildren();
+//                return true;
+//            }});
+        try {
+            mapper.writeValue(contentAsOutputStream(buf), bean);
+        } catch (Exception e) {
+            LOG.warn("exception when serialize {} to xml, detail: {}",
+                    bean, ExceptionUtils.exception2detail(e));
+        }
+    }
+    
+    public static void serializeToJson(final Object bean, final ByteBuf buf) {
+        try {
+            JSON.writeJSONString(contentAsOutputStream(buf), CharsetUtil.UTF_8, bean);
+        } catch (IOException e) {
+            LOG.warn("exception when serialize {} to json, detail: {}",
+                    bean, ExceptionUtils.exception2detail(e));
+        }
+    }
+
+    private static OutputStream contentAsOutputStream(final ByteBuf buf) {
+        return new ByteBufOutputStream(buf);
     }
 }

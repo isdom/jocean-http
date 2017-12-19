@@ -29,6 +29,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
@@ -43,8 +45,11 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.QueryStringEncoder;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
+import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
+import rx.Subscriber;
 import rx.functions.Action1;
+import rx.functions.Action2;
 import rx.functions.Func1;
 import rx.functions.Func2;
 
@@ -68,6 +73,8 @@ public class MessageUtil {
         
         public InteractionBuilder reqbean(final Object... reqbeans);
         
+        public InteractionBuilder body(final Func1<Terminable, Observable<MessageBody>> asbody);
+        
         public InteractionBuilder feature(final Feature... features);
         
         public <RESP> Observable<? extends RESP> responseAs(final Class<RESP> resptype, Func2<ByteBuf, Class<RESP>, RESP> decoder);
@@ -81,6 +88,7 @@ public class MessageUtil {
                 fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET));
         final List<String> _nvs = new ArrayList<>();
         final AtomicReference<URI> uriRef = new AtomicReference<>();
+        final AtomicReference<Func1<Terminable, Observable<MessageBody>>> _asbodyRef = new AtomicReference<>(null);
         
         return new InteractionBuilder() {
             private void updateObsRequest(final Action1<Object> action) {
@@ -165,11 +173,23 @@ public class MessageUtil {
             }
 
             @Override
+            public InteractionBuilder body(final Func1<Terminable, Observable<MessageBody>> asbody) {
+                _asbodyRef.set(asbody);
+                return this;
+            }
+            
+            @Override
             public InteractionBuilder feature(final Feature... features) {
                 _initiatorBuilder.feature(features);
                 return this;
             }
 
+            private Observable<? extends Object> addBody(final Observable<Object> obsreq,
+                    final HttpInitiator initiator) {
+                return null != _asbodyRef.get() ? obsreq.compose(MessageUtil.body(_asbodyRef.get().call(initiator)))
+                        : obsreq;
+            }
+            
             @Override
             public <RESP> Observable<? extends RESP> responseAs(final Class<RESP> resptype,
                     final Func2<ByteBuf, Class<RESP>, RESP> decoder) {
@@ -177,7 +197,7 @@ public class MessageUtil {
                 return initiator().flatMap(new Func1<HttpInitiator, Observable<? extends RESP>>() {
                     @Override
                     public Observable<? extends RESP> call(final HttpInitiator initiator) {
-                        return initiator.defineInteraction(_obsreqRef.get())
+                        return initiator.defineInteraction(addBody(_obsreqRef.get(), initiator))
                                 .compose(RxNettys.message2fullresp(initiator, true))
                                 .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
                                     @Override
@@ -190,6 +210,8 @@ public class MessageUtil {
                                     }
                                 }).doOnUnsubscribe(initiator.closer());
                     }
+
+                    
                 });
             }
 
@@ -200,7 +222,7 @@ public class MessageUtil {
                             @Override
                             public Observable<? extends DisposableWrapper<HttpObject>> call(final HttpInitiator initiator) {
                                 terminable.doOnTerminate(initiator.closer());
-                                return initiator.defineInteraction(_obsreqRef.get());
+                                return initiator.defineInteraction(addBody(_obsreqRef.get(), initiator));
                             }
                         });
             }};
@@ -344,6 +366,78 @@ public class MessageUtil {
         }
     }
 
+    public static Transformer<Object, Object> body(final Observable<MessageBody> body) {
+        return new Transformer<Object, Object>() {
+            @Override
+            public Observable<Object> call(final Observable<Object> msg) {
+                return msg.concatMap(new Func1<Object, Observable<Object>>() {
+                    @Override
+                    public Observable<Object> call(final Object obj) {
+                        if (obj instanceof HttpRequest) {
+                            final HttpRequest request = (HttpRequest)obj;
+                            return body.flatMap(new Func1<MessageBody, Observable<Object>>() {
+                                @Override
+                                public Observable<Object> call(final MessageBody body) {
+                                    request.headers().set(HttpHeaderNames.CONTENT_TYPE, body.contentType());
+                                    // set content-length
+                                    request.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.contentLength());
+                                    return Observable.concat(Observable.just(request), body.content());
+                                }});
+                        } else {
+                            return Observable.just(obj);
+                        }
+                    }});
+            }
+        };
+    }
+    
+    public static Func1<Terminable, Observable<MessageBody>> asBody(final Object bean,
+            final String contentType,
+            final Action2<Object, ByteBuf> encoder) {
+        return new Func1<Terminable, Observable<MessageBody>>() {
+            @Override
+            public Observable<MessageBody> call(final Terminable terminable) {
+                return Observable.unsafeCreate(new OnSubscribe<MessageBody>() {
+                    @Override
+                    public void call(final Subscriber<? super MessageBody> subscriber) {
+                        if (!subscriber.isUnsubscribed()) {
+                            final DisposableWrapper<ByteBuf> dwb = bean2dwb(bean, encoder, terminable);
+                            final int contentLength = dwb.unwrap().readableBytes();
+                            subscriber.onNext(tobody(contentType, contentLength, dwb));
+                            subscriber.onCompleted();
+                        }
+                    }});
+            }};
+    }
+    
+    private static DisposableWrapper<ByteBuf> bean2dwb(final Object bean,
+            final Action2<Object, ByteBuf> encoder, final Terminable terminable) {
+        final ByteBufAllocator allocator = PooledByteBufAllocator.DEFAULT;
+        final DisposableWrapper<ByteBuf> dwbuf = DisposableWrapperUtil.disposeOn(terminable,
+                RxNettys.wrap4release(allocator.buffer()));
+        encoder.call(bean, dwbuf.unwrap());
+        return dwbuf;
+    }
+
+    private static MessageBody tobody(final String contentType, final int contentLength,
+            final DisposableWrapper<ByteBuf> dwb) {
+        return new MessageBody() {
+            @Override
+            public String contentType() {
+                return contentType;
+            }
+
+            @Override
+            public int contentLength() {
+                return contentLength;
+            }
+
+            @Override
+            public Observable<? extends DisposableWrapper<ByteBuf>> content() {
+                return Observable.just(dwb);
+            }};
+    }
+    
     public static Observable<Object> fullRequestWithoutBody(final HttpVersion version, final HttpMethod method) {
         return Observable.<Object>just(new DefaultHttpRequest(version, method, ""), LastHttpContent.EMPTY_LAST_CONTENT);
     }
