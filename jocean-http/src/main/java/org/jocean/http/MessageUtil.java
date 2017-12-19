@@ -73,7 +73,7 @@ public class MessageUtil {
         
         public InteractionBuilder reqbean(final Object... reqbeans);
         
-        public InteractionBuilder body(final Func1<Terminable, Observable<MessageBody>> asbody);
+        public InteractionBuilder body(final Func1<Terminable, Observable<MessageBody>> tobody);
         
         public InteractionBuilder feature(final Feature... features);
         
