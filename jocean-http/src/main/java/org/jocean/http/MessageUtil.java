@@ -90,6 +90,8 @@ public class MessageUtil {
         
         public InteractionBuilder body(final Func1<Terminable, Observable<MessageBody>> tobody);
         
+        public InteractionBuilder onrequest(final Action1<Object> action);
+        
         public InteractionBuilder feature(final Feature... features);
         
         public <RESP> Observable<? extends RESP> responseAs(final Class<RESP> resptype, Func2<ByteBuf, Class<RESP>, RESP> decoder);
@@ -194,6 +196,12 @@ public class MessageUtil {
             @Override
             public InteractionBuilder body(final Func1<Terminable, Observable<MessageBody>> asbody) {
                 _asbodyRef.set(asbody);
+                return this;
+            }
+            
+            @Override
+            public InteractionBuilder onrequest(final Action1<Object> action) {
+                updateObsRequest(action);
                 return this;
             }
             
