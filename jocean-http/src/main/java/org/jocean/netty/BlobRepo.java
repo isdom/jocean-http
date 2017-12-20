@@ -3,6 +3,7 @@ package org.jocean.netty;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 
+import org.jocean.http.MessageBody;
 import org.jocean.http.WritePolicy;
 
 import io.netty.util.ReferenceCounted;
@@ -109,13 +110,7 @@ public interface BlobRepo {
         public PutObjectBuilder objectName(final String objectName);
         
         //  required
-        public PutObjectBuilder contentLength(final long contentLength);
-        
-        //  required
-        public PutObjectBuilder contentType(final String contentType);
-        
-        //  required
-        public PutObjectBuilder content(final Observable<?> content);
+        public PutObjectBuilder content(final MessageBody body);
         
         //  optional
         public PutObjectBuilder writePolicy(final WritePolicy writePolicy);
