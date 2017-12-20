@@ -43,6 +43,7 @@ import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http.QueryStringEncoder;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
@@ -59,6 +60,20 @@ public class MessageUtil {
     
     private MessageUtil() {
         throw new IllegalStateException("No instances!");
+    }
+
+    private static final Feature F_SSL;
+    static {
+        F_SSL = defaultSslFeature();
+    }
+
+    private static Feature defaultSslFeature() {
+        try {
+            return new Feature.ENABLE_SSL(SslContextBuilder.forClient().build());
+        } catch (Exception e) {
+            LOG.error("exception init default ssl feature, detail: {}", ExceptionUtils.exception2detail(e));
+            return null;
+        }
     }
 
     public interface InteractionBuilder {
@@ -83,11 +98,11 @@ public class MessageUtil {
     
     public static InteractionBuilder interaction(final HttpClient client) {
         final InitiatorBuilder _initiatorBuilder = client.initiator();
-        final AtomicBoolean _isAddrSetted = new AtomicBoolean(false);
+        final AtomicBoolean _isSSLEnabled = new AtomicBoolean(false);
         final AtomicReference<Observable<Object>> _obsreqRef = new AtomicReference<>(
                 fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET));
         final List<String> _nvs = new ArrayList<>();
-        final AtomicReference<URI> uriRef = new AtomicReference<>();
+        final AtomicReference<URI> _uriRef = new AtomicReference<>();
         final AtomicReference<Func1<Terminable, Observable<MessageBody>>> _asbodyRef = new AtomicReference<>(null);
         
         return new InteractionBuilder() {
@@ -102,14 +117,14 @@ public class MessageUtil {
             }
             
             private void extractUriWithHost(final Object...reqbeans) {
-                if (null == uriRef.get()) {
+                if (null == _uriRef.get()) {
                     for (Object bean : reqbeans) {
                         try {
                             final Path path = bean.getClass().getAnnotation(Path.class);
                             if (null != path) {
                                 final URI uri = new URI(path.value());
                                 if (null != uri.getHost()) {
-                                    uriRef.set(uri);
+                                    uri(path.value());
                                     return;
                                 }
                             }
@@ -121,15 +136,19 @@ public class MessageUtil {
                 }
             }
 
-            private Observable<? extends HttpInitiator> initiator() {
-                if (_isAddrSetted.get()) {
-                    return _initiatorBuilder.build();
+            private void checkAddr() {
+                if (null == _uriRef.get()) {
+                    throw new RuntimeException("remote address not set.");
+                }
+            }
+            
+            private InitiatorBuilder addSSLFeatureIfNeed(final InitiatorBuilder builder) {
+                if (_isSSLEnabled.get()) {
+                    return builder;
+                } else if ("https".equals(_uriRef.get().getScheme())) {
+                    return builder.feature(F_SSL);
                 } else {
-                    if (null != uriRef.get()) {
-                        return _initiatorBuilder.remoteAddress(uri2addr(uriRef.get())).build();
-                    } else {
-                        return Observable.error(new RuntimeException("remote address not set."));
-                    }
+                    return builder;
                 }
             }
             
@@ -143,8 +162,8 @@ public class MessageUtil {
             public InteractionBuilder uri(final String uriAsString) {
                 try {
                     final URI uri = new URI(uriAsString);
+                    _uriRef.set(uri);
                     _initiatorBuilder.remoteAddress(uri2addr(uri));
-                    _isAddrSetted.set(true);
                     updateObsRequest(MessageUtil.setHost(uri));
                 } catch (URISyntaxException e) {
                     throw new RuntimeException(e);
@@ -181,7 +200,19 @@ public class MessageUtil {
             @Override
             public InteractionBuilder feature(final Feature... features) {
                 _initiatorBuilder.feature(features);
+                if (isSSLEnabled(features)) {
+                    _isSSLEnabled.set(true);
+                }
                 return this;
+            }
+
+            private boolean isSSLEnabled(final Feature... features) {
+                for (Feature f : features) {
+                    if (f instanceof Feature.ENABLE_SSL) {
+                        return true;
+                    }
+                }
+                return false;
             }
 
             private Observable<? extends Object> addBody(final Observable<Object> obsreq,
@@ -193,39 +224,44 @@ public class MessageUtil {
             @Override
             public <RESP> Observable<? extends RESP> responseAs(final Class<RESP> resptype,
                     final Func2<ByteBuf, Class<RESP>, RESP> decoder) {
+                checkAddr();
                 addQueryParams();
-                return initiator().flatMap(new Func1<HttpInitiator, Observable<? extends RESP>>() {
-                    @Override
-                    public Observable<? extends RESP> call(final HttpInitiator initiator) {
-                        return initiator.defineInteraction(addBody(_obsreqRef.get(), initiator))
-                                .compose(RxNettys.message2fullresp(initiator, true))
-                                .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
-                                    @Override
-                                    public RESP call(final DisposableWrapper<FullHttpResponse> dwresp) {
-                                        try {
-                                            return decoder.call(dwresp.unwrap().content(), resptype);
-                                        } finally {
-                                            dwresp.dispose();
-                                        }
-                                    }
-                                }).doOnUnsubscribe(initiator.closer());
-                    }
+                return addSSLFeatureIfNeed(_initiatorBuilder).build()
+                        .flatMap(new Func1<HttpInitiator, Observable<? extends RESP>>() {
+                            @Override
+                            public Observable<? extends RESP> call(final HttpInitiator initiator) {
+                                return initiator.defineInteraction(addBody(_obsreqRef.get(), initiator))
+                                        .compose(RxNettys.message2fullresp(initiator, true))
+                                        .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
+                                            @Override
+                                            public RESP call(final DisposableWrapper<FullHttpResponse> dwresp) {
+                                                try {
+                                                    return decoder.call(dwresp.unwrap().content(), resptype);
+                                                } finally {
+                                                    dwresp.dispose();
+                                                }
+                                            }
+                                        }).doOnUnsubscribe(initiator.closer());
+                            }
 
-                    
-                });
+                        });
             }
 
             @Override
             public Observable<? extends DisposableWrapper<HttpObject>> responseAs(final Terminable terminable) {
+                checkAddr();
                 addQueryParams();
-                return initiator().flatMap(new Func1<HttpInitiator, Observable<? extends DisposableWrapper<HttpObject>>>() {
+                return addSSLFeatureIfNeed(_initiatorBuilder).build()
+                        .flatMap(new Func1<HttpInitiator, Observable<? extends DisposableWrapper<HttpObject>>>() {
                             @Override
-                            public Observable<? extends DisposableWrapper<HttpObject>> call(final HttpInitiator initiator) {
+                            public Observable<? extends DisposableWrapper<HttpObject>> call(
+                                    final HttpInitiator initiator) {
                                 terminable.doOnTerminate(initiator.closer());
                                 return initiator.defineInteraction(addBody(_obsreqRef.get(), initiator));
                             }
                         });
-            }};
+            }
+        };
     }
     
     public static SocketAddress uri2addr(final URI uri) {
