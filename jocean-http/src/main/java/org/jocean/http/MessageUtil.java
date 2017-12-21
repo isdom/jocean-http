@@ -93,6 +93,8 @@ public class MessageUtil {
         
         public InteractionBuilder reqbean(final Object... reqbeans);
         
+        public InteractionBuilder body(final Observable<MessageBody> tobody);
+        
         public InteractionBuilder body(final Func1<Terminable, Observable<MessageBody>> tobody);
         
         public InteractionBuilder onrequest(final Action1<Object> action);
@@ -201,6 +203,12 @@ public class MessageUtil {
                 return this;
             }
 
+            @Override
+            public InteractionBuilder body(final Observable<MessageBody> tobody) {
+                _obsreqRef.set(_obsreqRef.get().compose(MessageUtil.addBody(tobody)));
+                return this;
+            }
+            
             @Override
             public InteractionBuilder body(final Func1<Terminable, Observable<MessageBody>> asbody) {
                 _asbodyRef.set(asbody);
