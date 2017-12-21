@@ -99,6 +99,8 @@ public class MessageUtil {
         
         public InteractionBuilder feature(final Feature... features);
         
+        public InteractionBuilder writePolicy(final WritePolicy writePolicy);
+        
         public <RESP> Observable<? extends RESP> responseAs(final Class<RESP> resptype, Func2<ByteBuf, Class<RESP>, RESP> decoder);
         public Observable<? extends Interaction> execution();
     }
@@ -111,6 +113,7 @@ public class MessageUtil {
         final List<String> _nvs = new ArrayList<>();
         final AtomicReference<URI> _uriRef = new AtomicReference<>();
         final AtomicReference<Func1<Terminable, Observable<MessageBody>>> _asbodyRef = new AtomicReference<>(null);
+        final AtomicReference<WritePolicy> _writePolicyRef = new AtomicReference<>();
         
         return new InteractionBuilder() {
             private void updateObsRequest(final Action1<Object> action) {
@@ -219,6 +222,12 @@ public class MessageUtil {
                 return this;
             }
 
+            @Override
+            public InteractionBuilder writePolicy(final WritePolicy writePolicy) {
+                _writePolicyRef.set(writePolicy);
+                return this;
+            }
+            
             private boolean isSSLEnabled(final Feature... features) {
                 for (Feature f : features) {
                     if (f instanceof Feature.ENABLE_SSL) {
@@ -243,7 +252,7 @@ public class MessageUtil {
                         .flatMap(new Func1<HttpInitiator, Observable<? extends RESP>>() {
                             @Override
                             public Observable<? extends RESP> call(final HttpInitiator initiator) {
-                                return initiator.defineInteraction(addBody(_obsreqRef.get(), initiator))
+                                return initiator.defineInteraction(addBody(_obsreqRef.get(), initiator), _writePolicyRef.get())
                                         .compose(RxNettys.message2fullresp(initiator, true))
                                         .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
                                             @Override
@@ -256,7 +265,6 @@ public class MessageUtil {
                                             }
                                         }).doOnUnsubscribe(initiator.closer());
                             }
-
                         });
             }
 
@@ -269,7 +277,7 @@ public class MessageUtil {
                             @Override
                             public Interaction call(final HttpInitiator initiator) {
                                 final Observable<? extends DisposableWrapper<HttpObject>> interaction = 
-                                        initiator.defineInteraction(addBody(_obsreqRef.get(), initiator));
+                                        initiator.defineInteraction(addBody(_obsreqRef.get(), initiator), _writePolicyRef.get());
                                 return new Interaction() {
                                     @Override
                                     public HttpInitiator initiator() {
