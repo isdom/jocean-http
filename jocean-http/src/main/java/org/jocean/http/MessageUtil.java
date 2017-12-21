@@ -76,6 +76,11 @@ public class MessageUtil {
         }
     }
 
+    public interface Interaction {
+        public HttpInitiator  initiator();
+        public Observable<? extends DisposableWrapper<HttpObject>> execute();
+    }
+    
     public interface InteractionBuilder {
         
         public InteractionBuilder method(final HttpMethod method);
@@ -95,7 +100,7 @@ public class MessageUtil {
         public InteractionBuilder feature(final Feature... features);
         
         public <RESP> Observable<? extends RESP> responseAs(final Class<RESP> resptype, Func2<ByteBuf, Class<RESP>, RESP> decoder);
-        public Observable<? extends DisposableWrapper<HttpObject>> responseAs(final Terminable terminable);
+        public Observable<? extends Interaction> execution();
     }
     
     public static InteractionBuilder interaction(final HttpClient client) {
@@ -256,16 +261,25 @@ public class MessageUtil {
             }
 
             @Override
-            public Observable<? extends DisposableWrapper<HttpObject>> responseAs(final Terminable terminable) {
+            public Observable<? extends Interaction> execution() {
                 checkAddr();
                 addQueryParams();
                 return addSSLFeatureIfNeed(_initiatorBuilder).build()
-                        .flatMap(new Func1<HttpInitiator, Observable<? extends DisposableWrapper<HttpObject>>>() {
+                        .map(new Func1<HttpInitiator, Interaction>() {
                             @Override
-                            public Observable<? extends DisposableWrapper<HttpObject>> call(
-                                    final HttpInitiator initiator) {
-                                terminable.doOnTerminate(initiator.closer());
-                                return initiator.defineInteraction(addBody(_obsreqRef.get(), initiator));
+                            public Interaction call(final HttpInitiator initiator) {
+                                final Observable<? extends DisposableWrapper<HttpObject>> interaction = 
+                                        initiator.defineInteraction(addBody(_obsreqRef.get(), initiator));
+                                return new Interaction() {
+                                    @Override
+                                    public HttpInitiator initiator() {
+                                        return initiator;
+                                    }
+
+                                    @Override
+                                    public Observable<? extends DisposableWrapper<HttpObject>> execute() {
+                                        return interaction;
+                                    }};
                             }
                         });
             }
