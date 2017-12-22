@@ -24,7 +24,6 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ReflectUtils;
-import org.jocean.idiom.Terminable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,7 +94,7 @@ public class MessageUtil {
         
         public InteractionBuilder body(final Observable<MessageBody> tobody);
         
-        public InteractionBuilder body(final Func1<Terminable, Observable<MessageBody>> tobody);
+        public InteractionBuilder disposeBodyOnTerminate(final boolean doDispose);
         
         public InteractionBuilder onrequest(final Action1<Object> action);
         
@@ -110,11 +109,11 @@ public class MessageUtil {
     public static InteractionBuilder interaction(final HttpClient client) {
         final InitiatorBuilder _initiatorBuilder = client.initiator();
         final AtomicBoolean _isSSLEnabled = new AtomicBoolean(false);
+        final AtomicBoolean _doDisposeBody = new AtomicBoolean(true);
         final AtomicReference<Observable<Object>> _obsreqRef = new AtomicReference<>(
                 fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET));
         final List<String> _nvs = new ArrayList<>();
         final AtomicReference<URI> _uriRef = new AtomicReference<>();
-        final AtomicReference<Func1<Terminable, Observable<MessageBody>>> _asbodyRef = new AtomicReference<>(null);
         final AtomicReference<WritePolicy> _writePolicyRef = new AtomicReference<>();
         
         return new InteractionBuilder() {
@@ -210,8 +209,8 @@ public class MessageUtil {
             }
             
             @Override
-            public InteractionBuilder body(final Func1<Terminable, Observable<MessageBody>> asbody) {
-                _asbodyRef.set(asbody);
+            public InteractionBuilder disposeBodyOnTerminate(final boolean doDispose) {
+                _doDisposeBody.set(doDispose);
                 return this;
             }
             
@@ -245,10 +244,13 @@ public class MessageUtil {
                 return false;
             }
 
-            private Observable<? extends Object> addBody(final Observable<Object> obsreq,
-                    final HttpInitiator initiator) {
-                return null != _asbodyRef.get() ? obsreq.compose(MessageUtil.addBody(_asbodyRef.get().call(initiator)))
+            private Observable<? extends Object> hookDisposeBody(final Observable<Object> obsreq, final HttpInitiator initiator) {
+                return _doDisposeBody.get() ? obsreq.doOnNext(DisposableWrapperUtil.disposeOnForAny(initiator))
                         : obsreq;
+            }
+            
+            private Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final HttpInitiator initiator) {
+                return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator), _writePolicyRef.get());
             }
             
             @Override
@@ -260,7 +262,7 @@ public class MessageUtil {
                         .flatMap(new Func1<HttpInitiator, Observable<? extends RESP>>() {
                             @Override
                             public Observable<? extends RESP> call(final HttpInitiator initiator) {
-                                return initiator.defineInteraction(addBody(_obsreqRef.get(), initiator), _writePolicyRef.get())
+                                return defineInteraction(initiator)
                                         .compose(RxNettys.message2fullresp(initiator, true))
                                         .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
                                             @Override
@@ -285,7 +287,7 @@ public class MessageUtil {
                             @Override
                             public Interaction call(final HttpInitiator initiator) {
                                 final Observable<? extends DisposableWrapper<HttpObject>> interaction = 
-                                        initiator.defineInteraction(addBody(_obsreqRef.get(), initiator), _writePolicyRef.get());
+                                        defineInteraction(initiator);
                                 return new Interaction() {
                                     @Override
                                     public HttpInitiator initiator() {
@@ -466,30 +468,24 @@ public class MessageUtil {
         };
     }
     
-    public static Func1<Terminable, Observable<MessageBody>> beanToBody(final Object bean,
+    public static Observable<MessageBody> toBody(final Object bean,
             final String contentType,
             final Action2<Object, ByteBuf> encoder) {
-        return new Func1<Terminable, Observable<MessageBody>>() {
-            @Override
-            public Observable<MessageBody> call(final Terminable terminable) {
-                return Observable.unsafeCreate(new OnSubscribe<MessageBody>() {
+        return Observable.unsafeCreate(new OnSubscribe<MessageBody>() {
                     @Override
                     public void call(final Subscriber<? super MessageBody> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
-                            final DisposableWrapper<ByteBuf> dwb = bean2dwb(bean, encoder, terminable);
+                            final DisposableWrapper<ByteBuf> dwb = bean2dwb(bean, encoder);
                             final int contentLength = dwb.unwrap().readableBytes();
                             subscriber.onNext(tobody(contentType, contentLength, dwb));
                             subscriber.onCompleted();
                         }
                     }});
-            }};
     }
     
-    private static DisposableWrapper<ByteBuf> bean2dwb(final Object bean,
-            final Action2<Object, ByteBuf> encoder, final Terminable terminable) {
+    private static DisposableWrapper<ByteBuf> bean2dwb(final Object bean, final Action2<Object, ByteBuf> encoder) {
         final ByteBufAllocator allocator = PooledByteBufAllocator.DEFAULT;
-        final DisposableWrapper<ByteBuf> dwbuf = DisposableWrapperUtil.disposeOn(terminable,
-                RxNettys.wrap4release(allocator.buffer()));
+        final DisposableWrapper<ByteBuf> dwbuf = RxNettys.wrap4release(allocator.buffer());
         encoder.call(bean, dwbuf.unwrap());
         return dwbuf;
     }
