@@ -196,6 +196,16 @@ public class ParamUtil {
         }
     }
     
+    public static String parseContentAsString(final ByteBuf buf, final Class<?> cls) {
+        try {
+            return new String(Nettys.dumpByteBufAsBytes(buf), CharsetUtil.UTF_8);
+        } catch (IOException e) {
+            LOG.warn("exception when parse {} as string, detail: {}",
+                    buf, ExceptionUtils.exception2detail(e));
+            return null;
+        }
+    }
+    
     private static InputStream contentAsInputStream(final ByteBuf buf) {
         return new ByteBufInputStream(buf.slice());
     }
