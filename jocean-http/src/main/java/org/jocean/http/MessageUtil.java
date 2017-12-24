@@ -80,6 +80,32 @@ public class MessageUtil {
         public Observable<? extends DisposableWrapper<HttpObject>> execute();
     }
     
+    public static <RESP> Transformer<Interaction, RESP> responseAs(final Class<RESP> resptype,
+            final Func2<ByteBuf, Class<RESP>, RESP> decoder) {
+        return new Transformer<Interaction, RESP>() {
+            @Override
+            public Observable<RESP> call(final Observable<Interaction> obsinteraction) {
+                return obsinteraction.flatMap(new Func1<Interaction, Observable<RESP>>() {
+                    @Override
+                    public Observable<RESP> call(final Interaction interaction) {
+                        return interaction.execute().compose(RxNettys.message2fullresp(interaction.initiator(), true))
+                                .doOnUnsubscribe(interaction.initiator().closer())
+                                .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
+                                    @Override
+                                    public RESP call(final DisposableWrapper<FullHttpResponse> dwresp) {
+                                        try {
+                                            return decoder.call(dwresp.unwrap().content(), resptype);
+                                        } finally {
+                                            dwresp.dispose();
+                                        }
+                                    }
+                                });
+                    }
+                });
+            }
+        };
+    }
+    
     public interface InteractionBuilder {
         
         public InteractionBuilder method(final HttpMethod method);
@@ -102,7 +128,6 @@ public class MessageUtil {
         
         public InteractionBuilder writePolicy(final WritePolicy writePolicy);
         
-        public <RESP> Observable<? extends RESP> responseAs(final Class<RESP> resptype, Func2<ByteBuf, Class<RESP>, RESP> decoder);
         public Observable<? extends Interaction> execution();
     }
     
@@ -253,31 +278,6 @@ public class MessageUtil {
                 return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator), _writePolicyRef.get());
             }
             
-            @Override
-            public <RESP> Observable<? extends RESP> responseAs(final Class<RESP> resptype,
-                    final Func2<ByteBuf, Class<RESP>, RESP> decoder) {
-                checkAddr();
-                addQueryParams();
-                return addSSLFeatureIfNeed(_initiatorBuilder).build()
-                        .flatMap(new Func1<HttpInitiator, Observable<? extends RESP>>() {
-                            @Override
-                            public Observable<? extends RESP> call(final HttpInitiator initiator) {
-                                return defineInteraction(initiator)
-                                        .compose(RxNettys.message2fullresp(initiator, true))
-                                        .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
-                                            @Override
-                                            public RESP call(final DisposableWrapper<FullHttpResponse> dwresp) {
-                                                try {
-                                                    return decoder.call(dwresp.unwrap().content(), resptype);
-                                                } finally {
-                                                    dwresp.dispose();
-                                                }
-                                            }
-                                        }).doOnUnsubscribe(initiator.closer());
-                            }
-                        });
-            }
-
             @Override
             public Observable<? extends Interaction> execution() {
                 checkAddr();
@@ -624,11 +624,6 @@ public class MessageUtil {
         }, type);
     }
 
-    // @Override
-    // public <T> Observable<? extends T> decodeFormAs(final MessageUnit mu,
-    // final Class<T> type) {
-    // return Observable.error(new UnsupportedOperationException());
-    // }
     private static <T> Observable<? extends T> decodeContentAs(
             final Observable<? extends DisposableWrapper<ByteBuf>> content, final Func2<ByteBuf, Class<T>, T> func,
             final Class<T> type) {
