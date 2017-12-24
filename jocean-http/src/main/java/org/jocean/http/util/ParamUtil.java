@@ -196,7 +196,7 @@ public class ParamUtil {
         }
     }
     
-    public static String parseContentAsString(final ByteBuf buf, final Class<?> cls) {
+    public static String parseContentAsString(final ByteBuf buf) {
         try {
             return new String(Nettys.dumpByteBufAsBytes(buf), CharsetUtil.UTF_8);
         } catch (IOException e) {

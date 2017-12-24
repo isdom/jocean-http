@@ -31,6 +31,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.DefaultHttpRequest;
+import io.netty.handler.codec.http.FullHttpMessage;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
@@ -104,6 +105,36 @@ public class MessageUtil {
                 });
             }
         };
+    }
+    
+    private static final Func1<DisposableWrapper<? extends FullHttpMessage>, String> _FULLMSG_TO_STRING = new Func1<DisposableWrapper<? extends FullHttpMessage>, String>() {
+        @Override
+        public String call(final DisposableWrapper<? extends FullHttpMessage> dwfullmsg) {
+            try {
+                return ParamUtil.parseContentAsString(dwfullmsg.unwrap().content());
+            } finally {
+                dwfullmsg.dispose();
+            }
+        }
+    };
+
+    private static final Func1<Interaction, Observable<String>> _INTERACTION_TO_OBS_STRING = new Func1<Interaction, Observable<String>>() {
+        @Override
+        public Observable<String> call(final Interaction interaction) {
+            return interaction.execute().compose(RxNettys.message2fullresp(interaction.initiator(), true))
+                    .doOnUnsubscribe(interaction.initiator().closer()).map(_FULLMSG_TO_STRING);
+        }
+    };
+
+    private static final Transformer<Interaction, String> _AS_STRING = new Transformer<Interaction, String>() {
+        @Override
+        public Observable<String> call(final Observable<Interaction> obsinteraction) {
+            return obsinteraction.flatMap(_INTERACTION_TO_OBS_STRING);
+        }
+    };
+    
+    public static Transformer<Interaction, String> responseAsString() {
+        return _AS_STRING;
     }
     
     public interface InteractionBuilder {
