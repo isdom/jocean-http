@@ -550,6 +550,51 @@ public class MessageUtil {
         return _AS_BODY;
     }
     
+    private final static Transformer<DisposableWrapper<HttpObject>, FullMessage> _AS_FULLMSG = new Transformer<DisposableWrapper<HttpObject>, FullMessage>() {
+        @Override
+        public Observable<FullMessage> call(final Observable<DisposableWrapper<HttpObject>> dwhs) {
+            final Observable<? extends DisposableWrapper<HttpObject>> cached = dwhs.cache();
+            return cached.map(DisposableWrapperUtil.<HttpObject>unwrap()).compose(RxNettys.asHttpMessage())
+                    .map(new Func1<HttpMessage, FullMessage>() {
+                        @Override
+                        public FullMessage call(final HttpMessage msg) {
+                            final MessageBody body = new MessageBody() {
+                                @Override
+                                public String contentType() {
+                                    return msg.headers().get(HttpHeaderNames.CONTENT_TYPE);
+                                }
+    
+                                @Override
+                                public int contentLength() {
+                                    return HttpUtil.getContentLength(msg, -1);
+                                }
+    
+                                @Override
+                                public Observable<? extends DisposableWrapper<ByteBuf>> content() {
+                                    return cached.flatMap(RxNettys.message2body());
+                                }
+                            };
+                            return new FullMessage() {
+                                @SuppressWarnings("unchecked")
+                                @Override
+                                public <M extends HttpMessage> M message() {
+                                    return (M)msg;
+                                }
+
+                                @Override
+                                public Observable<? extends MessageBody> body() {
+                                    return Observable.just(body);
+                                }
+                            };
+                        }
+                    });
+        }
+    };
+    
+    public static Transformer<DisposableWrapper<HttpObject>, FullMessage> asFullMessage() {
+        return _AS_FULLMSG;
+    }
+    
     public static <T> Observable<? extends T> decodeAs(final MessageBody body, final Class<T> type) {
         if (null != body.contentType()) {
             if (body.contentType().startsWith(HttpHeaderValues.APPLICATION_JSON.toString())) {
