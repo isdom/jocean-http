@@ -10,7 +10,7 @@ configurations {
 dependencies {
     compile 'org.jocean:jocean-idiom:0.1.4-SNAPSHOT'
     
-    compile 'io.netty:netty-all:4.1.18.Final'
+    compile 'io.netty:netty-all:4.1.19.Final'
     runtime 'org.javassist:javassist:3.21.0-GA'
     compile 'com.jcraft:jzlib:1.1.3'
     
