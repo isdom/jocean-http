@@ -393,6 +393,7 @@ public class MessageUtil {
                         int idx = 0;
                         while (idx+1 < nvs.length) {
                             encoder.addParam(nvs[idx], nvs[idx+1]);
+                            idx+=2;
                         }
                         request.setUri(encoder.toString());
                     }
