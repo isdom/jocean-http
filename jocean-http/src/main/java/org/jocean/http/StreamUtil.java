@@ -58,7 +58,7 @@ public class StreamUtil {
                         final byte[] bytes = src2bytes.call(src);
                         if (bytes.length <= ref.get().unwrap().maxWritableBytes()) {
                             ref.get().unwrap().writeBytes(bytes);
-                            updatestate.call(src, StateableUtil.stateOf(ref.get()));
+                            updatestate.call(src, StateableUtil.<STATE>stateOf(ref.get()));
                             return Observable.empty();
                         } else {
                             final DisposableWrapper<ByteBuf> newbuf = newdwb.call();
