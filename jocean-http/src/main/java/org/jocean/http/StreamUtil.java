@@ -34,7 +34,7 @@ public class StreamUtil {
             @Override
             public DisposableWrapper<ByteBuf> call() {
                 final ByteBufAllocator allocator = PooledByteBufAllocator.DEFAULT;
-                final ByteBuf buf = allocator.buffer(8192, 8192);
+                final ByteBuf buf = allocator.buffer(bufSize, bufSize);
                 return Proxys.mixin().mix(DisposableWrapper.class, RxNettys.wrap4release(buf))
                         .mix(Stateable.class, new StateableSupport()).build();
             }};
