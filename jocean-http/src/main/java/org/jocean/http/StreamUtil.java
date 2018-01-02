@@ -20,6 +20,7 @@ import rx.functions.Action0;
 import rx.functions.Action2;
 import rx.functions.Func0;
 import rx.functions.Func1;
+import rx.observables.ConnectableObservable;
 
 public class StreamUtil {
     private static final Logger LOG =
@@ -98,5 +99,47 @@ public class StreamUtil {
                 });
             }
         };
+    }
+    
+    public static <STATE> Observable<? extends DisposableWrapper<ByteBuf>> buildContent(
+            final Observable<Object> sended,
+            final Func1<STATE, Observable<DisposableWrapper<ByteBuf>>> state2dwbs, 
+            final Func1<STATE, Boolean> isend) {
+        
+        final ConnectableObservable<DisposableWrapper<ByteBuf>> endSwitch = 
+                Observable.<DisposableWrapper<ByteBuf>>empty().replay();
+        
+        final Observable<? extends DisposableWrapper<ByteBuf>> cachedContent = 
+                sended.compose(sended2content(state2dwbs, isend, new Action0() {
+                    @Override
+                    public void call() {
+                        endSwitch.connect();
+                    }}))
+                .cache();
+        cachedContent.subscribe();
+        return Observable.switchOnNext(Observable.just(cachedContent, endSwitch));
+    }
+    
+    private static <STATE> Transformer<Object, DisposableWrapper<ByteBuf>> sended2content(
+            final Func1<STATE, Observable<DisposableWrapper<ByteBuf>>> state2dwbs, 
+            final Func1<STATE, Boolean> isend,
+            final Action0 onEnd) {
+        return new Transformer<Object, DisposableWrapper<ByteBuf>>() {
+            @Override
+            public Observable<DisposableWrapper<ByteBuf>> call(final Observable<Object> sended) {
+                return sended.flatMap(new Func1<Object, Observable<DisposableWrapper<ByteBuf>>>() {
+                    @Override
+                    public Observable<DisposableWrapper<ByteBuf>> call(final Object obj) {
+                        final STATE state = StateableUtil.stateOf(obj);
+                        
+                        final Observable<DisposableWrapper<ByteBuf>> dwbs = state2dwbs.call(state);
+                        if (null != dwbs) {
+                            return dwbs;
+                        } else if (isend.call(state)) {
+                            onEnd.call();
+                        }
+                        return Observable.empty();
+                    }} );
+            }};
     }
 }
