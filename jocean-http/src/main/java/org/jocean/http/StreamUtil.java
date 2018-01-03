@@ -30,15 +30,11 @@ public class StreamUtil {
         throw new IllegalStateException("No instances!");
     }
 
-    public static Func0<DisposableWrapper<ByteBuf>> allocStateableDWB(final int bufSize) {
-        return new Func0<DisposableWrapper<ByteBuf>>() {
-            @Override
-            public DisposableWrapper<ByteBuf> call() {
-                final ByteBufAllocator allocator = PooledByteBufAllocator.DEFAULT;
-                final ByteBuf buf = allocator.buffer(bufSize, bufSize);
-                return Proxys.mixin().mix(DisposableWrapper.class, RxNettys.wrap4release(buf))
-                        .mix(Stateable.class, new StateableSupport()).build();
-            }};
+    public static DisposableWrapper<ByteBuf> allocStateableDWB(final int bufSize) {
+        final ByteBufAllocator allocator = PooledByteBufAllocator.DEFAULT;
+        final ByteBuf buf = allocator.buffer(bufSize, bufSize);
+        return Proxys.mixin().mix(DisposableWrapper.class, RxNettys.wrap4release(buf))
+                .mix(Stateable.class, new StateableSupport()).build();
     }
 
     public static <SRC, STATE> Transformer<SRC, DisposableWrapper<ByteBuf>> src2dwb(
