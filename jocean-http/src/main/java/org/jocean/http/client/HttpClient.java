@@ -8,8 +8,8 @@ import java.net.SocketAddress;
 import org.jocean.http.Feature;
 import org.jocean.http.IntrafficController;
 import org.jocean.http.ReadPolicy;
+import org.jocean.http.WriteCtrl;
 import org.jocean.http.TrafficCounter;
-import org.jocean.http.WritePolicy;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.TerminateAware;
 
@@ -35,11 +35,9 @@ public interface HttpClient extends AutoCloseable {
         
         public boolean isActive();
 
-        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(
-                final Observable<? extends Object> request);
+        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request);
         
-        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(
-                final Observable<? extends Object> request, final WritePolicy writePolicy);
+        public WriteCtrl writeCtrl();
         
         // from IntrafficController
         public void setReadPolicy(final ReadPolicy readPolicy);

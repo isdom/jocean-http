@@ -373,7 +373,7 @@ public class MessageUtil {
         
         public InteractionBuilder feature(final Feature... features);
         
-        public InteractionBuilder writePolicy(final WritePolicy writePolicy);
+//        public InteractionBuilder writePolicy(final WritePolicy writePolicy);
         
         public Observable<? extends Interaction> execution();
     }
@@ -386,7 +386,7 @@ public class MessageUtil {
                 fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET));
         final List<String> _nvs = new ArrayList<>();
         final AtomicReference<URI> _uriRef = new AtomicReference<>();
-        final AtomicReference<WritePolicy> _writePolicyRef = new AtomicReference<>();
+//        final AtomicReference<WritePolicy> _writePolicyRef = new AtomicReference<>();
         
         return new InteractionBuilder() {
             private void updateObsRequest(final Action1<Object> action) {
@@ -501,11 +501,11 @@ public class MessageUtil {
                 return this;
             }
 
-            @Override
-            public InteractionBuilder writePolicy(final WritePolicy writePolicy) {
-                _writePolicyRef.set(writePolicy);
-                return this;
-            }
+//            @Override
+//            public InteractionBuilder writePolicy(final WritePolicy writePolicy) {
+//                _writePolicyRef.set(writePolicy);
+//                return this;
+//            }
             
             private boolean isSSLEnabled(final Feature... features) {
                 for (Feature f : features) {
@@ -522,7 +522,7 @@ public class MessageUtil {
             }
             
             private Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final HttpInitiator initiator) {
-                return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator), _writePolicyRef.get());
+                return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator));
             }
             
             @Override

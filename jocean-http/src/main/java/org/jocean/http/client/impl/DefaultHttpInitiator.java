@@ -14,8 +14,7 @@ import org.jocean.http.ReadPolicy;
 import org.jocean.http.ReadPolicy.Inboundable;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
-import org.jocean.http.WritePolicy;
-import org.jocean.http.WritePolicy.Outboundable;
+import org.jocean.http.WriteCtrl;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
@@ -241,17 +240,16 @@ class DefaultHttpInitiator
     
     @Override
     public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
-        return defineInteraction(request, null);
-    }
-
-    @Override
-    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request,
-            final WritePolicy writePolicy) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
             @Override
             public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-                _op.subscribeResponse(DefaultHttpInitiator.this, request, subscriber, writePolicy);
+                _op.subscribeResponse(DefaultHttpInitiator.this, request, subscriber);
             }});
+    }
+
+    @Override
+    public WriteCtrl writeCtrl() {
+        return buildWriteCtrl();
     }
     
     @Override
@@ -291,8 +289,8 @@ class DefaultHttpInitiator
             }};
     }
     
-    private Outboundable buildOutboundable() {
-        return new Outboundable() {
+    private WriteCtrl buildWriteCtrl() {
+        return new WriteCtrl() {
             @Override
             public void setFlushPerWrite(final boolean isFlushPerWrite) {
                 _isFlushPerWrite = isFlushPerWrite;
@@ -465,8 +463,7 @@ class DefaultHttpInitiator
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber, 
-                final WritePolicy writePolicy);
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber);
         
         public void responseOnNext(
                 final DefaultHttpInitiator initiator,
@@ -506,9 +503,8 @@ class DefaultHttpInitiator
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-                final WritePolicy writePolicy) {
-            initiator.subscribeResponse(request, subscriber, writePolicy);
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+            initiator.subscribeResponse(request, subscriber);
         }
         
         @Override
@@ -576,8 +572,7 @@ class DefaultHttpInitiator
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-                final WritePolicy writePolicy) {
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
             subscriber.onError(new RuntimeException("http connection unactive."));
         }
         
@@ -627,17 +622,13 @@ class DefaultHttpInitiator
     
     private void subscribeResponse(
             final Observable<? extends Object> request,
-            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber, 
-            final WritePolicy writePolicy) {
+            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
         if (subscriber.isUnsubscribed()) {
             LOG.info("response subscriber ({}) has been unsubscribed, ignore", 
                     subscriber);
             return;
         }
         if (holdRespSubscriber(subscriber)) {
-            if (null!=writePolicy) {
-                writePolicy.applyTo(buildOutboundable());
-            }
             // _respSubscriber field set to subscriber
             final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
                 @Override

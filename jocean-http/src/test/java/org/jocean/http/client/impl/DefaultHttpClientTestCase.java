@@ -21,7 +21,7 @@ import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.TestHttpUtil;
 import org.jocean.http.TransportException;
-import org.jocean.http.WritePolicy;
+import org.jocean.http.WriteCtrl;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.HttpClient.InitiatorBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
@@ -148,19 +148,23 @@ public class DefaultHttpClientTestCase {
                 final Observable<DisposableWrapper<FullHttpResponse>> getresp) throws Exception;
     }
     
-    private static HttpInitiator startInteraction(
-            final InitiatorBuilder builder,
-            final Observable<? extends Object> request, 
-            final Interaction interaction ) throws Exception {
-        return startInteraction(builder, request, null, interaction);
-    }
-
     private static HttpInitiator startInteraction(final InitiatorBuilder builder,
-            final Observable<? extends Object> request, final WritePolicy writePolicy, final Interaction interaction)
+            final Observable<? extends Object> request, 
+            final Interaction interaction)
+            throws Exception {
+        return startInteraction(builder, request, interaction, null);
+    }
+    
+    private static HttpInitiator startInteraction(final InitiatorBuilder builder,
+            final Observable<? extends Object> request, 
+            final Interaction interaction,
+            final Action1<WriteCtrl> writePolicy)
             throws Exception {
         try (final HttpInitiator initiator = builder.build().toBlocking().single()) {
-
-            interaction.interact(initiator, initiator.defineInteraction(request, writePolicy)
+            if (null != writePolicy) {
+                writePolicy.call(initiator.writeCtrl());
+            }
+            interaction.interact(initiator, initiator.defineInteraction(request)
                     .compose(RxNettys.message2fullresp(initiator, true)));
             return initiator;
         }
@@ -1167,11 +1171,6 @@ public class DefaultHttpClientTestCase {
             final Channel ch1 = (Channel)startInteraction(
                 client.initiator().remoteAddress(new LocalAddress(addr)), 
                 Observable.concat(Observable.<HttpObject>just(req), errorOfEnd),
-                new WritePolicy() {
-                    @Override
-                    public void applyTo(final Outboundable outboundable) {
-                        outboundable.setFlushPerWrite(true);
-                    }},
                 new Interaction() {
                     @Override
                     public void interact(
@@ -1194,7 +1193,13 @@ public class DefaultHttpClientTestCase {
                         TerminateAware.Util.awaitTerminated(trade);
                         assertTrue(!trade.isActive());
                     }
-                }).transport();
+                },
+                new Action1<WriteCtrl>() {
+                    @Override
+                    public void call(final WriteCtrl writeCtrl) {
+                        writeCtrl.setFlushPerWrite(true);
+                    }}
+                ).transport();
             
             assertEquals(0, allActiveAllocationsCount(allocator));
             
@@ -1241,11 +1246,6 @@ public class DefaultHttpClientTestCase {
             final Channel ch1 = (Channel)startInteraction(
                 client.initiator().remoteAddress(new LocalAddress(addr)), 
                 Observable.concat(Observable.<HttpObject>just(req), errorOfEnd),
-                new WritePolicy() {
-                    @Override
-                    public void applyTo(final Outboundable outboundable) {
-                        outboundable.setFlushPerWrite(true);
-                    }},
                 new Interaction() {
                     @Override
                     public void interact(
@@ -1268,7 +1268,13 @@ public class DefaultHttpClientTestCase {
                         TerminateAware.Util.awaitTerminated(trade);
                         assertTrue(!trade.isActive());
                     }
-                }).transport();
+                },
+                new Action1<WriteCtrl>() {
+                    @Override
+                    public void call(final WriteCtrl writeCtrl) {
+                        writeCtrl.setFlushPerWrite(true);
+                    }}
+                ).transport();
             
             assertEquals(0, allActiveAllocationsCount(allocator));
             

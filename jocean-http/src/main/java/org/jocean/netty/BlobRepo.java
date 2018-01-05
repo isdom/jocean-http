@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 
 import org.jocean.http.MessageBody;
-import org.jocean.http.WritePolicy;
 
 import io.netty.util.ReferenceCounted;
 import rx.Observable;
@@ -113,7 +112,7 @@ public interface BlobRepo {
         public PutObjectBuilder content(final MessageBody body);
         
         //  optional
-        public PutObjectBuilder writePolicy(final WritePolicy writePolicy);
+//        public PutObjectBuilder writePolicy(final WritePolicy writePolicy);
         
         public Observable<String> build();
     }

@@ -18,8 +18,7 @@ import org.jocean.http.ReadPolicy;
 import org.jocean.http.ReadPolicy.Inboundable;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
-import org.jocean.http.WritePolicy;
-import org.jocean.http.WritePolicy.Outboundable;
+import org.jocean.http.WriteCtrl;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
@@ -181,14 +180,14 @@ class DefaultHttpTrade extends DefaultAttributeMap
     
     @Override
     public Subscription outbound(final Observable<? extends Object> message) {
-        return this._op.setOutbound(this, message, null);
-    }
-    
-    @Override
-    public Subscription outbound(Observable<? extends Object> message, final WritePolicy writePolicy) {
-        return this._op.setOutbound(this, message, writePolicy);
+        return this._op.setOutbound(this, message);
     }
 
+    @Override
+    public WriteCtrl writeCtrl() {
+        return buildWriteCtrl();
+    }
+    
     @Override
     public void close() {
         fireClosed(new CloseException());
@@ -263,13 +262,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
             }
         });
         
-//        this._cachedInbound = 
-//            Observable.unsafeCreate(new OnSubscribe<HttpObject>() {
-//                @Override
-//                public void call(final Subscriber<? super HttpObject> subscriber) {
-//                    subscribeInbound(subscriber, inbound);
-//                }});
-        
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
                 HttpHandlers.ON_EXCEPTION_CAUGHT,
@@ -326,20 +318,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }).compose(RxNettys.assembleTo(maxBufSize, DefaultHttpTrade.this));
     }
 
-//    private void subscribeInbound(final Subscriber<? super HttpObject> subscriber,
-//            final Observable<? extends HttpObject> inbound) {
-//        if (!subscriber.isUnsubscribed()) {
-//            final Subscriber<? super HttpObject> serializedSubscriber = RxSubscribers.serialized(subscriber);
-//            this._subscribers.add(serializedSubscriber);
-//            serializedSubscriber.add(Subscriptions.create(new Action0() {
-//                @Override
-//                public void call() {
-//                    _subscribers.remove(serializedSubscriber);
-//                }}));
-//            inbound.subscribe(serializedSubscriber);
-//        }
-//    }
-    
     private void initInboundHandler(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
         final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
             @Override
@@ -395,12 +373,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
     }
     
     private Subscription setOutbound(
-            final Observable<? extends Object> outbound, 
-            final WritePolicy writePolicy) {
+            final Observable<? extends Object> outbound) {
         if (this._isOutboundSetted.compareAndSet(false, true)) {
-            if (null!=writePolicy) {
-                writePolicy.applyTo(buildOutboundable());
-            }
             final Subscription subscription = outbound.subscribe(buildOutboundObserver());
             outboundSubscriptionUpdater.set(this, subscription);
             return subscription;
@@ -437,8 +411,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 }};
     }
     
-    private Outboundable buildOutboundable() {
-        return new Outboundable() {
+    private WriteCtrl buildWriteCtrl() {
+        return new WriteCtrl() {
             @Override
             public void setFlushPerWrite(final boolean isFlushPerWrite) {
                 _isFlushPerWrite = isFlushPerWrite;
@@ -830,8 +804,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
                 final HttpObject msg);
         
         public Subscription setOutbound(final DefaultHttpTrade trade,
-                final Observable<? extends Object> outbound, 
-                final WritePolicy writePolicy);
+                final Observable<? extends Object> outbound);
         
         public void outboundOnNext(
                 final DefaultHttpTrade trade,
@@ -868,9 +841,8 @@ class DefaultHttpTrade extends DefaultAttributeMap
         @Override
         public Subscription setOutbound(
                 final DefaultHttpTrade trade,
-                final Observable<? extends Object> outbound,
-                final WritePolicy writePolicy) {
-            return trade.setOutbound(outbound, writePolicy);
+                final Observable<? extends Object> outbound) {
+            return trade.setOutbound(outbound);
         }
         
         @Override
@@ -930,9 +902,7 @@ class DefaultHttpTrade extends DefaultAttributeMap
         
         @Override
         public Subscription setOutbound(final DefaultHttpTrade trade,
-                final Observable<? extends Object> outbound,
-                final WritePolicy writePolicy
-                ) {
+                final Observable<? extends Object> outbound) {
             return null;
         }
         

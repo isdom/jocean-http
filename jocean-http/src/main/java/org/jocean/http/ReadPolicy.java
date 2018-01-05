@@ -2,7 +2,6 @@ package org.jocean.http;
 
 import java.util.concurrent.TimeUnit;
 
-import org.jocean.http.WritePolicy.Outboundable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,8 +38,8 @@ public interface ReadPolicy {
             return new MaxBPS(maxBytesPerSecond, maxDelay);
         }
         
-        public static ReadPolicy byoutbound(final long maxDelay, final Outboundable outboundable) {
-            return new ByOutbound(outboundable);
+        public static ReadPolicy byoutbound(final long maxDelay, final WriteCtrl sendctrl) {
+            return new ByOutbound(sendctrl);
         }
         
         public static ReadPolicy composite(final ReadPolicy policy1, final ReadPolicy policy2) {
@@ -112,8 +111,8 @@ public interface ReadPolicy {
 
         static class ByOutbound implements ReadPolicy {
             
-            ByOutbound(final Outboundable outboundable) {
-                this._outboundable = outboundable;
+            ByOutbound(final WriteCtrl writeCtrl) {
+                this._writeCtrl = writeCtrl;
             }
             
             @Override
@@ -122,32 +121,32 @@ public interface ReadPolicy {
                     @Override
                     public void call(final SingleSubscriber<? super Object> subscriber) {
                         if (!subscriber.isUnsubscribed()) {
-                            ctrlSpeed(inbound, subscriber, _outboundable);
+                            ctrlSpeed(inbound, subscriber, _writeCtrl);
                         }
                     }});
             }
             
             private static void ctrlSpeed(final Inboundable inbound, 
                     final SingleSubscriber<? super Object> subscriber,
-                    final Outboundable outboundable) {
+                    final WriteCtrl writeCtrl) {
                 // TBD: unsubscribe writability()
-                outboundable.writability().subscribe(new Action1<Boolean>() {
+                writeCtrl.writability().subscribe(new Action1<Boolean>() {
                     @Override
                     public void call(final Boolean iswritable) {
                         if (iswritable) {
-                            LOG.info("inbound {} 's peer outbound {} can write, then perform read", 
-                                    inbound, outboundable);
+                            LOG.info("inbound {} 's peer sendctrl {} can write, then perform read", 
+                                    inbound, writeCtrl);
                             if (!subscriber.isUnsubscribed()) {
                                 subscriber.onSuccess(_NOTIFIER);
                             }
                         } else {
-                            LOG.info("inbound {} 's peer outbound {} CAN'T write, then waiting", 
-                                    inbound, outboundable);
+                            LOG.info("inbound {} 's peer sendctrl {} CAN'T write, then waiting", 
+                                    inbound, writeCtrl);
                         }
                     }});
             }
 
-            private final Outboundable _outboundable;
+            private final WriteCtrl _writeCtrl;
         }
         
         static class OnlyHttpRequest implements ReadPolicy {
