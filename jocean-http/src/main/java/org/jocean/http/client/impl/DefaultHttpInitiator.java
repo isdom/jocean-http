@@ -197,11 +197,11 @@ class DefaultHttpInitiator
             final Single<?> when = this._whenToRead;
             if (null != when) {
                 //  TBD, try to record subscription and unsubscribe then
-                final Subscription subscription = when.subscribe(new Action1<Object>() {
+                whenToReadSubscriptionUpdater.set(this, when.subscribe(new Action1<Object>() {
                     @Override
                     public void call(final Object nouse) {
                         _op.readMessage(DefaultHttpInitiator.this);
-                    }});
+                    }}));
             } else {
                 //  perform read at once
                 _op.readMessage(DefaultHttpInitiator.this);
@@ -883,8 +883,14 @@ class DefaultHttpInitiator
     
     private volatile boolean _isKeepAlive = true;
     
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscription> whenToReadSubscriptionUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscription.class, "_whenToReadSubscription");
+    
     private static final AtomicLongFieldUpdater<DefaultHttpInitiator> readBeginUpdater =
             AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator.class, "_readBegin");
+    
+    @SuppressWarnings("unused")
+    private volatile Subscription _whenToReadSubscription = null;
     
     @SuppressWarnings("unused")
     private volatile long _readBegin = 0;
