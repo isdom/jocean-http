@@ -1,14 +1,19 @@
 package org.jocean.http;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
+import org.jocean.idiom.DisposableWrapperUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.handler.codec.http.HttpContent;
 import rx.Observable;
 import rx.Single;
 import rx.SingleSubscriber;
 import rx.functions.Action1;
+import rx.functions.Func0;
 import rx.functions.Func2;
 
 public interface ReadPolicy {
@@ -30,6 +35,21 @@ public interface ReadPolicy {
             throw new IllegalStateException("No instances!");
         }
 
+        public static ReadPolicy composite(final ReadPolicy policy1, final ReadPolicy policy2) {
+            return new ReadPolicy() {
+                @Override
+                public Single<?> whenToRead(final Inboundable inboundable) {
+                    return Single.zip(policy1.whenToRead(inboundable), 
+                            policy2.whenToRead(inboundable),
+                            new Func2<Object, Object, Object>() {
+                                @Override
+                                public Object call(Object t1, Object t2) {
+                                    return t1;
+                                }});
+                    
+                }};
+        }
+        
         private static final ReadPolicy POLICY_NEVER = new ReadPolicy() {
             @Override
             public Single<?> whenToRead(final Inboundable inboundable) {
@@ -46,25 +66,6 @@ public interface ReadPolicy {
         
         public static ReadPolicy maxbps(final long maxBytesPerSecond, final long maxDelay) {
             return new MaxBPS(maxBytesPerSecond, maxDelay);
-        }
-        
-        public static ReadPolicy byoutbound(final long maxDelay, final WriteCtrl sendctrl) {
-            return new ByOutbound(sendctrl);
-        }
-        
-        public static ReadPolicy composite(final ReadPolicy policy1, final ReadPolicy policy2) {
-            return new ReadPolicy() {
-                @Override
-                public Single<?> whenToRead(final Inboundable inboundable) {
-                    return Single.zip(policy1.whenToRead(inboundable), 
-                            policy2.whenToRead(inboundable),
-                            new Func2<Object, Object, Object>() {
-                                @Override
-                                public Object call(Object t1, Object t2) {
-                                    return t1;
-                                }});
-                    
-                }};
         }
         
         static class MaxBPS implements ReadPolicy {
@@ -119,6 +120,10 @@ public interface ReadPolicy {
             private final long _maxDelay;
         }
 
+        public static ReadPolicy byoutbound(final long maxDelay, final WriteCtrl sendctrl) {
+            return new ByOutbound(sendctrl);
+        }
+        
         static class ByOutbound implements ReadPolicy {
             
             ByOutbound(final WriteCtrl writeCtrl) {
@@ -159,13 +164,56 @@ public interface ReadPolicy {
             private final WriteCtrl _writeCtrl;
         }
         
-        static class OnlyHttpRequest implements ReadPolicy {
-            @Override
-            public Single<?> whenToRead(final Inboundable inboundable) {
-                // TODO Auto-generated method stub
-                return null;
+        public static ReadPolicy bysended(final Func0<Long> size4sending, final WriteCtrl writeCtrl, final int maxPendingSize) {
+            return new BySended(size4sending, writeCtrl, maxPendingSize);
+        }
+        
+        static class BySended implements ReadPolicy {
+            
+            BySended(final Func0<Long> size4sending, final WriteCtrl writeCtrl, final int maxPendingSize) {
+                this._maxPendingSize = maxPendingSize;
+                this._size4sending = size4sending;
+                writeCtrl.sended().subscribe(sended -> {
+                    final Object unwrap = DisposableWrapperUtil.unwrap(sended);
+                    if (unwrap instanceof HttpContent) {
+                        this._size4sended.addAndGet(((HttpContent)unwrap).content().readableBytes());
+                    }
+                    checkPeningRead();
+                });
             }
             
+            private void checkPeningRead() {
+                final long pendingSize = this._size4sending.call() - this._size4sended.get();
+                if (pendingSize <= this._maxPendingSize) {
+                    LOG.info("pengind size {} <= {}, then check pending read", pendingSize, this._maxPendingSize);
+                    final SingleSubscriber<? super Object> subscriber = this._pendingRead.getAndSet(null);
+                    if (null != subscriber && !subscriber.isUnsubscribed()) {
+                        LOG.info("notify pending read {}", subscriber);
+                        subscriber.onSuccess(_NOTIFIER);
+                    } else {
+                        LOG.info("NONE pending read exist");
+                    }
+                } else {
+                    LOG.info("pengind size {} > {}, just wait", pendingSize, this._maxPendingSize);
+                }
+            }
+
+            @Override
+            public Single<?> whenToRead(final Inboundable inbound) {
+                return Single.create(new Single.OnSubscribe<Object>() {
+                    @Override
+                    public void call(final SingleSubscriber<? super Object> subscriber) {
+                        if (!subscriber.isUnsubscribed()) {
+                            _pendingRead.set(subscriber);
+                            checkPeningRead();
+                        }
+                    }});
+            }
+            
+            private final Func0<Long> _size4sending;
+            private final AtomicLong _size4sended = new AtomicLong(0);
+            private final long _maxPendingSize;
+            private final AtomicReference<SingleSubscriber<? super Object>> _pendingRead = new AtomicReference<>(null);
         }
     }
 }
