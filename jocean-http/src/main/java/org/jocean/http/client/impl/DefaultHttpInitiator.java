@@ -190,26 +190,6 @@ class DefaultHttpInitiator extends IntrafficControllerSupport
         }
     }
 
-    /*
-    private void onReadComplete() {
-        this._unreadBegin = System.currentTimeMillis();
-        if (inTransacting()) {
-            final Single<?> when = this._whenToRead;
-            if (null != when) {
-                final Subscription pendingRead = when.subscribe(new Action1<Object>() {
-                    @Override
-                    public void call(final Object nouse) {
-                        _op.readMessage(DefaultHttpInitiator.this);
-                    }});
-                pendingReadUpdater.set(this, pendingRead);
-            } else {
-                //  perform read at once
-                _op.readMessage(DefaultHttpInitiator.this);
-            }
-        }
-    }
-    */
-
     private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = new Action1_N<Subscriber<? super Boolean>>() {
         @Override
         public void call(final Subscriber<? super Boolean> subscriber, final Object... args) {
@@ -229,29 +209,6 @@ class DefaultHttpInitiator extends IntrafficControllerSupport
         this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._op.isWritable(this));
     }
 
-    /*
-    @Override
-    public void setReadPolicy(final ReadPolicy readPolicy) {
-        this._op.runAtEventLoop(this, new Runnable() {
-            @Override
-            public void run() {
-                setReadPolicy0(readPolicy);
-            }});
-    }
-
-    private void setReadPolicy0(final ReadPolicy readPolicy) {
-        this._whenToRead = null != readPolicy 
-                ? readPolicy.whenToRead(buildInboundable()) 
-                : null;
-        final Subscription pendingRead = pendingReadUpdater.getAndSet(this, null);
-        if (null != pendingRead && !pendingRead.isUnsubscribed()) {
-            pendingRead.unsubscribe();
-            // perform other read action
-            onReadComplete();
-        }
-    }
-    */
-    
     @Override
     public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
@@ -912,13 +869,6 @@ class DefaultHttpInitiator extends IntrafficControllerSupport
     private volatile int _transactionStatus = STATUS_IDLE;
     
     private volatile boolean _isKeepAlive = true;
-    
-//    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscription> pendingReadUpdater =
-//            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscription.class, "_pendingRead");
-//    
-//    @SuppressWarnings("unused")
-//    private volatile Subscription _pendingRead = null;
-//    private volatile Single<?> _whenToRead = null;
     
     private static final AtomicLongFieldUpdater<DefaultHttpInitiator> readBeginUpdater =
             AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator.class, "_readBegin");

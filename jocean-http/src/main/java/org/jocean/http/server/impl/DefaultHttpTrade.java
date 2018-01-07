@@ -142,29 +142,6 @@ class DefaultHttpTrade extends IntrafficControllerSupport
         return this._selector.isActive();
     }
     
-    /*
-    @Override
-    public void setReadPolicy(final ReadPolicy readPolicy) {
-        this._op.runAtEventLoop(this, new Runnable() {
-            @Override
-            public void run() {
-                setReadPolicy0(readPolicy);
-            }});
-    }
-
-    private void setReadPolicy0(final ReadPolicy readPolicy) {
-        this._whenToRead = null != readPolicy 
-                ? readPolicy.whenToRead(buildInboundable()) 
-                : null;
-        final Subscription pendingRead = pendingReadUpdater.getAndSet(this, null);
-        if (null != pendingRead && !pendingRead.isUnsubscribed()) {
-            pendingRead.unsubscribe();
-            // perform other read action
-            onReadComplete();
-        }
-    }
-    */
-
     @Override
     protected Inboundable buildInboundable() {
         return new Inboundable() {
@@ -592,26 +569,6 @@ class DefaultHttpTrade extends IntrafficControllerSupport
         }
     }
 
-    /*
-    private void onReadComplete() {
-        this._unreadBegin = System.currentTimeMillis();
-        if (inRecving()) {
-            final Single<?> when = this._whenToRead;
-            if (null != when) {
-                final Subscription pendingRead = when.subscribe(new Action1<Object>() {
-                    @Override
-                    public void call(final Object nouse) {
-                        _op.readMessage(DefaultHttpTrade.this);
-                    }});
-                pendingReadUpdater.set(this, pendingRead);
-            } else {
-                //  perform read at once
-                _op.readMessage(DefaultHttpTrade.this);
-            }
-        }
-    }
-    */
-
     private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = new Action1_N<Subscriber<? super Boolean>>() {
         @Override
         public void call(final Subscriber<? super Boolean> subscriber, final Object... args) {
@@ -774,14 +731,6 @@ class DefaultHttpTrade extends IntrafficControllerSupport
     
     @SuppressWarnings("unused")
     private volatile int _transactionStatus = STATUS_IDLE;
-    
-//    private static final AtomicReferenceFieldUpdater<DefaultHttpTrade, Subscription> pendingReadUpdater =
-//            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpTrade.class, Subscription.class, "_pendingRead");
-//    
-//    @SuppressWarnings("unused")
-//    private volatile Subscription _pendingRead = null;
-    
-//  private volatile Single<?> _whenToRead = null;
     
     private static final AtomicLongFieldUpdater<DefaultHttpTrade> readBeginUpdater =
             AtomicLongFieldUpdater.newUpdater(DefaultHttpTrade.class, "_readBegin");
