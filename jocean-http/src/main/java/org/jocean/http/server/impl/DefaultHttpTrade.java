@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.DoFlush;
-import org.jocean.http.ReadPolicy;
+import org.jocean.http.IntrafficControllerSupport;
 import org.jocean.http.ReadPolicy.Inboundable;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
@@ -47,12 +47,10 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.DefaultAttributeMap;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import rx.Observable;
 import rx.Observer;
-import rx.Single;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -65,7 +63,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpTrade extends DefaultAttributeMap 
+class DefaultHttpTrade extends IntrafficControllerSupport 
     implements HttpTrade,  Comparable<DefaultHttpTrade> {
     
     private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
@@ -144,17 +142,31 @@ class DefaultHttpTrade extends DefaultAttributeMap
         return this._selector.isActive();
     }
     
-    /* (non-Javadoc)
-     * @see IntrafficController#setReadPolicy(org.jocean.http.ReadPolicy)
-     */
+    /*
     @Override
     public void setReadPolicy(final ReadPolicy readPolicy) {
+        this._op.runAtEventLoop(this, new Runnable() {
+            @Override
+            public void run() {
+                setReadPolicy0(readPolicy);
+            }});
+    }
+
+    private void setReadPolicy0(final ReadPolicy readPolicy) {
         this._whenToRead = null != readPolicy 
                 ? readPolicy.whenToRead(buildInboundable()) 
                 : null;
+        final Subscription pendingRead = pendingReadUpdater.getAndSet(this, null);
+        if (null != pendingRead && !pendingRead.isUnsubscribed()) {
+            pendingRead.unsubscribe();
+            // perform other read action
+            onReadComplete();
+        }
     }
+    */
 
-    private Inboundable buildInboundable() {
+    @Override
+    protected Inboundable buildInboundable() {
         return new Inboundable() {
             @Override
             public long durationFromRead() {
@@ -171,6 +183,21 @@ class DefaultHttpTrade extends DefaultAttributeMap
             public long inboundBytes() {
                 return _traffic.inboundBytes();
             }};
+    }
+    
+    @Override
+    protected boolean needRead() {
+        return inRecving();
+    }
+    
+    @Override
+    protected void readMessage0() {
+        this._op.readMessage(this);
+    }
+    
+    @Override
+    protected void runAtEventLoop0(final Runnable runnable) {
+        this._op.runAtEventLoop(this, runnable);
     }
     
     @Override
@@ -565,22 +592,25 @@ class DefaultHttpTrade extends DefaultAttributeMap
         }
     }
 
+    /*
     private void onReadComplete() {
         this._unreadBegin = System.currentTimeMillis();
         if (inRecving()) {
             final Single<?> when = this._whenToRead;
             if (null != when) {
-                when.subscribe(new Action1<Object>() {
+                final Subscription pendingRead = when.subscribe(new Action1<Object>() {
                     @Override
                     public void call(final Object nouse) {
                         _op.readMessage(DefaultHttpTrade.this);
                     }});
+                pendingReadUpdater.set(this, pendingRead);
             } else {
                 //  perform read at once
                 _op.readMessage(DefaultHttpTrade.this);
             }
         }
     }
+    */
 
     private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = new Action1_N<Subscriber<? super Boolean>>() {
         @Override
@@ -745,6 +775,14 @@ class DefaultHttpTrade extends DefaultAttributeMap
     @SuppressWarnings("unused")
     private volatile int _transactionStatus = STATUS_IDLE;
     
+//    private static final AtomicReferenceFieldUpdater<DefaultHttpTrade, Subscription> pendingReadUpdater =
+//            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpTrade.class, Subscription.class, "_pendingRead");
+//    
+//    @SuppressWarnings("unused")
+//    private volatile Subscription _pendingRead = null;
+    
+//  private volatile Single<?> _whenToRead = null;
+    
     private static final AtomicLongFieldUpdater<DefaultHttpTrade> readBeginUpdater =
             AtomicLongFieldUpdater.newUpdater(DefaultHttpTrade.class, "_readBegin");
     
@@ -752,7 +790,6 @@ class DefaultHttpTrade extends DefaultAttributeMap
     private volatile long _readBegin = 0;
     
     private volatile long _unreadBegin = 0;
-    private volatile Single<?> _whenToRead = null;
     
     private static final AtomicReferenceFieldUpdater<DefaultHttpTrade, ChannelHandler> inboundHandlerUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpTrade.class, ChannelHandler.class, "_inboundHandler");

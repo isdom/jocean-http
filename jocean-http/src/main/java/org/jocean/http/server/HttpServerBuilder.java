@@ -9,13 +9,12 @@ import java.net.SocketAddress;
 import org.jocean.http.Feature;
 import org.jocean.http.IntrafficController;
 import org.jocean.http.ReadPolicy;
-import org.jocean.http.WriteCtrl;
 import org.jocean.http.TrafficCounter;
+import org.jocean.http.WriteCtrl;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.TerminateAware;
 
 import io.netty.handler.codec.http.HttpObject;
-import io.netty.util.AttributeMap;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -41,7 +40,7 @@ public interface HttpServerBuilder extends Closeable {
             final Feature ... features);
     
     public interface HttpTrade 
-        extends IntrafficController, AutoCloseable, TerminateAware<HttpTrade>, AttributeMap {
+        extends IntrafficController, AutoCloseable, TerminateAware<HttpTrade> {
         public Object transport();
         
         public Action0 closer();

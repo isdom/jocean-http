@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
-import org.jocean.http.ReadPolicy;
+import org.jocean.http.IntrafficControllerSupport;
 import org.jocean.http.ReadPolicy.Inboundable;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
@@ -46,7 +46,6 @@ import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import rx.Observable;
 import rx.Observer;
-import rx.Single;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -58,7 +57,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpInitiator
+class DefaultHttpInitiator extends IntrafficControllerSupport
     implements HttpInitiator, Comparable<DefaultHttpInitiator>{
     
     private static final Logger LOG =
@@ -191,23 +190,25 @@ class DefaultHttpInitiator
         }
     }
 
+    /*
     private void onReadComplete() {
         this._unreadBegin = System.currentTimeMillis();
         if (inTransacting()) {
             final Single<?> when = this._whenToRead;
             if (null != when) {
-                //  TBD, try to record subscription and unsubscribe then
-                whenToReadSubscriptionUpdater.set(this, when.subscribe(new Action1<Object>() {
+                final Subscription pendingRead = when.subscribe(new Action1<Object>() {
                     @Override
                     public void call(final Object nouse) {
                         _op.readMessage(DefaultHttpInitiator.this);
-                    }}));
+                    }});
+                pendingReadUpdater.set(this, pendingRead);
             } else {
                 //  perform read at once
                 _op.readMessage(DefaultHttpInitiator.this);
             }
         }
     }
+    */
 
     private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = new Action1_N<Subscriber<? super Boolean>>() {
         @Override
@@ -228,15 +229,28 @@ class DefaultHttpInitiator
         this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._op.isWritable(this));
     }
 
-    /* (non-Javadoc)
-     * @see IntrafficController#setReadPolicy(org.jocean.http.ReadPolicy)
-     */
+    /*
     @Override
     public void setReadPolicy(final ReadPolicy readPolicy) {
+        this._op.runAtEventLoop(this, new Runnable() {
+            @Override
+            public void run() {
+                setReadPolicy0(readPolicy);
+            }});
+    }
+
+    private void setReadPolicy0(final ReadPolicy readPolicy) {
         this._whenToRead = null != readPolicy 
                 ? readPolicy.whenToRead(buildInboundable()) 
                 : null;
+        final Subscription pendingRead = pendingReadUpdater.getAndSet(this, null);
+        if (null != pendingRead && !pendingRead.isUnsubscribed()) {
+            pendingRead.unsubscribe();
+            // perform other read action
+            onReadComplete();
+        }
     }
+    */
     
     @Override
     public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
@@ -270,7 +284,8 @@ class DefaultHttpInitiator
         return this._isKeepAlive;
     }
     
-    private Inboundable buildInboundable() {
+    @Override
+    protected Inboundable buildInboundable() {
         return new Inboundable() {
             @Override
             public long durationFromRead() {
@@ -287,6 +302,21 @@ class DefaultHttpInitiator
             public long inboundBytes() {
                 return _traffic.inboundBytes();
             }};
+    }
+    
+    @Override
+    protected boolean needRead() {
+        return inTransacting();
+    }
+    
+    @Override
+    protected void readMessage0() {
+        this._op.readMessage(this);
+    }
+    
+    @Override
+    protected void runAtEventLoop0(final Runnable runnable) {
+        this._op.runAtEventLoop(this, runnable);
     }
     
     private WriteCtrl buildWriteCtrl() {
@@ -883,14 +913,15 @@ class DefaultHttpInitiator
     
     private volatile boolean _isKeepAlive = true;
     
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscription> whenToReadSubscriptionUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscription.class, "_whenToReadSubscription");
+//    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscription> pendingReadUpdater =
+//            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscription.class, "_pendingRead");
+//    
+//    @SuppressWarnings("unused")
+//    private volatile Subscription _pendingRead = null;
+//    private volatile Single<?> _whenToRead = null;
     
     private static final AtomicLongFieldUpdater<DefaultHttpInitiator> readBeginUpdater =
             AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator.class, "_readBegin");
-    
-    @SuppressWarnings("unused")
-    private volatile Subscription _whenToReadSubscription = null;
     
     @SuppressWarnings("unused")
     private volatile long _readBegin = 0;
@@ -899,7 +930,6 @@ class DefaultHttpInitiator
     
     private volatile boolean _isFlushPerWrite = false;
     private volatile boolean _isRequestCompleted = false;
-    private volatile Single<?> _whenToRead = null;
     
     private final InterfaceSelector _selector;
 
