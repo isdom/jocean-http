@@ -738,8 +738,6 @@ class DefaultHttpTrade extends IntrafficControllerSupport
     @SuppressWarnings("unused")
     private volatile long _readBegin = 0;
     
-    private volatile long _unreadBegin = 0;
-    
     private static final AtomicReferenceFieldUpdater<DefaultHttpTrade, ChannelHandler> inboundHandlerUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpTrade.class, ChannelHandler.class, "_inboundHandler");
     

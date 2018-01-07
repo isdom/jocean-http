@@ -876,8 +876,6 @@ class DefaultHttpInitiator extends IntrafficControllerSupport
     @SuppressWarnings("unused")
     private volatile long _readBegin = 0;
     
-    private volatile long _unreadBegin = 0;
-    
     private volatile boolean _isFlushPerWrite = false;
     private volatile boolean _isRequestCompleted = false;
     
