@@ -30,6 +30,16 @@ public interface ReadPolicy {
             throw new IllegalStateException("No instances!");
         }
 
+        private static final ReadPolicy POLICY_NEVER = new ReadPolicy() {
+            @Override
+            public Single<?> whenToRead(final Inboundable inboundable) {
+                return Observable.never().toSingle();
+            }};
+            
+        public static ReadPolicy never() {
+            return POLICY_NEVER;
+        }
+        
         public static ReadPolicy maxbps() {
             return maxbps(8192L, 500L);
         }
