@@ -1,14 +1,11 @@
 package org.jocean.http;
 
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.jocean.idiom.DisposableWrapperUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.handler.codec.http.HttpContent;
 import rx.Observable;
 import rx.Single;
 import rx.SingleSubscriber;
@@ -164,26 +161,20 @@ public interface ReadPolicy {
             private final WriteCtrl _writeCtrl;
         }
         
-        public static ReadPolicy bysended(final Func0<Long> size4sending, final WriteCtrl writeCtrl, final int maxPendingSize) {
-            return new BySended(size4sending, writeCtrl, maxPendingSize);
+        public static ReadPolicy bysended(final WriteCtrl writeCtrl, final Func0<Integer> pendingSize, final int maxPendingSize) {
+            return new BySended(writeCtrl, pendingSize, maxPendingSize);
         }
         
         static class BySended implements ReadPolicy {
             
-            BySended(final Func0<Long> size4sending, final WriteCtrl writeCtrl, final int maxPendingSize) {
+            BySended(final WriteCtrl writeCtrl, final Func0<Integer> pendingSize, final int maxPendingSize) {
                 this._maxPendingSize = maxPendingSize;
-                this._size4sending = size4sending;
-                writeCtrl.sended().subscribe(sended -> {
-                    final Object unwrap = DisposableWrapperUtil.unwrap(sended);
-                    if (unwrap instanceof HttpContent) {
-                        this._size4sended.addAndGet(((HttpContent)unwrap).content().readableBytes());
-                    }
-                    checkPeningRead();
-                });
+                this._pendingSize = pendingSize;
+                writeCtrl.sended().subscribe(sended -> checkPeningRead() );
             }
             
             private void checkPeningRead() {
-                final long pendingSize = this._size4sending.call() - this._size4sended.get();
+                final long pendingSize = this._pendingSize.call();
                 if (pendingSize <= this._maxPendingSize) {
                     LOG.info("pengind size {} <= {}, then check pending read", pendingSize, this._maxPendingSize);
                     final SingleSubscriber<? super Object> subscriber = this._pendingRead.getAndSet(null);
@@ -210,8 +201,7 @@ public interface ReadPolicy {
                     }});
             }
             
-            private final Func0<Long> _size4sending;
-            private final AtomicLong _size4sended = new AtomicLong(0);
+            private final Func0<Integer> _pendingSize;
             private final long _maxPendingSize;
             private final AtomicReference<SingleSubscriber<? super Object>> _pendingRead = new AtomicReference<>(null);
         }
