@@ -170,7 +170,11 @@ public interface ReadPolicy {
             BySended(final WriteCtrl writeCtrl, final Func0<Integer> pendingSize, final int maxPendingSize) {
                 this._maxPendingSize = maxPendingSize;
                 this._pendingSize = pendingSize;
-                writeCtrl.sended().subscribe(sended -> checkPeningRead() );
+                writeCtrl.sended().subscribe( new Action1<Object>() {
+                    @Override
+                    public void call(final Object sended) {
+                        checkPeningRead();                        
+                    }} );
             }
             
             private void checkPeningRead() {
