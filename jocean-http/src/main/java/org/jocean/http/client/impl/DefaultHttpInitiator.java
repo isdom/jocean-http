@@ -653,6 +653,7 @@ class DefaultHttpInitiator extends IntrafficControllerSupport
 
     private void readMessage() {
         if (inTransacting()) {
+            LOG.info("read message for channel {}", this._channel);
             this._channel.read();
             this._unreadBegin = 0;
             readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
