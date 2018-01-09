@@ -68,6 +68,14 @@ public class DefaultHttpClient implements HttpClient {
         this._highWaterMark = high;
     }
     
+    public int getRecvBufSize() {
+        return this._recvBufSize;
+    }
+
+    public void setRecvBufSize(final int recvBufSize) {
+        this._recvBufSize = recvBufSize;
+    }
+    
     public int getSendBufSize() {
         return this._sendBufSize;
     }
@@ -93,10 +101,10 @@ public class DefaultHttpClient implements HttpClient {
             }
         }};
         
-    private final Action1<Channel> _SET_SNDBUF_SIZE = new Action1<Channel>() {
+    private final Action1<Channel> _SET_SEND_RECV_BUF_SIZE = new Action1<Channel>() {
         @Override
         public void call(final Channel channel) {
-            if ( _sendBufSize > 0) {
+            if (_sendBufSize > 0) {
                 if (LOG.isInfoEnabled()) {
                     LOG.info("channel({})'s default SO_SNDBUF is {} bytes, and will be reset to {} bytes",
                             channel, 
@@ -104,6 +112,15 @@ public class DefaultHttpClient implements HttpClient {
                             _sendBufSize);
                 }
                 channel.config().setOption(ChannelOption.SO_SNDBUF, _sendBufSize);
+            }
+            if (_recvBufSize > 0) {
+                if (LOG.isInfoEnabled()) {
+                    LOG.info("channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
+                            channel, 
+                            channel.config().getOption(ChannelOption.SO_RCVBUF), 
+                            _recvBufSize);
+                }
+                channel.config().setOption(ChannelOption.SO_RCVBUF, _recvBufSize);
             }
         }};
         
@@ -225,7 +242,7 @@ public class DefaultHttpClient implements HttpClient {
             final SocketAddress remoteAddress, 
             final Feature[] features) {
         return this._channelCreator.newChannel()
-            .doOnNext(_SET_SNDBUF_SIZE)
+            .doOnNext(_SET_SEND_RECV_BUF_SIZE)
             .doOnNext(_DISABLE_AUTOREAD)
             .doOnNext(applyPerChannelFeatures(features))
             .flatMap(RxNettys.asyncConnectToMaybeSSL(remoteAddress));
@@ -342,6 +359,7 @@ public class DefaultHttpClient implements HttpClient {
     private int _lowWaterMark = -1;
     private int _highWaterMark = -1;
     private int _sendBufSize = -1;
+    private int _recvBufSize = -1;
     
     private final ChannelPool _channelPool;
     private final ChannelCreator _channelCreator;
