@@ -197,8 +197,8 @@ class HttpFuncs {
                 public void channelWritabilityChanged(final ChannelHandlerContext ctx)
                         throws Exception {
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("ON_CHANNEL_WRITABILITYCHANGED_FUNC1: channel({})/handler({}): channelWritabilityChanged.", 
-                                ctx.channel(), ctx.name());
+                        LOG.debug("ON_CHANNEL_WRITABILITYCHANGED_FUNC1: channel({})/handler({}): channelWritabilityChanged isWritable({}).", 
+                                ctx.channel(), ctx.name(), ctx.channel().isWritable());
                     }
                     try {
                         onChannelWritabilityChanged.call();
