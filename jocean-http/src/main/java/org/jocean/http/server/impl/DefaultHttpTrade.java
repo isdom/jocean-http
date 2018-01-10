@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+import org.jocean.http.CloseException;
 import org.jocean.http.DoFlush;
 import org.jocean.http.IntrafficControllerSupport;
 import org.jocean.http.ReadPolicy.Inboundable;
@@ -401,8 +402,10 @@ class DefaultHttpTrade extends IntrafficControllerSupport
 
                 @Override
                 public void onError(final Throwable e) {
-                    LOG.warn("response invoke onError with ({}), try close trade: {}",
-                            ExceptionUtils.exception2detail(e), DefaultHttpTrade.this);
+                    if (!(e instanceof CloseException)) {
+                        LOG.warn("response invoke onError with ({}), try close trade: {}",
+                                ExceptionUtils.exception2detail(e), DefaultHttpTrade.this);
+                    }
                     fireClosed(e);
                 }
 
@@ -472,13 +475,6 @@ class DefaultHttpTrade extends IntrafficControllerSupport
                 public void call() {
                     _sendedObserver.removeComponent(subscriber);
                 }}));
-        }
-    }
-    
-    static class CloseException extends RuntimeException {
-        private static final long serialVersionUID = 1L;
-        CloseException() {
-            super("close()");
         }
     }
     
