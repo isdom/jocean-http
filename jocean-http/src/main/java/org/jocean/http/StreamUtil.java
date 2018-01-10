@@ -73,13 +73,16 @@ public class StreamUtil {
                     @Override
                     public Observable<DisposableWrapper<ByteBuf>> call() {
                         if (null == ref.get()) {
+                            LOG.info("src2dwb onCompleted with ref is null");
                             return Observable.empty();
                         } else {
                             final DisposableWrapper<ByteBuf> last = ref.getAndSet(null);
                             if (last.unwrap().readableBytes() > 0) {
+                                LOG.info("src2dwb onCompleted with last as content");
                                 return Observable.just(last);
                             } else {
                                 last.dispose();
+                                LOG.info("src2dwb onCompleted with last NO content");
                                 return Observable.empty();
                             }
                         }
@@ -89,6 +92,7 @@ public class StreamUtil {
                     public void call() {
                         final DisposableWrapper<ByteBuf> last = ref.getAndSet(null);
                         if (null != last) {
+                            LOG.info("src2dwb doOnUnsubscribe with last disposed.");
                             last.dispose();
                         }
                     }
