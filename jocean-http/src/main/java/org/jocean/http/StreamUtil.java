@@ -24,7 +24,7 @@ import rx.observables.ConnectableObservable;
 
 public class StreamUtil {
     private static final Logger LOG =
-            LoggerFactory.getLogger(MessageUtil.class);
+            LoggerFactory.getLogger(StreamUtil.class);
     
     private StreamUtil() {
         throw new IllegalStateException("No instances!");
