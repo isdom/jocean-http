@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
-import org.jocean.http.IntrafficControllerSupport;
+import org.jocean.http.IntrafficSupport;
 import org.jocean.http.ReadPolicy.Inboundable;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
@@ -57,7 +57,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpInitiator extends IntrafficControllerSupport
+class DefaultHttpInitiator extends IntrafficSupport
     implements HttpInitiator, Comparable<DefaultHttpInitiator>{
     
     private static final Logger LOG =

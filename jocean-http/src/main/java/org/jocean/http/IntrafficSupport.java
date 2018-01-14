@@ -8,7 +8,7 @@ import rx.Single;
 import rx.Subscription;
 import rx.functions.Action1;
 
-public abstract class IntrafficControllerSupport implements IntrafficController {
+public abstract class IntrafficSupport implements Intraffic {
     public void setReadPolicy(final ReadPolicy readPolicy) {
         runAtEventLoop0(new Runnable() {
             @Override
@@ -58,8 +58,8 @@ public abstract class IntrafficControllerSupport implements IntrafficController 
 
     private volatile Single<?> _whenToRead = null;
     
-    private static final AtomicReferenceFieldUpdater<IntrafficControllerSupport, Subscription> pendingReadUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(IntrafficControllerSupport.class, Subscription.class, "_pendingRead");
+    private static final AtomicReferenceFieldUpdater<IntrafficSupport, Subscription> pendingReadUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(IntrafficSupport.class, Subscription.class, "_pendingRead");
     
     @SuppressWarnings("unused")
     private volatile Subscription _pendingRead = null;

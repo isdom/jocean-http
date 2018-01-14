@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.CloseException;
 import org.jocean.http.DoFlush;
-import org.jocean.http.IntrafficControllerSupport;
+import org.jocean.http.IntrafficSupport;
 import org.jocean.http.ReadPolicy.Inboundable;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
@@ -64,7 +64,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpTrade extends IntrafficControllerSupport 
+class DefaultHttpTrade extends IntrafficSupport 
     implements HttpTrade,  Comparable<DefaultHttpTrade> {
     
     private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
