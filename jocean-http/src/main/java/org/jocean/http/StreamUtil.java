@@ -20,7 +20,6 @@ import rx.functions.Action0;
 import rx.functions.Action2;
 import rx.functions.Func0;
 import rx.functions.Func1;
-import rx.observables.ConnectableObservable;
 
 public class StreamUtil {
     private static final Logger LOG =
@@ -39,7 +38,8 @@ public class StreamUtil {
 
     public static <SRC, STATE> Transformer<SRC, DisposableWrapper<ByteBuf>> src2dwb(
             final Func0<DisposableWrapper<ByteBuf>> newdwb, final Func1<SRC, byte[]> src2bytes,
-            final Func1<SRC, STATE> newstate, final Action2<SRC, STATE> updatestate) {
+            final Func1<SRC, STATE> newstate, 
+            final Action2<SRC, STATE> updatestate) {
         final AtomicReference<DisposableWrapper<ByteBuf>> ref = new AtomicReference<>();
 
         return new Transformer<SRC, DisposableWrapper<ByteBuf>>() {
@@ -73,16 +73,16 @@ public class StreamUtil {
                     @Override
                     public Observable<DisposableWrapper<ByteBuf>> call() {
                         if (null == ref.get()) {
-                            LOG.info("src2dwb onCompleted with ref is null");
+                            LOG.debug("src2dwb onCompleted with ref is null");
                             return Observable.empty();
                         } else {
                             final DisposableWrapper<ByteBuf> last = ref.getAndSet(null);
                             if (last.unwrap().readableBytes() > 0) {
-                                LOG.info("src2dwb onCompleted with last as content");
+                                LOG.debug("src2dwb onCompleted with last as content");
                                 return Observable.just(last);
                             } else {
                                 last.dispose();
-                                LOG.info("src2dwb onCompleted with last NO content");
+                                LOG.debug("src2dwb onCompleted with last NO content");
                                 return Observable.empty();
                             }
                         }
@@ -92,7 +92,7 @@ public class StreamUtil {
                     public void call() {
                         final DisposableWrapper<ByteBuf> last = ref.getAndSet(null);
                         if (null != last) {
-                            LOG.info("src2dwb doOnUnsubscribe with last disposed.");
+                            LOG.debug("src2dwb doOnUnsubscribe with last disposed.");
                             last.dispose();
                         }
                     }
@@ -101,29 +101,34 @@ public class StreamUtil {
         };
     }
     
+    static class _EndEvent extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+    }
+    
     public static <STATE> Observable<? extends DisposableWrapper<ByteBuf>> buildContent(
             final Observable<Object> sended,
             final Func1<STATE, Observable<DisposableWrapper<ByteBuf>>> state2dwbs, 
             final Func1<STATE, Boolean> isend) {
         
-        final ConnectableObservable<DisposableWrapper<ByteBuf>> endSwitch = 
-                Observable.<DisposableWrapper<ByteBuf>>empty().replay();
-        
         final Observable<? extends DisposableWrapper<ByteBuf>> cachedContent = 
-                sended.compose(sended2content(state2dwbs, isend, new Action0() {
+                sended.compose(sended2content(state2dwbs, isend))
+                .onErrorResumeNext(new Func1<Throwable, Observable<DisposableWrapper<ByteBuf>>>() {
                     @Override
-                    public void call() {
-                        endSwitch.connect();
-                    }}))
+                    public Observable<DisposableWrapper<ByteBuf>> call(final Throwable e) {
+                        if (e instanceof _EndEvent) {
+                            return Observable.empty();
+                        } else {
+                            return Observable.error(e);
+                        }
+                    }})
                 .cache();
         cachedContent.subscribe();
-        return Observable.switchOnNext(Observable.just(cachedContent, endSwitch));
+        return cachedContent;
     }
     
     private static <STATE> Transformer<Object, DisposableWrapper<ByteBuf>> sended2content(
             final Func1<STATE, Observable<DisposableWrapper<ByteBuf>>> state2dwbs, 
-            final Func1<STATE, Boolean> isend,
-            final Action0 onEnd) {
+            final Func1<STATE, Boolean> isend) {
         return new Transformer<Object, DisposableWrapper<ByteBuf>>() {
             @Override
             public Observable<DisposableWrapper<ByteBuf>> call(final Observable<Object> sended) {
@@ -134,10 +139,13 @@ public class StreamUtil {
                         
                         final Observable<DisposableWrapper<ByteBuf>> dwbs = state2dwbs.call(state);
                         if (null != dwbs) {
+                            LOG.debug("sended2content: null != dwbs and return dwbs");
                             return dwbs;
                         } else if (isend.call(state)) {
-                            onEnd.call();
+                            LOG.debug("sended2content: on the end, and push end event");
+                            return Observable.error(new _EndEvent());
                         }
+                        LOG.debug("sended2content: return Observable.empty()");
                         return Observable.empty();
                     }} );
             }};
