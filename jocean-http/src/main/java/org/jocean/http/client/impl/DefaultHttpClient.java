@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.Outbound;
 import org.jocean.http.util.Feature2Handler;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
@@ -375,7 +374,7 @@ public class DefaultHttpClient implements HttpClient {
         _FOR_INTERACTION.register(Feature.ENABLE_LOGGING_OVER_SSL.getClass(), HttpHandlers.LOGGING_OVER_SSL);
         _FOR_INTERACTION.register(Feature.ENABLE_COMPRESSOR.getClass(), HttpHandlers.CONTENT_DECOMPRESSOR);
         _FOR_INTERACTION.register(Feature.ENABLE_CLOSE_ON_IDLE.class, HttpHandlers.CLOSE_ON_IDLE);
-        _FOR_INTERACTION.register(Outbound.ENABLE_MULTIPART.getClass(), HttpHandlers.CHUNKED_WRITER);
+        _FOR_INTERACTION.register(Feature.ENABLE_MULTIPART.getClass(), HttpHandlers.CHUNKED_WRITER);
         
         _FOR_CHANNEL = new Feature2Handler();
         _FOR_CHANNEL.register(Feature.ENABLE_SSL.class, HttpHandlers.SSL);

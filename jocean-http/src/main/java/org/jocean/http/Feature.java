@@ -119,4 +119,11 @@ public interface Feature {
         
         private final SslContext _sslCtx;
     }
+    
+    public static final Feature ENABLE_MULTIPART = new AbstractFeature0() {
+        @Override
+        public String toString() {
+            return "ENABLE_MULTIPART";
+        }
+    };
 }

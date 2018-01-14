@@ -28,7 +28,6 @@ import org.jocean.http.PayloadCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.HttpClient.HttpInitiator;
-import org.jocean.http.client.Outbound;
 import org.jocean.http.rosa.SignalClient;
 import org.jocean.http.rosa.impl.internal.Facades.ResponseBodyTypeSource;
 import org.jocean.http.rosa.impl.internal.Facades.ResponseTypeSource;
@@ -328,7 +327,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
             safeGetRequestFeatures(signalBean), 
             features);
         return (hasAttachments(features))
-            ? Feature.Util.union(addSignalFeatures, Outbound.ENABLE_MULTIPART)
+            ? Feature.Util.union(addSignalFeatures, Feature.ENABLE_MULTIPART)
             : addSignalFeatures;
     }
 
