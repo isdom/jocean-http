@@ -19,7 +19,7 @@ public abstract class InboundSupport implements Inbound {
     
     private void setReadPolicy0(final ReadPolicy readPolicy) {
         this._whenToRead = null != readPolicy 
-                ? readPolicy.whenToRead(buildInboundable()) 
+                ? readPolicy.whenToRead(buildIntraffic()) 
                 : null;
         final Subscription pendingRead = pendingReadUpdater.getAndSet(this, null);
         if (null != pendingRead && !pendingRead.isUnsubscribed()) {
@@ -48,7 +48,7 @@ public abstract class InboundSupport implements Inbound {
         }
     }
 
-    protected abstract Intraffic buildInboundable();
+    protected abstract Intraffic buildIntraffic();
         
     protected abstract boolean needRead();
 

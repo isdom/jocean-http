@@ -144,7 +144,7 @@ class DefaultHttpTrade extends InboundSupport
     }
     
     @Override
-    protected Intraffic buildInboundable() {
+    protected Intraffic buildIntraffic() {
         return new Intraffic() {
             @Override
             public long durationFromRead() {
