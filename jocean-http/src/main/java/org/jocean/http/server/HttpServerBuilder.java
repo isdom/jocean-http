@@ -7,8 +7,8 @@ import java.io.Closeable;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
-import org.jocean.http.Intraffic;
-import org.jocean.http.Outtraffic;
+import org.jocean.http.Inbound;
+import org.jocean.http.Outbound;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.WriteCtrl;
@@ -41,7 +41,7 @@ public interface HttpServerBuilder extends Closeable {
             final Feature ... features);
     
     public interface HttpTrade 
-        extends Intraffic, Outtraffic, AutoCloseable, TerminateAware<HttpTrade> {
+        extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpTrade> {
         public Object transport();
         
         public Action0 closer();

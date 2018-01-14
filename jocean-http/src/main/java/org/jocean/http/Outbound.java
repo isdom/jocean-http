@@ -1,5 +1,5 @@
 package org.jocean.http;
 
-public interface Outtraffic {
+public interface Outbound {
     public WriteCtrl writeCtrl();
 }

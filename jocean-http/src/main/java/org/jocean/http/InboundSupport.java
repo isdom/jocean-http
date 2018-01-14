@@ -2,13 +2,13 @@ package org.jocean.http;
 
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
-import org.jocean.http.ReadPolicy.Inboundable;
+import org.jocean.http.ReadPolicy.Intraffic;
 
 import rx.Single;
 import rx.Subscription;
 import rx.functions.Action1;
 
-public abstract class IntrafficSupport implements Intraffic {
+public abstract class InboundSupport implements Inbound {
     public void setReadPolicy(final ReadPolicy readPolicy) {
         runAtEventLoop0(new Runnable() {
             @Override
@@ -48,7 +48,7 @@ public abstract class IntrafficSupport implements Intraffic {
         }
     }
 
-    protected abstract Inboundable buildInboundable();
+    protected abstract Intraffic buildInboundable();
         
     protected abstract boolean needRead();
 
@@ -58,8 +58,8 @@ public abstract class IntrafficSupport implements Intraffic {
 
     private volatile Single<?> _whenToRead = null;
     
-    private static final AtomicReferenceFieldUpdater<IntrafficSupport, Subscription> pendingReadUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(IntrafficSupport.class, Subscription.class, "_pendingRead");
+    private static final AtomicReferenceFieldUpdater<InboundSupport, Subscription> pendingReadUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(InboundSupport.class, Subscription.class, "_pendingRead");
     
     @SuppressWarnings("unused")
     private volatile Subscription _pendingRead = null;

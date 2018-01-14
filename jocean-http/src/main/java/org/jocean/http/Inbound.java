@@ -1,5 +1,5 @@
 package org.jocean.http;
 
-public interface Intraffic {
+public interface Inbound {
     public void setReadPolicy(final ReadPolicy readPolicy);
 }

@@ -10,8 +10,8 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
-import org.jocean.http.IntrafficSupport;
-import org.jocean.http.ReadPolicy.Inboundable;
+import org.jocean.http.InboundSupport;
+import org.jocean.http.ReadPolicy.Intraffic;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.WriteCtrl;
@@ -57,7 +57,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpInitiator extends IntrafficSupport
+class DefaultHttpInitiator extends InboundSupport
     implements HttpInitiator, Comparable<DefaultHttpInitiator>{
     
     private static final Logger LOG =
@@ -242,8 +242,8 @@ class DefaultHttpInitiator extends IntrafficSupport
     }
     
     @Override
-    protected Inboundable buildInboundable() {
-        return new Inboundable() {
+    protected Intraffic buildInboundable() {
+        return new Intraffic() {
             @Override
             public long durationFromRead() {
                 final long begin = _unreadBegin;

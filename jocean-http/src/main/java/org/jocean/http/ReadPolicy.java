@@ -14,9 +14,9 @@ import rx.functions.Func0;
 import rx.functions.Func2;
 
 public interface ReadPolicy {
-    public Single<?> whenToRead(final Inboundable inboundable);
+    public Single<?> whenToRead(final Intraffic intraffic);
 
-    public interface Inboundable {
+    public interface Intraffic {
         public long durationFromRead();
         public long durationFromBegin();
         public long inboundBytes();
@@ -35,9 +35,9 @@ public interface ReadPolicy {
         public static ReadPolicy composite(final ReadPolicy policy1, final ReadPolicy policy2) {
             return new ReadPolicy() {
                 @Override
-                public Single<?> whenToRead(final Inboundable inboundable) {
-                    return Single.zip(policy1.whenToRead(inboundable), 
-                            policy2.whenToRead(inboundable),
+                public Single<?> whenToRead(final Intraffic intraffic) {
+                    return Single.zip(policy1.whenToRead(intraffic), 
+                            policy2.whenToRead(intraffic),
                             new Func2<Object, Object, Object>() {
                                 @Override
                                 public Object call(Object t1, Object t2) {
@@ -49,7 +49,7 @@ public interface ReadPolicy {
         
         private static final ReadPolicy POLICY_NEVER = new ReadPolicy() {
             @Override
-            public Single<?> whenToRead(final Inboundable inboundable) {
+            public Single<?> whenToRead(final Intraffic intraffic) {
                 return Observable.never().toSingle();
             }};
             
@@ -73,7 +73,7 @@ public interface ReadPolicy {
             }
             
             @Override
-            public Single<?> whenToRead(final Inboundable inbound) {
+            public Single<?> whenToRead(final Intraffic inbound) {
                 return Single.create(new Single.OnSubscribe<Object>() {
                     @Override
                     public void call(final SingleSubscriber<? super Object> subscriber) {
@@ -83,7 +83,7 @@ public interface ReadPolicy {
                     }});
             }
             
-            private static void ctrlSpeed(final Inboundable inbound, 
+            private static void ctrlSpeed(final Intraffic inbound, 
                     final SingleSubscriber<? super Object> subscriber,
                     final long maxBytesPerSecond, 
                     final long maxDelay) {
@@ -128,7 +128,7 @@ public interface ReadPolicy {
             }
             
             @Override
-            public Single<?> whenToRead(final Inboundable inbound) {
+            public Single<?> whenToRead(final Intraffic inbound) {
                 return Single.create(new Single.OnSubscribe<Object>() {
                     @Override
                     public void call(final SingleSubscriber<? super Object> subscriber) {
@@ -138,7 +138,7 @@ public interface ReadPolicy {
                     }});
             }
             
-            private static void ctrlSpeed(final Inboundable inbound, 
+            private static void ctrlSpeed(final Intraffic inbound, 
                     final SingleSubscriber<? super Object> subscriber,
                     final WriteCtrl writeCtrl) {
                 // TBD: unsubscribe writability()
@@ -194,7 +194,7 @@ public interface ReadPolicy {
             }
 
             @Override
-            public Single<?> whenToRead(final Inboundable inbound) {
+            public Single<?> whenToRead(final Intraffic inbound) {
                 return Single.create(new Single.OnSubscribe<Object>() {
                     @Override
                     public void call(final SingleSubscriber<? super Object> subscriber) {

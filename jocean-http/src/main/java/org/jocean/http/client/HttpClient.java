@@ -6,8 +6,8 @@ package org.jocean.http.client;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
-import org.jocean.http.Intraffic;
-import org.jocean.http.Outtraffic;
+import org.jocean.http.Inbound;
+import org.jocean.http.Outbound;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.WriteCtrl;
 import org.jocean.http.TrafficCounter;
@@ -26,7 +26,7 @@ public interface HttpClient extends AutoCloseable {
     public void close();
     
     public interface HttpInitiator
-    extends Intraffic, Outtraffic, AutoCloseable, TerminateAware<HttpInitiator> {
+    extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpInitiator> {
         public Object transport();
         
         public Action0 closer();
