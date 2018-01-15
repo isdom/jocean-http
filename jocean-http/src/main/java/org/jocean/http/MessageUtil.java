@@ -232,6 +232,27 @@ public class MessageUtil {
         }
     }
     
+    public static <T> T unserializeAsX_WWW_FORM_URLENCODED(final ByteBuf buf, final Class<T> type) {
+        final String kvs = parseContentAsString(buf);
+        if (null != kvs) {
+            final T bean = ReflectUtils.newInstance(type);
+            if (null != bean) {
+                final QueryStringDecoder decoder = new QueryStringDecoder(kvs, CharsetUtil.UTF_8, false);
+                
+                final Field[] fields = ReflectUtils.getAnnotationFieldsOf(type, QueryParam.class);
+                if (null != fields) {
+                    for (Field field : fields) {
+                        final String key = field.getAnnotation(QueryParam.class).value();
+                        injectParamValue(decoder.parameters().get(key), bean, field);
+                    }
+                }
+                
+                return bean;
+            }
+        }
+        return null;
+    }
+    
     public static String parseContentAsString(final ByteBuf buf) {
         try {
             return new String(Nettys.dumpByteBufAsBytes(buf), CharsetUtil.UTF_8);
@@ -872,7 +893,7 @@ public class MessageUtil {
         }, type);
     }
 
-    private static <T> Observable<? extends T> decodeContentAs(
+    public static <T> Observable<? extends T> decodeContentAs(
             final Observable<? extends DisposableWrapper<ByteBuf>> content, final Func2<ByteBuf, Class<T>, T> func,
             final Class<T> type) {
         return content.map(DisposableWrapperUtil.<ByteBuf>unwrap()).toList().map(new Func1<List<ByteBuf>, T>() {
