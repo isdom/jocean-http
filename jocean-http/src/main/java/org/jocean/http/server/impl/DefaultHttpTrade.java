@@ -309,11 +309,163 @@ class DefaultHttpTrade extends InboundSupport
         
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
         
-        if (!channel.isActive()) {
+        if (!this._channel.isActive()) {
             fireClosed(new TransportException("channelInactive of " + channel));
         }
     }
 
+    private void onChannelInactive() {
+        if (inTransacting()) {
+            fireClosed(new TransportException("channelInactive of " + this._channel));
+        } else {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
+            }
+            // close normally
+            close();
+        }
+    }
+
+    protected interface Op {
+//        public <T extends ChannelHandler> T enable(
+//                final DefaultHttpTrade trade, 
+//                final HttpHandlers handlerType, final Object... args);
+
+        public Subscription setOutbound(final DefaultHttpTrade trade, final Observable<? extends Object> outbound);
+        
+        public void inboundOnNext(
+                final DefaultHttpTrade trade,
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
+                final HttpObject msg);
+        
+        public void outboundOnNext(final DefaultHttpTrade trade, final Object msg);
+        
+        public void outboundOnCompleted(final DefaultHttpTrade trade);
+        
+        public void readMessage(final DefaultHttpTrade trade);
+
+        public void setWriteBufferWaterMark(final DefaultHttpTrade trade, final int low, final int high);
+        
+        public boolean isWritable(final DefaultHttpTrade trade);
+        
+        public Future<?> runAtEventLoop(final DefaultHttpTrade trade, final Runnable task);
+    }
+    
+    private final Op _op;
+    
+    private WriteCtrl buildWriteCtrl() {
+        return new WriteCtrl() {
+            @Override
+            public void setFlushPerWrite(final boolean isFlushPerWrite) {
+                _isFlushPerWrite = isFlushPerWrite;
+            }
+
+            @Override
+            public void setWriteBufferWaterMark(final int low, final int high) {
+                _op.setWriteBufferWaterMark(DefaultHttpTrade.this, low, high);
+            }
+
+            @Override
+            public Observable<Boolean> writability() {
+                return Observable.unsafeCreate(new Observable.OnSubscribe<Boolean>() {
+                    @Override
+                    public void call(final Subscriber<? super Boolean> subscriber) {
+                        if (!subscriber.isUnsubscribed()) {
+                            _op.runAtEventLoop(DefaultHttpTrade.this, new Runnable() {
+                                @Override
+                                public void run() {
+                                    addWritabilitySubscriber(subscriber);
+                                }});
+                        }
+                    }});
+            }
+
+            @Override
+            public Observable<Object> sended() {
+                return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
+                    @Override
+                    public void call(final Subscriber<? super Object> subscriber) {
+                        addSendedSubscriber(subscriber);
+                    }});
+            }};
+    }
+
+    private void addWritabilitySubscriber(final Subscriber<? super Boolean> subscriber) {
+        if (!subscriber.isUnsubscribed()) {
+            subscriber.onNext(this._op.isWritable(this));
+            this._writabilityObserver.addComponent(subscriber);
+            subscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    _writabilityObserver.removeComponent(subscriber);
+                }}));
+        }
+    }
+    
+    private void addSendedSubscriber(final Subscriber<? super Object> subscriber) {
+        if (!subscriber.isUnsubscribed()) {
+            this._sendedObserver.addComponent(subscriber);
+            subscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    _sendedObserver.removeComponent(subscriber);
+                }}));
+        }
+    }
+    
+    private final COWCompositeSupport<Subscriber<? super Boolean>> _writabilityObserver = 
+            new COWCompositeSupport<>();
+    
+    private final COWCompositeSupport<Subscriber<? super Object>> _sendedObserver = 
+            new COWCompositeSupport<>();
+    
+    private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = new Action1_N<Subscriber<? super Boolean>>() {
+        @Override
+        public void call(final Subscriber<? super Boolean> subscriber, final Object... args) {
+            final Boolean isWritable = (Boolean)args[0];
+            if (!subscriber.isUnsubscribed()) {
+                try {
+                    subscriber.onNext(isWritable);
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke onNext({}), detail: {}",
+                        subscriber,
+                        ExceptionUtils.exception2detail(e));
+                }
+            }
+        }};
+        
+    private void onWritabilityChanged() {
+        this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._op.isWritable(this));
+    }
+    
+    private static final Action1_N<Subscriber<? super Object>> ON_SENDED = new Action1_N<Subscriber<? super Object>>() {
+        @Override
+        public void call(final Subscriber<? super Object> subscriber, final Object... args) {
+            final Object outmsg = args[0];
+            if (!subscriber.isUnsubscribed()) {
+                try {
+                    subscriber.onNext(outmsg);
+                } catch (Exception e) {
+                    LOG.warn("exception when invoke onNext({}), detail: {}",
+                        subscriber,
+                        ExceptionUtils.exception2detail(e));
+                }
+            }
+        }};
+        
+    private void onOutboundMsgSended(final Object outmsg) {
+        this._sendedObserver.foreachComponent(ON_SENDED, outmsg);
+    }
+    
+    private ChannelFuture sendOutbound(Object outmsg) {
+        while (outmsg instanceof DisposableWrapper) {
+            outmsg = ((DisposableWrapper<?>)outmsg).unwrap();
+        }
+        return this._isFlushPerWrite
+                ? this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
+                : this._channel.write(ReferenceCountUtil.retain(outmsg));
+    }
+    
     private Observable<? extends DisposableWrapper<HttpObject>> buildObsRequest(final int maxBufSize) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
             @Override
@@ -418,66 +570,6 @@ class DefaultHttpTrade extends InboundSupport
                 }};
     }
     
-    private WriteCtrl buildWriteCtrl() {
-        return new WriteCtrl() {
-            @Override
-            public void setFlushPerWrite(final boolean isFlushPerWrite) {
-                _isFlushPerWrite = isFlushPerWrite;
-            }
-
-            @Override
-            public void setWriteBufferWaterMark(final int low, final int high) {
-                _op.setWriteBufferWaterMark(DefaultHttpTrade.this, low, high);
-            }
-
-            @Override
-            public Observable<Boolean> writability() {
-                return Observable.unsafeCreate(new Observable.OnSubscribe<Boolean>() {
-                    @Override
-                    public void call(final Subscriber<? super Boolean> subscriber) {
-                        if (!subscriber.isUnsubscribed()) {
-                            _op.runAtEventLoop(DefaultHttpTrade.this, new Runnable() {
-                                @Override
-                                public void run() {
-                                    addWritabilitySubscriber(subscriber);
-                                }});
-                        }
-                    }});
-            }
-
-            @Override
-            public Observable<Object> sended() {
-                return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
-                    @Override
-                    public void call(final Subscriber<? super Object> subscriber) {
-                        addSendedSubscriber(subscriber);
-                    }});
-            }};
-    }
-
-    private void addWritabilitySubscriber(final Subscriber<? super Boolean> subscriber) {
-        if (!subscriber.isUnsubscribed()) {
-            subscriber.onNext(this._op.isWritable(this));
-            this._writabilityObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _writabilityObserver.removeComponent(subscriber);
-                }}));
-        }
-    }
-    
-    private void addSendedSubscriber(final Subscriber<? super Object> subscriber) {
-        if (!subscriber.isUnsubscribed()) {
-            this._sendedObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _sendedObserver.removeComponent(subscriber);
-                }}));
-        }
-    }
-    
     private static final ActionN FIRE_CLOSED = new ActionN() {
         @Override
         public void call(final Object... args) {
@@ -552,66 +644,7 @@ class DefaultHttpTrade extends InboundSupport
     private void fireClosed(final Throwable e) {
         this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
     }
-    
-    private void onChannelInactive() {
-        if (inTransacting()) {
-            fireClosed(new TransportException("channelInactive of " + this._channel));
-        } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
-            }
-            // close normally
-            close();
-        }
-    }
 
-    private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = new Action1_N<Subscriber<? super Boolean>>() {
-        @Override
-        public void call(final Subscriber<? super Boolean> subscriber, final Object... args) {
-            final Boolean isWritable = (Boolean)args[0];
-            if (!subscriber.isUnsubscribed()) {
-                try {
-                    subscriber.onNext(isWritable);
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke onNext({}), detail: {}",
-                        subscriber,
-                        ExceptionUtils.exception2detail(e));
-                }
-            }
-        }};
-        
-    private void onWritabilityChanged() {
-        this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._op.isWritable(this));
-    }
-    
-    private static final Action1_N<Subscriber<? super Object>> ON_SENDED = new Action1_N<Subscriber<? super Object>>() {
-        @Override
-        public void call(final Subscriber<? super Object> subscriber, final Object... args) {
-            final Object outmsg = args[0];
-            if (!subscriber.isUnsubscribed()) {
-                try {
-                    subscriber.onNext(outmsg);
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke onNext({}), detail: {}",
-                        subscriber,
-                        ExceptionUtils.exception2detail(e));
-                }
-            }
-        }};
-
-    private void onOutboundMsgSended(final Object outmsg) {
-        this._sendedObserver.foreachComponent(ON_SENDED, outmsg);
-    }
-    
-    private ChannelFuture sendOutbound(Object outmsg) {
-        while (outmsg instanceof DisposableWrapper) {
-            outmsg = ((DisposableWrapper<?>)outmsg).unwrap();
-        }
-        return this._isFlushPerWrite
-                ? this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
-                : this._channel.write(ReferenceCountUtil.retain(outmsg));
-    }
-    
     private void outboundOnNext(final Object outmsg) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("sending http response msg {}", outmsg);
@@ -764,44 +797,6 @@ class DefaultHttpTrade extends InboundSupport
     private String _requestUri;
     
     private volatile boolean _isKeepAlive = false;
-    
-    private final COWCompositeSupport<Subscriber<? super Boolean>> _writabilityObserver = 
-            new COWCompositeSupport<>();
-    
-    private final COWCompositeSupport<Subscriber<? super Object>> _sendedObserver = 
-            new COWCompositeSupport<>();
-    
-    private final Op _op;
-    
-    protected interface Op {
-//        public <T extends ChannelHandler> T enable(
-//                final DefaultHttpTrade trade, 
-//                final HttpHandlers handlerType, final Object... args);
-
-        public void inboundOnNext(
-                final DefaultHttpTrade trade,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-                final HttpObject msg);
-        
-        public Subscription setOutbound(final DefaultHttpTrade trade,
-                final Observable<? extends Object> outbound);
-        
-        public void outboundOnNext(
-                final DefaultHttpTrade trade,
-                final Object msg);
-        
-        public void outboundOnCompleted(
-                final DefaultHttpTrade trade);
-        
-        public void readMessage(final DefaultHttpTrade trade);
-
-        public void setWriteBufferWaterMark(final DefaultHttpTrade trade,
-                final int low, final int high);
-        
-        public boolean isWritable(final DefaultHttpTrade trade);
-        
-        public Future<?> runAtEventLoop(final DefaultHttpTrade trade, final Runnable task);
-    }
     
     private static final Op OP_ACTIVE = new Op() {
 //        public <T extends ChannelHandler> T enable(
