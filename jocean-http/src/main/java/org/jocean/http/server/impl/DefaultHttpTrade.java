@@ -327,10 +327,6 @@ class DefaultHttpTrade extends InboundSupport
     }
 
     protected interface Op {
-//        public <T extends ChannelHandler> T enable(
-//                final DefaultHttpTrade trade, 
-//                final HttpHandlers handlerType, final Object... args);
-
         public Subscription setOutbound(final DefaultHttpTrade trade, final Observable<? extends Object> outbound);
         
         public void inboundOnNext(
@@ -709,8 +705,7 @@ class DefaultHttpTrade extends InboundSupport
     
     private void unsubscribeOutbound() {
         final Subscription subscription = outboundSubscriptionUpdater.getAndSet(this, null);
-        if (null != subscription
-            && !subscription.isUnsubscribed()) {
+        if (null != subscription && !subscription.isUnsubscribed()) {
             subscription.unsubscribe();
         }
     }
@@ -799,13 +794,6 @@ class DefaultHttpTrade extends InboundSupport
     private volatile boolean _isKeepAlive = false;
     
     private static final Op OP_ACTIVE = new Op() {
-//        public <T extends ChannelHandler> T enable(
-//                final DefaultHttpTrade trade, 
-//                final HttpHandlers handlerType, final Object... args) {
-//            return Nettys.applyToChannel(trade.onTerminate(), 
-//                    trade._channel, handlerType, args);
-//        }
-        
         public void inboundOnNext(
                 final DefaultHttpTrade trade,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
@@ -860,11 +848,6 @@ class DefaultHttpTrade extends InboundSupport
     };
     
     private static final Op OP_UNACTIVE = new Op() {
-//        public <T extends ChannelHandler> T enable(
-//                final DefaultHttpTrade trade, 
-//                final HttpHandlers handlerType, final Object... args) {
-//            return null;
-//        }
         public void inboundOnNext(
                 final DefaultHttpTrade trade,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,

@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+import org.jocean.http.DoFlush;
 import org.jocean.http.InboundSupport;
 import org.jocean.http.ReadPolicy.Intraffic;
 import org.jocean.http.TrafficCounter;
@@ -211,10 +212,6 @@ class DefaultHttpInitiator extends InboundSupport
     }
 
     protected interface Op {
-//        public <T extends ChannelHandler> T enable(
-//                final DefaultHttpInitiator initiator, 
-//                final HttpHandlers handlerType, final Object... args);
-
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
@@ -466,7 +463,7 @@ class DefaultHttpInitiator extends InboundSupport
 
     private void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("close active initiator[channel: {}] "
+            LOG.debug("closing active initiator[channel: {}] "
                     + "with isRequestCompleted({})"
                     + "/transactionStatus({})"
                     + "/isKeepAlive({}),"
@@ -478,21 +475,25 @@ class DefaultHttpInitiator extends InboundSupport
                     errorAsString(e));
         }
         
-        removeRespHandler();
+        removeInboundHandler();
         
         // notify response Subscriber with error
         releaseRespWithError(e);
         
-        unsubscribeRequest();
+        unsubscribeOutbound();
         
         //  fire all pending subscribers onError with unactived exception
         this._terminateAwareSupport.fireAllTerminates(this);
     }
 
     private static String errorAsString(final Throwable e) {
-        return (e instanceof CloseException)
-            ? "close()" 
-            : ExceptionUtils.exception2detail(e);
+        return e != null 
+            ?
+                (e instanceof CloseException)
+                ? "close()" 
+                : ExceptionUtils.exception2detail(e)
+            : "no error"
+            ;
     }
 
     private String transactionStatusAsString() {
@@ -508,135 +509,6 @@ class DefaultHttpInitiator extends InboundSupport
         }
     }
 
-    private static final Op OP_ACTIVE = new Op() {
-//        public <T extends ChannelHandler> T enable(
-//                final DefaultHttpInitiator initiator, 
-//                final HttpHandlers handlerType, final Object... args) {
-//            return Nettys.applyToChannel(initiator.onTerminate(), 
-//                    initiator._channel, handlerType, args);
-//        }
-        
-        @Override
-        public void subscribeResponse(
-                final DefaultHttpInitiator initiator,
-                final Observable<? extends Object> request,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-            initiator.subscribeResponse(request, subscriber);
-        }
-        
-        @Override
-        public void inboundOnNext(
-                final DefaultHttpInitiator initiator,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-                final HttpObject msg) {
-            initiator.responseOnNext(subscriber, msg);
-        }
-        
-        @Override
-        public void doOnUnsubscribeResponse(
-                final DefaultHttpInitiator initiator,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-            initiator.doOnUnsubscribeResponse(subscriber);
-        }
-        
-        @Override
-        public void outboundOnNext(
-                final DefaultHttpInitiator initiator,
-                final Object msg) {
-            initiator.requestOnNext(msg);
-        }
-        
-        @Override
-        public void outboundOnCompleted(
-                final DefaultHttpInitiator initiator) {
-            initiator.requestOnCompleted();
-        }
-        
-        @Override
-        public void readMessage(final DefaultHttpInitiator initiator) {
-            initiator.readMessage();
-        }
-
-        @Override
-        public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
-                final int low, final int high) {
-            initiator._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
-            if (LOG.isInfoEnabled()) {
-                LOG.info("channel({}) setWriteBufferWaterMark with low:{} high:{}", 
-                    initiator._channel, low, high);
-            }
-        }
-        
-        @Override
-        public boolean isWritable(final DefaultHttpInitiator initiator) {
-            return initiator._channel.isWritable();
-        }
-        
-        @Override
-        public Future<?> runAtEventLoop(final DefaultHttpInitiator initiator, final Runnable task) {
-            return initiator._channel.eventLoop().submit(task);
-        }
-    };
-    
-    private static final Op OP_UNACTIVE = new Op() {
-//        public <T extends ChannelHandler> T enable(
-//                final DefaultHttpInitiator initiator, 
-//                final HttpHandlers handlerType, final Object... args) {
-//            return null;
-//        }
-        
-        @Override
-        public void subscribeResponse(
-                final DefaultHttpInitiator initiator,
-                final Observable<? extends Object> request,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-            subscriber.onError(new RuntimeException("http connection unactive."));
-        }
-        
-        @Override
-        public void inboundOnNext(
-                final DefaultHttpInitiator initiator,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-                final HttpObject msg) {
-            ReferenceCountUtil.release(msg);
-        }
-        
-        @Override
-        public void doOnUnsubscribeResponse(
-                final DefaultHttpInitiator initiator,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-        }
-
-        @Override
-        public void outboundOnNext(
-                final DefaultHttpInitiator initiator,
-                final Object msg) {
-        }
-        
-        @Override
-        public void outboundOnCompleted(final DefaultHttpInitiator initiator) {
-        }
-        
-        @Override
-        public void readMessage(final DefaultHttpInitiator initiator) {
-        }
-
-        @Override
-        public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
-                final int low, final int high) {
-        }
-        
-        @Override
-        public boolean isWritable(final DefaultHttpInitiator initiator) {
-            return false;
-        }
-        
-        @Override
-        public Future<?> runAtEventLoop(final DefaultHttpInitiator initiator, final Runnable task) {
-            return null;
-        }
-    };
-    
     private void subscribeResponse(
             final Observable<? extends Object> request,
             final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
@@ -645,7 +517,7 @@ class DefaultHttpInitiator extends InboundSupport
                     subscriber);
             return;
         }
-        if (holdRespSubscriber(subscriber)) {
+        if (holdInboundSubscriber(subscriber)) {
             // _respSubscriber field set to subscriber
             final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
                 @Override
@@ -658,8 +530,8 @@ class DefaultHttpInitiator extends InboundSupport
                     _op.inboundOnNext(DefaultHttpInitiator.this, subscriber, respmsg);
                 }};
             Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
-            respHandlerUpdater.set(this, handler);
-            reqSubscriptionUpdater.set(this,  wrapRequest(request).subscribe(buildRequestObserver()));
+            inboundHandlerUpdater.set(this, handler);
+            outboundSubscriptionUpdater.set(this,  wrapRequest(request).subscribe(buildRequestObserver()));
             
             subscriber.add(Subscriptions.create(new Action0() {
                 @Override
@@ -713,54 +585,58 @@ class DefaultHttpInitiator extends InboundSupport
                 }};
     }
 
-    private void requestOnCompleted() {
+    private void outboundOnCompleted() {
         // force flush for _isFlushPerWrite = false
         this._channel.flush();
         this._isRequestCompleted = true;
         this.readMessage();
     }
 
-    private void requestOnNext(final Object reqmsg) {
+    private void outboundOnNext(final Object outmsg) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug("sending http request msg {}", reqmsg);
+            LOG.debug("sending http request msg {}", outmsg);
         }
         // set in transacting flag
         markStartSending();
         
-        if (reqmsg instanceof HttpRequest) {
-            onHttpRequest((HttpRequest)reqmsg);
+        if (outmsg instanceof HttpRequest) {
+            onHttpRequest((HttpRequest)outmsg);
         }
         
-        sendOutbound(reqmsg)
-        .addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(final ChannelFuture future)
-                    throws Exception {
-                if (future.isSuccess()) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("send http request msg {} success.", reqmsg);
+        if (outmsg instanceof DoFlush) {
+            this._channel.flush();
+        } else {
+            sendOutbound(outmsg)
+            .addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(final ChannelFuture future)
+                        throws Exception {
+                    if (future.isSuccess()) {
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("send http request msg {} success.", outmsg);
+                        }
+                        onOutboundMsgSended(outmsg);
+                    } else {
+                        LOG.warn("exception when send http req: {}, detail: {}",
+                                outmsg, ExceptionUtils.exception2detail(future.cause()));
+                        fireClosed(new TransportException("send reqmsg error", future.cause()));
                     }
-                    onOutboundMsgSended(reqmsg);
-                } else {
-                    LOG.warn("exception when send http req: {}, detail: {}",
-                            reqmsg, ExceptionUtils.exception2detail(future.cause()));
-                    fireClosed(new TransportException("send reqmsg error", future.cause()));
-                }
-            }});
+                }});
+        }
     }
 
     private void onHttpRequest(final HttpRequest req) {
         this._isKeepAlive = HttpUtil.isKeepAlive(req);
     }
 
-    private void responseOnNext(
+    private void inboundOnNext(
             final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-            final HttpObject respmsg) {
+            final HttpObject inmsg) {
         markStartRecving();
         try {
-            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(respmsg)));
+            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
         } finally {
-            if (respmsg instanceof LastHttpContent) {
+            if (inmsg instanceof LastHttpContent) {
                 /*
                  * netty 参考代码: https://github.com/netty/netty/blob/netty-
                  * 4.0.26.Final /codec/src /main/java/io/netty/handler/codec
@@ -773,8 +649,8 @@ class DefaultHttpInitiator extends InboundSupport
                  * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
                  * 因此，无需在channelInactive处，针对该情况做特殊处理
                  */
-                if (unholdRespSubscriber(subscriber)) {
-                    removeRespHandler();
+                if (unholdInboundSubscriber(subscriber)) {
+                    removeInboundHandler();
                     endTransaction();
                     subscriber.onCompleted();
                 }
@@ -784,23 +660,16 @@ class DefaultHttpInitiator extends InboundSupport
 
     private void doOnUnsubscribeResponse(
             final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-        if (unholdRespSubscriber(subscriber)) {
-            removeRespHandler();
+        if (unholdInboundSubscriber(subscriber)) {
+            removeInboundHandler();
             // unsubscribe before OnCompleted or OnError
             fireClosed(new RuntimeException("unsubscribe response"));
         }
     }
 
-    private void removeRespHandler() {
-        final ChannelHandler handler = respHandlerUpdater.getAndSet(this, null);
-        if (null != handler) {
-            Nettys.actionToRemoveHandler(this._channel, handler).call();
-        }
-    }
-
     private void releaseRespWithError(final Throwable error) {
         @SuppressWarnings("unchecked")
-        final Subscriber<? super HttpObject> respSubscriber = respSubscriberUpdater.getAndSet(this, null);
+        final Subscriber<? super HttpObject> respSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
         if (null != respSubscriber
            && !respSubscriber.isUnsubscribed()) {
             try {
@@ -812,20 +681,26 @@ class DefaultHttpInitiator extends InboundSupport
         }
     }
 
-    private void unsubscribeRequest() {
-        final Subscription reqSubscription = reqSubscriptionUpdater.getAndSet(this, null);
-        if (null != reqSubscription
-            && !reqSubscription.isUnsubscribed()) {
-            reqSubscription.unsubscribe();
+    private void unsubscribeOutbound() {
+        final Subscription subscription = outboundSubscriptionUpdater.getAndSet(this, null);
+        if (null != subscription && !subscription.isUnsubscribed()) {
+            subscription.unsubscribe();
         }
     }
 
-    private boolean holdRespSubscriber(final Subscriber<?> subscriber) {
-        return respSubscriberUpdater.compareAndSet(this, null, subscriber);
+    private void removeInboundHandler() {
+        final ChannelHandler handler = inboundHandlerUpdater.getAndSet(this, null);
+        if (null != handler) {
+            Nettys.actionToRemoveHandler(this._channel, handler).call();
+        }
     }
 
-    private boolean unholdRespSubscriber(final Subscriber<?> subscriber) {
-        return respSubscriberUpdater.compareAndSet(this, subscriber, null);
+    private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
+        return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
+    }
+
+    private boolean unholdInboundSubscriber(final Subscriber<?> subscriber) {
+        return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
     }
     
     private void markStartSending() {
@@ -845,18 +720,18 @@ class DefaultHttpInitiator extends InboundSupport
     }
 
     @SuppressWarnings("rawtypes")
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscriber> respSubscriberUpdater =
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscriber> inboundSubscriberUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscriber.class, "_respSubscriber");
     
     private volatile Subscriber<? super HttpObject> _respSubscriber;
     
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, ChannelHandler> respHandlerUpdater =
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, ChannelHandler> inboundHandlerUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, ChannelHandler.class, "_respHandler");
     
     @SuppressWarnings("unused")
     private volatile ChannelHandler _respHandler;
     
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscription> reqSubscriptionUpdater =
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscription> outboundSubscriptionUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscription.class, "_reqSubscription");
     
     private volatile Subscription _reqSubscription;
@@ -889,4 +764,120 @@ class DefaultHttpInitiator extends InboundSupport
     private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
     private final TrafficCounter _traffic;
+
+    private static final Op OP_ACTIVE = new Op() {
+      @Override
+      public void subscribeResponse(
+              final DefaultHttpInitiator initiator,
+              final Observable<? extends Object> request,
+              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+          initiator.subscribeResponse(request, subscriber);
+      }
+      
+      @Override
+      public void inboundOnNext(
+              final DefaultHttpInitiator initiator,
+              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
+              final HttpObject msg) {
+          initiator.inboundOnNext(subscriber, msg);
+      }
+      
+      @Override
+      public void doOnUnsubscribeResponse(
+              final DefaultHttpInitiator initiator,
+              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+          initiator.doOnUnsubscribeResponse(subscriber);
+      }
+      
+      @Override
+      public void outboundOnNext(
+              final DefaultHttpInitiator initiator,
+              final Object msg) {
+          initiator.outboundOnNext(msg);
+      }
+      
+      @Override
+      public void outboundOnCompleted(
+              final DefaultHttpInitiator initiator) {
+          initiator.outboundOnCompleted();
+      }
+      
+      @Override
+      public void readMessage(final DefaultHttpInitiator initiator) {
+          initiator.readMessage();
+      }
+
+      @Override
+      public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
+              final int low, final int high) {
+          initiator._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
+          if (LOG.isInfoEnabled()) {
+              LOG.info("channel({}) setWriteBufferWaterMark with low:{} high:{}", 
+                  initiator._channel, low, high);
+          }
+      }
+      
+      @Override
+      public boolean isWritable(final DefaultHttpInitiator initiator) {
+          return initiator._channel.isWritable();
+      }
+      
+      @Override
+      public Future<?> runAtEventLoop(final DefaultHttpInitiator initiator, final Runnable task) {
+          return initiator._channel.eventLoop().submit(task);
+      }
+  };
+  
+  private static final Op OP_UNACTIVE = new Op() {
+      @Override
+      public void subscribeResponse(
+              final DefaultHttpInitiator initiator,
+              final Observable<? extends Object> request,
+              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+          subscriber.onError(new RuntimeException("http connection unactive."));
+      }
+      
+      @Override
+      public void inboundOnNext(
+              final DefaultHttpInitiator initiator,
+              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
+              final HttpObject msg) {
+          ReferenceCountUtil.release(msg);
+      }
+      
+      @Override
+      public void doOnUnsubscribeResponse(
+              final DefaultHttpInitiator initiator,
+              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+      }
+
+      @Override
+      public void outboundOnNext(
+              final DefaultHttpInitiator initiator,
+              final Object msg) {
+      }
+      
+      @Override
+      public void outboundOnCompleted(final DefaultHttpInitiator initiator) {
+      }
+      
+      @Override
+      public void readMessage(final DefaultHttpInitiator initiator) {
+      }
+
+      @Override
+      public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
+              final int low, final int high) {
+      }
+      
+      @Override
+      public boolean isWritable(final DefaultHttpInitiator initiator) {
+          return false;
+      }
+      
+      @Override
+      public Future<?> runAtEventLoop(final DefaultHttpInitiator initiator, final Runnable task) {
+          return null;
+      }
+  };
 }
