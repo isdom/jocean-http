@@ -40,7 +40,6 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
-import rx.Observer;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -234,8 +233,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     private void initInboundHandler(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
         final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
             @Override
-            protected void channelRead0(final ChannelHandlerContext ctx,
-                    final HttpObject inmsg) throws Exception {
+            protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject inmsg) throws Exception {
                 _iobaseop.inboundOnNext(DefaultHttpTrade.this, subscriber, inmsg);
             }};
         Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
@@ -254,34 +252,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
                     this, outbound);
             return null;
         }
-    }
-    
-    private Observer<Object> buildOutboundObserver() {
-        return new Observer<Object>() {
-                @Override
-                public void onCompleted() {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("response invoke onCompleted for trade: {}", DefaultHttpTrade.this);
-                    }
-                    _iobaseop.outboundOnCompleted(DefaultHttpTrade.this);
-                }
-
-                @Override
-                public void onError(final Throwable e) {
-                    if (!(e instanceof CloseException)) {
-                        LOG.warn("response invoke onError with ({}), try close trade: {}",
-                                ExceptionUtils.exception2detail(e), DefaultHttpTrade.this);
-                    }
-                    fireClosed(e);
-                }
-
-                @Override
-                public void onNext(final Object outmsg) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("response invoke onNext({}) for trade: {}", outmsg, DefaultHttpTrade.this);
-                    }
-                    _iobaseop.outboundOnNext(DefaultHttpTrade.this, outmsg);
-                }};
     }
     
     @Override

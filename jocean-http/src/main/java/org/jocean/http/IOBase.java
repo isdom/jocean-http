@@ -23,6 +23,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import rx.Observable;
+import rx.Observer;
 import rx.Single;
 import rx.Subscriber;
 import rx.Subscription;
@@ -295,6 +296,34 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
             this._unreadBegin = 0;
             readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
         }
+    }
+    
+    protected Observer<Object> buildOutboundObserver() {
+        return new Observer<Object>() {
+                @Override
+                public void onCompleted() {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("outound invoke onCompleted for iobase: {}", IOBase.this);
+                    }
+                    _iobaseop.outboundOnCompleted(IOBase.this);
+                }
+
+                @Override
+                public void onError(final Throwable e) {
+                    if (!(e instanceof CloseException)) {
+                        LOG.warn("outound invoke onError with ({}), try close iobase: {}",
+                                ExceptionUtils.exception2detail(e), IOBase.this);
+                    }
+                    fireClosed(e);
+                }
+
+                @Override
+                public void onNext(final Object outmsg) {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("outbound invoke onNext({}) for iobase: {}", outmsg, IOBase.this);
+                    }
+                    _iobaseop.outboundOnNext(IOBase.this, outmsg);
+                }};
     }
     
     protected abstract void fireClosed(final Throwable e);

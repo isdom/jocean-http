@@ -36,7 +36,6 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
-import rx.Observer;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -187,6 +186,40 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
     }
 
+    private void subscribeResponse(
+            final Observable<? extends Object> request,
+            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+        if (subscriber.isUnsubscribed()) {
+            LOG.info("response subscriber ({}) has been unsubscribed, ignore", 
+                    subscriber);
+            return;
+        }
+        if (holdInboundSubscriber(subscriber)) {
+            // _respSubscriber field set to subscriber
+            final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
+                @Override
+                protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject respmsg) throws Exception {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("HttpInitiator: channel({})/handler({}): channelRead0 and call with msg({}).",
+                            ctx.channel(), ctx.name(), respmsg);
+                    }
+                    _iobaseop.inboundOnNext(DefaultHttpInitiator.this, subscriber, respmsg);
+                }};
+            Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
+            inboundHandlerUpdater.set(this, handler);
+            outboundSubscriptionUpdater.set(this,  wrapRequest(request).subscribe(buildOutboundObserver()));
+            
+            subscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    _op.doOnUnsubscribeResponse(DefaultHttpInitiator.this, subscriber);
+                }}));
+        } else {
+            // _respSubscriber field has already setted
+            subscriber.onError(new RuntimeException("Transaction in progress"));
+        }
+    }
+
     @Override
     public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
@@ -259,41 +292,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
     }
 
-    private void subscribeResponse(
-            final Observable<? extends Object> request,
-            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-        if (subscriber.isUnsubscribed()) {
-            LOG.info("response subscriber ({}) has been unsubscribed, ignore", 
-                    subscriber);
-            return;
-        }
-        if (holdInboundSubscriber(subscriber)) {
-            // _respSubscriber field set to subscriber
-            final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
-                @Override
-                protected void channelRead0(final ChannelHandlerContext ctx,
-                        final HttpObject respmsg) throws Exception {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("HttpInitiator: channel({})/handler({}): channelRead0 and call with msg({}).",
-                            ctx.channel(), ctx.name(), respmsg);
-                    }
-                    _iobaseop.inboundOnNext(DefaultHttpInitiator.this, subscriber, respmsg);
-                }};
-            Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
-            inboundHandlerUpdater.set(this, handler);
-            outboundSubscriptionUpdater.set(this,  wrapRequest(request).subscribe(buildRequestObserver()));
-            
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _op.doOnUnsubscribeResponse(DefaultHttpInitiator.this, subscriber);
-                }}));
-        } else {
-            // _respSubscriber field has already setted
-            subscriber.onError(new RuntimeException("Transaction in progress"));
-        }
-    }
-
     private Observable<? extends Object> wrapRequest(
             final Observable<? extends Object> request) {
         if (Nettys.isSupportCompress(this._channel)) {
@@ -301,29 +299,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         } else {
             return request;
         }
-    }
-
-    private Observer<Object> buildRequestObserver() {
-        return new Observer<Object>() {
-                @Override
-                public void onCompleted() {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("request invoke onCompleted for initiator: {}", DefaultHttpInitiator.this);
-                    }
-                    _iobaseop.outboundOnCompleted(DefaultHttpInitiator.this);
-                }
-
-                @Override
-                public void onError(final Throwable e) {
-                    LOG.warn("request invoke onError with ({}), try close initiator: {}",
-                            ExceptionUtils.exception2detail(e), DefaultHttpInitiator.this);
-                    fireClosed(e);
-                }
-
-                @Override
-                public void onNext(final Object reqmsg) {
-                    _iobaseop.outboundOnNext(DefaultHttpInitiator.this, reqmsg);
-                }};
     }
 
     private void onHttpRequest(final HttpRequest req) {
