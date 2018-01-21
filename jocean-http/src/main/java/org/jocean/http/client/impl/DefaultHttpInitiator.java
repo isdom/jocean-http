@@ -7,14 +7,11 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
-import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.CloseException;
 import org.jocean.http.DoFlush;
 import org.jocean.http.IOBase;
-import org.jocean.http.ReadPolicy.Intraffic;
-import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.HttpHandlers;
@@ -23,7 +20,6 @@ import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.TerminateAwareSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +48,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpInitiator extends IOBase
+class DefaultHttpInitiator extends IOBase<HttpInitiator>
     implements HttpInitiator, Comparable<DefaultHttpInitiator>{
     
     private static final Action1<Object> _ADD_ACCEPT_ENCODING = new Action1<Object>() {
@@ -127,47 +123,8 @@ class DefaultHttpInitiator extends IOBase
         return inTransacting();
     }
     
-    @Override
-    public void close() {
-        fireClosed(new CloseException());
-    }
-
-    @Override
-    public Action0 closer() {
-        return new Action0() {
-            @Override
-            public void call() {
-                close();
-            }};
-    }
-    
-    @Override
-    public Object transport() {
-        return this._channel;
-    }
-    
     Channel channel() {
         return this._channel;
-    }
-    
-    @Override
-    public Action1<Action0> onTerminate() {
-        return this._terminateAwareSupport.onTerminate(this);
-    }
-            
-    @Override
-    public Action1<Action1<HttpInitiator>> onTerminateOf() {
-        return this._terminateAwareSupport.onTerminateOf(this);
-    }
-
-    @Override
-    public Action0 doOnTerminate(Action0 onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
-    }
-                
-    @Override
-    public Action0 doOnTerminate(final Action1<HttpInitiator> onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
     }
     
     boolean isKeepAlive() {
@@ -176,9 +133,6 @@ class DefaultHttpInitiator extends IOBase
     
     DefaultHttpInitiator(final Channel channel) {
         super(channel);
-        
-        this._terminateAwareSupport = 
-            new TerminateAwareSupport<HttpInitiator>(this._selector);
         
         Nettys.applyToChannel(onTerminate(), 
                 channel, 
@@ -216,10 +170,6 @@ class DefaultHttpInitiator extends IOBase
                         onWritabilityChanged();
                     }});
 
-        this._traffic = Nettys.applyToChannel(onTerminate(), 
-                channel, 
-                HttpHandlers.TRAFFICCOUNTER);
-        
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
         
         if (!this._channel.isActive()) {
@@ -237,20 +187,6 @@ class DefaultHttpInitiator extends IOBase
         }
     }
 
-    protected interface Op {
-        public void subscribeResponse(
-                final DefaultHttpInitiator initiator,
-                final Observable<? extends Object> request,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber);
-        
-        public void doOnUnsubscribeResponse(
-                final DefaultHttpInitiator initiator,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber);
-    }
-    
-    private final Op _op;
-    
-
     @Override
     public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
@@ -260,50 +196,21 @@ class DefaultHttpInitiator extends IOBase
             }});
     }
 
-    @Override
-    public TrafficCounter traffic() {
-        return this._traffic;
-    }
-    
-    @Override
-    public boolean isActive() {
-        return this._selector.isActive();
-    }
-
     boolean inTransacting() {
         return transactionStatus() > STATUS_IDLE;
     }
     
     @Override
-    protected Intraffic buildIntraffic() {
-        return new Intraffic() {
-            @Override
-            public long durationFromRead() {
-                final long begin = _unreadBegin;
-                return 0 == begin ? 0 : System.currentTimeMillis() - begin;
-            }
-            
-            @Override
-            public long durationFromBegin() {
-                return Math.max(System.currentTimeMillis() - readBeginUpdater.get(DefaultHttpInitiator.this), 1L);
-            }
-            
-            @Override
-            public long inboundBytes() {
-                return _traffic.inboundBytes();
-            }};
+    protected void fireClosed(final Throwable e) {
+        this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
     }
-    
+
     private static final ActionN FIRE_CLOSED = new ActionN() {
         @Override
         public void call(final Object... args) {
             ((DefaultHttpInitiator)args[0]).doClosed((Throwable)args[1]);
         }};
         
-    private void fireClosed(final Throwable e) {
-        this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
-    }
-
     private void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("closing active initiator[channel: {}] "
@@ -595,19 +502,23 @@ class DefaultHttpInitiator extends IOBase
     
     private volatile boolean _isKeepAlive = true;
     
-    private static final AtomicLongFieldUpdater<DefaultHttpInitiator> readBeginUpdater =
-            AtomicLongFieldUpdater.newUpdater(DefaultHttpInitiator.class, "_readBegin");
-    
-    @SuppressWarnings("unused")
-    private volatile long _readBegin = 0;
-    
     private volatile boolean _isRequestCompleted = false;
     
-    private final TerminateAwareSupport<HttpInitiator> _terminateAwareSupport;
-
     private final long _createTimeMillis = System.currentTimeMillis();
-    private final TrafficCounter _traffic;
 
+    private final Op _op;
+
+    private interface Op {
+        public void subscribeResponse(
+                final DefaultHttpInitiator initiator,
+                final Observable<? extends Object> request,
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber);
+        
+        public void doOnUnsubscribeResponse(
+                final DefaultHttpInitiator initiator,
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber);
+    }
+    
     private static final Op OP_ACTIVE = new Op() {
       @Override
       public void subscribeResponse(

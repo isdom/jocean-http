@@ -10,14 +10,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
-import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.CloseException;
 import org.jocean.http.DoFlush;
 import org.jocean.http.IOBase;
-import org.jocean.http.ReadPolicy.Intraffic;
-import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpHandlers;
@@ -26,8 +23,6 @@ import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.InterfaceSelector;
-import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,8 +52,8 @@ import rx.functions.Func1;
  * @author isdom
  *
  */
-class DefaultHttpTrade extends IOBase 
-    implements HttpTrade,  Comparable<DefaultHttpTrade> {
+class DefaultHttpTrade extends IOBase<HttpTrade> 
+    implements HttpTrade, Comparable<DefaultHttpTrade> {
     
     private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
         @Override
@@ -127,36 +122,6 @@ class DefaultHttpTrade extends IOBase
             LoggerFactory.getLogger(DefaultHttpTrade.class);
     
     @Override
-    public TrafficCounter traffic() {
-        return this._traffic;
-    }
-    
-    @Override
-    public boolean isActive() {
-        return this._selector.isActive();
-    }
-    
-    @Override
-    protected Intraffic buildIntraffic() {
-        return new Intraffic() {
-            @Override
-            public long durationFromRead() {
-                final long begin = _unreadBegin;
-                return 0 == begin ? 0 : System.currentTimeMillis() - begin;
-            }
-            
-            @Override
-            public long durationFromBegin() {
-                return Math.max(System.currentTimeMillis() - readBeginUpdater.get(DefaultHttpTrade.this), 1L);
-            }
-            
-            @Override
-            public long inboundBytes() {
-                return _traffic.inboundBytes();
-            }};
-    }
-    
-    @Override
     protected boolean needRead() {
         return inRecving();
     }
@@ -171,50 +136,9 @@ class DefaultHttpTrade extends IOBase
         return this._op.setOutbound(this, message);
     }
 
-    @Override
-    public void close() {
-        fireClosed(new CloseException());
-    }
-
-    @Override
-    public Action0 closer() {
-        return new Action0() {
-            @Override
-            public void call() {
-                close();
-            }};
-    }
-    
-    @Override
-    public Object transport() {
-        return this._channel;
-    }
-    
-    @Override
-    public Action1<Action0> onTerminate() {
-        return this._terminateAwareSupport.onTerminate(this);
-    }
-
-    @Override
-    public Action1<Action1<HttpTrade>> onTerminateOf() {
-        return this._terminateAwareSupport.onTerminateOf(this);
-    }
-
-    @Override
-    public Action0 doOnTerminate(Action0 onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
-    }
-
-    @Override
-    public Action0 doOnTerminate(Action1<HttpTrade> onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
-    }
-    
     boolean isKeepAlive() {
         return this._isKeepAlive;
     }
-    
-    private final InterfaceSelector _selector = new InterfaceSelector();
     
     DefaultHttpTrade(final Channel channel) {
         this(channel, 0);
@@ -226,8 +150,6 @@ class DefaultHttpTrade extends IOBase
         if (!channel.eventLoop().inEventLoop()) {
             throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
         }
-        this._terminateAwareSupport = 
-            new TerminateAwareSupport<HttpTrade>(this._selector);
         
         this._obsRequest = buildObsRequest(maxBufSize).cache().doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
             @Override
@@ -281,10 +203,6 @@ class DefaultHttpTrade extends IOBase
                         onWritabilityChanged();
                     }});
         
-        this._traffic = Nettys.applyToChannel(onTerminate(), 
-                channel, 
-                HttpHandlers.TRAFFICCOUNTER);
-        
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
         
         if (!this._channel.isActive()) {
@@ -304,12 +222,6 @@ class DefaultHttpTrade extends IOBase
         }
     }
 
-    protected interface Op {
-        public Subscription setOutbound(final DefaultHttpTrade trade, final Observable<? extends Object> outbound);
-    }
-    
-    private final Op _op;
-    
     private Observable<? extends DisposableWrapper<HttpObject>> buildObsRequest(final int maxBufSize) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
             @Override
@@ -415,6 +327,11 @@ class DefaultHttpTrade extends IOBase
                 }};
     }
     
+    @Override
+    protected void fireClosed(final Throwable e) {
+        this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
+    }
+
     private static final ActionN FIRE_CLOSED = new ActionN() {
         @Override
         public void call(final Object... args) {
@@ -486,10 +403,6 @@ class DefaultHttpTrade extends IOBase
         }
     }
     
-    private void fireClosed(final Throwable e) {
-        this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
-    }
-
     @Override
     protected void outboundOnNext(final Object outmsg) {
         if (LOG.isDebugEnabled()) {
@@ -608,12 +521,6 @@ class DefaultHttpTrade extends IOBase
     @SuppressWarnings("unused")
     private volatile int _transactionStatus = STATUS_IDLE;
     
-    private static final AtomicLongFieldUpdater<DefaultHttpTrade> readBeginUpdater =
-            AtomicLongFieldUpdater.newUpdater(DefaultHttpTrade.class, "_readBegin");
-    
-    @SuppressWarnings("unused")
-    private volatile long _readBegin = 0;
-    
     private static final AtomicReferenceFieldUpdater<DefaultHttpTrade, ChannelHandler> inboundHandlerUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpTrade.class, ChannelHandler.class, "_inboundHandler");
     
@@ -633,14 +540,17 @@ class DefaultHttpTrade extends IOBase
     
     private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
     
-    private final TerminateAwareSupport<HttpTrade> _terminateAwareSupport;
-    
     private final long _createTimeMillis = System.currentTimeMillis();
-    private final TrafficCounter _traffic;
     private String _requestMethod;
     private String _requestUri;
     
     private volatile boolean _isKeepAlive = false;
+    
+    private final Op _op;
+    
+    private interface Op {
+        public Subscription setOutbound(final DefaultHttpTrade trade, final Observable<? extends Object> outbound);
+    }
     
     private static final Op OP_ACTIVE = new Op() {
         @Override

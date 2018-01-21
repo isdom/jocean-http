@@ -1,12 +1,17 @@
 package org.jocean.http;
 
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.ReadPolicy.Intraffic;
+import org.jocean.http.util.HttpHandlers;
+import org.jocean.http.util.Nettys;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
+import org.jocean.idiom.TerminateAware;
+import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.idiom.rx.Action1_N;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +30,7 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.subscriptions.Subscriptions;
 
-public abstract class IOBase implements Inbound, Outbound {
+public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> {
     private static final Logger LOG =
             LoggerFactory.getLogger(IOBase.class);
     
@@ -33,26 +38,34 @@ public abstract class IOBase implements Inbound, Outbound {
     
     protected interface IOBaseOp {
         public void inboundOnNext(
-                final IOBase io,
+                final IOBase<?> io,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject msg);
         
-        public void outboundOnNext(final IOBase io, final Object msg);
+        public void outboundOnNext(final IOBase<?> io, final Object msg);
 
-        public void outboundOnCompleted(final IOBase io);
+        public void outboundOnCompleted(final IOBase<?> io);
         
-        public void readMessage(final IOBase io);
+        public void readMessage(final IOBase<?> io);
 
-        public void setWriteBufferWaterMark(final IOBase io, final int low, final int high);
+        public void setWriteBufferWaterMark(final IOBase<?> io, final int low, final int high);
         
-        public boolean isWritable(final IOBase io);
+        public boolean isWritable(final IOBase<?> io);
         
-        public Future<?> runAtEventLoop(final IOBase io, final Runnable task);
+        public Future<?> runAtEventLoop(final IOBase<?> io, final Runnable task);
     }
     
     protected IOBase(final Channel channel) {
+        
+        this._terminateAwareSupport = 
+                new TerminateAwareSupport<T>(this._selector);
+        
         this._channel = channel;
         this._iobaseop = this._selector.build(IOBaseOp.class, OP_ACTIVE, OP_UNACTIVE);
+        this._traffic = Nettys.applyToChannel(onTerminate(), 
+                this._channel, 
+                HttpHandlers.TRAFFICCOUNTER);
+        
     }
     
     protected final IOBaseOp _iobaseop;
@@ -60,6 +73,53 @@ public abstract class IOBase implements Inbound, Outbound {
     protected final Channel _channel;
     
     private volatile boolean _isFlushPerWrite = false;
+    
+    private final TrafficCounter _traffic;
+    
+    protected final TerminateAwareSupport<T> _terminateAwareSupport;
+    
+//    @Override
+    public void close() {
+        fireClosed(new CloseException());
+    }
+
+//    @Override
+    public Action0 closer() {
+        return new Action0() {
+            @Override
+            public void call() {
+                close();
+            }};
+    }
+    
+//    @Override
+    public Object transport() {
+        return this._channel;
+    }
+    
+    @SuppressWarnings("unchecked")
+    @Override
+    public Action1<Action0> onTerminate() {
+        return this._terminateAwareSupport.onTerminate((T) this);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Action1<Action1<T>> onTerminateOf() {
+        return this._terminateAwareSupport.onTerminateOf((T) this);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Action0 doOnTerminate(Action0 onTerminate) {
+        return this._terminateAwareSupport.doOnTerminate((T) this, onTerminate);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Action0 doOnTerminate(Action1<T> onTerminate) {
+        return this._terminateAwareSupport.doOnTerminate((T) this, onTerminate);
+    }
     
     @Override
     public WriteCtrl writeCtrl() {
@@ -226,8 +286,37 @@ public abstract class IOBase implements Inbound, Outbound {
         this._iobaseop.runAtEventLoop(this, runnable);
     }
     
-    protected abstract Intraffic buildIntraffic();
+//    @Override
+    public TrafficCounter traffic() {
+        return this._traffic;
+    }
+    
+//    @Override
+    public boolean isActive() {
+        return this._selector.isActive();
+    }
+    
+    private Intraffic buildIntraffic() {
+        return new Intraffic() {
+            @Override
+            public long durationFromRead() {
+                final long begin = _unreadBegin;
+                return 0 == begin ? 0 : System.currentTimeMillis() - begin;
+            }
+            
+            @Override
+            public long durationFromBegin() {
+                return Math.max(System.currentTimeMillis() - readBeginUpdater.get(IOBase.this), 1L);
+            }
+            
+            @Override
+            public long inboundBytes() {
+                return traffic().inboundBytes();
+            }};
+    }
         
+    protected abstract void fireClosed(final Throwable e);
+    
     protected abstract boolean needRead();
 
     protected abstract void inboundOnNext(
@@ -242,18 +331,26 @@ public abstract class IOBase implements Inbound, Outbound {
     
     private volatile Single<?> _whenToRead = null;
     
+    protected volatile long _unreadBegin = 0;
+
+    @SuppressWarnings("rawtypes")
+    protected static final AtomicLongFieldUpdater<IOBase> readBeginUpdater = 
+            AtomicLongFieldUpdater.newUpdater(IOBase.class, "_readBegin");
+    
+    @SuppressWarnings("unused")
+    private volatile long _readBegin = 0;
+    
+    @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<IOBase, Subscription> pendingReadUpdater =
             AtomicReferenceFieldUpdater.newUpdater(IOBase.class, Subscription.class, "_pendingRead");
     
     @SuppressWarnings("unused")
     private volatile Subscription _pendingRead = null;
     
-    protected volatile long _unreadBegin = 0;
-
     private static final IOBaseOp OP_ACTIVE = new IOBaseOp() {
         @Override
         public void inboundOnNext(
-                final IOBase iobase,
+                final IOBase<?> iobase,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject msg) {
             iobase.inboundOnNext(subscriber, msg);
@@ -261,24 +358,24 @@ public abstract class IOBase implements Inbound, Outbound {
         
         @Override
         public void outboundOnNext(
-                final IOBase iobase,
+                final IOBase<?> iobase,
                 final Object msg) {
             iobase.outboundOnNext(msg);
         }
         
         @Override
         public void outboundOnCompleted(
-                final IOBase iobase) {
+                final IOBase<?> iobase) {
             iobase.outboundOnCompleted();
         }
         
         @Override
-        public void readMessage(final IOBase iobase) {
+        public void readMessage(final IOBase<?> iobase) {
             iobase.readMessage();
         }
 
         @Override
-        public void setWriteBufferWaterMark(final IOBase iobase, final int low, final int high) {
+        public void setWriteBufferWaterMark(final IOBase<?> iobase, final int low, final int high) {
             iobase._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
             if (LOG.isInfoEnabled()) {
                 LOG.info("channel({}) setWriteBufferWaterMark with low:{} high:{}", iobase._channel, low, high);
@@ -286,12 +383,12 @@ public abstract class IOBase implements Inbound, Outbound {
         }
         
         @Override
-        public boolean isWritable(final IOBase iobase) {
+        public boolean isWritable(final IOBase<?> iobase) {
             return iobase._channel.isWritable();
         }
         
         @Override
-        public Future<?> runAtEventLoop(final IOBase iobase, final Runnable task) {
+        public Future<?> runAtEventLoop(final IOBase<?> iobase, final Runnable task) {
             return iobase._channel.eventLoop().submit(task);
         }
     };
@@ -299,7 +396,7 @@ public abstract class IOBase implements Inbound, Outbound {
     private static final IOBaseOp OP_UNACTIVE = new IOBaseOp() {
         @Override
         public void inboundOnNext(
-                final IOBase iobase,
+                final IOBase<?> iobase,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject inmsg) {
             ReferenceCountUtil.release(inmsg);
@@ -309,28 +406,28 @@ public abstract class IOBase implements Inbound, Outbound {
         }
         
         @Override
-        public void outboundOnNext(final IOBase iobase, final Object msg) {
+        public void outboundOnNext(final IOBase<?> iobase, final Object msg) {
         }
         
         @Override
-        public void outboundOnCompleted(final IOBase iobase) {
+        public void outboundOnCompleted(final IOBase<?> iobase) {
         }
         
         @Override
-        public void readMessage(final IOBase iobase) {
+        public void readMessage(final IOBase<?> iobase) {
         }
 
         @Override
-        public void setWriteBufferWaterMark(final IOBase iobase, final int low, final int high) {
+        public void setWriteBufferWaterMark(final IOBase<?> iobase, final int low, final int high) {
         }
         
         @Override
-        public boolean isWritable(final IOBase iobase) {
+        public boolean isWritable(final IOBase<?> iobase) {
             return false;
         }
         
         @Override
-        public Future<?> runAtEventLoop(final IOBase iobase, final Runnable task) {
+        public Future<?> runAtEventLoop(final IOBase<?> iobase, final Runnable task) {
             return null;
         }
     };
