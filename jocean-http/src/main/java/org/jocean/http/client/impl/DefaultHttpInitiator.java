@@ -12,22 +12,18 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.CloseException;
 import org.jocean.http.DoFlush;
-import org.jocean.http.InboundSupport;
+import org.jocean.http.IOBase;
 import org.jocean.http.ReadPolicy.Intraffic;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
-import org.jocean.http.WriteCtrl;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
-import org.jocean.idiom.rx.Action1_N;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,15 +33,12 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.channel.WriteBufferWaterMark;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.ReferenceCountUtil;
-import io.netty.util.concurrent.Future;
 import rx.Observable;
 import rx.Observer;
 import rx.Subscriber;
@@ -59,7 +52,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpInitiator extends InboundSupport
+class DefaultHttpInitiator extends IOBase
     implements HttpInitiator, Comparable<DefaultHttpInitiator>{
     
     private static final Action1<Object> _ADD_ACCEPT_ENCODING = new Action1<Object>() {
@@ -135,21 +128,6 @@ class DefaultHttpInitiator extends InboundSupport
     }
     
     @Override
-    protected void readMessage0() {
-        this._op.readMessage(this);
-    }
-    
-    @Override
-    protected void runAtEventLoop0(final Runnable runnable) {
-        this._op.runAtEventLoop(this, runnable);
-    }
-    
-    @Override
-    public WriteCtrl writeCtrl() {
-        return buildWriteCtrl();
-    }
-    
-    @Override
     public void close() {
         fireClosed(new CloseException());
     }
@@ -196,10 +174,9 @@ class DefaultHttpInitiator extends InboundSupport
         return this._isKeepAlive;
     }
     
-    private final InterfaceSelector _selector = new InterfaceSelector();
-    
     DefaultHttpInitiator(final Channel channel) {
-        this._channel = channel;
+        super(channel);
+        
         this._terminateAwareSupport = 
             new TerminateAwareSupport<HttpInitiator>(this._selector);
         
@@ -269,139 +246,10 @@ class DefaultHttpInitiator extends InboundSupport
         public void doOnUnsubscribeResponse(
                 final DefaultHttpInitiator initiator,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber);
-        
-        public void inboundOnNext(
-                final DefaultHttpInitiator initiator,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-                final HttpObject msg);
-        
-        public void outboundOnNext(final DefaultHttpInitiator initiator, final Object msg);
-
-        public void outboundOnCompleted(final DefaultHttpInitiator initiator);
-        
-        public void readMessage(final DefaultHttpInitiator initiator);
-
-        public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator, final int low, final int high);
-        
-        public boolean isWritable(final DefaultHttpInitiator initiator);
-        
-        public Future<?> runAtEventLoop(final DefaultHttpInitiator initiator, final Runnable task);
     }
     
     private final Op _op;
     
-    private WriteCtrl buildWriteCtrl() {
-        return new WriteCtrl() {
-            @Override
-            public void setFlushPerWrite(final boolean isFlushPerWrite) {
-                _isFlushPerWrite = isFlushPerWrite;
-            }
-
-            @Override
-            public void setWriteBufferWaterMark(final int low, final int high) {
-                _op.setWriteBufferWaterMark(DefaultHttpInitiator.this, low, high);
-            }
-
-            @Override
-            public Observable<Boolean> writability() {
-                return Observable.unsafeCreate(new Observable.OnSubscribe<Boolean>() {
-                    @Override
-                    public void call(final Subscriber<? super Boolean> subscriber) {
-                        if (!subscriber.isUnsubscribed()) {
-                            _op.runAtEventLoop(DefaultHttpInitiator.this, new Runnable() {
-                                @Override
-                                public void run() {
-                                    addWritabilitySubscriber(subscriber);
-                                }});
-                        }
-                    }});
-            }
-
-            @Override
-            public Observable<Object> sended() {
-                return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
-                    @Override
-                    public void call(final Subscriber<? super Object> subscriber) {
-                        addSendedSubscriber(subscriber);
-                    }});
-            }};
-    }
-
-    private void addWritabilitySubscriber(final Subscriber<? super Boolean> subscriber) {
-        if (!subscriber.isUnsubscribed()) {
-            subscriber.onNext(this._op.isWritable(this));
-            this._writabilityObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _writabilityObserver.removeComponent(subscriber);
-                }}));
-        }
-    }
-    
-    private void addSendedSubscriber(final Subscriber<? super Object> subscriber) {
-        if (!subscriber.isUnsubscribed()) {
-            this._sendedObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _sendedObserver.removeComponent(subscriber);
-                }}));
-        }
-    }
-    
-    private final COWCompositeSupport<Subscriber<? super Boolean>> _writabilityObserver = 
-            new COWCompositeSupport<>();
-    
-    private final COWCompositeSupport<Subscriber<? super Object>> _sendedObserver = 
-            new COWCompositeSupport<>();
-    
-    private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = new Action1_N<Subscriber<? super Boolean>>() {
-        @Override
-        public void call(final Subscriber<? super Boolean> subscriber, final Object... args) {
-            final Boolean isWritable = (Boolean)args[0];
-            if (!subscriber.isUnsubscribed()) {
-                try {
-                    subscriber.onNext(isWritable);
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke onNext({}), detail: {}",
-                        subscriber,
-                        ExceptionUtils.exception2detail(e));
-                }
-            }
-        }};
-        
-    private void onWritabilityChanged() {
-        this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._op.isWritable(this));
-    }
-
-    private static final Action1_N<Subscriber<? super Object>> ON_SENDED = new Action1_N<Subscriber<? super Object>>() {
-        @Override
-        public void call(final Subscriber<? super Object> subscriber, final Object... args) {
-            final Object outmsg = args[0];
-            if (!subscriber.isUnsubscribed()) {
-                try {
-                    subscriber.onNext(outmsg);
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke onNext({}), detail: {}",
-                        subscriber,
-                        ExceptionUtils.exception2detail(e));
-                }
-            }
-        }};
-
-    private void onOutboundMsgSended(final Object outmsg) {
-        this._sendedObserver.foreachComponent(ON_SENDED, outmsg);
-    }
-
-    private ChannelFuture sendOutbound(Object outmsg) {
-        while (outmsg instanceof DisposableWrapper) {
-            outmsg = ((DisposableWrapper<?>)outmsg).unwrap();
-        }
-        return this._isFlushPerWrite
-                ? this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
-                : this._channel.write(ReferenceCountUtil.retain(outmsg));
-    }
 
     @Override
     public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
@@ -522,7 +370,7 @@ class DefaultHttpInitiator extends InboundSupport
                         LOG.debug("HttpInitiator: channel({})/handler({}): channelRead0 and call with msg({}).",
                             ctx.channel(), ctx.name(), respmsg);
                     }
-                    _op.inboundOnNext(DefaultHttpInitiator.this, subscriber, respmsg);
+                    _iobaseop.inboundOnNext(DefaultHttpInitiator.this, subscriber, respmsg);
                 }};
             Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
             inboundHandlerUpdater.set(this, handler);
@@ -548,7 +396,8 @@ class DefaultHttpInitiator extends InboundSupport
         }
     }
 
-    private void readMessage() {
+    @Override
+    protected void readMessage() {
         if (inTransacting()) {
             LOG.info("read message for channel {}", this._channel);
             this._channel.read();
@@ -564,7 +413,7 @@ class DefaultHttpInitiator extends InboundSupport
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("request invoke onCompleted for initiator: {}", DefaultHttpInitiator.this);
                     }
-                    _op.outboundOnCompleted(DefaultHttpInitiator.this);
+                    _iobaseop.outboundOnCompleted(DefaultHttpInitiator.this);
                 }
 
                 @Override
@@ -576,18 +425,20 @@ class DefaultHttpInitiator extends InboundSupport
 
                 @Override
                 public void onNext(final Object reqmsg) {
-                    _op.outboundOnNext(DefaultHttpInitiator.this, reqmsg);
+                    _iobaseop.outboundOnNext(DefaultHttpInitiator.this, reqmsg);
                 }};
     }
 
-    private void outboundOnCompleted() {
+    @Override
+    protected void outboundOnCompleted() {
         // force flush for _isFlushPerWrite = false
         this._channel.flush();
         this._isRequestCompleted = true;
         this.readMessage();
     }
 
-    private void outboundOnNext(final Object outmsg) {
+    @Override
+    protected void outboundOnNext(final Object outmsg) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("sending http request msg {}", outmsg);
         }
@@ -624,7 +475,8 @@ class DefaultHttpInitiator extends InboundSupport
         this._isKeepAlive = HttpUtil.isKeepAlive(req);
     }
 
-    private void inboundOnNext(
+    @Override
+    protected void inboundOnNext(
             final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
             final HttpObject inmsg) {
         markStartRecving();
@@ -749,12 +601,10 @@ class DefaultHttpInitiator extends InboundSupport
     @SuppressWarnings("unused")
     private volatile long _readBegin = 0;
     
-    private volatile boolean _isFlushPerWrite = false;
     private volatile boolean _isRequestCompleted = false;
     
     private final TerminateAwareSupport<HttpInitiator> _terminateAwareSupport;
 
-    private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
     private final TrafficCounter _traffic;
 
@@ -768,56 +618,10 @@ class DefaultHttpInitiator extends InboundSupport
       }
       
       @Override
-      public void inboundOnNext(
-              final DefaultHttpInitiator initiator,
-              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-              final HttpObject msg) {
-          initiator.inboundOnNext(subscriber, msg);
-      }
-      
-      @Override
       public void doOnUnsubscribeResponse(
               final DefaultHttpInitiator initiator,
               final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
           initiator.doOnUnsubscribeResponse(subscriber);
-      }
-      
-      @Override
-      public void outboundOnNext(
-              final DefaultHttpInitiator initiator,
-              final Object msg) {
-          initiator.outboundOnNext(msg);
-      }
-      
-      @Override
-      public void outboundOnCompleted(
-              final DefaultHttpInitiator initiator) {
-          initiator.outboundOnCompleted();
-      }
-      
-      @Override
-      public void readMessage(final DefaultHttpInitiator initiator) {
-          initiator.readMessage();
-      }
-
-      @Override
-      public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
-              final int low, final int high) {
-          initiator._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
-          if (LOG.isInfoEnabled()) {
-              LOG.info("channel({}) setWriteBufferWaterMark with low:{} high:{}", 
-                  initiator._channel, low, high);
-          }
-      }
-      
-      @Override
-      public boolean isWritable(final DefaultHttpInitiator initiator) {
-          return initiator._channel.isWritable();
-      }
-      
-      @Override
-      public Future<?> runAtEventLoop(final DefaultHttpInitiator initiator, final Runnable task) {
-          return initiator._channel.eventLoop().submit(task);
       }
   };
   
@@ -831,46 +635,9 @@ class DefaultHttpInitiator extends InboundSupport
       }
       
       @Override
-      public void inboundOnNext(
-              final DefaultHttpInitiator initiator,
-              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-              final HttpObject msg) {
-          ReferenceCountUtil.release(msg);
-      }
-      
-      @Override
       public void doOnUnsubscribeResponse(
               final DefaultHttpInitiator initiator,
               final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-      }
-
-      @Override
-      public void outboundOnNext(
-              final DefaultHttpInitiator initiator,
-              final Object msg) {
-      }
-      
-      @Override
-      public void outboundOnCompleted(final DefaultHttpInitiator initiator) {
-      }
-      
-      @Override
-      public void readMessage(final DefaultHttpInitiator initiator) {
-      }
-
-      @Override
-      public void setWriteBufferWaterMark(final DefaultHttpInitiator initiator,
-              final int low, final int high) {
-      }
-      
-      @Override
-      public boolean isWritable(final DefaultHttpInitiator initiator) {
-          return false;
-      }
-      
-      @Override
-      public Future<?> runAtEventLoop(final DefaultHttpInitiator initiator, final Runnable task) {
-          return null;
       }
   };
 }

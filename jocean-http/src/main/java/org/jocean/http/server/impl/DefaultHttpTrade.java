@@ -15,22 +15,19 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.CloseException;
 import org.jocean.http.DoFlush;
-import org.jocean.http.InboundSupport;
+import org.jocean.http.IOBase;
 import org.jocean.http.ReadPolicy.Intraffic;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
-import org.jocean.http.WriteCtrl;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAwareSupport;
-import org.jocean.idiom.rx.Action1_N;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,14 +39,11 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.channel.WriteBufferWaterMark;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.util.ReferenceCountUtil;
-import io.netty.util.concurrent.Future;
 import rx.Observable;
 import rx.Observer;
 import rx.Subscriber;
@@ -58,13 +52,12 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.ActionN;
 import rx.functions.Func1;
-import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
  *
  */
-class DefaultHttpTrade extends InboundSupport 
+class DefaultHttpTrade extends IOBase 
     implements HttpTrade,  Comparable<DefaultHttpTrade> {
     
     private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
@@ -169,16 +162,6 @@ class DefaultHttpTrade extends InboundSupport
     }
     
     @Override
-    protected void readMessage0() {
-        this._op.readMessage(this);
-    }
-    
-    @Override
-    protected void runAtEventLoop0(final Runnable runnable) {
-        this._op.runAtEventLoop(this, runnable);
-    }
-    
-    @Override
     public Observable<? extends DisposableWrapper<HttpObject>> inbound() {
         return this._obsRequest;
     }
@@ -188,11 +171,6 @@ class DefaultHttpTrade extends InboundSupport
         return this._op.setOutbound(this, message);
     }
 
-    @Override
-    public WriteCtrl writeCtrl() {
-        return buildWriteCtrl();
-    }
-    
     @Override
     public void close() {
         fireClosed(new CloseException());
@@ -243,11 +221,11 @@ class DefaultHttpTrade extends InboundSupport
     }
     
     DefaultHttpTrade(final Channel channel, final int maxBufSize) {
+        super(channel);
         
         if (!channel.eventLoop().inEventLoop()) {
             throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
         }
-        this._channel = channel;
         this._terminateAwareSupport = 
             new TerminateAwareSupport<HttpTrade>(this._selector);
         
@@ -328,139 +306,9 @@ class DefaultHttpTrade extends InboundSupport
 
     protected interface Op {
         public Subscription setOutbound(final DefaultHttpTrade trade, final Observable<? extends Object> outbound);
-        
-        public void inboundOnNext(
-                final DefaultHttpTrade trade,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-                final HttpObject msg);
-        
-        public void outboundOnNext(final DefaultHttpTrade trade, final Object msg);
-        
-        public void outboundOnCompleted(final DefaultHttpTrade trade);
-        
-        public void readMessage(final DefaultHttpTrade trade);
-
-        public void setWriteBufferWaterMark(final DefaultHttpTrade trade, final int low, final int high);
-        
-        public boolean isWritable(final DefaultHttpTrade trade);
-        
-        public Future<?> runAtEventLoop(final DefaultHttpTrade trade, final Runnable task);
     }
     
     private final Op _op;
-    
-    private WriteCtrl buildWriteCtrl() {
-        return new WriteCtrl() {
-            @Override
-            public void setFlushPerWrite(final boolean isFlushPerWrite) {
-                _isFlushPerWrite = isFlushPerWrite;
-            }
-
-            @Override
-            public void setWriteBufferWaterMark(final int low, final int high) {
-                _op.setWriteBufferWaterMark(DefaultHttpTrade.this, low, high);
-            }
-
-            @Override
-            public Observable<Boolean> writability() {
-                return Observable.unsafeCreate(new Observable.OnSubscribe<Boolean>() {
-                    @Override
-                    public void call(final Subscriber<? super Boolean> subscriber) {
-                        if (!subscriber.isUnsubscribed()) {
-                            _op.runAtEventLoop(DefaultHttpTrade.this, new Runnable() {
-                                @Override
-                                public void run() {
-                                    addWritabilitySubscriber(subscriber);
-                                }});
-                        }
-                    }});
-            }
-
-            @Override
-            public Observable<Object> sended() {
-                return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
-                    @Override
-                    public void call(final Subscriber<? super Object> subscriber) {
-                        addSendedSubscriber(subscriber);
-                    }});
-            }};
-    }
-
-    private void addWritabilitySubscriber(final Subscriber<? super Boolean> subscriber) {
-        if (!subscriber.isUnsubscribed()) {
-            subscriber.onNext(this._op.isWritable(this));
-            this._writabilityObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _writabilityObserver.removeComponent(subscriber);
-                }}));
-        }
-    }
-    
-    private void addSendedSubscriber(final Subscriber<? super Object> subscriber) {
-        if (!subscriber.isUnsubscribed()) {
-            this._sendedObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _sendedObserver.removeComponent(subscriber);
-                }}));
-        }
-    }
-    
-    private final COWCompositeSupport<Subscriber<? super Boolean>> _writabilityObserver = 
-            new COWCompositeSupport<>();
-    
-    private final COWCompositeSupport<Subscriber<? super Object>> _sendedObserver = 
-            new COWCompositeSupport<>();
-    
-    private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = new Action1_N<Subscriber<? super Boolean>>() {
-        @Override
-        public void call(final Subscriber<? super Boolean> subscriber, final Object... args) {
-            final Boolean isWritable = (Boolean)args[0];
-            if (!subscriber.isUnsubscribed()) {
-                try {
-                    subscriber.onNext(isWritable);
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke onNext({}), detail: {}",
-                        subscriber,
-                        ExceptionUtils.exception2detail(e));
-                }
-            }
-        }};
-        
-    private void onWritabilityChanged() {
-        this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._op.isWritable(this));
-    }
-    
-    private static final Action1_N<Subscriber<? super Object>> ON_SENDED = new Action1_N<Subscriber<? super Object>>() {
-        @Override
-        public void call(final Subscriber<? super Object> subscriber, final Object... args) {
-            final Object outmsg = args[0];
-            if (!subscriber.isUnsubscribed()) {
-                try {
-                    subscriber.onNext(outmsg);
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke onNext({}), detail: {}",
-                        subscriber,
-                        ExceptionUtils.exception2detail(e));
-                }
-            }
-        }};
-        
-    private void onOutboundMsgSended(final Object outmsg) {
-        this._sendedObserver.foreachComponent(ON_SENDED, outmsg);
-    }
-    
-    private ChannelFuture sendOutbound(Object outmsg) {
-        while (outmsg instanceof DisposableWrapper) {
-            outmsg = ((DisposableWrapper<?>)outmsg).unwrap();
-        }
-        return this._isFlushPerWrite
-                ? this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
-                : this._channel.write(ReferenceCountUtil.retain(outmsg));
-    }
     
     private Observable<? extends DisposableWrapper<HttpObject>> buildObsRequest(final int maxBufSize) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
@@ -476,14 +324,15 @@ class DefaultHttpTrade extends InboundSupport
             @Override
             protected void channelRead0(final ChannelHandlerContext ctx,
                     final HttpObject inmsg) throws Exception {
-                _op.inboundOnNext(DefaultHttpTrade.this, subscriber, inmsg);
+                _iobaseop.inboundOnNext(DefaultHttpTrade.this, subscriber, inmsg);
             }};
         Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
         // TBD, check _inboundHandler's status, at most only once
         this._inboundHandler = handler;
     }
 
-    private void inboundOnNext(
+    @Override
+    protected void inboundOnNext(
             final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
             final HttpObject inmsg) {
         if (LOG.isDebugEnabled()) {
@@ -545,7 +394,7 @@ class DefaultHttpTrade extends InboundSupport
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("response invoke onCompleted for trade: {}", DefaultHttpTrade.this);
                     }
-                    _op.outboundOnCompleted(DefaultHttpTrade.this);
+                    _iobaseop.outboundOnCompleted(DefaultHttpTrade.this);
                 }
 
                 @Override
@@ -562,7 +411,7 @@ class DefaultHttpTrade extends InboundSupport
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("response invoke onNext({}) for trade: {}", outmsg, DefaultHttpTrade.this);
                     }
-                    _op.outboundOnNext(DefaultHttpTrade.this, outmsg);
+                    _iobaseop.outboundOnNext(DefaultHttpTrade.this, outmsg);
                 }};
     }
     
@@ -641,7 +490,8 @@ class DefaultHttpTrade extends InboundSupport
         this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
     }
 
-    private void outboundOnNext(final Object outmsg) {
+    @Override
+    protected void outboundOnNext(final Object outmsg) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("sending http response msg {}", outmsg);
         }
@@ -670,7 +520,8 @@ class DefaultHttpTrade extends InboundSupport
         }
     }
     
-    private void outboundOnCompleted() {
+    @Override
+    protected void outboundOnCompleted() {
         // force flush for _isFlushPerWrite = false
         //  reference: https://github.com/netty/netty/commit/789e323b79d642ea2c0a024cb1c839654b7b8fad
         //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
@@ -695,7 +546,8 @@ class DefaultHttpTrade extends InboundSupport
             }});
     }
     
-    private void readMessage() {
+    @Override
+    protected void readMessage() {
         if (inRecving()) {
             this._channel.read();
             this._unreadBegin = 0;
@@ -773,8 +625,6 @@ class DefaultHttpTrade extends InboundSupport
     private volatile Throwable _unactiveReason = null;
     private final Observable<? extends DisposableWrapper<HttpObject>> _obsRequest;
     
-    private volatile boolean _isFlushPerWrite = false;
-    
     private static final AtomicReferenceFieldUpdater<DefaultHttpTrade, Subscription> outboundSubscriptionUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpTrade.class, Subscription.class, "_outboundSubscription");
     
@@ -785,7 +635,6 @@ class DefaultHttpTrade extends InboundSupport
     
     private final TerminateAwareSupport<HttpTrade> _terminateAwareSupport;
     
-    private final Channel _channel;
     private final long _createTimeMillis = System.currentTimeMillis();
     private final TrafficCounter _traffic;
     private String _requestMethod;
@@ -794,102 +643,18 @@ class DefaultHttpTrade extends InboundSupport
     private volatile boolean _isKeepAlive = false;
     
     private static final Op OP_ACTIVE = new Op() {
-        public void inboundOnNext(
-                final DefaultHttpTrade trade,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-                final HttpObject inmsg) {
-            trade.inboundOnNext(subscriber, inmsg);
-        }
-        
         @Override
         public Subscription setOutbound(
                 final DefaultHttpTrade trade,
                 final Observable<? extends Object> outbound) {
             return trade.setOutbound(outbound);
         }
-        
-        @Override
-        public void outboundOnNext(
-                final DefaultHttpTrade trade,
-                final Object outmsg) {
-            trade.outboundOnNext(outmsg);
-        }
-        
-        @Override
-        public void outboundOnCompleted(
-                final DefaultHttpTrade trade) {
-            trade.outboundOnCompleted();
-        }
-        
-        @Override
-        public void readMessage(final DefaultHttpTrade trade) {
-            trade.readMessage();
-        }
-
-        @Override
-        public void setWriteBufferWaterMark(final DefaultHttpTrade trade,
-                final int low, final int high) {
-            trade._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
-            if (LOG.isInfoEnabled()) {
-                LOG.info("channel({}) setWriteBufferWaterMark with low:{} high:{}", 
-                    trade._channel, low, high);
-            }
-        }
-        
-        @Override
-        public boolean isWritable(final DefaultHttpTrade trade) {
-            return trade._channel.isWritable();
-        }
-        
-        @Override
-        public Future<?> runAtEventLoop(final DefaultHttpTrade trade, final Runnable task) {
-            return trade._channel.eventLoop().submit(task);
-        }
     };
     
     private static final Op OP_UNACTIVE = new Op() {
-        public void inboundOnNext(
-                final DefaultHttpTrade trade,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-                final HttpObject inmsg) {
-            ReferenceCountUtil.release(inmsg);
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("HttpTrade(inactive): channelRead0 and release msg({}).", inmsg);
-            }
-        }
-        
         @Override
         public Subscription setOutbound(final DefaultHttpTrade trade,
                 final Observable<? extends Object> outbound) {
-            return null;
-        }
-        
-        @Override
-        public void outboundOnNext(
-                final DefaultHttpTrade trade,
-                final Object outmsg) {
-        }
-        
-        @Override
-        public void outboundOnCompleted(final DefaultHttpTrade trade) {
-        }
-        
-        @Override
-        public void readMessage(final DefaultHttpTrade trade) {
-        }
-
-        @Override
-        public void setWriteBufferWaterMark(final DefaultHttpTrade trade,
-                final int low, final int high) {
-        }
-        
-        @Override
-        public boolean isWritable(final DefaultHttpTrade trade) {
-            return false;
-        }
-        
-        @Override
-        public Future<?> runAtEventLoop(final DefaultHttpTrade trade, final Runnable task) {
             return null;
         }
     };
