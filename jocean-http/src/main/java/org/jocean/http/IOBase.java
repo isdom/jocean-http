@@ -29,6 +29,7 @@ import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.functions.ActionN;
 import rx.subscriptions.Subscriptions;
 
 public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> {
@@ -326,7 +327,17 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
                 }};
     }
     
-    protected abstract void fireClosed(final Throwable e);
+    protected void fireClosed(final Throwable e) {
+        this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
+    }
+
+    private static final ActionN FIRE_CLOSED = new ActionN() {
+        @Override
+        public void call(final Object... args) {
+            ((IOBase<?>)args[0]).doClosed((Throwable)args[1]);
+        }};
+        
+    protected abstract void doClosed(final Throwable e);
     
     protected abstract boolean needRead();
 

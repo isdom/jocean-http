@@ -44,7 +44,6 @@ import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.functions.ActionN;
 import rx.functions.Func1;
 
 /**
@@ -255,17 +254,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     }
     
     @Override
-    protected void fireClosed(final Throwable e) {
-        this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
-    }
-
-    private static final ActionN FIRE_CLOSED = new ActionN() {
-        @Override
-        public void call(final Object... args) {
-            ((DefaultHttpTrade)args[0]).doClosed((Throwable)args[1]);
-        }};
-        
-    private void doClosed(final Throwable e) {
+    protected void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("closing active trade[channel: {}] "
                     + "with "
