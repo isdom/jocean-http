@@ -36,25 +36,6 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
     
     protected final InterfaceSelector _selector = new InterfaceSelector();
     
-    protected interface IOBaseOp {
-        public void inboundOnNext(
-                final IOBase<?> io,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-                final HttpObject msg);
-        
-        public void outboundOnNext(final IOBase<?> io, final Object msg);
-
-        public void outboundOnCompleted(final IOBase<?> io);
-        
-        public void readMessage(final IOBase<?> io);
-
-        public void setWriteBufferWaterMark(final IOBase<?> io, final int low, final int high);
-        
-        public boolean isWritable(final IOBase<?> io);
-        
-        public Future<?> runAtEventLoop(final IOBase<?> io, final Runnable task);
-    }
-    
     protected IOBase(final Channel channel) {
         
         this._terminateAwareSupport = 
@@ -345,6 +326,25 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
     
     @SuppressWarnings("unused")
     private volatile Subscription _pendingRead = null;
+    
+    protected interface IOBaseOp {
+        public void inboundOnNext(
+                final IOBase<?> io,
+                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
+                final HttpObject msg);
+        
+        public void outboundOnNext(final IOBase<?> io, final Object msg);
+
+        public void outboundOnCompleted(final IOBase<?> io);
+        
+        public void readMessage(final IOBase<?> io);
+
+        public void setWriteBufferWaterMark(final IOBase<?> io, final int low, final int high);
+        
+        public boolean isWritable(final IOBase<?> io);
+        
+        public Future<?> runAtEventLoop(final IOBase<?> io, final Runnable task);
+    }
     
     private static final IOBaseOp OP_ACTIVE = new IOBaseOp() {
         @Override
