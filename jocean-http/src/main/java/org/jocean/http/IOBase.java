@@ -240,7 +240,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
     }
     
     public void setReadPolicy(final ReadPolicy readPolicy) {
-        runAtEventLoop0(new Runnable() {
+        this._iobaseop.runAtEventLoop(this, new Runnable() {
             @Override
             public void run() {
                 setReadPolicy0(readPolicy);
@@ -267,25 +267,17 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
                 final Subscription pendingRead = when.subscribe(new Action1<Object>() {
                     @Override
                     public void call(final Object nouse) {
-                        readMessage0();
+                        _iobaseop.readMessage(IOBase.this);
                     }});
 
                 pendingReadUpdater.set(this, pendingRead);
             } else {
                 //  perform read at once
-                readMessage0();
+                _iobaseop.readMessage(IOBase.this);
             }
         }
     }
 
-    private void readMessage0() {
-        this._iobaseop.readMessage(this);
-    }
-    
-    private void runAtEventLoop0(final Runnable runnable) {
-        this._iobaseop.runAtEventLoop(this, runnable);
-    }
-    
 //    @Override
     public TrafficCounter traffic() {
         return this._traffic;
@@ -314,7 +306,16 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
                 return traffic().inboundBytes();
             }};
     }
-        
+
+    protected void readMessage() {
+        if (needRead()) {
+            LOG.info("read message for channel {}", this._channel);
+            this._channel.read();
+            this._unreadBegin = 0;
+            readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
+        }
+    }
+    
     protected abstract void fireClosed(final Throwable e);
     
     protected abstract boolean needRead();
@@ -327,14 +328,12 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
     
     protected abstract void outboundOnCompleted();
     
-    protected abstract void readMessage();
-    
     private volatile Single<?> _whenToRead = null;
     
-    protected volatile long _unreadBegin = 0;
+    private volatile long _unreadBegin = 0;
 
     @SuppressWarnings("rawtypes")
-    protected static final AtomicLongFieldUpdater<IOBase> readBeginUpdater = 
+    private static final AtomicLongFieldUpdater<IOBase> readBeginUpdater = 
             AtomicLongFieldUpdater.newUpdater(IOBase.class, "_readBegin");
     
     @SuppressWarnings("unused")

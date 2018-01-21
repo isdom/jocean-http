@@ -303,16 +303,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
     }
 
-    @Override
-    protected void readMessage() {
-        if (inTransacting()) {
-            LOG.info("read message for channel {}", this._channel);
-            this._channel.read();
-            this._unreadBegin = 0;
-            readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
-        }
-    }
-
     private Observer<Object> buildRequestObserver() {
         return new Observer<Object>() {
                 @Override
@@ -336,12 +326,8 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
                 }};
     }
 
-    @Override
-    protected void outboundOnCompleted() {
-        // force flush for _isFlushPerWrite = false
-        this._channel.flush();
-        this._isRequestCompleted = true;
-        this.readMessage();
+    private void onHttpRequest(final HttpRequest req) {
+        this._isKeepAlive = HttpUtil.isKeepAlive(req);
     }
 
     @Override
@@ -378,8 +364,12 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
     }
 
-    private void onHttpRequest(final HttpRequest req) {
-        this._isKeepAlive = HttpUtil.isKeepAlive(req);
+    @Override
+    protected void outboundOnCompleted() {
+        // force flush for _isFlushPerWrite = false
+        this._channel.flush();
+        this._isRequestCompleted = true;
+        this.readMessage();
     }
 
     @Override
