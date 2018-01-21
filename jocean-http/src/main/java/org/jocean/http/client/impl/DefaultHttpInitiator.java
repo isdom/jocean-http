@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+import org.jocean.http.CloseException;
 import org.jocean.http.DoFlush;
 import org.jocean.http.InboundSupport;
 import org.jocean.http.ReadPolicy.Intraffic;
@@ -148,8 +149,56 @@ class DefaultHttpInitiator extends InboundSupport
         return buildWriteCtrl();
     }
     
+    @Override
+    public void close() {
+        fireClosed(new CloseException());
+    }
+
+    @Override
+    public Action0 closer() {
+        return new Action0() {
+            @Override
+            public void call() {
+                close();
+            }};
+    }
+    
+    @Override
+    public Object transport() {
+        return this._channel;
+    }
+    
+    Channel channel() {
+        return this._channel;
+    }
+    
+    @Override
+    public Action1<Action0> onTerminate() {
+        return this._terminateAwareSupport.onTerminate(this);
+    }
+            
+    @Override
+    public Action1<Action1<HttpInitiator>> onTerminateOf() {
+        return this._terminateAwareSupport.onTerminateOf(this);
+    }
+
+    @Override
+    public Action0 doOnTerminate(Action0 onTerminate) {
+        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
+    }
+                
+    @Override
+    public Action0 doOnTerminate(final Action1<HttpInitiator> onTerminate) {
+        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
+    }
+    
+    boolean isKeepAlive() {
+        return this._isKeepAlive;
+    }
+    
+    private final InterfaceSelector _selector = new InterfaceSelector();
+    
     DefaultHttpInitiator(final Channel channel) {
-        this._selector = new InterfaceSelector();
         this._channel = channel;
         this._terminateAwareSupport = 
             new TerminateAwareSupport<HttpInitiator>(this._selector);
@@ -377,10 +426,6 @@ class DefaultHttpInitiator extends InboundSupport
         return transactionStatus() > STATUS_IDLE;
     }
     
-    boolean isKeepAlive() {
-        return this._isKeepAlive;
-    }
-    
     @Override
     protected Intraffic buildIntraffic() {
         return new Intraffic() {
@@ -399,56 +444,6 @@ class DefaultHttpInitiator extends InboundSupport
             public long inboundBytes() {
                 return _traffic.inboundBytes();
             }};
-    }
-    
-    @Override
-    public Action0 closer() {
-        return new Action0() {
-            @Override
-            public void call() {
-                close();
-            }};
-    }
-    
-    static class CloseException extends RuntimeException {
-        private static final long serialVersionUID = 1L;
-        CloseException() {
-            super("close()");
-        }
-    }
-    
-    @Override
-    public void close() {
-        fireClosed(new CloseException());
-    }
-
-    @Override
-    public Object transport() {
-        return this._channel;
-    }
-    
-    Channel channel() {
-        return this._channel;
-    }
-    
-    @Override
-    public Action1<Action0> onTerminate() {
-        return this._terminateAwareSupport.onTerminate(this);
-    }
-            
-    @Override
-    public Action1<Action1<HttpInitiator>> onTerminateOf() {
-        return this._terminateAwareSupport.onTerminateOf(this);
-    }
-
-    @Override
-    public Action0 doOnTerminate(Action0 onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
-    }
-                
-    @Override
-    public Action0 doOnTerminate(final Action1<HttpInitiator> onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate(this, onTerminate);
     }
     
     private static final ActionN FIRE_CLOSED = new ActionN() {
@@ -757,8 +752,6 @@ class DefaultHttpInitiator extends InboundSupport
     private volatile boolean _isFlushPerWrite = false;
     private volatile boolean _isRequestCompleted = false;
     
-    private final InterfaceSelector _selector;
-
     private final TerminateAwareSupport<HttpInitiator> _terminateAwareSupport;
 
     private final Channel _channel;
