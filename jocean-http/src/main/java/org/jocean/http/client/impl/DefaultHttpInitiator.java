@@ -423,7 +423,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
 
     private final Op _op;
 
-    private interface Op {
+    protected interface Op {
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,

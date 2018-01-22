@@ -458,7 +458,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     
     private final Op _op;
     
-    private interface Op {
+    protected interface Op {
         public Subscription setOutbound(final DefaultHttpTrade trade, final Observable<? extends Object> outbound);
     }
     
