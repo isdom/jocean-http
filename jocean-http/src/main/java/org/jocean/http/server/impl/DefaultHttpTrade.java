@@ -42,7 +42,6 @@ import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
 import rx.Subscriber;
 import rx.Subscription;
-import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func1;
 
@@ -165,50 +164,11 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
             }
         });
         
-        Nettys.applyToChannel(onTerminate(), 
-                channel, 
-                HttpHandlers.ON_EXCEPTION_CAUGHT,
-                new Action1<Throwable>() {
-                    @Override
-                    public void call(final Throwable cause) {
-                        fireClosed(cause);
-                    }});
-        
-        Nettys.applyToChannel(onTerminate(), 
-                channel, 
-                HttpHandlers.ON_CHANNEL_INACTIVE,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        onChannelInactive();
-                    }});
-        
-        Nettys.applyToChannel(onTerminate(), 
-                channel, 
-                HttpHandlers.ON_CHANNEL_READCOMPLETE,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        onReadComplete();
-                    }});
-
-        Nettys.applyToChannel(onTerminate(), 
-                channel, 
-                HttpHandlers.ON_CHANNEL_WRITABILITYCHANGED,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        onWritabilityChanged();
-                    }});
-        
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
-        
-        if (!this._channel.isActive()) {
-            fireClosed(new TransportException("channelInactive of " + channel));
-        }
     }
 
-    private void onChannelInactive() {
+    @Override
+    protected void onChannelInactive() {
         if (inTransacting()) {
             fireClosed(new TransportException("channelInactive of " + this._channel));
         } else {
@@ -488,13 +448,13 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     @SuppressWarnings("unused")
     private volatile Subscription _outboundSubscription;
     
+    private volatile boolean _isKeepAlive = false;
+    
     private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
     
     private final long _createTimeMillis = System.currentTimeMillis();
     private String _requestMethod;
     private String _requestUri;
-    
-    private volatile boolean _isKeepAlive = false;
     
     private final Op _op;
     

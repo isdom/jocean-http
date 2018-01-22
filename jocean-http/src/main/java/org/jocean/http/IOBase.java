@@ -49,6 +49,45 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
                 this._channel, 
                 HttpHandlers.TRAFFICCOUNTER);
         
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
+                HttpHandlers.ON_EXCEPTION_CAUGHT,
+                new Action1<Throwable>() {
+                    @Override
+                    public void call(final Throwable cause) {
+                        fireClosed(cause);
+                    }});
+        
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
+                HttpHandlers.ON_CHANNEL_INACTIVE,
+                new Action0() {
+                    @Override
+                    public void call() {
+                        onChannelInactive();
+                    }});
+        
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
+                HttpHandlers.ON_CHANNEL_READCOMPLETE,
+                new Action0() {
+                    @Override
+                    public void call() {
+                        onReadComplete();
+                    }});
+        
+        Nettys.applyToChannel(onTerminate(), 
+                channel, 
+                HttpHandlers.ON_CHANNEL_WRITABILITYCHANGED,
+                new Action0() {
+                    @Override
+                    public void call() {
+                        onWritabilityChanged();
+                    }});
+        
+        if (!this._channel.isActive()) {
+            fireClosed(new TransportException("channelInactive of " + channel));
+        }
     }
     
     protected final IOBaseOp _iobaseop;
@@ -189,8 +228,8 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
                 }
             }
         }};
-        
-    protected void onWritabilityChanged() {
+
+    private void onWritabilityChanged() {
         this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._iobaseop.isWritable(this));
     }
 
@@ -242,7 +281,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         }
     }
 
-    protected void onReadComplete() {
+    private void onReadComplete() {
         this._unreadBegin = System.currentTimeMillis();
         if (needRead()) {
             final Single<?> when = this._whenToRead;
@@ -348,6 +387,8 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
     protected abstract void outboundOnNext(final Object outmsg);
     
     protected abstract void outboundOnCompleted();
+    
+    protected abstract void onChannelInactive();
     
     private volatile Single<?> _whenToRead = null;
     

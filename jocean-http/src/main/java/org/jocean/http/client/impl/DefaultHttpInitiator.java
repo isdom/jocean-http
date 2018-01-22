@@ -60,7 +60,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             }
         }};
         
-    private static final AtomicInteger _IDSRC = new AtomicInteger(0);
+    private static final AtomicInteger _IDSRC = new AtomicInteger(1);
     
     private final int _id = _IDSRC.getAndIncrement();
 
@@ -106,8 +106,8 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
                 .append(", transactionStatus=").append(transactionStatusAsString())
                 .append(", isKeepAlive=").append(isKeepAlive())
                 .append(", isRequestCompleted=").append(_isRequestCompleted)
-                .append(", reqSubscription=").append(_reqSubscription)
-                .append(", respSubscriber=").append(_respSubscriber)
+                .append(", reqSubscription=").append(_outboundSubscription)
+                .append(", respSubscriber=").append(_inboundSubscriber)
                 .append(", channel=").append(_channel)
                 .append("]");
         return builder.toString();
@@ -132,50 +132,11 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
     DefaultHttpInitiator(final Channel channel) {
         super(channel);
         
-        Nettys.applyToChannel(onTerminate(), 
-                channel, 
-                HttpHandlers.ON_EXCEPTION_CAUGHT,
-                new Action1<Throwable>() {
-                    @Override
-                    public void call(final Throwable cause) {
-                        fireClosed(cause);
-                    }});
-        
-        Nettys.applyToChannel(onTerminate(), 
-                channel, 
-                HttpHandlers.ON_CHANNEL_INACTIVE,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        onChannelInactive();
-                    }});
-        
-        Nettys.applyToChannel(onTerminate(), 
-                channel, 
-                HttpHandlers.ON_CHANNEL_READCOMPLETE,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        onReadComplete();
-                    }});
-        
-        Nettys.applyToChannel(onTerminate(), 
-                channel, 
-                HttpHandlers.ON_CHANNEL_WRITABILITYCHANGED,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        onWritabilityChanged();
-                    }});
-
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
-        
-        if (!this._channel.isActive()) {
-            fireClosed(new TransportException("channelInactive of " + channel));
-        }
     }
 
-    private void onChannelInactive() {
+    @Override
+    protected void onChannelInactive() {
         if (inTransacting()) {
             fireClosed(new TransportException("channelInactive of " + this._channel));
         } else {
@@ -228,10 +189,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             }});
     }
 
-    boolean inTransacting() {
-        return transactionStatus() > STATUS_IDLE;
-    }
-    
     @Override
     protected void doClosed(final Throwable e) {
         if (LOG.isDebugEnabled()) {
@@ -427,22 +384,9 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         return transactionUpdater.get(this);
     }
 
-    @SuppressWarnings("rawtypes")
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscriber> inboundSubscriberUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscriber.class, "_respSubscriber");
-    
-    private volatile Subscriber<? super HttpObject> _respSubscriber;
-    
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, ChannelHandler> inboundHandlerUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, ChannelHandler.class, "_respHandler");
-    
-    @SuppressWarnings("unused")
-    private volatile ChannelHandler _respHandler;
-    
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscription> outboundSubscriptionUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscription.class, "_reqSubscription");
-    
-    private volatile Subscription _reqSubscription;
+    boolean inTransacting() {
+        return transactionStatus() > STATUS_IDLE;
+    }
     
     private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator> transactionUpdater =
             AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator.class, "_transactionStatus");
@@ -453,6 +397,23 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
     
     @SuppressWarnings("unused")
     private volatile int _transactionStatus = STATUS_IDLE;
+    
+    @SuppressWarnings("rawtypes")
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscriber> inboundSubscriberUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscriber.class, "_inboundSubscriber");
+    
+    private volatile Subscriber<? super HttpObject> _inboundSubscriber;
+    
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, ChannelHandler> inboundHandlerUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, ChannelHandler.class, "_inboundHandler");
+    
+    @SuppressWarnings("unused")
+    private volatile ChannelHandler _inboundHandler;
+    
+    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscription> outboundSubscriptionUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscription.class, "_outboundSubscription");
+    
+    private volatile Subscription _outboundSubscription;
     
     private volatile boolean _isKeepAlive = true;
     
