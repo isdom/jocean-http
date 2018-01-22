@@ -13,7 +13,6 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.CloseException;
-import org.jocean.http.DoFlush;
 import org.jocean.http.IOBase;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
@@ -32,8 +31,6 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
@@ -190,11 +187,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     }
 
     private void initInboundHandler(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-        final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
-            @Override
-            protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject inmsg) throws Exception {
-                _iobaseop.inboundOnNext(DefaultHttpTrade.this, subscriber, inmsg);
-            }};
+        final ChannelHandler handler = buildInboundHandler(subscriber);
         Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
         // TBD, check _inboundHandler's status, at most only once
         this._inboundHandler = handler;
@@ -226,9 +219,11 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
                     this.isKeepAlive(),
                     errorAsString(e));
         }
-        fireAllSubscriberUnactive(e);
         
         removeInboundHandler();
+        
+        fireAllSubscriberUnactive(e);
+        
         unsubscribeOutbound();
         
         //  fire all pending subscribers onError with unactived exception
@@ -293,26 +288,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         // set in transacting flag
         markStartSending();
         
-        if (outmsg instanceof DoFlush) {
-            this._channel.flush();
-        } else {
-            sendOutbound(outmsg)
-            .addListener(new ChannelFutureListener() {
-                @Override
-                public void operationComplete(final ChannelFuture future)
-                        throws Exception {
-                    if (future.isSuccess()) {
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("send http response msg {} success.", outmsg);
-                        }
-                        onOutboundMsgSended(outmsg);
-                    } else {
-                        LOG.warn("exception when send http resp: {}, detail: {}",
-                                outmsg, ExceptionUtils.exception2detail(future.cause()));
-                        fireClosed(new TransportException("send response error", future.cause()));
-                    }
-                }});
-        }
+        sendOutmsg(outmsg);
     }
     
     @Override

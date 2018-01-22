@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.CloseException;
-import org.jocean.http.DoFlush;
 import org.jocean.http.IOBase;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
@@ -24,11 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpObject;
@@ -156,15 +151,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
         if (holdInboundSubscriber(subscriber)) {
             // _respSubscriber field set to subscriber
-            final ChannelHandler handler = new SimpleChannelInboundHandler<HttpObject>(false) {
-                @Override
-                protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject respmsg) throws Exception {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("HttpInitiator: channel({})/handler({}): channelRead0 and call with msg({}).",
-                            ctx.channel(), ctx.name(), respmsg);
-                    }
-                    _iobaseop.inboundOnNext(DefaultHttpInitiator.this, subscriber, respmsg);
-                }};
+            final ChannelHandler handler = buildInboundHandler(subscriber);
             Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
             inboundHandlerUpdater.set(this, handler);
             outboundSubscriptionUpdater.set(this,  wrapRequest(request).subscribe(buildOutboundObserver()));
@@ -207,7 +194,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         removeInboundHandler();
         
         // notify response Subscriber with error
-        releaseRespWithError(e);
+        releaseInboundWithError(e);
         
         unsubscribeOutbound();
         
@@ -263,26 +250,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             onHttpRequest((HttpRequest)outmsg);
         }
         
-        if (outmsg instanceof DoFlush) {
-            this._channel.flush();
-        } else {
-            sendOutbound(outmsg)
-            .addListener(new ChannelFutureListener() {
-                @Override
-                public void operationComplete(final ChannelFuture future)
-                        throws Exception {
-                    if (future.isSuccess()) {
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("send http request msg {} success.", outmsg);
-                        }
-                        onOutboundMsgSended(outmsg);
-                    } else {
-                        LOG.warn("exception when send http req: {}, detail: {}",
-                                outmsg, ExceptionUtils.exception2detail(future.cause()));
-                        fireClosed(new TransportException("send reqmsg error", future.cause()));
-                    }
-                }});
-        }
+        sendOutmsg(outmsg);
     }
 
     @Override
@@ -332,16 +300,16 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
     }
 
-    private void releaseRespWithError(final Throwable error) {
+    private void releaseInboundWithError(final Throwable error) {
         @SuppressWarnings("unchecked")
-        final Subscriber<? super HttpObject> respSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
-        if (null != respSubscriber
-           && !respSubscriber.isUnsubscribed()) {
+        final Subscriber<? super HttpObject> inboundSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
+        if (null != inboundSubscriber
+           && !inboundSubscriber.isUnsubscribed()) {
             try {
-                respSubscriber.onError(error);
+                inboundSubscriber.onError(error);
             } catch (Exception e) {
                 LOG.warn("exception when invoke {}.onError, detail: {}",
-                    respSubscriber, ExceptionUtils.exception2detail(e));
+                    inboundSubscriber, ExceptionUtils.exception2detail(e));
             }
         }
     }

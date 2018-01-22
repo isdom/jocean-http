@@ -18,6 +18,9 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.util.ReferenceCountUtil;
@@ -44,7 +47,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
                 new TerminateAwareSupport<T>(this._selector);
         
         this._channel = channel;
-        this._iobaseop = this._selector.build(IOBaseOp.class, OP_ACTIVE, OP_UNACTIVE);
+        this._iobaseop = this._selector.build(IOBaseOp.class, IOOP_ACTIVE, IOOP_UNACTIVE);
         this._traffic = Nettys.applyToChannel(onTerminate(), 
                 this._channel, 
                 HttpHandlers.TRAFFICCOUNTER);
@@ -90,7 +93,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         }
     }
     
-    protected final IOBaseOp _iobaseop;
+    private final IOBaseOp _iobaseop;
     
     protected final Channel _channel;
     
@@ -233,6 +236,29 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._iobaseop.isWritable(this));
     }
 
+    protected void sendOutmsg(final Object outmsg) {
+        if (outmsg instanceof DoFlush) {
+            this._channel.flush();
+        } else {
+            sendOutbound(outmsg)
+            .addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(final ChannelFuture future)
+                        throws Exception {
+                    if (future.isSuccess()) {
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("send http outmsg {} success.", outmsg);
+                        }
+                        onOutboundMsgSended(outmsg);
+                    } else {
+                        LOG.warn("exception when send outmsg: {}, detail: {}",
+                                outmsg, ExceptionUtils.exception2detail(future.cause()));
+                        fireClosed(new TransportException("send outmsg error", future.cause()));
+                    }
+                }});
+        }
+    }
+
     private static final Action1_N<Subscriber<? super Object>> ON_SENDED = new Action1_N<Subscriber<? super Object>>() {
         @Override
         public void call(final Subscriber<? super Object> subscriber, final Object... args) {
@@ -248,11 +274,11 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
             }
         }};
 
-    protected void onOutboundMsgSended(final Object outmsg) {
+    private void onOutboundMsgSended(final Object outmsg) {
         this._sendedObserver.foreachComponent(ON_SENDED, outmsg);
     }
 
-    protected ChannelFuture sendOutbound(Object outmsg) {
+    private ChannelFuture sendOutbound(Object outmsg) {
         while (outmsg instanceof DisposableWrapper) {
             outmsg = ((DisposableWrapper<?>)outmsg).unwrap();
         }
@@ -338,6 +364,19 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         }
     }
     
+    protected SimpleChannelInboundHandler<HttpObject> buildInboundHandler(
+            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+        return new SimpleChannelInboundHandler<HttpObject>(false) {
+            @Override
+            protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject inmsg) throws Exception {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("IOBase: channel({})/handler({}): channelRead0 and call with msg({}).",
+                        ctx.channel(), ctx.name(), inmsg);
+                }
+                _iobaseop.inboundOnNext(IOBase.this, subscriber, inmsg);
+            }};
+    }
+
     protected Observer<Object> buildOutboundObserver() {
         return new Observer<Object>() {
                 @Override
@@ -427,7 +466,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         public Future<?> runAtEventLoop(final IOBase<?> io, final Runnable task);
     }
     
-    private static final IOBaseOp OP_ACTIVE = new IOBaseOp() {
+    private static final IOBaseOp IOOP_ACTIVE = new IOBaseOp() {
         @Override
         public void inboundOnNext(
                 final IOBase<?> iobase,
@@ -473,7 +512,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         }
     };
     
-    private static final IOBaseOp OP_UNACTIVE = new IOBaseOp() {
+    private static final IOBaseOp IOOP_UNACTIVE = new IOBaseOp() {
         @Override
         public void inboundOnNext(
                 final IOBase<?> iobase,
