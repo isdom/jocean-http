@@ -153,7 +153,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             // _respSubscriber field set to subscriber
             final ChannelHandler handler = buildInboundHandler(subscriber);
             Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
-            inboundHandlerUpdater.set(this, handler);
+            setInboundHandler(handler);
             outboundSubscriptionUpdater.set(this,  wrapRequest(request).subscribe(buildOutboundObserver()));
             
             subscriber.add(Subscriptions.create(new Action0() {
@@ -321,13 +321,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
     }
 
-    private void removeInboundHandler() {
-        final ChannelHandler handler = inboundHandlerUpdater.getAndSet(this, null);
-        if (null != handler) {
-            Nettys.actionToRemoveHandler(this._channel, handler).call();
-        }
-    }
-
     private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
         return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
     }
@@ -371,12 +364,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscriber.class, "_inboundSubscriber");
     
     private volatile Subscriber<? super HttpObject> _inboundSubscriber;
-    
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, ChannelHandler> inboundHandlerUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, ChannelHandler.class, "_inboundHandler");
-    
-    @SuppressWarnings("unused")
-    private volatile ChannelHandler _inboundHandler;
     
     private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscription> outboundSubscriptionUpdater =
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscription.class, "_outboundSubscription");

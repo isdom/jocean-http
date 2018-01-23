@@ -190,7 +190,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         final ChannelHandler handler = buildInboundHandler(subscriber);
         Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
         // TBD, check _inboundHandler's status, at most only once
-        this._inboundHandler = handler;
+        setInboundHandler(handler);
     }
 
     private Subscription setOutbound(
@@ -361,13 +361,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         }
     }
     
-    private void removeInboundHandler() {
-        final ChannelHandler handler = inboundHandlerUpdater.getAndSet(this, null);
-        if (null != handler) {
-            Nettys.actionToRemoveHandler(this._channel, handler).call();
-        }
-    }
-    
     private void markStartRecving() {
         transactionUpdater.compareAndSet(this, STATUS_IDLE, STATUS_RECV);
     }
@@ -406,12 +399,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     
     @SuppressWarnings("unused")
     private volatile int _transactionStatus = STATUS_IDLE;
-    
-    private static final AtomicReferenceFieldUpdater<DefaultHttpTrade, ChannelHandler> inboundHandlerUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpTrade.class, ChannelHandler.class, "_inboundHandler");
-    
-    @SuppressWarnings("unused")
-    private volatile ChannelHandler _inboundHandler = null;
     
     private final List<Subscriber<? super HttpObject>> _subscribers = 
             new CopyOnWriteArrayList<>();

@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
@@ -414,6 +415,17 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         public void call(final Object... args) {
             ((IOBase<?>)args[0]).doClosed((Throwable)args[1]);
         }};
+
+    protected void setInboundHandler(final ChannelHandler handler) {
+        inboundHandlerUpdater.set(this, handler);
+    }
+
+    protected void removeInboundHandler() {
+        final ChannelHandler handler = inboundHandlerUpdater.getAndSet(this, null);
+        if (null != handler) {
+            Nettys.actionToRemoveHandler(this._channel, handler).call();
+        }
+    }
         
     protected abstract void doClosed(final Throwable e);
     
@@ -446,6 +458,13 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
     
     @SuppressWarnings("unused")
     private volatile Subscription _pendingRead = null;
+    
+    @SuppressWarnings("rawtypes")
+    private static final AtomicReferenceFieldUpdater<IOBase, ChannelHandler> inboundHandlerUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(IOBase.class, ChannelHandler.class, "_inboundHandler");
+    
+    @SuppressWarnings("unused")
+    private volatile ChannelHandler _inboundHandler;
     
     protected interface IOBaseOp {
         public void inboundOnNext(
