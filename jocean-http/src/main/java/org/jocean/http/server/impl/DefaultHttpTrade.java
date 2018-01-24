@@ -10,7 +10,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
-import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.CloseException;
 import org.jocean.http.IOBase;
@@ -197,7 +196,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
             final Observable<? extends Object> outbound) {
         if (this._isOutboundSetted.compareAndSet(false, true)) {
             final Subscription subscription = outbound.subscribe(buildOutboundObserver());
-            outboundSubscriptionUpdater.set(this, subscription);
+            setOutboundSubscription(subscription);
             return subscription;
         } else {
             LOG.warn("trade({}) 's outbound message has setted, ignore this outbound({})",
@@ -354,13 +353,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         }
     }
     
-    private void unsubscribeOutbound() {
-        final Subscription subscription = outboundSubscriptionUpdater.getAndSet(this, null);
-        if (null != subscription && !subscription.isUnsubscribed()) {
-            subscription.unsubscribe();
-        }
-    }
-    
     private void markStartRecving() {
         transactionUpdater.compareAndSet(this, STATUS_IDLE, STATUS_RECV);
     }
@@ -404,12 +396,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
             new CopyOnWriteArrayList<>();
     private volatile Throwable _unactiveReason = null;
     private final Observable<? extends DisposableWrapper<HttpObject>> _obsRequest;
-    
-    private static final AtomicReferenceFieldUpdater<DefaultHttpTrade, Subscription> outboundSubscriptionUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpTrade.class, Subscription.class, "_outboundSubscription");
-    
-    @SuppressWarnings("unused")
-    private volatile Subscription _outboundSubscription;
     
     private volatile boolean _isKeepAlive = false;
     

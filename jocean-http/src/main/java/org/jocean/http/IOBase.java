@@ -427,6 +427,17 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         }
     }
         
+    protected void setOutboundSubscription(final Subscription subscription) {
+        outboundSubscriptionUpdater.set(this, subscription);
+    }
+    
+    protected void unsubscribeOutbound() {
+        final Subscription subscription = outboundSubscriptionUpdater.getAndSet(this, null);
+        if (null != subscription && !subscription.isUnsubscribed()) {
+            subscription.unsubscribe();
+        }
+    }
+    
     protected abstract void doClosed(final Throwable e);
     
     protected abstract boolean needRead();
@@ -465,6 +476,13 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
     
     @SuppressWarnings("unused")
     private volatile ChannelHandler _inboundHandler;
+    
+    @SuppressWarnings("rawtypes")
+    private static final AtomicReferenceFieldUpdater<IOBase, Subscription> outboundSubscriptionUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(IOBase.class, Subscription.class, "_outboundSubscription");
+    
+    @SuppressWarnings("unused")
+    private volatile Subscription _outboundSubscription;
     
     protected interface IOBaseOp {
         public void inboundOnNext(

@@ -32,7 +32,6 @@ import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
 import rx.Subscriber;
-import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.subscriptions.Subscriptions;
@@ -101,7 +100,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
                 .append(", transactionStatus=").append(transactionStatusAsString())
                 .append(", isKeepAlive=").append(isKeepAlive())
                 .append(", isRequestCompleted=").append(_isRequestCompleted)
-                .append(", reqSubscription=").append(_outboundSubscription)
                 .append(", respSubscriber=").append(_inboundSubscriber)
                 .append(", channel=").append(_channel)
                 .append("]");
@@ -154,7 +152,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             final ChannelHandler handler = buildInboundHandler(subscriber);
             Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
             setInboundHandler(handler);
-            outboundSubscriptionUpdater.set(this,  wrapRequest(request).subscribe(buildOutboundObserver()));
+            setOutboundSubscription(wrapRequest(request).subscribe(buildOutboundObserver()));
             
             subscriber.add(Subscriptions.create(new Action0() {
                 @Override
@@ -314,13 +312,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
     }
 
-    private void unsubscribeOutbound() {
-        final Subscription subscription = outboundSubscriptionUpdater.getAndSet(this, null);
-        if (null != subscription && !subscription.isUnsubscribed()) {
-            subscription.unsubscribe();
-        }
-    }
-
     private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
         return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
     }
@@ -364,11 +355,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscriber.class, "_inboundSubscriber");
     
     private volatile Subscriber<? super HttpObject> _inboundSubscriber;
-    
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscription> outboundSubscriptionUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscription.class, "_outboundSubscription");
-    
-    private volatile Subscription _outboundSubscription;
     
     private volatile boolean _isKeepAlive = true;
     
