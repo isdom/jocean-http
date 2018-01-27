@@ -135,7 +135,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
     }
 
     private void subscribeResponse(
-            final Observable<? extends Object> request,
+            final Observable<? extends Object> obsRequest,
             final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
         if (subscriber.isUnsubscribed()) {
             LOG.info("response subscriber ({}) has been unsubscribed, ignore", 
@@ -143,7 +143,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             return;
         }
         if (holdInboundAndInstallHandler(subscriber)) {
-            setOutboundSubscription(wrapRequest(request).subscribe(buildOutboundObserver()));
+            setOutbound(wrapRequest(obsRequest));
             subscriber.add(Subscriptions.create(new Action0() {
                 @Override
                 public void call() {
@@ -234,8 +234,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
                  * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
                  * 因此，无需在channelInactive处，针对该情况做特殊处理
                  */
-                if (unholdInboundSubscriber(subscriber)) {
-                    removeInboundHandler();
+                if (unholdInboundAndUninstallHandler(subscriber)) {
                     endTransaction();
                     subscriber.onCompleted();
                 }
@@ -245,8 +244,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
 
     private void doOnUnsubscribeResponse(
             final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-        if (unholdInboundSubscriber(subscriber)) {
-            removeInboundHandler();
+        if (unholdInboundAndUninstallHandler(subscriber)) {
             // unsubscribe before OnCompleted or OnError
             fireClosed(new RuntimeException("unsubscribe response"));
         }

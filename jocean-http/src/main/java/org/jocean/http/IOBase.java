@@ -1,5 +1,6 @@
 package org.jocean.http;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
@@ -377,11 +378,20 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         }
     }
 
+    protected boolean unholdInboundAndUninstallHandler(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+        if (unholdInboundSubscriber(subscriber)) {
+            removeInboundHandler();
+            return true;
+        } else {
+            return false;
+        }
+    }
+    
     private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
         return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
     }
 
-    protected boolean unholdInboundSubscriber(final Subscriber<?> subscriber) {
+    private boolean unholdInboundSubscriber(final Subscriber<?> subscriber) {
         return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
     }
     
@@ -411,34 +421,6 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
             }};
     }
 
-    protected Observer<Object> buildOutboundObserver() {
-        return new Observer<Object>() {
-                @Override
-                public void onCompleted() {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("outound invoke onCompleted for iobase: {}", IOBase.this);
-                    }
-                    _iobaseop.outboundOnCompleted(IOBase.this);
-                }
-
-                @Override
-                public void onError(final Throwable e) {
-                    if (!(e instanceof CloseException)) {
-                        LOG.warn("outound invoke onError with ({}), try close iobase: {}",
-                                ExceptionUtils.exception2detail(e), IOBase.this);
-                    }
-                    fireClosed(e);
-                }
-
-                @Override
-                public void onNext(final Object outmsg) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("outbound invoke onNext({}) for iobase: {}", outmsg, IOBase.this);
-                    }
-                    _iobaseop.outboundOnNext(IOBase.this, outmsg);
-                }};
-    }
-    
     protected void fireClosed(final Throwable e) {
         this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
     }
@@ -484,14 +466,54 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         inboundHandlerUpdater.set(this, handler);
     }
 
-    protected void removeInboundHandler() {
+    private void removeInboundHandler() {
         final ChannelHandler handler = inboundHandlerUpdater.getAndSet(this, null);
         if (null != handler) {
             Nettys.actionToRemoveHandler(this._channel, handler).call();
         }
     }
         
-    protected void setOutboundSubscription(final Subscription subscription) {
+    protected Subscription setOutbound(final Observable<? extends Object> outbound) {
+        if (this._isOutboundSetted.compareAndSet(false, true)) {
+            final Subscription subscription = outbound.subscribe(buildOutboundObserver());
+            setOutboundSubscription(subscription);
+            return subscription;
+        } else {
+            LOG.warn("iobase ({}) 's outbound message has setted, ignore this outbound({})",
+                    this, outbound);
+            return null;
+        }
+    }
+    
+    private Observer<Object> buildOutboundObserver() {
+        return new Observer<Object>() {
+                @Override
+                public void onCompleted() {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("outound invoke onCompleted for iobase: {}", IOBase.this);
+                    }
+                    _iobaseop.outboundOnCompleted(IOBase.this);
+                }
+
+                @Override
+                public void onError(final Throwable e) {
+                    if (!(e instanceof CloseException)) {
+                        LOG.warn("outound invoke onError with ({}), try close iobase: {}",
+                                ExceptionUtils.exception2detail(e), IOBase.this);
+                    }
+                    fireClosed(e);
+                }
+
+                @Override
+                public void onNext(final Object outmsg) {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("outbound invoke onNext({}) for iobase: {}", outmsg, IOBase.this);
+                    }
+                    _iobaseop.outboundOnNext(IOBase.this, outmsg);
+                }};
+    }
+    
+    private void setOutboundSubscription(final Subscription subscription) {
         outboundSubscriptionUpdater.set(this, subscription);
     }
     
@@ -537,7 +559,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
             AtomicReferenceFieldUpdater.newUpdater(IOBase.class, Subscriber.class, "_inboundSubscriber");
     
     @SuppressWarnings("unused")
-    private volatile Subscriber<? super DisposableWrapper<HttpObject>> _inboundSubscriber;
+    private volatile Subscriber<?> _inboundSubscriber;
     
     @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<IOBase, ChannelHandler> inboundHandlerUpdater =
@@ -545,6 +567,8 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     
     @SuppressWarnings("unused")
     private volatile ChannelHandler _inboundHandler;
+    
+    private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
     
     @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<IOBase, Subscription> outboundSubscriptionUpdater =

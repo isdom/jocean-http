@@ -5,7 +5,6 @@ package org.jocean.http.server.impl;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
@@ -179,19 +178,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         }).compose(RxNettys.assembleTo(maxBufSize, DefaultHttpTrade.this));
     }
 
-    private Subscription setOutbound(
-            final Observable<? extends Object> outbound) {
-        if (this._isOutboundSetted.compareAndSet(false, true)) {
-            final Subscription subscription = outbound.subscribe(buildOutboundObserver());
-            setOutboundSubscription(subscription);
-            return subscription;
-        } else {
-            LOG.warn("trade({}) 's outbound message has setted, ignore this outbound({})",
-                    this, outbound);
-            return null;
-        }
-    }
-    
     private String transactionStatusAsString() {
         switch(transactionStatus()) {
         case STATUS_IDLE:
@@ -280,9 +266,10 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
                  * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
                  * 因此，无需在channelInactive处，针对该情况做特殊处理
                  */
-                markEndofRecving();
-                removeInboundHandler();
-                subscriber.onCompleted();
+                if (unholdInboundAndUninstallHandler(subscriber)) {
+                    markEndofRecving();
+                    subscriber.onCompleted();
+                }
             }
         }
     }
@@ -329,8 +316,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     private final Observable<? extends DisposableWrapper<HttpObject>> _obsRequest;
     
     private volatile boolean _isKeepAlive = false;
-    
-    private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
     
     private final long _createTimeMillis = System.currentTimeMillis();
     private String _requestMethod;
