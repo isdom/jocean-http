@@ -7,23 +7,18 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
-import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
-import org.jocean.http.CloseException;
 import org.jocean.http.IOBase;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
-import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
-import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpObject;
@@ -100,7 +95,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
                 .append(", transactionStatus=").append(transactionStatusAsString())
                 .append(", isKeepAlive=").append(isKeepAlive())
                 .append(", isRequestCompleted=").append(_isRequestCompleted)
-                .append(", respSubscriber=").append(_inboundSubscriber)
+//                .append(", respSubscriber=").append(_inboundSubscriber)
                 .append(", channel=").append(_channel)
                 .append("]");
         return builder.toString();
@@ -147,13 +142,8 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
                     subscriber);
             return;
         }
-        if (holdInboundSubscriber(subscriber)) {
-            // _respSubscriber field set to subscriber
-            final ChannelHandler handler = buildInboundHandler(subscriber);
-            Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
-            setInboundHandler(handler);
+        if (holdInboundAndInstallHandler(subscriber)) {
             setOutboundSubscription(wrapRequest(request).subscribe(buildOutboundObserver()));
-            
             subscriber.add(Subscriptions.create(new Action0() {
                 @Override
                 public void call() {
@@ -198,16 +188,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         
         //  fire all pending subscribers onError with unactived exception
         this._terminateAwareSupport.fireAllTerminates(this);
-    }
-
-    private static String errorAsString(final Throwable e) {
-        return e != null 
-            ?
-                (e instanceof CloseException)
-                ? "close()" 
-                : ExceptionUtils.exception2detail(e)
-            : "no error"
-            ;
     }
 
     private String transactionStatusAsString() {
@@ -298,28 +278,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
     }
 
-    private void releaseInboundWithError(final Throwable error) {
-        @SuppressWarnings("unchecked")
-        final Subscriber<? super HttpObject> inboundSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
-        if (null != inboundSubscriber
-           && !inboundSubscriber.isUnsubscribed()) {
-            try {
-                inboundSubscriber.onError(error);
-            } catch (Exception e) {
-                LOG.warn("exception when invoke {}.onError, detail: {}",
-                    inboundSubscriber, ExceptionUtils.exception2detail(e));
-            }
-        }
-    }
-
-    private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
-        return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
-    }
-
-    private boolean unholdInboundSubscriber(final Subscriber<?> subscriber) {
-        return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
-    }
-    
     private void markStartSending() {
         transactionUpdater.compareAndSet(this, STATUS_IDLE, STATUS_SEND);
     }
@@ -349,12 +307,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
     
     @SuppressWarnings("unused")
     private volatile int _transactionStatus = STATUS_IDLE;
-    
-    @SuppressWarnings("rawtypes")
-    private static final AtomicReferenceFieldUpdater<DefaultHttpInitiator, Subscriber> inboundSubscriberUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(DefaultHttpInitiator.class, Subscriber.class, "_inboundSubscriber");
-    
-    private volatile Subscriber<? super HttpObject> _inboundSubscriber;
     
     private volatile boolean _isKeepAlive = true;
     

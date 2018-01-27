@@ -5,18 +5,13 @@ package org.jocean.http.server.impl;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
-import org.jocean.http.CloseException;
 import org.jocean.http.IOBase;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.http.util.HttpHandlers;
-import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
@@ -29,7 +24,6 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandler;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
@@ -180,16 +174,9 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
             @Override
             public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-                initInboundHandler(subscriber);
+                holdInboundAndInstallHandler(subscriber);
             }
         }).compose(RxNettys.assembleTo(maxBufSize, DefaultHttpTrade.this));
-    }
-
-    private void initInboundHandler(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-        final ChannelHandler handler = buildInboundHandler(subscriber);
-        Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
-        // TBD, check _inboundHandler's status, at most only once
-        setInboundHandler(handler);
     }
 
     private Subscription setOutbound(
@@ -221,22 +208,13 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         
         removeInboundHandler();
         
-        fireAllSubscriberUnactive(e);
+        // notify request Subscriber with error
+        releaseInboundWithError(e);
         
         unsubscribeOutbound();
         
         //  fire all pending subscribers onError with unactived exception
         this._terminateAwareSupport.fireAllTerminates(this);
-    }
-
-    private static String errorAsString(final Throwable e) {
-        return e != null 
-            ?
-                (e instanceof CloseException)
-                ? "close()" 
-                : ExceptionUtils.exception2detail(e)
-            : "no error"
-            ;
     }
 
     private String transactionStatusAsString() {
@@ -251,25 +229,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
             return "RECV_END";
         default:
             return "UNKNOWN";
-        }
-    }
-    
-    private void fireAllSubscriberUnactive(final Throwable reason) {
-        this._unactiveReason = null != reason 
-                ? reason 
-                : new RuntimeException("inbound unactived");
-        @SuppressWarnings("unchecked")
-        final Subscriber<? super HttpObject>[] subscribers = 
-            (Subscriber<? super HttpObject>[])this._subscribers.toArray(new Subscriber[0]);
-        for (Subscriber<? super HttpObject> subscriber : subscribers) {
-            if (!subscriber.isUnsubscribed()) {
-                try {
-                    subscriber.onError(this._unactiveReason);
-                } catch (Exception e) {
-                    LOG.warn("exception when invoke ({}).onError, detail: {}",
-                            subscriber, ExceptionUtils.exception2detail(e));
-                }
-            }
         }
     }
     
@@ -392,9 +351,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     @SuppressWarnings("unused")
     private volatile int _transactionStatus = STATUS_IDLE;
     
-    private final List<Subscriber<? super HttpObject>> _subscribers = 
-            new CopyOnWriteArrayList<>();
-    private volatile Throwable _unactiveReason = null;
     private final Observable<? extends DisposableWrapper<HttpObject>> _obsRequest;
     
     private volatile boolean _isKeepAlive = false;

@@ -288,6 +288,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
                 : this._channel.write(ReferenceCountUtil.retain(outmsg));
     }
     
+    @Override
     public void setReadPolicy(final ReadPolicy readPolicy) {
         this._iobaseop.runAtEventLoop(this, new Runnable() {
             @Override
@@ -365,7 +366,39 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         }
     }
     
-    protected SimpleChannelInboundHandler<HttpObject> buildInboundHandler(
+    protected boolean holdInboundAndInstallHandler(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+        if (holdInboundSubscriber(subscriber)) {
+            final ChannelHandler handler = buildInboundHandler(subscriber);
+            Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
+            setInboundHandler(handler);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
+        return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
+    }
+
+    protected boolean unholdInboundSubscriber(final Subscriber<?> subscriber) {
+        return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
+    }
+    
+    protected void releaseInboundWithError(final Throwable error) {
+        @SuppressWarnings("unchecked")
+        final Subscriber<? super DisposableWrapper<HttpObject>> inboundSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
+        if (null != inboundSubscriber && !inboundSubscriber.isUnsubscribed()) {
+            try {
+                inboundSubscriber.onError(error);
+            } catch (Exception e) {
+                LOG.warn("exception when invoke {}.onError, detail: {}",
+                    inboundSubscriber, ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+
+    private SimpleChannelInboundHandler<HttpObject> buildInboundHandler(
             final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
         return new SimpleChannelInboundHandler<HttpObject>(false) {
             @Override
@@ -416,7 +449,17 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
             ((IOBase<?>)args[0]).doClosed((Throwable)args[1]);
         }};
 
-    protected void setInboundHandler(final ChannelHandler handler) {
+    protected static String errorAsString(final Throwable e) {
+        return e != null 
+            ?
+                (e instanceof CloseException)
+                ? "close()" 
+                : ExceptionUtils.exception2detail(e)
+            : "no error"
+            ;
+    }
+
+    private void setInboundHandler(final ChannelHandler handler) {
         inboundHandlerUpdater.set(this, handler);
     }
 
@@ -469,6 +512,13 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
     
     @SuppressWarnings("unused")
     private volatile Subscription _pendingRead = null;
+    
+    @SuppressWarnings("rawtypes")
+    private static final AtomicReferenceFieldUpdater<IOBase, Subscriber> inboundSubscriberUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(IOBase.class, Subscriber.class, "_inboundSubscriber");
+    
+    @SuppressWarnings("unused")
+    private volatile Subscriber<? super DisposableWrapper<HttpObject>> _inboundSubscriber;
     
     @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<IOBase, ChannelHandler> inboundHandlerUpdater =
