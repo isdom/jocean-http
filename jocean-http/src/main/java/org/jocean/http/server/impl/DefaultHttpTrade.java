@@ -27,7 +27,6 @@ import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
-import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
 import rx.Subscriber;
 import rx.Subscription;
@@ -200,6 +199,23 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     }
     
     @Override
+    protected void inboundOnNext(final HttpObject inmsg) {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("HttpTrade: channel({}) invoke channelRead0 and call with msg({}).",
+                this._channel, inmsg);
+        }
+        markStartRecving();
+        if (inmsg instanceof HttpRequest) {
+            onHttpRequest((HttpRequest)inmsg);
+        }
+    }
+
+    @Override
+    protected void inboundOnCompleted() {
+        markEndofRecving();
+    }
+    
+    @Override
     protected void outboundOnNext(final Object outmsg) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("sending http response msg {}", outmsg);
@@ -234,44 +250,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
                     fireClosed(new TransportException("flush response error", future.cause()));
                 }
             }});
-    }
-    
-    @Override
-    protected void inboundOnNext(
-            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-            final HttpObject inmsg) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("HttpTrade: channel({}) invoke channelRead0 and call with msg({}).",
-                this._channel, inmsg);
-        }
-        markStartRecving();
-        if (inmsg instanceof HttpRequest) {
-            onHttpRequest((HttpRequest)inmsg);
-        }
-        
-        try {
-            // retain of create transfer to DisposableWrapper<HttpObject>
-            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
-        } finally {
-            if (inmsg instanceof LastHttpContent) {
-                /*
-                 * netty 参考代码: https://github.com/netty/netty/blob/netty-
-                 * 4.0.26.Final /codec/src /main/java/io/netty/handler/codec
-                 * /ByteToMessageDecoder .java#L274 https://github.com/netty
-                 * /netty/blob/netty-4.0.26.Final /codec-http /src/main/java
-                 * /io/netty/handler/codec/http/HttpObjectDecoder .java#L398
-                 * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件 currentState ==
-                 * State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() &&
-                 * !chunked 即没有指定Content-Length头域，也不是CHUNKED传输模式
-                 * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
-                 * 因此，无需在channelInactive处，针对该情况做特殊处理
-                 */
-                if (unholdInboundAndUninstallHandler(subscriber)) {
-                    markEndofRecving();
-                    subscriber.onCompleted();
-                }
-            }
-        }
     }
     
     private void markStartRecving() {

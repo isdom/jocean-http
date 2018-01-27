@@ -7,8 +7,10 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import org.jocean.http.ReadPolicy.Intraffic;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.DisposableWrapper;
+import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.TerminateAware;
@@ -25,6 +27,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import rx.Observable;
@@ -417,10 +420,40 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
                     LOG.debug("IOBase: channel({})/handler({}): channelRead0 and call with msg({}).",
                         ctx.channel(), ctx.name(), inmsg);
                 }
-                _iobaseop.inboundOnNext(IOBase.this, subscriber, inmsg);
+                _iobaseop.processInmsg(IOBase.this, subscriber, inmsg);
             }};
     }
 
+    private void processInmsg(
+            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
+            final HttpObject inmsg) {
+        
+        inboundOnNext(inmsg);
+        
+        try {
+            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
+        } finally {
+            if (inmsg instanceof LastHttpContent) {
+                /*
+                 * netty 参考代码: https://github.com/netty/netty/blob/netty-
+                 * 4.0.26.Final /codec/src /main/java/io/netty/handler/codec
+                 * /ByteToMessageDecoder .java#L274 https://github.com/netty
+                 * /netty/blob/netty-4.0.26.Final /codec-http /src/main/java
+                 * /io/netty/handler/codec/http/HttpObjectDecoder .java#L398
+                 * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件 currentState ==
+                 * State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() &&
+                 * !chunked 即没有指定Content-Length头域，也不是CHUNKED传输模式
+                 * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
+                 * 因此，无需在channelInactive处，针对该情况做特殊处理
+                 */
+                if (unholdInboundAndUninstallHandler(subscriber)) {
+                    inboundOnCompleted();
+                    subscriber.onCompleted();
+                }
+            }
+        }
+    }
+    
     protected void fireClosed(final Throwable e) {
         this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
     }
@@ -492,7 +525,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("outound invoke onCompleted for iobase: {}", IOBase.this);
                     }
-                    _iobaseop.outboundOnCompleted(IOBase.this);
+                    _iobaseop.onOutmsgCompleted(IOBase.this);
                 }
 
                 @Override
@@ -509,7 +542,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("outbound invoke onNext({}) for iobase: {}", outmsg, IOBase.this);
                     }
-                    _iobaseop.outboundOnNext(IOBase.this, outmsg);
+                    _iobaseop.processOutmsg(IOBase.this, outmsg);
                 }};
     }
     
@@ -526,10 +559,10 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     
     protected abstract boolean needRead();
 
-    protected abstract void inboundOnNext(
-            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-            final HttpObject inmsg);
+    protected abstract void inboundOnNext(final HttpObject inmsg);
 
+    protected abstract void inboundOnCompleted();
+    
     protected abstract void outboundOnNext(final Object outmsg);
     
     protected abstract void outboundOnCompleted();
@@ -578,14 +611,14 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     private volatile Subscription _outboundSubscription;
     
     protected interface IOBaseOp {
-        public void inboundOnNext(
+        public void processInmsg(
                 final IOBase<?> io,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject msg);
         
-        public void outboundOnNext(final IOBase<?> io, final Object msg);
+        public void processOutmsg(final IOBase<?> io, final Object msg);
 
-        public void outboundOnCompleted(final IOBase<?> io);
+        public void onOutmsgCompleted(final IOBase<?> io);
         
         public void readMessage(final IOBase<?> io);
 
@@ -598,22 +631,22 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     
     private static final IOBaseOp IOOP_ACTIVE = new IOBaseOp() {
         @Override
-        public void inboundOnNext(
+        public void processInmsg(
                 final IOBase<?> iobase,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject msg) {
-            iobase.inboundOnNext(subscriber, msg);
+            iobase.processInmsg(subscriber, msg);
         }
         
         @Override
-        public void outboundOnNext(
+        public void processOutmsg(
                 final IOBase<?> iobase,
                 final Object msg) {
             iobase.outboundOnNext(msg);
         }
         
         @Override
-        public void outboundOnCompleted(
+        public void onOutmsgCompleted(
                 final IOBase<?> iobase) {
             iobase.outboundOnCompleted();
         }
@@ -644,7 +677,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     
     private static final IOBaseOp IOOP_UNACTIVE = new IOBaseOp() {
         @Override
-        public void inboundOnNext(
+        public void processInmsg(
                 final IOBase<?> iobase,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject inmsg) {
@@ -655,11 +688,11 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         }
         
         @Override
-        public void outboundOnNext(final IOBase<?> iobase, final Object msg) {
+        public void processOutmsg(final IOBase<?> iobase, final Object msg) {
         }
         
         @Override
-        public void outboundOnCompleted(final IOBase<?> iobase) {
+        public void onOutmsgCompleted(final IOBase<?> iobase) {
         }
         
         @Override

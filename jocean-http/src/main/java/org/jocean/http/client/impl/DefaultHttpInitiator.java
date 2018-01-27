@@ -12,9 +12,7 @@ import org.jocean.http.IOBase;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.Nettys;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
-import org.jocean.idiom.DisposableWrapperUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,7 +22,6 @@ import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
-import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
 import rx.Subscriber;
 import rx.functions.Action0;
@@ -95,7 +92,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
                 .append(", transactionStatus=").append(transactionStatusAsString())
                 .append(", isKeepAlive=").append(isKeepAlive())
                 .append(", isRequestCompleted=").append(_isRequestCompleted)
-//                .append(", respSubscriber=").append(_inboundSubscriber)
                 .append(", channel=").append(_channel)
                 .append("]");
         return builder.toString();
@@ -191,6 +187,16 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
     }
 
     @Override
+    protected void inboundOnNext(final HttpObject inmsg) {
+        markStartRecving();
+    }
+
+    @Override
+    protected void inboundOnCompleted() {
+        endTransaction();
+    }
+    
+    @Override
     protected void outboundOnNext(final Object outmsg) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("sending http request msg {}", outmsg);
@@ -211,35 +217,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         this._channel.flush();
         this._isRequestCompleted = true;
         this.readMessage();
-    }
-
-    @Override
-    protected void inboundOnNext(
-            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-            final HttpObject inmsg) {
-        markStartRecving();
-        try {
-            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
-        } finally {
-            if (inmsg instanceof LastHttpContent) {
-                /*
-                 * netty 参考代码: https://github.com/netty/netty/blob/netty-
-                 * 4.0.26.Final /codec/src /main/java/io/netty/handler/codec
-                 * /ByteToMessageDecoder .java#L274 https://github.com/netty
-                 * /netty/blob/netty-4.0.26.Final /codec-http /src/main/java
-                 * /io/netty/handler/codec/http/HttpObjectDecoder .java#L398
-                 * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件 currentState ==
-                 * State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() &&
-                 * !chunked 即没有指定Content-Length头域，也不是CHUNKED传输模式
-                 * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
-                 * 因此，无需在channelInactive处，针对该情况做特殊处理
-                 */
-                if (unholdInboundAndUninstallHandler(subscriber)) {
-                    endTransaction();
-                    subscriber.onCompleted();
-                }
-            }
-        }
     }
 
     private void doOnUnsubscribeResponse(
