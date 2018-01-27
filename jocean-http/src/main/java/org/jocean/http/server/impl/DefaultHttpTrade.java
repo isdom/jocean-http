@@ -192,31 +192,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         }
     }
     
-    @Override
-    protected void doClosed(final Throwable e) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("closing active trade[channel: {}] "
-                    + "with "
-                    + "/transactionStatus({})"
-                    + "/isKeepAlive({}),"
-                    + "cause by {}", 
-                    this._channel, 
-                    this.transactionStatusAsString(),
-                    this.isKeepAlive(),
-                    errorAsString(e));
-        }
-        
-        removeInboundHandler();
-        
-        // notify request Subscriber with error
-        releaseInboundWithError(e);
-        
-        unsubscribeOutbound();
-        
-        //  fire all pending subscribers onError with unactived exception
-        this._terminateAwareSupport.fireAllTerminates(this);
-    }
-
     private String transactionStatusAsString() {
         switch(transactionStatus()) {
         case STATUS_IDLE:

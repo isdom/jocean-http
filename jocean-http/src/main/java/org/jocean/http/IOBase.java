@@ -36,7 +36,7 @@ import rx.functions.Action1;
 import rx.functions.ActionN;
 import rx.subscriptions.Subscriptions;
 
-public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> {
+public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, TerminateAware<T> {
     private static final Logger LOG =
             LoggerFactory.getLogger(IOBase.class);
     
@@ -102,9 +102,9 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
     
     private final TrafficCounter _traffic;
     
-    protected final TerminateAwareSupport<T> _terminateAwareSupport;
+    private final TerminateAwareSupport<T> _terminateAwareSupport;
     
-//    @Override
+    @Override
     public void close() {
         fireClosed(new CloseException());
     }
@@ -385,7 +385,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
     }
     
-    protected void releaseInboundWithError(final Throwable error) {
+    private void releaseInboundWithError(final Throwable error) {
         @SuppressWarnings("unchecked")
         final Subscriber<? super DisposableWrapper<HttpObject>> inboundSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
         if (null != inboundSubscriber && !inboundSubscriber.isUnsubscribed()) {
@@ -447,9 +447,30 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         @Override
         public void call(final Object... args) {
             ((IOBase<?>)args[0]).doClosed((Throwable)args[1]);
-        }};
+        }
+    };
 
-    protected static String errorAsString(final Throwable e) {
+    @SuppressWarnings("unchecked")
+    private void doClosed(final Throwable e) {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("closing iobase: {}\r\n"
+                    + "cause by {}", 
+                    toString(),
+                    errorAsString(e));
+        }
+        
+        removeInboundHandler();
+        
+        // notify request or response Subscriber with error
+        releaseInboundWithError(e);
+        
+        unsubscribeOutbound();
+        
+        //  fire all pending subscribers onError with unactived exception
+        this._terminateAwareSupport.fireAllTerminates((T) this);
+    }
+        
+    private static String errorAsString(final Throwable e) {
         return e != null 
             ?
                 (e instanceof CloseException)
@@ -474,14 +495,12 @@ public abstract class IOBase<T> implements Inbound, Outbound, TerminateAware<T> 
         outboundSubscriptionUpdater.set(this, subscription);
     }
     
-    protected void unsubscribeOutbound() {
+    private void unsubscribeOutbound() {
         final Subscription subscription = outboundSubscriptionUpdater.getAndSet(this, null);
         if (null != subscription && !subscription.isUnsubscribed()) {
             subscription.unsubscribe();
         }
     }
-    
-    protected abstract void doClosed(final Throwable e);
     
     protected abstract boolean needRead();
 

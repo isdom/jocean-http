@@ -164,32 +164,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             }});
     }
 
-    @Override
-    protected void doClosed(final Throwable e) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("closing active initiator[channel: {}] "
-                    + "with isRequestCompleted({})"
-                    + "/transactionStatus({})"
-                    + "/isKeepAlive({}),"
-                    + "cause by {}", 
-                    this._channel, 
-                    this._isRequestCompleted, 
-                    this.transactionStatusAsString(),
-                    this.isKeepAlive(),
-                    errorAsString(e));
-        }
-        
-        removeInboundHandler();
-        
-        // notify response Subscriber with error
-        releaseInboundWithError(e);
-        
-        unsubscribeOutbound();
-        
-        //  fire all pending subscribers onError with unactived exception
-        this._terminateAwareSupport.fireAllTerminates(this);
-    }
-
     private String transactionStatusAsString() {
         switch(transactionStatus()) {
         case STATUS_IDLE:
