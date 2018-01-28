@@ -118,7 +118,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     
     @Override
     public Subscription outbound(final Observable<? extends Object> message) {
-        return this._op.setOutbound(this, message);
+        return setOutbound(message);
     }
 
     boolean isKeepAlive() {
@@ -151,8 +151,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
                 LOG.warn("HttpTrade: {}'s inbound with onError {}", this, ExceptionUtils.exception2detail(e));
             }
         });
-        
-        this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
     }
 
     @Override
@@ -299,27 +297,4 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     private final long _createTimeMillis = System.currentTimeMillis();
     private String _requestMethod;
     private String _requestUri;
-    
-    private final Op _op;
-    
-    protected interface Op {
-        public Subscription setOutbound(final DefaultHttpTrade trade, final Observable<? extends Object> outbound);
-    }
-    
-    private static final Op OP_ACTIVE = new Op() {
-        @Override
-        public Subscription setOutbound(
-                final DefaultHttpTrade trade,
-                final Observable<? extends Object> outbound) {
-            return trade.setOutbound(outbound);
-        }
-    };
-    
-    private static final Op OP_UNACTIVE = new Op() {
-        @Override
-        public Subscription setOutbound(final DefaultHttpTrade trade,
-                final Observable<? extends Object> outbound) {
-            return null;
-        }
-    };
 }

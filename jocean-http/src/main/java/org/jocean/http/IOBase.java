@@ -503,8 +503,8 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
             Nettys.actionToRemoveHandler(this._channel, handler).call();
         }
     }
-        
-    protected Subscription setOutbound(final Observable<? extends Object> outbound) {
+
+    private Subscription doSetOutbound(final Observable<? extends Object> outbound) {
         if (this._isOutboundSetted.compareAndSet(false, true)) {
             final Subscription subscription = outbound.subscribe(buildOutboundObserver());
             setOutboundSubscription(subscription);
@@ -553,6 +553,10 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         if (null != subscription && !subscription.isUnsubscribed()) {
             subscription.unsubscribe();
         }
+    }
+    
+    protected Subscription setOutbound(final Observable<? extends Object> message) {
+        return this._iobaseop.setOutbound(this, message);
     }
     
     protected abstract boolean needRead();
@@ -614,6 +618,8 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject msg);
         
+        public Subscription setOutbound(final IOBase<?> io, final Observable<? extends Object> outbound);
+        
         public void sendOutmsg(final IOBase<?> io, final Object msg);
 
         public void onOutmsgCompleted(final IOBase<?> io);
@@ -634,6 +640,11 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject inmsg) {
             iobase.processInmsg(subscriber, inmsg);
+        }
+        
+        @Override
+        public Subscription setOutbound(final IOBase<?> iobase, final Observable<? extends Object> outbound) {
+            return iobase.doSetOutbound(outbound);
         }
         
         @Override
@@ -678,6 +689,11 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
                 final HttpObject inmsg) {
             ReferenceCountUtil.release(inmsg);
             LOG.warn("IOBase(inactive): channelRead0 and release msg({}).", inmsg);
+        }
+        
+        @Override
+        public Subscription setOutbound(final IOBase<?> iobase, final Observable<? extends Object> outbound) {
+            return null;
         }
         
         @Override
