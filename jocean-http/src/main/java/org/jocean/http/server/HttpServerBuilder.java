@@ -42,6 +42,10 @@ public interface HttpServerBuilder extends Closeable {
     
     public interface HttpTrade 
         extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpTrade> {
+        public Observable<? extends DisposableWrapper<HttpObject>> inbound();
+        
+        public Subscription outbound(final Observable<? extends Object> message);
+        
         public Object transport();
         
         public Action0 closer();
@@ -50,10 +54,6 @@ public interface HttpServerBuilder extends Closeable {
         
         public TrafficCounter traffic();
         public boolean isActive();
-        
-        public Observable<? extends DisposableWrapper<HttpObject>> inbound();
-        
-        public Subscription outbound(final Observable<? extends Object> message);
         
         // from Outtraffic
         public WriteCtrl writeCtrl();

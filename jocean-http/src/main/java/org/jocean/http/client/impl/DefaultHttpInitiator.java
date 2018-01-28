@@ -35,76 +35,18 @@ import rx.subscriptions.Subscriptions;
 class DefaultHttpInitiator extends IOBase<HttpInitiator>
     implements HttpInitiator, Comparable<DefaultHttpInitiator>{
     
-    private static final Action1<Object> _ADD_ACCEPT_ENCODING = new Action1<Object>() {
-        @Override
-        public void call(final Object msg) {
-            if (msg instanceof HttpRequest) {
-                final HttpRequest request = (HttpRequest)msg;
-                request.headers().add(
-                    HttpHeaderNames.ACCEPT_ENCODING, 
-                    HttpHeaderValues.GZIP + "," + HttpHeaderValues.DEFLATE);
-            }
-        }};
-        
-    private static final AtomicInteger _IDSRC = new AtomicInteger(1);
-    
-    private final int _id = _IDSRC.getAndIncrement();
-
-    @Override
-    public int compareTo(final DefaultHttpInitiator o) {
-        return this._id - o._id;
-    }
-    
-    /* (non-Javadoc)
-     * @see java.lang.Object#hashCode()
-     */
-    @Override
-    public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + this._id;
-        return result;
-    }
-
-    /* (non-Javadoc)
-     * @see java.lang.Object#equals(java.lang.Object)
-     */
-    @Override
-    public boolean equals(final Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
-            return false;
-        DefaultHttpInitiator other = (DefaultHttpInitiator) obj;
-        if (this._id != other._id)
-            return false;
-        return true;
-    }
-
-    @Override
-    public String toString() {
-        final StringBuilder builder = new StringBuilder();
-        builder.append("DefaultHttpInitiator [create at:")
-                .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
-                .append(", isActive=").append(isActive())
-                .append(", transactionStatus=").append(transactionStatusAsString())
-                .append(", isKeepAlive=").append(isKeepAlive())
-                .append(", isRequestCompleted=").append(_isRequestCompleted)
-                .append(", channel=").append(_channel)
-                .append("]");
-        return builder.toString();
-    }
-
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpInitiator.class);
     
     @Override
-    protected boolean needRead() {
-        return inTransacting();
+    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
+            @Override
+            public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+                _op.subscribeResponse(DefaultHttpInitiator.this, request, subscriber);
+            }});
     }
-    
+
     Channel channel() {
         return this._channel;
     }
@@ -117,17 +59,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         super(channel);
         
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
-    }
-
-    @Override
-    protected void onChannelInactive() {
-        if (inTransacting()) {
-            fireClosed(new TransportException("channelInactive of " + this._channel));
-        } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
-            }
-        }
     }
 
     private void subscribeResponse(
@@ -159,15 +90,30 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
     }
 
-    @Override
-    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
-            @Override
-            public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-                _op.subscribeResponse(DefaultHttpInitiator.this, request, subscriber);
-            }});
+    private void doOnUnsubscribeResponse(
+            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+        if (unholdInboundAndUninstallHandler(subscriber)) {
+            // unsubscribe before OnCompleted or OnError
+            fireClosed(new RuntimeException("unsubscribe response"));
+        }
     }
 
+    @Override
+    protected void onChannelInactive() {
+        if (inTransacting()) {
+            fireClosed(new TransportException("channelInactive of " + this._channel));
+        } else {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
+            }
+        }
+    }
+
+    @Override
+    protected boolean needRead() {
+        return inTransacting();
+    }
+    
     @Override
     protected void onInboundMessage(final HttpObject inmsg) {
         markStartRecving();
@@ -197,14 +143,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         this._channel.flush();
         this._isRequestCompleted = true;
         this.readMessage();
-    }
-
-    private void doOnUnsubscribeResponse(
-            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-        if (unholdInboundAndUninstallHandler(subscriber)) {
-            // unsubscribe before OnCompleted or OnError
-            fireClosed(new RuntimeException("unsubscribe response"));
-        }
     }
 
     private void markStartSending() {
@@ -301,4 +239,66 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
               final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
       }
   };
+
+  private static final Action1<Object> _ADD_ACCEPT_ENCODING = new Action1<Object>() {
+      @Override
+      public void call(final Object msg) {
+          if (msg instanceof HttpRequest) {
+              final HttpRequest request = (HttpRequest)msg;
+              request.headers().add(
+                  HttpHeaderNames.ACCEPT_ENCODING, 
+                  HttpHeaderValues.GZIP + "," + HttpHeaderValues.DEFLATE);
+          }
+      }};
+      
+  private static final AtomicInteger _IDSRC = new AtomicInteger(1);
+  
+  private final int _id = _IDSRC.getAndIncrement();
+
+  @Override
+  public int compareTo(final DefaultHttpInitiator o) {
+      return this._id - o._id;
+  }
+  
+  /* (non-Javadoc)
+   * @see java.lang.Object#hashCode()
+   */
+  @Override
+  public int hashCode() {
+      final int prime = 31;
+      int result = 1;
+      result = prime * result + this._id;
+      return result;
+  }
+
+  /* (non-Javadoc)
+   * @see java.lang.Object#equals(java.lang.Object)
+   */
+  @Override
+  public boolean equals(final Object obj) {
+      if (this == obj)
+          return true;
+      if (obj == null)
+          return false;
+      if (getClass() != obj.getClass())
+          return false;
+      DefaultHttpInitiator other = (DefaultHttpInitiator) obj;
+      if (this._id != other._id)
+          return false;
+      return true;
+  }
+
+  @Override
+  public String toString() {
+      final StringBuilder builder = new StringBuilder();
+      builder.append("DefaultHttpInitiator [create at:")
+              .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
+              .append(", isActive=").append(isActive())
+              .append(", transactionStatus=").append(transactionStatusAsString())
+              .append(", isKeepAlive=").append(isKeepAlive())
+              .append(", isRequestCompleted=").append(_isRequestCompleted)
+              .append(", channel=").append(_channel)
+              .append("]");
+      return builder.toString();
+  }
 }

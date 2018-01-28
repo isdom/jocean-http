@@ -40,76 +40,8 @@ import rx.functions.Func1;
 class DefaultHttpTrade extends IOBase<HttpTrade> 
     implements HttpTrade, Comparable<DefaultHttpTrade> {
     
-    private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
-        @Override
-        public DisposableWrapper<HttpObject> call(final DisposableWrapper<HttpObject> wrapper) {
-            if (wrapper.unwrap() instanceof HttpContent) {
-                return DisposableWrapperUtil.<HttpObject>wrap(((HttpContent) wrapper.unwrap()).duplicate(), wrapper);
-            } else {
-                return wrapper;
-            }
-        }
-    };
-        
-    private static final AtomicInteger _IDSRC = new AtomicInteger(1);
-    
-    private final int _id = _IDSRC.getAndIncrement();
-    
-    @Override
-    public int compareTo(final DefaultHttpTrade o) {
-        return this._id - o._id;
-    }
-    
-    /* (non-Javadoc)
-     * @see java.lang.Object#hashCode()
-     */
-    @Override
-    public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + _id;
-        return result;
-    }
-
-    /* (non-Javadoc)
-     * @see java.lang.Object#equals(java.lang.Object)
-     */
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
-            return false;
-        DefaultHttpTrade other = (DefaultHttpTrade) obj;
-        if (_id != other._id)
-            return false;
-        return true;
-    }
-
-    @Override
-    public String toString() {
-        final StringBuilder builder = new StringBuilder();
-        builder.append("DefaultHttpTrade [create at:")
-                .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
-                .append(", requestMethod=").append(this._requestMethod)
-                .append(", requestUri=").append(this._requestUri)
-                .append(", isKeepAlive=").append(isKeepAlive())
-                .append(", transactionStatus=").append(transactionStatusAsString())
-                .append(", isActive=").append(isActive())
-                .append(", channel=").append(_channel)
-                .append("]");
-        return builder.toString();
-    }
-
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
-    
-    @Override
-    protected boolean needRead() {
-        return inRecving();
-    }
     
     @Override
     public Observable<? extends DisposableWrapper<HttpObject>> inbound() {
@@ -153,6 +85,15 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         });
     }
 
+    private Observable<? extends DisposableWrapper<HttpObject>> buildObsRequest(final int maxBufSize) {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
+            @Override
+            public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+                holdInboundAndInstallHandler(subscriber);
+            }
+        }).compose(RxNettys.assembleTo(maxBufSize, DefaultHttpTrade.this));
+    }
+
     @Override
     protected void onChannelInactive() {
         if (inTransacting()) {
@@ -166,19 +107,9 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         }
     }
 
-    private Observable<? extends DisposableWrapper<HttpObject>> buildObsRequest(final int maxBufSize) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
-            @Override
-            public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
-                holdInboundAndInstallHandler(subscriber);
-            }
-        }).compose(RxNettys.assembleTo(maxBufSize, DefaultHttpTrade.this));
-    }
-
-    private void onHttpRequest(final HttpRequest req) {
-        this._requestMethod = req.method().name();
-        this._requestUri = req.uri();
-        this._isKeepAlive = HttpUtil.isKeepAlive(req);
+    @Override
+    protected boolean needRead() {
+        return inRecving();
     }
     
     @Override
@@ -193,6 +124,12 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         }
     }
 
+    private void onHttpRequest(final HttpRequest req) {
+        this._requestMethod = req.method().name();
+        this._requestUri = req.uri();
+        this._isKeepAlive = HttpUtil.isKeepAlive(req);
+    }
+    
     @Override
     protected void onInboundCompleted() {
         markEndofRecving();
@@ -297,4 +234,67 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     private final long _createTimeMillis = System.currentTimeMillis();
     private String _requestMethod;
     private String _requestUri;
+
+    private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
+        @Override
+        public DisposableWrapper<HttpObject> call(final DisposableWrapper<HttpObject> wrapper) {
+            if (wrapper.unwrap() instanceof HttpContent) {
+                return DisposableWrapperUtil.<HttpObject>wrap(((HttpContent) wrapper.unwrap()).duplicate(), wrapper);
+            } else {
+                return wrapper;
+            }
+        }
+    };
+        
+    private static final AtomicInteger _IDSRC = new AtomicInteger(1);
+    
+    private final int _id = _IDSRC.getAndIncrement();
+    
+    @Override
+    public int compareTo(final DefaultHttpTrade o) {
+        return this._id - o._id;
+    }
+    
+    /* (non-Javadoc)
+     * @see java.lang.Object#hashCode()
+     */
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + _id;
+        return result;
+    }
+
+    /* (non-Javadoc)
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        DefaultHttpTrade other = (DefaultHttpTrade) obj;
+        if (_id != other._id)
+            return false;
+        return true;
+    }
+
+    @Override
+    public String toString() {
+        final StringBuilder builder = new StringBuilder();
+        builder.append("DefaultHttpTrade [create at:")
+                .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
+                .append(", requestMethod=").append(this._requestMethod)
+                .append(", requestUri=").append(this._requestUri)
+                .append(", isKeepAlive=").append(isKeepAlive())
+                .append(", transactionStatus=").append(transactionStatusAsString())
+                .append(", isActive=").append(isActive())
+                .append(", channel=").append(_channel)
+                .append("]");
+        return builder.toString();
+    }
 }

@@ -27,6 +27,9 @@ public interface HttpClient extends AutoCloseable {
     
     public interface HttpInitiator
     extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpInitiator> {
+        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(
+                final Observable<? extends Object> request);
+        
         public Object transport();
         
         public Action0 closer();
@@ -36,8 +39,6 @@ public interface HttpClient extends AutoCloseable {
         
         public boolean isActive();
 
-        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request);
-        
         // from Outtraffic
         public WriteCtrl writeCtrl();
         
