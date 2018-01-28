@@ -116,12 +116,12 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
     
     @Override
     protected void onInboundMessage(final HttpObject inmsg) {
-        markStartRecving();
+        startRecving();
     }
 
     @Override
     protected void onInboundCompleted() {
-        endTransaction();
+        endofTransaction();
     }
     
     @Override
@@ -130,7 +130,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             LOG.debug("sending http request msg {}", outmsg);
         }
         // set in transacting flag
-        markStartSending();
+        startSending();
         
         if (outmsg instanceof HttpRequest) {
             this._isKeepAlive = HttpUtil.isKeepAlive((HttpRequest)outmsg);
@@ -145,15 +145,15 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         this.readMessage();
     }
 
-    private void markStartSending() {
+    private void startSending() {
         transactionUpdater.compareAndSet(this, STATUS_IDLE, STATUS_SEND);
     }
     
-    private void markStartRecving() {
+    private void startRecving() {
         transactionUpdater.compareAndSet(this, STATUS_SEND, STATUS_RECV);
     }
     
-    private void endTransaction() {
+    private void endofTransaction() {
         transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_IDLE);
     }
     

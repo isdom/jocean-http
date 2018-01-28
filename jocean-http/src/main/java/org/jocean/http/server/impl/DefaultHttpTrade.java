@@ -118,7 +118,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
             LOG.debug("HttpTrade: channel({}) invoke channelRead0 and call with msg({}).",
                 this._channel, inmsg);
         }
-        markStartRecving();
+        startRecving();
         if (inmsg instanceof HttpRequest) {
             onHttpRequest((HttpRequest)inmsg);
         }
@@ -132,7 +132,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     
     @Override
     protected void onInboundCompleted() {
-        markEndofRecving();
+        endofRecving();
     }
     
     @Override
@@ -141,7 +141,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
             LOG.debug("sending http response msg {}", outmsg);
         }
         // set in transacting flag
-        markStartSending();
+        startSending();
     }
     
     @Override
@@ -163,7 +163,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
             @Override
             public void operationComplete(final ChannelFuture future)
                     throws Exception {
-                endTransaction();
+                endofTransaction();
                 if (future.isSuccess()) {
                     // close normally
                     close();
@@ -173,19 +173,19 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
             }};
     }
     
-    private void markStartRecving() {
+    private void startRecving() {
         transactionUpdater.compareAndSet(this, STATUS_IDLE, STATUS_RECV);
     }
     
-    private void markEndofRecving() {
+    private void endofRecving() {
         transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_RECV_END);
     }
     
-    private void markStartSending() {
+    private void startSending() {
         transactionUpdater.compareAndSet(this, STATUS_RECV_END, STATUS_SEND);
     }
     
-    private void endTransaction() {
+    private void endofTransaction() {
         transactionUpdater.compareAndSet(this, STATUS_SEND, STATUS_IDLE);
     }
     
