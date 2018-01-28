@@ -177,21 +177,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         }).compose(RxNettys.assembleTo(maxBufSize, DefaultHttpTrade.this));
     }
 
-    private String transactionStatusAsString() {
-        switch(transactionStatus()) {
-        case STATUS_IDLE:
-            return "IDLE";
-        case STATUS_SEND:
-            return "SEND";
-        case STATUS_RECV:
-            return "RECV";
-        case STATUS_RECV_END:
-            return "RECV_END";
-        default:
-            return "UNKNOWN";
-        }
-    }
-    
     private void onHttpRequest(final HttpRequest req) {
         this._requestMethod = req.method().name();
         this._requestUri = req.uri();
@@ -199,7 +184,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     }
     
     @Override
-    protected void inboundOnNext(final HttpObject inmsg) {
+    protected void onInboundMessage(final HttpObject inmsg) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("HttpTrade: channel({}) invoke channelRead0 and call with msg({}).",
                 this._channel, inmsg);
@@ -211,12 +196,12 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     }
 
     @Override
-    protected void inboundOnCompleted() {
+    protected void onInboundCompleted() {
         markEndofRecving();
     }
     
     @Override
-    protected void outboundOnNext(final Object outmsg) {
+    protected void beforeSendingOutbound(final Object outmsg) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("sending http response msg {}", outmsg);
         }
@@ -225,7 +210,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     }
     
     @Override
-    protected void outboundOnCompleted() {
+    protected void onOutboundCompleted() {
         // force flush for _isFlushPerWrite = false
         //  reference: https://github.com/netty/netty/commit/789e323b79d642ea2c0a024cb1c839654b7b8fad
         //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
@@ -235,8 +220,11 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         //
         // See https://github.com/netty/netty/issues/2983 for more information.
-        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER)
-        .addListener(new ChannelFutureListener() {
+        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(closeWhenComplete());
+    }
+
+    private ChannelFutureListener closeWhenComplete() {
+        return new ChannelFutureListener() {
             @Override
             public void operationComplete(final ChannelFuture future)
                     throws Exception {
@@ -247,7 +235,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
                 } else {
                     fireClosed(new TransportException("flush response error", future.cause()));
                 }
-            }});
+            }};
     }
     
     private void markStartRecving() {
@@ -266,16 +254,31 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         transactionUpdater.compareAndSet(this, STATUS_SEND, STATUS_IDLE);
     }
     
-    private int transactionStatus() {
-        return transactionUpdater.get(this);
-    }
-    
     private boolean inRecving() {
         return transactionStatus() == STATUS_RECV;
     }
     
     boolean inTransacting() {
         return transactionStatus() > STATUS_IDLE;
+    }
+    
+    private int transactionStatus() {
+        return transactionUpdater.get(this);
+    }
+    
+    private String transactionStatusAsString() {
+        switch(transactionStatus()) {
+        case STATUS_IDLE:
+            return "IDLE";
+        case STATUS_SEND:
+            return "SEND";
+        case STATUS_RECV:
+            return "RECV";
+        case STATUS_RECV_END:
+            return "RECV_END";
+        default:
+            return "UNKNOWN";
+        }
     }
     
     private static final AtomicIntegerFieldUpdater<DefaultHttpTrade> transactionUpdater =

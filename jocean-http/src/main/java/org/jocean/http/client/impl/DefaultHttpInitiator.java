@@ -151,6 +151,14 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
     }
 
+    private Observable<? extends Object> wrapRequest(final Observable<? extends Object> request) {
+        if (Nettys.isSupportCompress(this._channel)) {
+            return request.doOnNext(_ADD_ACCEPT_ENCODING);
+        } else {
+            return request;
+        }
+    }
+
     @Override
     public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
@@ -160,44 +168,18 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             }});
     }
 
-    private String transactionStatusAsString() {
-        switch(transactionStatus()) {
-        case STATUS_IDLE:
-            return "IDLE";
-        case STATUS_SEND:
-            return "SEND";
-        case STATUS_RECV:
-            return "RECV";
-        default:
-            return "UNKNOWN";
-        }
-    }
-
-    private Observable<? extends Object> wrapRequest(
-            final Observable<? extends Object> request) {
-        if (Nettys.isSupportCompress(this._channel)) {
-            return request.doOnNext(_ADD_ACCEPT_ENCODING);
-        } else {
-            return request;
-        }
-    }
-
-    private void onHttpRequest(final HttpRequest req) {
-        this._isKeepAlive = HttpUtil.isKeepAlive(req);
-    }
-
     @Override
-    protected void inboundOnNext(final HttpObject inmsg) {
+    protected void onInboundMessage(final HttpObject inmsg) {
         markStartRecving();
     }
 
     @Override
-    protected void inboundOnCompleted() {
+    protected void onInboundCompleted() {
         endTransaction();
     }
     
     @Override
-    protected void outboundOnNext(final Object outmsg) {
+    protected void beforeSendingOutbound(final Object outmsg) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("sending http request msg {}", outmsg);
         }
@@ -205,12 +187,12 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         markStartSending();
         
         if (outmsg instanceof HttpRequest) {
-            onHttpRequest((HttpRequest)outmsg);
+            this._isKeepAlive = HttpUtil.isKeepAlive((HttpRequest)outmsg);
         }
     }
 
     @Override
-    protected void outboundOnCompleted() {
+    protected void onOutboundCompleted() {
         // force flush for _isFlushPerWrite = false
         this._channel.flush();
         this._isRequestCompleted = true;
@@ -237,14 +219,27 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_IDLE);
     }
     
-    private int transactionStatus() {
-        return transactionUpdater.get(this);
-    }
-
     boolean inTransacting() {
         return transactionStatus() > STATUS_IDLE;
     }
     
+    private int transactionStatus() {
+        return transactionUpdater.get(this);
+    }
+
+    private String transactionStatusAsString() {
+        switch(transactionStatus()) {
+        case STATUS_IDLE:
+            return "IDLE";
+        case STATUS_SEND:
+            return "SEND";
+        case STATUS_RECV:
+            return "RECV";
+        default:
+            return "UNKNOWN";
+        }
+    }
+
     private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator> transactionUpdater =
             AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator.class, "_transactionStatus");
     

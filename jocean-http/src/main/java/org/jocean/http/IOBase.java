@@ -388,7 +388,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
 
     private void processInmsg(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber, final HttpObject inmsg) {
         
-        inboundOnNext(inmsg);
+        onInboundMessage(inmsg);
         
         try {
             subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
@@ -407,7 +407,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
                  * 因此，无需在channelInactive处，针对该情况做特殊处理
                  */
                 if (unholdInboundAndUninstallHandler(subscriber)) {
-                    inboundOnCompleted();
+                    onInboundCompleted();
                     subscriber.onCompleted();
                 }
             }
@@ -415,10 +415,11 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     }
     
     private void doSendOutmsg(final Object outmsg) {
-        outboundOnNext(outmsg);
         if (outmsg instanceof DoFlush) {
             this._channel.flush();
         } else {
+            beforeSendingOutbound(outmsg);
+            
             writeOutmsgToChannel(outmsg)
             .addListener(new ChannelFutureListener() {
                 @Override
@@ -556,13 +557,13 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     
     protected abstract boolean needRead();
 
-    protected abstract void inboundOnNext(final HttpObject inmsg);
+    protected abstract void onInboundMessage(final HttpObject inmsg);
 
-    protected abstract void inboundOnCompleted();
+    protected abstract void onInboundCompleted();
     
-    protected abstract void outboundOnNext(final Object outmsg);
+    protected abstract void beforeSendingOutbound(final Object outmsg);
     
-    protected abstract void outboundOnCompleted();
+    protected abstract void onOutboundCompleted();
     
     protected abstract void onChannelInactive();
     
@@ -642,7 +643,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         
         @Override
         public void onOutmsgCompleted(final IOBase<?> iobase) {
-            iobase.outboundOnCompleted();
+            iobase.onOutboundCompleted();
         }
         
         @Override
