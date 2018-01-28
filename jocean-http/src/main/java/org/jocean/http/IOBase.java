@@ -1,6 +1,7 @@
 package org.jocean.http;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
@@ -611,6 +612,27 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     
     @SuppressWarnings("unused")
     private volatile Subscription _outboundSubscription;
+    
+    @SuppressWarnings("rawtypes")
+    private static final AtomicIntegerFieldUpdater<IOBase> transactionUpdater =
+            AtomicIntegerFieldUpdater.newUpdater(IOBase.class, "_transactionStatus");
+    
+    @SuppressWarnings("unused")
+    private volatile int _transactionStatus = STATUS_IDLE;
+
+    protected static final int STATUS_IDLE = 0;
+    
+    public boolean inTransacting() {
+        return transactionStatus() > STATUS_IDLE;
+    }
+    
+    protected int transactionStatus() {
+        return transactionUpdater.get(this);
+    }
+
+    protected void transferStatus(final int oldStatus, final int newStatus) {
+        transactionUpdater.compareAndSet(this, oldStatus, newStatus);
+    }
     
     protected interface IOBaseOp {
         public void onInmsgRecvd(

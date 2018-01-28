@@ -6,7 +6,6 @@ package org.jocean.http.server.impl;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 import org.jocean.http.IOBase;
 import org.jocean.http.TransportException;
@@ -174,31 +173,23 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
     }
     
     private void startRecving() {
-        transactionUpdater.compareAndSet(this, STATUS_IDLE, STATUS_RECV);
+        transferStatus(STATUS_IDLE, STATUS_RECV);
     }
     
     private void endofRecving() {
-        transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_RECV_END);
+        transferStatus(STATUS_RECV, STATUS_RECV_END);
     }
     
     private void startSending() {
-        transactionUpdater.compareAndSet(this, STATUS_RECV_END, STATUS_SEND);
+        transferStatus(STATUS_RECV_END, STATUS_SEND);
     }
     
     private void endofTransaction() {
-        transactionUpdater.compareAndSet(this, STATUS_SEND, STATUS_IDLE);
+        transferStatus(STATUS_SEND, STATUS_IDLE);
     }
     
     private boolean inRecving() {
         return transactionStatus() == STATUS_RECV;
-    }
-    
-    boolean inTransacting() {
-        return transactionStatus() > STATUS_IDLE;
-    }
-    
-    private int transactionStatus() {
-        return transactionUpdater.get(this);
     }
     
     private String transactionStatusAsString() {
@@ -216,16 +207,9 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         }
     }
     
-    private static final AtomicIntegerFieldUpdater<DefaultHttpTrade> transactionUpdater =
-            AtomicIntegerFieldUpdater.newUpdater(DefaultHttpTrade.class, "_transactionStatus");
-    
-    private static final int STATUS_IDLE = 0;
     private static final int STATUS_RECV = 1;
     private static final int STATUS_RECV_END = 2;
     private static final int STATUS_SEND = 3;
-    
-    @SuppressWarnings("unused")
-    private volatile int _transactionStatus = STATUS_IDLE;
     
     private final Observable<? extends DisposableWrapper<HttpObject>> _obsRequest;
     

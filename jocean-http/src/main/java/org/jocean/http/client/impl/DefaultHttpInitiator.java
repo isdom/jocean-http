@@ -6,7 +6,6 @@ package org.jocean.http.client.impl;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 import org.jocean.http.IOBase;
 import org.jocean.http.TransportException;
@@ -146,25 +145,17 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
     }
 
     private void startSending() {
-        transactionUpdater.compareAndSet(this, STATUS_IDLE, STATUS_SEND);
+        transferStatus(STATUS_IDLE, STATUS_SEND);
     }
     
     private void startRecving() {
-        transactionUpdater.compareAndSet(this, STATUS_SEND, STATUS_RECV);
+        transferStatus(STATUS_SEND, STATUS_RECV);
     }
     
     private void endofTransaction() {
-        transactionUpdater.compareAndSet(this, STATUS_RECV, STATUS_IDLE);
+        transferStatus(STATUS_RECV, STATUS_IDLE);
     }
     
-    boolean inTransacting() {
-        return transactionStatus() > STATUS_IDLE;
-    }
-    
-    private int transactionStatus() {
-        return transactionUpdater.get(this);
-    }
-
     private String transactionStatusAsString() {
         switch(transactionStatus()) {
         case STATUS_IDLE:
@@ -178,15 +169,8 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
     }
 
-    private static final AtomicIntegerFieldUpdater<DefaultHttpInitiator> transactionUpdater =
-            AtomicIntegerFieldUpdater.newUpdater(DefaultHttpInitiator.class, "_transactionStatus");
-    
-    private static final int STATUS_IDLE = 0;
     private static final int STATUS_SEND = 1;
     private static final int STATUS_RECV = 2;
-    
-    @SuppressWarnings("unused")
-    private volatile int _transactionStatus = STATUS_IDLE;
     
     private volatile boolean _isKeepAlive = true;
     
