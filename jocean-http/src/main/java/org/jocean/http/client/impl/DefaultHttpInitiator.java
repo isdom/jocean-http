@@ -207,8 +207,6 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         if (outmsg instanceof HttpRequest) {
             onHttpRequest((HttpRequest)outmsg);
         }
-        
-        sendOutmsg(outmsg);
     }
 
     @Override

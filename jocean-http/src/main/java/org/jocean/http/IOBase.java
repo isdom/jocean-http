@@ -241,29 +241,6 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._iobaseop.isWritable(this));
     }
 
-    protected void sendOutmsg(final Object outmsg) {
-        if (outmsg instanceof DoFlush) {
-            this._channel.flush();
-        } else {
-            sendOutbound(outmsg)
-            .addListener(new ChannelFutureListener() {
-                @Override
-                public void operationComplete(final ChannelFuture future)
-                        throws Exception {
-                    if (future.isSuccess()) {
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("send http outmsg {} success.", outmsg);
-                        }
-                        onOutboundMsgSended(outmsg);
-                    } else {
-                        LOG.warn("exception when send outmsg: {}, detail: {}",
-                                outmsg, ExceptionUtils.exception2detail(future.cause()));
-                        fireClosed(new TransportException("send outmsg error", future.cause()));
-                    }
-                }});
-        }
-    }
-
     private static final Action1_N<Subscriber<? super Object>> ON_SENDED = new Action1_N<Subscriber<? super Object>>() {
         @Override
         public void call(final Subscriber<? super Object> subscriber, final Object... args) {
@@ -272,26 +249,11 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
                 try {
                     subscriber.onNext(outmsg);
                 } catch (Exception e) {
-                    LOG.warn("exception when invoke onNext({}), detail: {}",
-                        subscriber,
-                        ExceptionUtils.exception2detail(e));
+                    LOG.warn("exception when invoke onNext({}), detail: {}", subscriber, ExceptionUtils.exception2detail(e));
                 }
             }
         }};
 
-    private void onOutboundMsgSended(final Object outmsg) {
-        this._sendedObserver.foreachComponent(ON_SENDED, outmsg);
-    }
-
-    private ChannelFuture sendOutbound(Object outmsg) {
-        while (outmsg instanceof DisposableWrapper) {
-            outmsg = ((DisposableWrapper<?>)outmsg).unwrap();
-        }
-        return this._isFlushPerWrite
-                ? this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
-                : this._channel.write(ReferenceCountUtil.retain(outmsg));
-    }
-    
     @Override
     public void setReadPolicy(final ReadPolicy readPolicy) {
         this._iobaseop.runAtEventLoop(this, new Runnable() {
@@ -420,13 +382,11 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
                     LOG.debug("IOBase: channel({})/handler({}): channelRead0 and call with msg({}).",
                         ctx.channel(), ctx.name(), inmsg);
                 }
-                _iobaseop.processInmsg(IOBase.this, subscriber, inmsg);
+                _iobaseop.onInmsgRecvd(IOBase.this, subscriber, inmsg);
             }};
     }
 
-    private void processInmsg(
-            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-            final HttpObject inmsg) {
+    private void processInmsg(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber, final HttpObject inmsg) {
         
         inboundOnNext(inmsg);
         
@@ -454,6 +414,43 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         }
     }
     
+    private void doSendOutmsg(final Object outmsg) {
+        outboundOnNext(outmsg);
+        if (outmsg instanceof DoFlush) {
+            this._channel.flush();
+        } else {
+            writeOutmsgToChannel(outmsg)
+            .addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(final ChannelFuture future)
+                        throws Exception {
+                    if (future.isSuccess()) {
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("send http outmsg {} success.", outmsg);
+                        }
+                        onOutmsgSended(outmsg);
+                    } else {
+                        LOG.warn("exception when send outmsg: {}, detail: {}",
+                                outmsg, ExceptionUtils.exception2detail(future.cause()));
+                        fireClosed(new TransportException("send outmsg error", future.cause()));
+                    }
+                }});
+        }
+    }
+    
+    private ChannelFuture writeOutmsgToChannel(Object outmsg) {
+        while (outmsg instanceof DisposableWrapper) {
+            outmsg = ((DisposableWrapper<?>)outmsg).unwrap();
+        }
+        return this._isFlushPerWrite
+                ? this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
+                : this._channel.write(ReferenceCountUtil.retain(outmsg));
+    }
+    
+    private void onOutmsgSended(final Object outmsg) {
+        this._sendedObserver.foreachComponent(ON_SENDED, outmsg);
+    }
+
     protected void fireClosed(final Throwable e) {
         this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
     }
@@ -542,7 +539,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("outbound invoke onNext({}) for iobase: {}", outmsg, IOBase.this);
                     }
-                    _iobaseop.processOutmsg(IOBase.this, outmsg);
+                    _iobaseop.sendOutmsg(IOBase.this, outmsg);
                 }};
     }
     
@@ -611,12 +608,12 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     private volatile Subscription _outboundSubscription;
     
     protected interface IOBaseOp {
-        public void processInmsg(
+        public void onInmsgRecvd(
                 final IOBase<?> io,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject msg);
         
-        public void processOutmsg(final IOBase<?> io, final Object msg);
+        public void sendOutmsg(final IOBase<?> io, final Object msg);
 
         public void onOutmsgCompleted(final IOBase<?> io);
         
@@ -631,23 +628,20 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     
     private static final IOBaseOp IOOP_ACTIVE = new IOBaseOp() {
         @Override
-        public void processInmsg(
+        public void onInmsgRecvd(
                 final IOBase<?> iobase,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
-                final HttpObject msg) {
-            iobase.processInmsg(subscriber, msg);
+                final HttpObject inmsg) {
+            iobase.processInmsg(subscriber, inmsg);
         }
         
         @Override
-        public void processOutmsg(
-                final IOBase<?> iobase,
-                final Object msg) {
-            iobase.outboundOnNext(msg);
+        public void sendOutmsg(final IOBase<?> iobase, final Object msg) {
+            iobase.doSendOutmsg(msg);
         }
         
         @Override
-        public void onOutmsgCompleted(
-                final IOBase<?> iobase) {
+        public void onOutmsgCompleted(final IOBase<?> iobase) {
             iobase.outboundOnCompleted();
         }
         
@@ -677,31 +671,25 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     
     private static final IOBaseOp IOOP_UNACTIVE = new IOBaseOp() {
         @Override
-        public void processInmsg(
+        public void onInmsgRecvd(
                 final IOBase<?> iobase,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
                 final HttpObject inmsg) {
             ReferenceCountUtil.release(inmsg);
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("IOBase(inactive): channelRead0 and release msg({}).", inmsg);
-            }
+            LOG.warn("IOBase(inactive): channelRead0 and release msg({}).", inmsg);
         }
         
         @Override
-        public void processOutmsg(final IOBase<?> iobase, final Object msg) {
-        }
+        public void sendOutmsg(final IOBase<?> iobase, final Object outmsg) {}
         
         @Override
-        public void onOutmsgCompleted(final IOBase<?> iobase) {
-        }
+        public void onOutmsgCompleted(final IOBase<?> iobase) {}
         
         @Override
-        public void readMessage(final IOBase<?> iobase) {
-        }
+        public void readMessage(final IOBase<?> iobase) {}
 
         @Override
-        public void setWriteBufferWaterMark(final IOBase<?> iobase, final int low, final int high) {
-        }
+        public void setWriteBufferWaterMark(final IOBase<?> iobase, final int low, final int high) {}
         
         @Override
         public boolean isWritable(final IOBase<?> iobase) {

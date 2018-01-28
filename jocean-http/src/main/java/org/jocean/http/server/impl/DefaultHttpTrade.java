@@ -222,8 +222,6 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         }
         // set in transacting flag
         markStartSending();
-        
-        sendOutmsg(outmsg);
     }
     
     @Override
