@@ -13,7 +13,6 @@ import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
-import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,7 +78,7 @@ class DefaultHttpTrade extends IOBase<HttpTrade>
         this._obsRequest.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
             @Override
             public void call(final Throwable e) {
-                LOG.warn("HttpTrade: {}'s inbound with onError {}", this, ExceptionUtils.exception2detail(e));
+                LOG.warn("HttpTrade: {}'s inbound with onError {}", this, errorAsString(e));
             }
         });
     }

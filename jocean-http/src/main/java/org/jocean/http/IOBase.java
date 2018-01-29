@@ -484,7 +484,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         this._terminateAwareSupport.fireAllTerminates((T) this);
     }
         
-    private static String errorAsString(final Throwable e) {
+    protected static String errorAsString(final Throwable e) {
         return e != null 
             ?
                 (e instanceof CloseException)
