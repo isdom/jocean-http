@@ -386,7 +386,7 @@ public class MessageUtil {
         
         public InteractionBuilder reqbean(final Object... reqbeans);
         
-        public InteractionBuilder body(final Observable<MessageBody> tobody);
+        public InteractionBuilder body(final Observable<MessageBody> body);
         
         public InteractionBuilder disposeBodyOnTerminate(final boolean doDispose);
         
@@ -496,8 +496,8 @@ public class MessageUtil {
             }
 
             @Override
-            public InteractionBuilder body(final Observable<MessageBody> tobody) {
-                _obsreqRef.set(_obsreqRef.get().compose(MessageUtil.addBody(tobody)));
+            public InteractionBuilder body(final Observable<MessageBody> body) {
+                _obsreqRef.set(_obsreqRef.get().compose(MessageUtil.addBody(body)));
                 return this;
             }
             
