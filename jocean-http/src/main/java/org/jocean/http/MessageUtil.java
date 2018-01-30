@@ -723,7 +723,8 @@ public class MessageUtil {
         };
     }
     
-    public static Observable<MessageBody> toBody(final Object bean,
+    public static Observable<? extends MessageBody> toBody(
+            final Object bean,
             final String contentType,
             final Action2<Object, OutputStream> encoder) {
         return Observable.just(new MessageBody() {
