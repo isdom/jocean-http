@@ -27,6 +27,7 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ReflectUtils;
+import org.jocean.netty.util.ByteBufArrayOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,9 +39,7 @@ import com.fasterxml.jackson.databind.deser.DeserializationProblemHandler;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufInputStream;
-import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpMessage;
@@ -61,9 +60,7 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
-import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
-import rx.Subscriber;
 import rx.functions.Action1;
 import rx.functions.Action2;
 import rx.functions.Func0;
@@ -267,37 +264,28 @@ public class MessageUtil {
         return new ByteBufInputStream(buf.slice());
     }
     
-    public static void serializeToXml(final Object bean, final ByteBuf buf) {
+    public static void serializeToXml(final Object bean, final OutputStream out) {
         final XmlMapper mapper = new XmlMapper();
-//        mapper.addHandler(new DeserializationProblemHandler() {
-//            @Override
-//            public boolean handleUnknownProperty(final DeserializationContext ctxt, final JsonParser p,
-//                    final JsonDeserializer<?> deserializer, final Object beanOrClass, final String propertyName)
-//                    throws IOException {
-//                LOG.warn("UnknownProperty [{}], just skip", propertyName);
-//                p.skipChildren();
-//                return true;
-//            }});
         try {
-            mapper.writeValue(contentAsOutputStream(buf), bean);
+            mapper.writeValue(out, bean);
         } catch (Exception e) {
             LOG.warn("exception when serialize {} to xml, detail: {}",
                     bean, ExceptionUtils.exception2detail(e));
         }
     }
     
-    public static void serializeToJson(final Object bean, final ByteBuf buf) {
+    public static void serializeToJson(final Object bean, final OutputStream out) {
         try {
-            JSON.writeJSONString(contentAsOutputStream(buf), CharsetUtil.UTF_8, bean);
+            JSON.writeJSONString(out, CharsetUtil.UTF_8, bean);
         } catch (IOException e) {
             LOG.warn("exception when serialize {} to json, detail: {}",
                     bean, ExceptionUtils.exception2detail(e));
         }
     }
 
-    private static OutputStream contentAsOutputStream(final ByteBuf buf) {
-        return new ByteBufOutputStream(buf);
-    }
+//    private static OutputStream contentAsOutputStream(final ByteBuf buf) {
+//        return new ByteBufOutputStream(buf);
+//    }
     
     private static final Feature F_SSL;
     static {
@@ -522,12 +510,6 @@ public class MessageUtil {
                 return this;
             }
 
-//            @Override
-//            public InteractionBuilder writePolicy(final WritePolicy writePolicy) {
-//                _writePolicyRef.set(writePolicy);
-//                return this;
-//            }
-            
             private boolean isSSLEnabled(final Feature... features) {
                 for (Feature f : features) {
                     if (f instanceof Feature.ENABLE_SSL) {
@@ -726,7 +708,11 @@ public class MessageUtil {
                                 public Observable<Object> call(final MessageBody body) {
                                     request.headers().set(HttpHeaderNames.CONTENT_TYPE, body.contentType());
                                     // set content-length
-                                    request.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.contentLength());
+                                    if (body.contentLength() > 0) {
+                                        request.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.contentLength());
+                                    } else {
+                                        HttpUtil.setTransferEncodingChunked(request, true);
+                                    }
                                     return Observable.concat(Observable.just(request), body.content());
                                 }});
                         } else {
@@ -739,29 +725,9 @@ public class MessageUtil {
     
     public static Observable<MessageBody> toBody(final Object bean,
             final String contentType,
-            final Action2<Object, ByteBuf> encoder) {
-        return Observable.unsafeCreate(new OnSubscribe<MessageBody>() {
-                    @Override
-                    public void call(final Subscriber<? super MessageBody> subscriber) {
-                        if (!subscriber.isUnsubscribed()) {
-                            final DisposableWrapper<ByteBuf> dwb = bean2dwb(bean, encoder);
-                            final int contentLength = dwb.unwrap().readableBytes();
-                            subscriber.onNext(tobody(contentType, contentLength, dwb));
-                            subscriber.onCompleted();
-                        }
-                    }});
-    }
-    
-    private static DisposableWrapper<ByteBuf> bean2dwb(final Object bean, final Action2<Object, ByteBuf> encoder) {
-        final ByteBufAllocator allocator = PooledByteBufAllocator.DEFAULT;
-        final DisposableWrapper<ByteBuf> dwbuf = RxNettys.wrap4release(allocator.buffer());
-        encoder.call(bean, dwbuf.unwrap());
-        return dwbuf;
-    }
+            final Action2<Object, OutputStream> encoder) {
+        return Observable.just(new MessageBody() {
 
-    private static MessageBody tobody(final String contentType, final int contentLength,
-            final DisposableWrapper<ByteBuf> dwb) {
-        return new MessageBody() {
             @Override
             public String contentType() {
                 return contentType;
@@ -769,15 +735,28 @@ public class MessageUtil {
 
             @Override
             public int contentLength() {
-                return contentLength;
+                return -1;
             }
 
             @Override
             public Observable<? extends DisposableWrapper<ByteBuf>> content() {
-                return Observable.just(dwb);
-            }};
+                return bean2dwbs(Observable.just(bean), encoder);
+            }});
     }
     
+    private static Observable<DisposableWrapper<ByteBuf>> bean2dwbs(final Observable<Object> rawbody, final Action2<Object, OutputStream> encoder) {
+        return rawbody.flatMap(new Func1<Object, Observable<DisposableWrapper<ByteBuf>>>() {
+                @Override
+                public Observable<DisposableWrapper<ByteBuf>> call(final Object pojo) {
+                    try (final ByteBufArrayOutputStream out = new ByteBufArrayOutputStream(PooledByteBufAllocator.DEFAULT, 8192)) {
+                        encoder.call(pojo, out);
+                        return Observable.from(out.buffers()).map(DisposableWrapperUtil.<ByteBuf>wrap(RxNettys.<ByteBuf>disposerOf(), null));
+                    } catch (Exception e) {
+                        return Observable.error(e);
+                    }
+                }});
+    }
+
     public static Observable<Object> fullRequestWithoutBody(final HttpVersion version, final HttpMethod method) {
         return Observable.<Object>just(new DefaultHttpRequest(version, method, ""), LastHttpContent.EMPTY_LAST_CONTENT);
     }
