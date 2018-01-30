@@ -374,7 +374,7 @@ public class MessageUtil {
         
         public InteractionBuilder reqbean(final Object... reqbeans);
         
-        public InteractionBuilder body(final Observable<MessageBody> body);
+        public InteractionBuilder body(final Observable<? extends MessageBody> body);
         
         public InteractionBuilder disposeBodyOnTerminate(final boolean doDispose);
         
@@ -484,7 +484,7 @@ public class MessageUtil {
             }
 
             @Override
-            public InteractionBuilder body(final Observable<MessageBody> body) {
+            public InteractionBuilder body(final Observable<? extends MessageBody> body) {
                 _obsreqRef.set(_obsreqRef.get().compose(MessageUtil.addBody(body)));
                 return this;
             }
@@ -694,7 +694,7 @@ public class MessageUtil {
     }
 
     // TODO: support multipart/...
-    public static Transformer<Object, Object> addBody(final Observable<MessageBody> body) {
+    public static Transformer<Object, Object> addBody(final Observable<? extends MessageBody> body) {
         return new Transformer<Object, Object>() {
             @Override
             public Observable<Object> call(final Observable<Object> msg) {
