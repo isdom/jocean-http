@@ -696,19 +696,19 @@ public class MessageUtil {
                 return msg.concatMap(new Func1<Object, Observable<Object>>() {
                     @Override
                     public Observable<Object> call(final Object obj) {
-                        if (obj instanceof HttpRequest) {
-                            final HttpRequest request = (HttpRequest)obj;
+                        if (obj instanceof HttpMessage) {
+                            final HttpMessage httpmsg = (HttpMessage)obj;
                             return body.flatMap(new Func1<MessageBody, Observable<Object>>() {
                                 @Override
                                 public Observable<Object> call(final MessageBody body) {
-                                    request.headers().set(HttpHeaderNames.CONTENT_TYPE, body.contentType());
+                                    httpmsg.headers().set(HttpHeaderNames.CONTENT_TYPE, body.contentType());
                                     // set content-length
                                     if (body.contentLength() > 0) {
-                                        request.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.contentLength());
+                                        httpmsg.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.contentLength());
                                     } else {
-                                        HttpUtil.setTransferEncodingChunked(request, true);
+                                        HttpUtil.setTransferEncodingChunked(httpmsg, true);
                                     }
-                                    return Observable.concat(Observable.just(request), body.content());
+                                    return Observable.concat(Observable.just(httpmsg), body.content());
                                 }});
                         } else {
                             return Observable.just(obj);
