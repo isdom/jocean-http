@@ -305,7 +305,7 @@ public class MessageUtil {
     }
     
     public static <RESP> Transformer<Interaction, RESP> responseAs(final Class<RESP> resptype,
-            final Func2<ByteBuf, Class<RESP>, RESP> decoder) {
+            final Func2<InputStream, Class<RESP>, RESP> decoder) {
         return new Transformer<Interaction, RESP>() {
             @Override
             public Observable<RESP> call(final Observable<Interaction> obsinteraction) {
@@ -318,7 +318,7 @@ public class MessageUtil {
                                     @Override
                                     public RESP call(final DisposableWrapper<FullHttpResponse> dwresp) {
                                         try {
-                                            return decoder.call(dwresp.unwrap().content(), resptype);
+                                            return decoder.call(contentAsInputStream(dwresp.unwrap().content()), resptype);
                                         } finally {
                                             dwresp.dispose();
                                         }
