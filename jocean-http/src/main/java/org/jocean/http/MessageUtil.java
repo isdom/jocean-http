@@ -227,8 +227,8 @@ public class MessageUtil {
         }
     }
     
-    public static <T> T unserializeAsX_WWW_FORM_URLENCODED(final ByteBuf buf, final Class<T> type) {
-        final String kvs = parseContentAsString(buf);
+    public static <T> T unserializeAsX_WWW_FORM_URLENCODED(final InputStream is, final Class<T> type) {
+        final String kvs = parseContentAsString(is);
         if (null != kvs) {
             final T bean = ReflectUtils.newInstance(type);
             if (null != bean) {
@@ -248,12 +248,14 @@ public class MessageUtil {
         return null;
     }
     
-    public static String parseContentAsString(final ByteBuf buf) {
+    public static String parseContentAsString(final InputStream is) {
         try {
-            return new String(Nettys.dumpByteBufAsBytes(buf), CharsetUtil.UTF_8);
+            final byte[] bytes = new byte[is.available()];
+            is.read(bytes);
+            return new String(bytes, CharsetUtil.UTF_8);
         } catch (IOException e) {
             LOG.warn("exception when parse {} as string, detail: {}",
-                    buf, ExceptionUtils.exception2detail(e));
+                    is, ExceptionUtils.exception2detail(e));
             return null;
         }
     }
@@ -334,7 +336,7 @@ public class MessageUtil {
         @Override
         public String call(final DisposableWrapper<? extends FullHttpMessage> dwfullmsg) {
             try {
-                return parseContentAsString(dwfullmsg.unwrap().content());
+                return parseContentAsString(contentAsInputStream(dwfullmsg.unwrap().content()));
             } finally {
                 dwfullmsg.dispose();
             }
