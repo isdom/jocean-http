@@ -43,7 +43,6 @@ import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpMessage;
-import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
@@ -63,7 +62,6 @@ import rx.Observable;
 import rx.Observable.Transformer;
 import rx.functions.Action1;
 import rx.functions.Action2;
-import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.functions.Func2;
 
@@ -167,6 +165,7 @@ public class MessageUtil {
         }
     }
 
+    /*
     public static <T> Func1<Func0<FullHttpRequest>, T> decodeXmlContentAs(final Class<T> type) {
         return new Func1<Func0<FullHttpRequest>, T>() {
             @Override
@@ -174,7 +173,7 @@ public class MessageUtil {
                 final FullHttpRequest fhr = getfhr.call();
                 if (null != fhr) {
                     try {
-                        return unserializeAsXml(fhr.content(), type);
+                        return unserializeAsXml(contentAsInputStream(fhr.content()), type);
                     } finally {
                         fhr.release();
                     }
@@ -190,7 +189,7 @@ public class MessageUtil {
                 final FullHttpRequest fhr = getfhr.call();
                 if (null != fhr) {
                     try {
-                        return unserializeAsJson(fhr.content(), type);
+                        return unserializeAsJson(contentAsInputStream(fhr.content()), type);
                     } finally {
                         fhr.release();
                     }
@@ -198,8 +197,9 @@ public class MessageUtil {
                 return null;
             }};
     }
+    */
     
-    public static <T> T unserializeAsXml(final ByteBuf buf, final Class<T> type) {
+    public static <T> T unserializeAsXml(final InputStream is, final Class<T> type) {
         final XmlMapper mapper = new XmlMapper();
         mapper.addHandler(new DeserializationProblemHandler() {
             @Override
@@ -211,20 +211,18 @@ public class MessageUtil {
                 return true;
             }});
         try {
-            return mapper.readValue(contentAsInputStream(buf), type);
+            return mapper.readValue(is, type);
         } catch (Exception e) {
-            LOG.warn("exception when parse xml, detail: {}",
-                    ExceptionUtils.exception2detail(e));
+            LOG.warn("exception when parse as xml, detail: {}", ExceptionUtils.exception2detail(e));
             return null;
         }
     }
     
-    public static <T> T unserializeAsJson(final ByteBuf buf, final Class<T> type) {
+    public static <T> T unserializeAsJson(final InputStream is, final Class<T> type) {
         try {
-            return JSON.parseObject(contentAsInputStream(buf), type);
+            return JSON.parseObject(is, type);
         } catch (IOException e) {
-            LOG.warn("exception when parse {} as json, detail: {}",
-                    buf, ExceptionUtils.exception2detail(e));
+            LOG.warn("exception when parse as json, detail: {}", ExceptionUtils.exception2detail(e));
             return null;
         }
     }
@@ -382,8 +380,6 @@ public class MessageUtil {
         
         public InteractionBuilder feature(final Feature... features);
         
-//        public InteractionBuilder writePolicy(final WritePolicy writePolicy);
-        
         public Observable<? extends Interaction> execution();
     }
     
@@ -395,7 +391,6 @@ public class MessageUtil {
                 fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET));
         final List<String> _nvs = new ArrayList<>();
         final AtomicReference<URI> _uriRef = new AtomicReference<>();
-//        final AtomicReference<WritePolicy> _writePolicyRef = new AtomicReference<>();
         
         return new InteractionBuilder() {
             private void updateObsRequest(final Action1<Object> action) {
@@ -856,32 +851,32 @@ public class MessageUtil {
     }
 
     public static <T> Observable<? extends T> decodeJsonAs(final MessageBody body, final Class<T> type) {
-        return decodeContentAs(body.content(), new Func2<ByteBuf, Class<T>, T>() {
+        return decodeContentAs(body.content(), new Func2<InputStream, Class<T>, T>() {
             @Override
-            public T call(final ByteBuf buf, Class<T> clazz) {
-                return unserializeAsJson(buf, clazz);
+            public T call(final InputStream is, Class<T> clazz) {
+                return unserializeAsJson(is, clazz);
             }
         }, type);
     }
 
     public static <T> Observable<? extends T> decodeXmlAs(final MessageBody body, final Class<T> type) {
-        return decodeContentAs(body.content(), new Func2<ByteBuf, Class<T>, T>() {
+        return decodeContentAs(body.content(), new Func2<InputStream, Class<T>, T>() {
             @Override
-            public T call(final ByteBuf buf, Class<T> clazz) {
-                return unserializeAsXml(buf, clazz);
+            public T call(final InputStream is, Class<T> clazz) {
+                return unserializeAsXml(is, clazz);
             }
         }, type);
     }
 
     public static <T> Observable<? extends T> decodeContentAs(
-            final Observable<? extends DisposableWrapper<ByteBuf>> content, final Func2<ByteBuf, Class<T>, T> func,
+            final Observable<? extends DisposableWrapper<ByteBuf>> content, final Func2<InputStream, Class<T>, T> func,
             final Class<T> type) {
         return content.map(DisposableWrapperUtil.<ByteBuf>unwrap()).toList().map(new Func1<List<ByteBuf>, T>() {
             @Override
             public T call(final List<ByteBuf> bufs) {
                 final ByteBuf buf = Nettys.composite(bufs);
                 try {
-                    return func.call(buf, type);
+                    return func.call(contentAsInputStream(buf), type);
                 } finally {
                     ReferenceCountUtil.release(buf);
                 }
