@@ -152,6 +152,10 @@ public class ByteBufArrayOutputStream extends OutputStream implements DataOutput
      * Returns the buffer where this stream is writing data.
      */
     public ByteBuf[] buffers() {
-        return _bufs.toArray(new ByteBuf[0]);
+        try {
+            return _bufs.toArray(new ByteBuf[0]);
+        } finally {
+            _bufs.clear();
+        }
     }
 }
