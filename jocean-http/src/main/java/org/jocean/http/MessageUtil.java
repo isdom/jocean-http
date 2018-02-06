@@ -748,7 +748,8 @@ public class MessageUtil {
                 public Observable<DisposableWrapper<ByteBuf>> call(final Object pojo) {
                     try (final ByteBufArrayOutputStream out = new ByteBufArrayOutputStream(PooledByteBufAllocator.DEFAULT, 8192)) {
                         encoder.call(pojo, out);
-                        return Observable.from(out.buffers()).map(DisposableWrapperUtil.<ByteBuf>wrap(RxNettys.<ByteBuf>disposerOf(), null));
+                        final ByteBuf[] bufs = out.buffers();
+                        return Observable.from(bufs).map(DisposableWrapperUtil.<ByteBuf>wrap(RxNettys.<ByteBuf>disposerOf(), null));
                     } catch (Exception e) {
                         return Observable.error(e);
                     }
