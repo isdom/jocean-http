@@ -153,6 +153,9 @@ public class ByteBufArrayOutputStream extends OutputStream implements DataOutput
      * Returns the buffer where this stream is writing data.
      */
     public synchronized ByteBuf[] buffers() {
+        if (!_opened) {
+            throw new RuntimeException("ByteBufArrayOutputStream has closed!");
+        }
         try {
             return _bufs.toArray(new ByteBuf[0]);
         } finally {
@@ -170,7 +173,6 @@ public class ByteBufArrayOutputStream extends OutputStream implements DataOutput
      * @exception  IOException  if an I/O error occurs.
      */
     public synchronized void close() throws IOException {
-        // TODO
         // release and remove all valid _bufs
         if (_opened) {
             _opened = false;
