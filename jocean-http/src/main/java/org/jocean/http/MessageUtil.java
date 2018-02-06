@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
@@ -266,6 +267,8 @@ public class MessageUtil {
     
     public static void serializeToXml(final Object bean, final OutputStream out) {
         final XmlMapper mapper = new XmlMapper();
+        mapper.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
+        
         try {
             mapper.writeValue(out, bean);
         } catch (Exception e) {

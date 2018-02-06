@@ -1,11 +1,15 @@
 package org.jocean.http;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import javax.ws.rs.Path;
 
+import org.jocean.netty.util.ByteBufArrayOutputStream;
 import org.junit.Test;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
@@ -40,4 +44,19 @@ public class MessageUtilTestCase {
         assertEquals("/pathexist", request4.uri());
     }
 
+    @Test
+    public final void testSendRedpackRequestToXml() {
+        final SendRedpackRequest request = new SendRedpackRequest();
+        
+        request.setMchId("11111");
+        request.setMchBillno("222222");
+        
+        try (final ByteBufArrayOutputStream out = new ByteBufArrayOutputStream(PooledByteBufAllocator.DEFAULT, 8192)) {
+            MessageUtil.serializeToXml(request, out);
+            final ByteBuf[] bufs = out.buffers();
+            assertTrue(bufs.length > 0);
+        } catch (Exception e) {
+        }
+        
+    }
 }
