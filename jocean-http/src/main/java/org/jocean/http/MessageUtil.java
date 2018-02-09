@@ -41,7 +41,6 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
-import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpMessage;
 import io.netty.handler.codec.http.FullHttpResponse;
@@ -749,7 +748,7 @@ public class MessageUtil {
         return rawbody.flatMap(new Func1<Object, Observable<DisposableWrapper<ByteBuf>>>() {
                 @Override
                 public Observable<DisposableWrapper<ByteBuf>> call(final Object pojo) {
-                    try (final ByteBufArrayOutputStream out = new ByteBufArrayOutputStream(PooledByteBufAllocator.DEFAULT, 8192)) {
+                    try (final ByteBufArrayOutputStream out = new ByteBufArrayOutputStream()) {
                         encoder.call(pojo, out);
                         final ByteBuf[] bufs = out.buffers();
                         return Observable.from(bufs).map(DisposableWrapperUtil.<ByteBuf>wrap(RxNettys.<ByteBuf>disposerOf(), null));

@@ -11,9 +11,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufInputStream;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.util.CharsetUtil;
+import rx.functions.Func0;
 
 /**
  * An {@link OutputStream} which writes data to a {@link ByteBuf}.
@@ -33,21 +34,30 @@ public class ByteBufArrayOutputStream extends OutputStream implements DataOutput
     private static final Logger LOG
         = LoggerFactory.getLogger(ByteBufArrayOutputStream.class);
     
-    private final int _pageSize;
-    private final ByteBufAllocator _allocator;
+    private static final Func0<ByteBuf> _DEFAULT_NEW_BUFFER = new Func0<ByteBuf>() {
+        @Override
+        public ByteBuf call() {
+            return PooledByteBufAllocator.DEFAULT.buffer(8192, 8192);
+        }};
+    
+    private final Func0<ByteBuf> _newBuffer;
     private final List<ByteBuf> _bufs = new ArrayList<>();
+    
     private boolean _opened = true;
     private final DataOutputStream utf8out = new DataOutputStream(this);
 
+    public ByteBufArrayOutputStream() {
+        this(_DEFAULT_NEW_BUFFER);
+    }
+    
     /**
      * Creates a new stream which writes data to the specified {@code buffer}.
      */
-    public ByteBufArrayOutputStream(final ByteBufAllocator allocator, final int pageSize) {
-        if (allocator == null) {
-            throw new NullPointerException("allocator");
+    public ByteBufArrayOutputStream(final Func0<ByteBuf> newBuffer) {
+        if (newBuffer == null) {
+            throw new NullPointerException("newBuffer");
         }
-        this._allocator = allocator;
-        this._pageSize = pageSize;
+        this._newBuffer = newBuffer;
     }
 
     private ByteBuf lastBuf() {
@@ -62,7 +72,7 @@ public class ByteBufArrayOutputStream extends OutputStream implements DataOutput
     }
     
     private ByteBuf addBuf() {
-        final ByteBuf newbuf = _allocator.buffer(_pageSize, _pageSize);
+        final ByteBuf newbuf = this._newBuffer.call();
         _bufs.add(newbuf);
         return newbuf;
     }
