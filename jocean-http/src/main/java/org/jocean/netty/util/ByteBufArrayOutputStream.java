@@ -175,14 +175,17 @@ public class ByteBufArrayOutputStream extends OutputStream implements DataOutput
     public synchronized void close() throws IOException {
         // release and remove all valid _bufs
         if (_opened) {
-            _opened = false;
-            final ByteBuf[] bufs = buffers();
-            if (bufs.length > 0) {
-                LOG.warn("{} bufs left when stream closed, release these bufs", bufs.length);
-                // release all
-                for (ByteBuf b : bufs) {
-                    b.release();
+            try {
+                final ByteBuf[] bufs = buffers();
+                if (bufs.length > 0) {
+                    LOG.warn("{} bufs left when stream closed, release these bufs", bufs.length);
+                    // release all
+                    for (ByteBuf b : bufs) {
+                        b.release();
+                    }
                 }
+            } finally {
+                _opened = false;
             }
         }
         
