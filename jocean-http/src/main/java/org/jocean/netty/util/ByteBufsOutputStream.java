@@ -4,9 +4,9 @@ import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
+import org.jocean.idiom.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,6 +14,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.util.CharsetUtil;
+import rx.functions.Action1;
 import rx.functions.Func0;
 
 /**
@@ -29,10 +30,10 @@ import rx.functions.Func0;
  *
  * @see ByteBufInputStream
  */
-public class ByteBufArrayOutputStream extends OutputStream implements DataOutput {
+public class ByteBufsOutputStream extends OutputStream implements DataOutput {
 
     private static final Logger LOG
-        = LoggerFactory.getLogger(ByteBufArrayOutputStream.class);
+        = LoggerFactory.getLogger(ByteBufsOutputStream.class);
     
     private static final Func0<ByteBuf> _DEFAULT_NEW_BUFFER = new Func0<ByteBuf>() {
         @Override
@@ -40,47 +41,75 @@ public class ByteBufArrayOutputStream extends OutputStream implements DataOutput
             return PooledByteBufAllocator.DEFAULT.buffer(8192, 8192);
         }};
     
+    private static final Action1<ByteBuf> _DEFAULT_ON_BUFFER = new Action1<ByteBuf>() {
+        @Override
+        public void call(final ByteBuf buf) {
+            buf.release();
+        }};
     private final Func0<ByteBuf> _newBuffer;
-    private final List<ByteBuf> _bufs = new ArrayList<>();
+    private final AtomicReference<Action1<ByteBuf>> _onBufferRef = new AtomicReference<>();
+    private ByteBuf _buf = null;
     
     private boolean _opened = true;
     private final DataOutputStream utf8out = new DataOutputStream(this);
 
-    public ByteBufArrayOutputStream() {
-        this(_DEFAULT_NEW_BUFFER);
+    public ByteBufsOutputStream(final Action1<ByteBuf> onBuffer) {
+        this(_DEFAULT_NEW_BUFFER, onBuffer);
     }
     
     /**
      * Creates a new stream which writes data to the specified {@code buffer}.
      */
-    public ByteBufArrayOutputStream(final Func0<ByteBuf> newBuffer) {
+    public ByteBufsOutputStream(final Func0<ByteBuf> newBuffer, final Action1<ByteBuf> onBuffer) {
         if (newBuffer == null) {
             throw new NullPointerException("newBuffer");
         }
         this._newBuffer = newBuffer;
+        setOnBuffer(onBuffer);
+    }
+    
+    public void setOnBuffer(final Action1<ByteBuf> onBuffer) {
+        this._onBufferRef.set(onBuffer != null ? onBuffer : _DEFAULT_ON_BUFFER);
     }
 
-    private ByteBuf lastBuf() {
+    private ByteBuf currentBuf() {
         if (!_opened) {
             throw new RuntimeException("ByteBufArrayOutputStream has closed!");
         }
-        if (_bufs.isEmpty()) {
-            return addBuf();
+        if (null == this._buf) {
+            return newBuf();
         }
-        final ByteBuf lastbuf = _bufs.get(_bufs.size()-1);
-        return lastbuf.isWritable() ? lastbuf : addBuf();
+        return this._buf.isWritable() ? this._buf : newBuf();
     }
     
-    private ByteBuf addBuf() {
-        final ByteBuf newbuf = this._newBuffer.call();
-        _bufs.add(newbuf);
-        return newbuf;
+    private ByteBuf newBuf() {
+        flushBuf();
+        this._buf = this._newBuffer.call();
+        return this._buf;
+    }
+
+    private void flushBuf() {
+        if (null != this._buf) {
+            final ByteBuf old = this._buf;
+            this._buf = null;
+            final Action1<ByteBuf> onBuffer = this._onBufferRef.get();
+            try {
+                onBuffer.call(old);
+            } catch (Exception e) {
+                LOG.warn("exception when call onBuffer {}, detail: {}", onBuffer, ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+
+    @Override
+    public synchronized void flush() throws IOException {
+        flushBuf();
     }
 
     @Override
     public synchronized void write(final byte[] b, int off, int len) throws IOException {
         while (len > 0) {
-            final ByteBuf buffer = lastBuf();
+            final ByteBuf buffer = currentBuf();
             final int size = Math.min(buffer.writableBytes(), len);
             buffer.writeBytes(b, off, size);
             off += size;
@@ -95,17 +124,17 @@ public class ByteBufArrayOutputStream extends OutputStream implements DataOutput
 
     @Override
     public synchronized void write(final int b) throws IOException {
-        lastBuf().writeByte(b);
+        currentBuf().writeByte(b);
     }
 
     @Override
     public synchronized void writeBoolean(final boolean v) throws IOException {
-        lastBuf().writeBoolean(v);
+        currentBuf().writeBoolean(v);
     }
 
     @Override
     public synchronized void writeByte(final int v) throws IOException {
-        lastBuf().writeByte(v);
+        currentBuf().writeByte(v);
     }
 
     @Override
@@ -160,20 +189,6 @@ public class ByteBufArrayOutputStream extends OutputStream implements DataOutput
     }
 
     /**
-     * Returns the buffer where this stream is writing data.
-     */
-    public synchronized ByteBuf[] buffers() {
-        if (!_opened) {
-            throw new RuntimeException("ByteBufArrayOutputStream has closed!");
-        }
-        try {
-            return _bufs.toArray(new ByteBuf[0]);
-        } finally {
-            _bufs.clear();
-        }
-    }
-    
-    /**
      * Closes this output stream and releases any system resources
      * associated with this stream. The general contract of <code>close</code>
      * is that it closes the output stream. A closed stream cannot perform
@@ -183,20 +198,9 @@ public class ByteBufArrayOutputStream extends OutputStream implements DataOutput
      * @exception  IOException  if an I/O error occurs.
      */
     public synchronized void close() throws IOException {
-        // release and remove all valid _bufs
+        flushBuf();
         if (_opened) {
-            try {
-                final ByteBuf[] bufs = buffers();
-                if (bufs.length > 0) {
-                    LOG.warn("{} bufs left when stream closed, release these bufs", bufs.length);
-                    // release all
-                    for (ByteBuf b : bufs) {
-                        b.release();
-                    }
-                }
-            } finally {
-                _opened = false;
-            }
+            _opened = false;
         }
         
         super.close();

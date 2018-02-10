@@ -27,12 +27,11 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ReflectUtils;
-import org.jocean.netty.util.ByteBufArrayOutputStream;
+import org.jocean.netty.util.ByteBufsOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
@@ -59,7 +58,9 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
+import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
+import rx.Subscriber;
 import rx.functions.Action1;
 import rx.functions.Action2;
 import rx.functions.Func1;
@@ -266,8 +267,7 @@ public class MessageUtil {
     
     public static void serializeToXml(final Object bean, final OutputStream out) {
         final XmlMapper mapper = new XmlMapper();
-        mapper.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
-        
+//        mapper.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
         try {
             mapper.writeValue(out, bean);
         } catch (Exception e) {
@@ -740,22 +740,26 @@ public class MessageUtil {
 
             @Override
             public Observable<? extends DisposableWrapper<ByteBuf>> content() {
-                return bean2dwbs(Observable.just(bean), encoder);
+                return bean2dwbs(bean, encoder);
             }});
     }
     
-    private static Observable<DisposableWrapper<ByteBuf>> bean2dwbs(final Observable<Object> rawbody, final Action2<Object, OutputStream> encoder) {
-        return rawbody.flatMap(new Func1<Object, Observable<DisposableWrapper<ByteBuf>>>() {
-                @Override
-                public Observable<DisposableWrapper<ByteBuf>> call(final Object pojo) {
-                    try (final ByteBufArrayOutputStream out = new ByteBufArrayOutputStream()) {
-                        encoder.call(pojo, out);
-                        final ByteBuf[] bufs = out.buffers();
-                        return Observable.from(bufs).map(DisposableWrapperUtil.<ByteBuf>wrap(RxNettys.<ByteBuf>disposerOf(), null));
+    private static Observable<DisposableWrapper<ByteBuf>> bean2dwbs(final Object bean, final Action2<Object, OutputStream> encoder) {
+        return Observable.unsafeCreate(new OnSubscribe<ByteBuf>() {
+            @Override
+            public void call(final Subscriber<? super ByteBuf> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    try (final ByteBufsOutputStream out = new ByteBufsOutputStream(new Action1<ByteBuf>() {
+                        @Override
+                        public void call(final ByteBuf buf) {
+                            subscriber.onNext(buf);
+                        }})) {
+                        encoder.call(bean, out);
                     } catch (Exception e) {
-                        return Observable.error(e);
+                        subscriber.onError(e);
                     }
-                }});
+                }
+            }}).map(DisposableWrapperUtil.<ByteBuf>wrap(RxNettys.<ByteBuf>disposerOf(), null));
     }
 
     public static Observable<Object> fullRequestWithoutBody(final HttpVersion version, final HttpMethod method) {

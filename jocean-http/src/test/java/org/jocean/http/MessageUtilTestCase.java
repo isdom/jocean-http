@@ -3,13 +3,16 @@ package org.jocean.http;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.ws.rs.Path;
 
-import org.jocean.netty.util.ByteBufArrayOutputStream;
+import org.jocean.netty.util.ByteBufsOutputStream;
 import org.junit.Test;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
@@ -51,10 +54,11 @@ public class MessageUtilTestCase {
         request.setMchId("11111");
         request.setMchBillno("222222");
         
-        try (final ByteBufArrayOutputStream out = new ByteBufArrayOutputStream()) {
+        final List<ByteBuf> bufs = new ArrayList<>();
+        
+        try (final ByteBufsOutputStream out = new ByteBufsOutputStream(() -> Unpooled.buffer(), buf -> bufs.add(buf))) {
             MessageUtil.serializeToXml(request, out);
-            final ByteBuf[] bufs = out.buffers();
-            assertTrue(bufs.length > 0);
+            assertTrue(bufs.size() > 0);
         } catch (Exception e) {
         }
         
