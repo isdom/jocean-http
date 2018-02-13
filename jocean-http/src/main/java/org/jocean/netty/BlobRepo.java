@@ -2,6 +2,7 @@ package org.jocean.netty;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.Date;
 
 import org.jocean.http.MessageBody;
 
@@ -10,6 +11,32 @@ import rx.Observable;
 import rx.functions.Func1;
 
 public interface BlobRepo {
+    public interface PutObjectBuilder {
+        
+        //  required
+        public PutObjectBuilder objectName(final String objectName);
+        
+        //  required
+        public PutObjectBuilder content(final MessageBody body);
+        
+        public Observable<String> build();
+    }
+    
+    /**
+     * put object to OSS's Bucket
+     * @return
+     */
+    public PutObjectBuilder putObject();
+    
+    public interface SimplifiedObjectMeta {
+        public String getETag();
+        public long getSize();
+        public Date getLastModified();
+    }
+    
+    public Observable<SimplifiedObjectMeta> getSimplifiedObjectMeta(final String objectName);
+    
+    @Deprecated
     public interface Blob extends ReferenceCounted {
         public String name();
         public String filename();
@@ -103,24 +130,14 @@ public interface BlobRepo {
         public Blob   blob();
     }
     
-    public interface PutObjectBuilder {
-        
-        //  required
-        public PutObjectBuilder objectName(final String objectName);
-        
-        //  required
-        public PutObjectBuilder content(final MessageBody body);
-        
-        //  optional
-//        public PutObjectBuilder writePolicy(final WritePolicy writePolicy);
-        
-        public Observable<String> build();
-    }
-    
-    public PutObjectBuilder putObject();
-    
-    public Observable<PutResult> putBlob(final String key, 
-            final Blob blob);
+    /**
+     * @param key
+     * @param blob
+     * @return
+     * @deprecated 请使用 {@link #putObject()} 代替
+     */
+    @Deprecated
+    public Observable<PutResult> putBlob(final String key, final Blob blob);
     
     public Observable<Blob> getBlob(final String key);
     
