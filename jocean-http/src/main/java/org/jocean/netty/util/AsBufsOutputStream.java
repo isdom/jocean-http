@@ -55,9 +55,9 @@ public class AsBufsOutputStream<T> extends OutputStream implements DataOutput {
     private boolean _opened = true;
     private final DataOutputStream utf8out = new DataOutputStream(this);
 
-//    public AsByteBufOutputStream(final Action1<ByteBuf> onBuffer) {
-//        this(_DEFAULT_NEW_BUFFER, onBuffer);
-//    }
+    public AsBufsOutputStream(final Func0<T> allocator, final Func1<T, ByteBuf> tobuf) {
+        this(allocator, tobuf, null);
+    }
     
     /**
      * Creates a new stream which writes data to the specified {@code buffer}.
