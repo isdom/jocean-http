@@ -799,7 +799,7 @@ public class MessageUtil {
         }
     };
         
-    public static Transformer<DisposableWrapper<HttpObject>, MessageBody> asBody() {
+    public static Transformer<? extends DisposableWrapper<HttpObject>, MessageBody> asBody() {
         return _AS_BODY;
     }
     
@@ -844,7 +844,7 @@ public class MessageUtil {
         }
     };
     
-    public static Transformer<DisposableWrapper<HttpObject>, FullMessage> asFullMessage() {
+    public static Transformer<? extends DisposableWrapper<HttpObject>, FullMessage> asFullMessage() {
         return _AS_FULLMSG;
     }
     
