@@ -712,7 +712,9 @@ public class MessageUtil {
                                     } else {
                                         HttpUtil.setTransferEncodingChunked(httpmsg, true);
                                     }
-                                    return Observable.concat(Observable.just(httpmsg), body.content());
+                                    return Observable.concat(Observable.just(httpmsg), 
+                                            body.content(), 
+                                            Observable.just(LastHttpContent.EMPTY_LAST_CONTENT));
                                 }});
                         } else {
                             return Observable.just(obj);
