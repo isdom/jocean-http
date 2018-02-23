@@ -697,7 +697,7 @@ public class MessageUtil {
         return new Transformer<Object, Object>() {
             @Override
             public Observable<Object> call(final Observable<Object> msg) {
-                return msg.flatMap(new Func1<Object, Observable<Object>>() {
+                return msg.concatMap(new Func1<Object, Observable<Object>>() {
                     @Override
                     public Observable<Object> call(final Object obj) {
                         if (obj instanceof HttpMessage) {
@@ -755,6 +755,7 @@ public class MessageUtil {
                             subscriber.onNext(buf);
                         }})) {
                         encoder.call(bean, out);
+                        subscriber.onCompleted();
                     } catch (Exception e) {
                         subscriber.onError(e);
                     }
@@ -763,8 +764,7 @@ public class MessageUtil {
     }
 
     public static Observable<Object> fullRequestWithoutBody(final HttpVersion version, final HttpMethod method) {
-        return Observable.<Object>just(new DefaultHttpRequest(version, method, ""), LastHttpContent.EMPTY_LAST_CONTENT, 
-                DoFlush.Util.flushOnly());
+        return Observable.<Object>just(new DefaultHttpRequest(version, method, ""), LastHttpContent.EMPTY_LAST_CONTENT);
     }
     
     public static Observable<Object> fullRequest(final Object... beans) {
