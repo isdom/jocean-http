@@ -763,7 +763,8 @@ public class MessageUtil {
     }
 
     public static Observable<Object> fullRequestWithoutBody(final HttpVersion version, final HttpMethod method) {
-        return Observable.<Object>just(new DefaultHttpRequest(version, method, ""), LastHttpContent.EMPTY_LAST_CONTENT);
+        return Observable.<Object>just(new DefaultHttpRequest(version, method, ""), LastHttpContent.EMPTY_LAST_CONTENT, 
+                DoFlush.Util.flushOnly());
     }
     
     public static Observable<Object> fullRequest(final Object... beans) {
