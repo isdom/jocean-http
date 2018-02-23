@@ -7,7 +7,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.ws.rs.Path;
+import javax.ws.rs.core.MediaType;
 
+import org.jocean.http.client.HttpClient;
+import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.netty.util.ByteBufsOutputStream;
 import org.junit.Test;
 
@@ -61,6 +64,25 @@ public class MessageUtilTestCase {
             assertTrue(bufs.size() > 0);
         } catch (Exception e) {
         }
+    }
+
+    @Test
+    public final void testPostWithbody() {
+        final SendRedpackRequest request = new SendRedpackRequest();
         
+        request.setMchId("11111");
+        request.setMchBillno("222222");
+        
+        final HttpClient client = new DefaultHttpClient();
+            MessageUtil.interaction(client)
+                .method(HttpMethod.POST)
+                .uri("http://www.sina.com")
+                .reqbean(request)
+                .body(MessageUtil.toBody(request, MediaType.APPLICATION_XML, MessageUtil::serializeToXml))
+                .feature(Feature.ENABLE_LOGGING_OVER_SSL).execution()
+            // TODO try setFlushPerWrite true
+//            .doOnNext(interaction -> interaction.initiator().writeCtrl().setFlushPerWrite(true))
+            .compose(MessageUtil.responseAsString())
+            .toBlocking().single();
     }
 }

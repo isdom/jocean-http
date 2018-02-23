@@ -697,7 +697,7 @@ public class MessageUtil {
         return new Transformer<Object, Object>() {
             @Override
             public Observable<Object> call(final Observable<Object> msg) {
-                return msg.concatMap(new Func1<Object, Observable<Object>>() {
+                return msg.flatMap(new Func1<Object, Observable<Object>>() {
                     @Override
                     public Observable<Object> call(final Object obj) {
                         if (obj instanceof HttpMessage) {
@@ -712,9 +712,7 @@ public class MessageUtil {
                                     } else {
                                         HttpUtil.setTransferEncodingChunked(httpmsg, true);
                                     }
-                                    return Observable.concat(Observable.just(httpmsg), 
-                                            body.content(), 
-                                            Observable.just(LastHttpContent.EMPTY_LAST_CONTENT));
+                                    return Observable.concat(Observable.just(httpmsg), body.content());
                                 }});
                         } else {
                             return Observable.just(obj);
