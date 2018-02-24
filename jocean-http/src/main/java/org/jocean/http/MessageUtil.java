@@ -27,6 +27,7 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ReflectUtils;
+import org.jocean.netty.util.AsBufsOutputStream;
 import org.jocean.netty.util.ByteBufsOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +62,7 @@ import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
 import rx.Subscriber;
+import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Action2;
 import rx.functions.Func1;
@@ -890,6 +892,30 @@ public class MessageUtil {
                 } finally {
                     ReferenceCountUtil.release(buf);
                 }
+            }
+        });
+    }
+    
+    public static <T> Observable<T> fromBufout(final AsBufsOutputStream<T> bufout, final Action0 out) {
+        return Observable.unsafeCreate(new OnSubscribe<T>() {
+            @Override
+            public void call(final Subscriber<? super T> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    bufout.setOutput(new Action1<T>() {
+                        @Override
+                        public void call(final T t) {
+                            subscriber.onNext(t);
+                        }});
+                    try {
+                        out.call();
+                        subscriber.onCompleted();
+                    } catch (Exception e) {
+                        subscriber.onError(e);
+                    } finally {
+                        bufout.setOutput(null);
+                    }
+                }
+
             }
         });
     }
