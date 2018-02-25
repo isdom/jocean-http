@@ -27,8 +27,8 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ReflectUtils;
+import org.jocean.idiom.Terminable;
 import org.jocean.netty.util.AsBufsOutputStream;
-import org.jocean.netty.util.ByteBufsOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +41,7 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpMessage;
 import io.netty.handler.codec.http.FullHttpResponse;
@@ -65,6 +66,7 @@ import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Action2;
+import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.functions.Func2;
 
@@ -76,6 +78,15 @@ public class MessageUtil {
         throw new IllegalStateException("No instances!");
     }
 
+    public static Func0<DisposableWrapper<ByteBuf>> pooledAllocator(final Terminable terminable, final int pageSize) {
+        return new Func0<DisposableWrapper<ByteBuf>>() {
+            @Override
+            public DisposableWrapper<ByteBuf> call() {
+                return DisposableWrapperUtil.disposeOn(terminable, 
+                        RxNettys.wrap4release(PooledByteBufAllocator.DEFAULT.buffer(pageSize, pageSize)));
+            }};
+    }
+    
     public static Action1<HttpRequest> injectQueryParams(final Object bean) {
         return new Action1<HttpRequest>() {
             @Override
@@ -734,35 +745,30 @@ public class MessageUtil {
             public String contentType() {
                 return contentType;
             }
-
             @Override
             public int contentLength() {
                 return -1;
             }
-
             @Override
             public Observable<? extends DisposableWrapper<ByteBuf>> content() {
                 return bean2dwbs(bean, encoder);
             }});
     }
     
+    final private static Func1<DisposableWrapper<ByteBuf>, ByteBuf> _UNWRAP_DWB = new Func1<DisposableWrapper<ByteBuf>, ByteBuf>() {
+        @Override
+        public ByteBuf call(final DisposableWrapper<ByteBuf> dwb) {
+            return dwb.unwrap();
+        }};
+        
     private static Observable<DisposableWrapper<ByteBuf>> bean2dwbs(final Object bean, final Action2<Object, OutputStream> encoder) {
-        return Observable.unsafeCreate(new OnSubscribe<ByteBuf>() {
+        final AsBufsOutputStream<DisposableWrapper<ByteBuf>> bufout = 
+                new AsBufsOutputStream<>(pooledAllocator(null, 8192), _UNWRAP_DWB);
+        return fromBufout(bufout, new Action0() {
             @Override
-            public void call(final Subscriber<? super ByteBuf> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    try (final ByteBufsOutputStream out = new ByteBufsOutputStream(new Action1<ByteBuf>() {
-                        @Override
-                        public void call(final ByteBuf buf) {
-                            subscriber.onNext(buf);
-                        }})) {
-                        encoder.call(bean, out);
-                        subscriber.onCompleted();
-                    } catch (Exception e) {
-                        subscriber.onError(e);
-                    }
-                }
-            }}).map(DisposableWrapperUtil.<ByteBuf>wrap(RxNettys.<ByteBuf>disposerOf(), null));
+            public void call() {
+                encoder.call(bean, bufout);
+            }});
     }
 
     public static Observable<Object> fullRequestWithoutBody(final HttpVersion version, final HttpMethod method) {
@@ -915,7 +921,6 @@ public class MessageUtil {
                         bufout.setOutput(null);
                     }
                 }
-
             }
         });
     }
