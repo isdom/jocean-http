@@ -179,40 +179,6 @@ public class MessageUtil {
         }
     }
 
-    /*
-    public static <T> Func1<Func0<FullHttpRequest>, T> decodeXmlContentAs(final Class<T> type) {
-        return new Func1<Func0<FullHttpRequest>, T>() {
-            @Override
-            public T call(final Func0<FullHttpRequest> getfhr) {
-                final FullHttpRequest fhr = getfhr.call();
-                if (null != fhr) {
-                    try {
-                        return unserializeAsXml(contentAsInputStream(fhr.content()), type);
-                    } finally {
-                        fhr.release();
-                    }
-                }
-                return null;
-            }};
-    }
-    
-    public static <T> Func1<Func0<FullHttpRequest>, T> decodeJsonContentAs(final Class<T> type) {
-        return new Func1<Func0<FullHttpRequest>, T>() {
-            @Override
-            public T call(final Func0<FullHttpRequest> getfhr) {
-                final FullHttpRequest fhr = getfhr.call();
-                if (null != fhr) {
-                    try {
-                        return unserializeAsJson(contentAsInputStream(fhr.content()), type);
-                    } finally {
-                        fhr.release();
-                    }
-                }
-                return null;
-            }};
-    }
-    */
-    
     public static <T> T unserializeAsXml(final InputStream is, final Class<T> type) {
         final XmlMapper mapper = new XmlMapper();
         mapper.addHandler(new DeserializationProblemHandler() {
