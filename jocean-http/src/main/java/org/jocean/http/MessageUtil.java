@@ -258,16 +258,13 @@ public class MessageUtil {
     public static void serializeToJson(final Object bean, final OutputStream out) {
         try {
             JSON.writeJSONString(out, CharsetUtil.UTF_8, bean);
+            out.flush();
         } catch (IOException e) {
             LOG.warn("exception when serialize {} to json, detail: {}",
                     bean, ExceptionUtils.exception2detail(e));
         }
     }
 
-//    private static OutputStream contentAsOutputStream(final ByteBuf buf) {
-//        return new ByteBufOutputStream(buf);
-//    }
-    
     private static final Feature F_SSL;
     static {
         F_SSL = defaultSslFeature();
