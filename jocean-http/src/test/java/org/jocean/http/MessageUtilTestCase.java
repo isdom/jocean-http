@@ -12,7 +12,7 @@ import javax.ws.rs.core.MediaType;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.idiom.DisposableWrapper;
-import org.jocean.netty.util.AsBufsOutputStream;
+import org.jocean.netty.util.BufsOutputStream;
 import org.junit.Test;
 
 import io.netty.buffer.ByteBuf;
@@ -59,7 +59,7 @@ public class MessageUtilTestCase {
         
         final List<ByteBuf> bufs = new ArrayList<>();
         
-        try (final AsBufsOutputStream<DisposableWrapper<ByteBuf>> out = new AsBufsOutputStream<>(
+        try (final BufsOutputStream<DisposableWrapper<ByteBuf>> out = new BufsOutputStream<>(
                 MessageUtil.pooledAllocator(null, 8192), dwb->dwb.unwrap(), dwb->bufs.add(dwb.unwrap()) ) ) {
             MessageUtil.serializeToXml(request, out);
             assertTrue(bufs.size() > 0);

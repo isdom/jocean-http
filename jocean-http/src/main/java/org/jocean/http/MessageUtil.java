@@ -28,7 +28,7 @@ import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.Terminable;
-import org.jocean.netty.util.AsBufsOutputStream;
+import org.jocean.netty.util.BufsOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -725,8 +725,8 @@ public class MessageUtil {
         }};
         
     private static Observable<DisposableWrapper<ByteBuf>> bean2dwbs(final Object bean, final Action2<Object, OutputStream> encoder) {
-        final AsBufsOutputStream<DisposableWrapper<ByteBuf>> bufout = 
-                new AsBufsOutputStream<>(pooledAllocator(null, 8192), _UNWRAP_DWB);
+        final BufsOutputStream<DisposableWrapper<ByteBuf>> bufout = 
+                new BufsOutputStream<>(pooledAllocator(null, 8192), _UNWRAP_DWB);
         return fromBufout(bufout, new Action0() {
             @Override
             public void call() {
@@ -865,7 +865,7 @@ public class MessageUtil {
         });
     }
     
-    public static <T> Observable<T> fromBufout(final AsBufsOutputStream<T> bufout, final Action0 out) {
+    public static <T> Observable<T> fromBufout(final BufsOutputStream<T> bufout, final Action0 out) {
         return Observable.unsafeCreate(new OnSubscribe<T>() {
             @Override
             public void call(final Subscriber<? super T> subscriber) {
