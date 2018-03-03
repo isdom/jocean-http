@@ -887,4 +887,26 @@ public class MessageUtil {
             }
         });
     }
+    
+    public static <T> Observable<T> fromBufout(final Func0<BufsOutputStream<T>> createout, 
+            final Action1<OutputStream> fillout) {
+        return Observable.unsafeCreate(new OnSubscribe<T>() {
+            @Override
+            public void call(final Subscriber<? super T> subscriber) {
+                if (!subscriber.isUnsubscribed()) {
+                    try (final BufsOutputStream<T> bufout = createout.call()) {
+                        bufout.setOutput(new Action1<T>() {
+                            @Override
+                            public void call(final T t) {
+                                subscriber.onNext(t);
+                            }});
+                        fillout.call(bufout);
+                        subscriber.onCompleted();
+                    } catch (Exception e) {
+                        subscriber.onError(e);
+                    }
+                }
+            }
+        });
+    }
 }
