@@ -78,6 +78,34 @@ public class MessageUtil {
         throw new IllegalStateException("No instances!");
     }
 
+    public interface Interaction {
+        public HttpInitiator  initiator();
+        public Observable<? extends DisposableWrapper<HttpObject>> execute();
+    }
+    
+    public interface InteractionBuilder {
+        
+        public InteractionBuilder method(final HttpMethod method);
+        
+        public InteractionBuilder uri(final String uri);
+        
+        public InteractionBuilder path(final String path);
+        
+        public InteractionBuilder paramAsQuery(final String key, final String value);
+        
+        public InteractionBuilder reqbean(final Object... reqbeans);
+        
+        public InteractionBuilder body(final Observable<? extends MessageBody> body);
+        
+        public InteractionBuilder disposeBodyOnTerminate(final boolean doDispose);
+        
+        public InteractionBuilder onrequest(final Action1<Object> action);
+        
+        public InteractionBuilder feature(final Feature... features);
+        
+        public Observable<? extends Interaction> execution();
+    }
+    
     public static Func0<DisposableWrapper<ByteBuf>> pooledAllocator(final Terminable terminable, final int pageSize) {
         return new Func0<DisposableWrapper<ByteBuf>>() {
             @Override
@@ -279,11 +307,6 @@ public class MessageUtil {
         }
     }
 
-    public interface Interaction {
-        public HttpInitiator  initiator();
-        public Observable<? extends DisposableWrapper<HttpObject>> execute();
-    }
-    
     public static <RESP> Transformer<Interaction, RESP> responseAs(final Class<RESP> resptype,
             final Func2<InputStream, Class<RESP>, RESP> decoder) {
         return new Transformer<Interaction, RESP>() {
@@ -338,29 +361,6 @@ public class MessageUtil {
     
     public static Transformer<Interaction, String> responseAsString() {
         return _AS_STRING;
-    }
-    
-    public interface InteractionBuilder {
-        
-        public InteractionBuilder method(final HttpMethod method);
-        
-        public InteractionBuilder uri(final String uri);
-        
-        public InteractionBuilder path(final String path);
-        
-        public InteractionBuilder paramAsQuery(final String key, final String value);
-        
-        public InteractionBuilder reqbean(final Object... reqbeans);
-        
-        public InteractionBuilder body(final Observable<? extends MessageBody> body);
-        
-        public InteractionBuilder disposeBodyOnTerminate(final boolean doDispose);
-        
-        public InteractionBuilder onrequest(final Action1<Object> action);
-        
-        public InteractionBuilder feature(final Feature... features);
-        
-        public Observable<? extends Interaction> execution();
     }
     
     public static InteractionBuilder interaction(final HttpClient client) {
