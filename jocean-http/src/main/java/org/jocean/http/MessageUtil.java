@@ -78,11 +78,6 @@ public class MessageUtil {
         throw new IllegalStateException("No instances!");
     }
 
-    public interface Interaction {
-        public HttpInitiator  initiator();
-        public Observable<? extends DisposableWrapper<HttpObject>> execute();
-    }
-    
     public interface InteractionBuilder {
         
         public InteractionBuilder method(final HttpMethod method);
