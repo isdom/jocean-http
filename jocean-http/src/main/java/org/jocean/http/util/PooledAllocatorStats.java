@@ -10,20 +10,21 @@ import io.netty.buffer.PoolChunkListMetric;
 import io.netty.buffer.PoolChunkMetric;
 import io.netty.buffer.PoolSubpageMetric;
 import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.PooledByteBufAllocatorMetric;
 
 public class PooledAllocatorStats {
     public Map<String, Object> getMetrics() {
-        final PooledByteBufAllocator allocator = PooledByteBufAllocator.DEFAULT;
+        final PooledByteBufAllocatorMetric allocatorMetric = PooledByteBufAllocator.DEFAULT.metric();
         final Map<String, Object> metrics = new HashMap<>();
         {
             int idx = 0;
-            for (PoolArenaMetric poolArenaMetric : allocator.directArenas()) {
+            for (PoolArenaMetric poolArenaMetric : allocatorMetric.directArenas()) {
                 metrics.put("1_DirectArena[" + idx++ + "]", metricsOfPoolArena(poolArenaMetric));
             }
         }
         {
             int idx = 0;
-            for (PoolArenaMetric poolArenaMetric : allocator.heapArenas()) {
+            for (PoolArenaMetric poolArenaMetric : allocatorMetric.heapArenas()) {
                 metrics.put("2_HeapArena[" + idx++ + "]", metricsOfPoolArena(poolArenaMetric));
             }
         }
@@ -31,8 +32,60 @@ public class PooledAllocatorStats {
         return metrics;
     }
 
-    private static Map<String, Object> metricsOfPoolArena(
-            final PoolArenaMetric poolArenaMetric) {
+    public long getActiveAllocationsInBytes() {
+        final PooledByteBufAllocatorMetric allocatorMetric = PooledByteBufAllocator.DEFAULT.metric();
+        long totalBytes = 0;
+        for (PoolArenaMetric poolArenaMetric : allocatorMetric.directArenas()) {
+            totalBytes += activeAllocationsInBytes(poolArenaMetric);
+        }
+        for (PoolArenaMetric poolArenaMetric : allocatorMetric.heapArenas()) {
+            totalBytes += activeAllocationsInBytes(poolArenaMetric);
+        }
+        return totalBytes;
+    }
+    
+    private static long activeAllocationsInBytes(final PoolArenaMetric poolArenaMetric) {
+        long totalBytes = 0;
+        for (PoolChunkListMetric chunkListMetric : poolArenaMetric.chunkLists()) {
+            // 包括 tinySubpages & smallSubpages 以及 Normal ( 单次分配 <= 16M 大小的分配) 及 Huge ( 单次分配 > 16M) 分配
+            totalBytes += activeAllocationsInBytes(chunkListMetric);
+        }
+        
+        totalBytes += activeAllocationsInBytes(poolArenaMetric.tinySubpages());
+        totalBytes += activeAllocationsInBytes(poolArenaMetric.smallSubpages());
+        return totalBytes;
+    }
+
+    private static long activeAllocationsInBytes(final List<PoolSubpageMetric> subpages) {
+        long totalBytes = 0;
+        for (PoolSubpageMetric subpage : subpages) {
+            // 页面是从 PoolChunkList 中分配的，所以先去掉该页面在前述计算进去的 bytes
+            totalBytes -= subpage.pageSize();
+            
+            // 将该 Subpage 实际分配出去的 bytes 算入 totalBytes
+            totalBytes += activeAllocationsInBytes(subpage);
+        }
+        return totalBytes;
+    }
+
+    private static int activeAllocationsInBytes(final PoolSubpageMetric subpage) {
+        return subpage.elementSize() * (subpage.maxNumElements() - subpage.numAvailable());
+    }
+
+    private static long activeAllocationsInBytes(final PoolChunkListMetric chunkListMetric) {
+        long totalBytes = 0;
+        final Iterator<PoolChunkMetric> iter = chunkListMetric.iterator();
+        while (iter.hasNext()) {
+            totalBytes += activeAllocationsInBytes(iter.next());
+        }
+        return totalBytes;
+    }
+
+    private static int activeAllocationsInBytes(final PoolChunkMetric chunkMetric) {
+        return chunkMetric.chunkSize() - chunkMetric.freeBytes();
+    }
+    
+    private static Map<String, Object> metricsOfPoolArena(final PoolArenaMetric poolArenaMetric) {
         final Map<String, Object> metrics = new HashMap<>();
         
         /**
