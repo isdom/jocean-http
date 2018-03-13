@@ -32,6 +32,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import rx.Observable;
+import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Single;
 import rx.Subscriber;
@@ -185,8 +186,17 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
             }
 
             @Override
+            public Observable<Object> sending() {
+                return Observable.unsafeCreate(new OnSubscribe<Object>() {
+                    @Override
+                    public void call(final Subscriber<? super Object> subscriber) {
+                        addSendingSubscriber(subscriber);
+                    }});
+            }
+            
+            @Override
             public Observable<Object> sended() {
-                return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
+                return Observable.unsafeCreate(new OnSubscribe<Object>() {
                     @Override
                     public void call(final Subscriber<? super Object> subscriber) {
                         addSendedSubscriber(subscriber);
@@ -206,6 +216,17 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         }
     }
     
+    private void addSendingSubscriber(final Subscriber<? super Object> subscriber) {
+        if (!subscriber.isUnsubscribed()) {
+            this._sendingObserver.addComponent(subscriber);
+            subscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    _sendingObserver.removeComponent(subscriber);
+                }}));
+        }
+    }
+    
     private void addSendedSubscriber(final Subscriber<? super Object> subscriber) {
         if (!subscriber.isUnsubscribed()) {
             this._sendedObserver.addComponent(subscriber);
@@ -218,6 +239,9 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
     }
     
     private final COWCompositeSupport<Subscriber<? super Boolean>> _writabilityObserver = 
+            new COWCompositeSupport<>();
+    
+    private final COWCompositeSupport<Subscriber<? super Object>> _sendingObserver = 
             new COWCompositeSupport<>();
     
     private final COWCompositeSupport<Subscriber<? super Object>> _sendedObserver = 
@@ -242,19 +266,19 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._iobaseop.isWritable(this));
     }
 
-    private static final Action1_N<Subscriber<? super Object>> ON_SENDED = new Action1_N<Subscriber<? super Object>>() {
+    private static final Action1_N<Subscriber<? super Object>> OBJ_ON_NEXT = new Action1_N<Subscriber<? super Object>>() {
         @Override
         public void call(final Subscriber<? super Object> subscriber, final Object... args) {
-            final Object outmsg = args[0];
+            final Object obj = args[0];
             if (!subscriber.isUnsubscribed()) {
                 try {
-                    subscriber.onNext(outmsg);
+                    subscriber.onNext(obj);
                 } catch (Exception e) {
                     LOG.warn("exception when invoke onNext({}), detail: {}", subscriber, ExceptionUtils.exception2detail(e));
                 }
             }
         }};
-
+        
     @Override
     public void setReadPolicy(final ReadPolicy readPolicy) {
         this._iobaseop.runAtEventLoop(this, new Runnable() {
@@ -419,6 +443,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         if (outmsg instanceof DoFlush) {
             this._channel.flush();
         } else {
+            onOutmsgSending(outmsg);
             beforeSendingOutbound(outmsg);
             
             writeOutmsgToChannel(outmsg)
@@ -449,8 +474,12 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
                 : this._channel.write(ReferenceCountUtil.retain(outmsg));
     }
     
+    private void onOutmsgSending(final Object outmsg) {
+        this._sendingObserver.foreachComponent(OBJ_ON_NEXT, outmsg);
+    }
+    
     private void onOutmsgSended(final Object outmsg) {
-        this._sendedObserver.foreachComponent(ON_SENDED, outmsg);
+        this._sendedObserver.foreachComponent(OBJ_ON_NEXT, outmsg);
     }
 
     protected void fireClosed(final Throwable e) {
