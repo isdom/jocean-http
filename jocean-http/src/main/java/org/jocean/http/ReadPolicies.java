@@ -1,6 +1,7 @@
 package org.jocean.http;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
@@ -23,6 +24,31 @@ public class ReadPolicies {
         throw new IllegalStateException("No instances!");
     }
 
+    public static void enableRBS(final Inbound inbound, final WriteCtrl writeCtrl) {
+        inbound.setReadPolicy(ReadPolicies.bysended(writeCtrl, pendingCount(writeCtrl), 0));
+    }
+    
+    public static Func0<Integer> pendingCount(final WriteCtrl writeCtrl) {
+        final AtomicInteger sendingCount = new AtomicInteger(0);
+        final AtomicInteger sendedCount = new AtomicInteger(0);
+        
+        writeCtrl.sending().subscribe(incCounter(sendingCount));
+        writeCtrl.sended().subscribe(incCounter(sendedCount));
+        return new Func0<Integer>() {
+            @Override
+            public Integer call() {
+                return sendingCount.get() - sendedCount.get();
+            }};
+    }
+
+    private static Action1<Object> incCounter(final AtomicInteger counter) {
+        return new Action1<Object>() {
+            @Override
+            public void call(Object t) {
+                counter.incrementAndGet();
+            }};
+    }
+    
     public static ReadPolicy composite(final ReadPolicy policy1, final ReadPolicy policy2) {
         return new ReadPolicy() {
             @Override
