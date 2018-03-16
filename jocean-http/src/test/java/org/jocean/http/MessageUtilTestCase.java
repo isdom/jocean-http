@@ -75,7 +75,7 @@ public class MessageUtilTestCase {
         request.setMchBillno("222222");
         
         final HttpClient client = new DefaultHttpClient();
-            MessageUtil.interaction(client)
+            MessageUtil.interact(client)
                 .method(HttpMethod.POST)
                 .uri("http://www.sina.com")
                 .reqbean(request)

@@ -78,29 +78,6 @@ public class MessageUtil {
         throw new IllegalStateException("No instances!");
     }
 
-    public interface InteractionBuilder {
-        
-        public InteractionBuilder method(final HttpMethod method);
-        
-        public InteractionBuilder uri(final String uri);
-        
-        public InteractionBuilder path(final String path);
-        
-        public InteractionBuilder paramAsQuery(final String key, final String value);
-        
-        public InteractionBuilder reqbean(final Object... reqbeans);
-        
-        public InteractionBuilder body(final Observable<? extends MessageBody> body);
-        
-        public InteractionBuilder disposeBodyOnTerminate(final boolean doDispose);
-        
-        public InteractionBuilder onrequest(final Action1<Object> action);
-        
-        public InteractionBuilder feature(final Feature... features);
-        
-        public Observable<? extends Interaction> execution();
-    }
-    
     public static Func0<DisposableWrapper<ByteBuf>> pooledAllocator(final Terminable terminable, final int pageSize) {
         return new Func0<DisposableWrapper<ByteBuf>>() {
             @Override
@@ -358,16 +335,15 @@ public class MessageUtil {
         return _AS_STRING;
     }
     
-    public static InteractionBuilder interaction(final HttpClient client) {
+    public static Interact interact(final HttpClient client) {
         final InitiatorBuilder _initiatorBuilder = client.initiator();
         final AtomicBoolean _isSSLEnabled = new AtomicBoolean(false);
-        final AtomicBoolean _doDisposeBody = new AtomicBoolean(true);
         final AtomicReference<Observable<Object>> _obsreqRef = new AtomicReference<>(
                 fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET));
         final List<String> _nvs = new ArrayList<>();
         final AtomicReference<URI> _uriRef = new AtomicReference<>();
         
-        return new InteractionBuilder() {
+        return new Interact() {
             private void updateObsRequest(final Action1<Object> action) {
                 _obsreqRef.set(_obsreqRef.get().doOnNext(action));
             }
@@ -415,13 +391,13 @@ public class MessageUtil {
             }
             
             @Override
-            public InteractionBuilder method(final HttpMethod method) {
+            public Interact method(final HttpMethod method) {
                 updateObsRequest(MessageUtil.setMethod(method));
                 return this;
             }
 
             @Override
-            public InteractionBuilder uri(final String uriAsString) {
+            public Interact uri(final String uriAsString) {
                 try {
                     final URI uri = new URI(uriAsString);
                     _uriRef.set(uri);
@@ -434,45 +410,50 @@ public class MessageUtil {
             }
 
             @Override
-            public InteractionBuilder path(final String path) {
+            public Interact path(final String path) {
                 updateObsRequest(MessageUtil.setPath(path));
                 return this;
             }
 
             @Override
-            public InteractionBuilder paramAsQuery(final String name, final String value) {
+            public Interact paramAsQuery(final String name, final String value) {
                 _nvs.add(name);
                 _nvs.add(value);
                 return this;
             }
 
             @Override
-            public InteractionBuilder reqbean(final Object... reqbeans) {
+            public Interact reqbean(final Object... reqbeans) {
                 updateObsRequest(MessageUtil.toRequest(reqbeans));
                 extractUriWithHost(reqbeans);
                 return this;
             }
 
             @Override
-            public InteractionBuilder body(final Observable<? extends MessageBody> body) {
+            public Interact body(final Observable<? extends MessageBody> body) {
                 _obsreqRef.set(_obsreqRef.get().compose(MessageUtil.addBody(body)));
                 return this;
             }
             
             @Override
-            public InteractionBuilder disposeBodyOnTerminate(final boolean doDispose) {
-                _doDisposeBody.set(doDispose);
-                return this;
+            public Interact body(final Object bean, final ContentEncoder contentEncoder) {
+                return body(toBody(bean, contentEncoder.contentType(), contentEncoder.encoder()));
             }
             
+//            @Override
+//            public Interact disposeBodyOnTerminate(final boolean doDispose) {
+//                _doDisposeBody.set(doDispose);
+//                return this;
+//            }
+            
             @Override
-            public InteractionBuilder onrequest(final Action1<Object> action) {
+            public Interact onrequest(final Action1<Object> action) {
                 updateObsRequest(action);
                 return this;
             }
             
             @Override
-            public InteractionBuilder feature(final Feature... features) {
+            public Interact feature(final Feature... features) {
                 _initiatorBuilder.feature(features);
                 if (isSSLEnabled(features)) {
                     _isSSLEnabled.set(true);
@@ -490,8 +471,7 @@ public class MessageUtil {
             }
 
             private Observable<? extends Object> hookDisposeBody(final Observable<Object> obsreq, final HttpInitiator initiator) {
-                return _doDisposeBody.get() ? obsreq.doOnNext(DisposableWrapperUtil.disposeOnForAny(initiator))
-                        : obsreq;
+                return obsreq.doOnNext(DisposableWrapperUtil.disposeOnForAny(initiator));
             }
             
             private Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final HttpInitiator initiator) {
