@@ -35,7 +35,7 @@ public interface BlobRepo {
         public Date getLastModified();
     }
     
-    public Observable<SimplifiedObjectMeta> getSimplifiedObjectMeta(final String objectName);
+    public Func1<Interact, Observable<SimplifiedObjectMeta>> getSimplifiedObjectMeta(final String objectName);
     
     @Deprecated
     public interface Blob extends ReferenceCounted {
