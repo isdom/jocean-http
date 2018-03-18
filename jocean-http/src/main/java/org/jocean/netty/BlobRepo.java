@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.Date;
 
+import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
 
 import io.netty.util.ReferenceCounted;
@@ -19,7 +20,7 @@ public interface BlobRepo {
         //  required
         public PutObjectBuilder content(final MessageBody body);
         
-        public Observable<String> build();
+        public Func1<Interact, Observable<String>> build();
     }
     
     /**
