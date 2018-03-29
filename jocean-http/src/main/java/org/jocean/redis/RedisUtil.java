@@ -22,7 +22,6 @@ import io.netty.handler.codec.redis.SimpleStringRedisMessage;
 import io.netty.util.CharsetUtil;
 import rx.Observable;
 import rx.Observable.Transformer;
-import rx.functions.Action0;
 import rx.functions.Func1;
 
 /**
