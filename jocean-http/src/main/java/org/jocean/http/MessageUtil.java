@@ -206,6 +206,22 @@ public class MessageUtil {
             return null;
         }
     }
+
+    public static <RESP> Func2<InputStream, Class<RESP>, RESP> unserializeAsXml() {
+        return new Func2<InputStream, Class<RESP>, RESP>() {
+            @Override
+            public RESP call(final InputStream is, final Class<RESP> type) {
+                return unserializeAsXml(is, type);
+            }};
+    }
+    
+    public static <RESP> Func2<InputStream, Class<RESP>, RESP> unserializeAsJson() {
+        return new Func2<InputStream, Class<RESP>, RESP>() {
+            @Override
+            public RESP call(final InputStream is, final Class<RESP> type) {
+                return unserializeAsJson(is, type);
+            }};
+    }
     
     public static <T> T unserializeAsX_WWW_FORM_URLENCODED(final InputStream is, final Class<T> type) {
         final String kvs = parseContentAsString(is);
