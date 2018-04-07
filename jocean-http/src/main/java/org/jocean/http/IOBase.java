@@ -512,7 +512,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
         //  fire all pending subscribers onError with unactived exception
         this._terminateAwareSupport.fireAllTerminates((T) this);
     }
-        
+
     protected static String errorAsString(final Throwable e) {
         return e != null 
             ?
