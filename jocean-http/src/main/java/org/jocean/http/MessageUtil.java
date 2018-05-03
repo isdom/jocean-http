@@ -73,7 +73,7 @@ import rx.functions.Func2;
 public class MessageUtil {
     private static final Logger LOG =
             LoggerFactory.getLogger(MessageUtil.class);
-    
+
     private MessageUtil() {
         throw new IllegalStateException("No instances!");
     }
@@ -82,11 +82,11 @@ public class MessageUtil {
         return new Func0<DisposableWrapper<ByteBuf>>() {
             @Override
             public DisposableWrapper<ByteBuf> call() {
-                return DisposableWrapperUtil.disposeOn(terminable, 
+                return DisposableWrapperUtil.disposeOn(terminable,
                         RxNettys.wrap4release(PooledByteBufAllocator.DEFAULT.buffer(pageSize, pageSize)));
             }};
     }
-    
+
     public static Action1<HttpRequest> injectQueryParams(final Object bean) {
         return new Action1<HttpRequest>() {
             @Override
@@ -94,13 +94,13 @@ public class MessageUtil {
                 request2QueryParams(request, bean);
             }};
     }
-    
+
     public static void request2QueryParams(final HttpRequest request, final Object bean) {
         final Field[] fields = ReflectUtils.getAnnotationFieldsOf(bean.getClass(), QueryParam.class);
         if (null != fields) {
             final QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
 
-            for (Field field : fields) {
+            for (final Field field : fields) {
                 final String key = field.getAnnotation(QueryParam.class).value();
                 if (!"".equals(key) && null != decoder.parameters()) {
                     // for case: QueryParam("demo")
@@ -113,7 +113,7 @@ public class MessageUtil {
             }
         }
     }
-    
+
     public static String rawQuery(final String uri) {
         final int pos = uri.indexOf('?');
         if (-1 != pos) {
@@ -122,7 +122,7 @@ public class MessageUtil {
             return null;
         }
     }
-    
+
     public static Action1<HttpRequest> injectHeaderParams(final Object bean) {
         return new Action1<HttpRequest>() {
             @Override
@@ -130,19 +130,19 @@ public class MessageUtil {
                 request2HeaderParams(request, bean);
             }};
     }
-    
+
     public static void request2HeaderParams(final HttpRequest request, final Object bean) {
         final Field[] fields = ReflectUtils.getAnnotationFieldsOf(bean.getClass(), HeaderParam.class);
         if (null != fields) {
-            for (Field field : fields) {
-                injectParamValue(request.headers().getAll(field.getAnnotation(HeaderParam.class).value()), 
+            for (final Field field : fields) {
+                injectParamValue(request.headers().getAll(field.getAnnotation(HeaderParam.class).value()),
                     bean,
                     field
                 );
             }
         }
     }
-    
+
     private static void injectParamValue(
             final List<String> values,
             final Object obj,
@@ -151,7 +151,7 @@ public class MessageUtil {
             injectValueToField(values.get(0), obj, field);
         }
     }
-    
+
     public static <T> T getAsType(final List<String> list, final Class<T> type) {
         if (null != list && list.size() > 0) {
             return Beans.fromString(list.get(0), type);
@@ -159,7 +159,7 @@ public class MessageUtil {
             return null;
         }
     }
-    
+
     /**
      * @param value
      * @param obj
@@ -172,7 +172,7 @@ public class MessageUtil {
         if (null != value) {
             try {
                 field.set(obj, Beans.fromString(value, field.getType()));
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOG.warn("exception when set obj({}).{} with value({}), detail:{} ",
                         obj, field.getName(), value, ExceptionUtils.exception2detail(e));
             }
@@ -192,16 +192,16 @@ public class MessageUtil {
             }});
         try {
             return mapper.readValue(is, type);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOG.warn("exception when parse as xml, detail: {}", ExceptionUtils.exception2detail(e));
             return null;
         }
     }
-    
+
     public static <T> T unserializeAsJson(final InputStream is, final Class<T> type) {
         try {
             return JSON.parseObject(is, type);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.warn("exception when parse as json, detail: {}", ExceptionUtils.exception2detail(e));
             return null;
         }
@@ -214,7 +214,7 @@ public class MessageUtil {
                 return unserializeAsXml(is, type);
             }};
     }
-    
+
     public static <RESP> Func2<InputStream, Class<RESP>, RESP> unserializeAsJson() {
         return new Func2<InputStream, Class<RESP>, RESP>() {
             @Override
@@ -222,60 +222,60 @@ public class MessageUtil {
                 return unserializeAsJson(is, type);
             }};
     }
-    
+
     public static <T> T unserializeAsX_WWW_FORM_URLENCODED(final InputStream is, final Class<T> type) {
         final String kvs = parseContentAsString(is);
         if (null != kvs) {
             final T bean = ReflectUtils.newInstance(type);
             if (null != bean) {
                 final QueryStringDecoder decoder = new QueryStringDecoder(kvs, CharsetUtil.UTF_8, false);
-                
+
                 final Field[] fields = ReflectUtils.getAnnotationFieldsOf(type, QueryParam.class);
                 if (null != fields) {
-                    for (Field field : fields) {
+                    for (final Field field : fields) {
                         final String key = field.getAnnotation(QueryParam.class).value();
                         injectParamValue(decoder.parameters().get(key), bean, field);
                     }
                 }
-                
+
                 return bean;
             }
         }
         return null;
     }
-    
+
     public static String parseContentAsString(final InputStream is) {
         try {
             final byte[] bytes = new byte[is.available()];
             is.read(bytes);
             return new String(bytes, CharsetUtil.UTF_8);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.warn("exception when parse {} as string, detail: {}",
                     is, ExceptionUtils.exception2detail(e));
             return null;
         }
     }
-    
+
     private static InputStream contentAsInputStream(final ByteBuf buf) {
         return new ByteBufInputStream(buf.slice());
     }
-    
+
     public static void serializeToXml(final Object bean, final OutputStream out) {
         final XmlMapper mapper = new XmlMapper();
 //        mapper.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
         try {
             mapper.writeValue(out, bean);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOG.warn("exception when serialize {} to xml, detail: {}",
                     bean, ExceptionUtils.exception2detail(e));
         }
     }
-    
+
     public static void serializeToJson(final Object bean, final OutputStream out) {
         try {
             JSON.writeJSONString(out, CharsetUtil.UTF_8, bean);
             out.flush();
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOG.warn("exception when serialize {} to json, detail: {}",
                     bean, ExceptionUtils.exception2detail(e));
         }
@@ -289,7 +289,7 @@ public class MessageUtil {
     private static Feature defaultSslFeature() {
         try {
             return new Feature.ENABLE_SSL(SslContextBuilder.forClient().build());
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOG.error("exception init default ssl feature, detail: {}", ExceptionUtils.exception2detail(e));
             return null;
         }
@@ -320,7 +320,7 @@ public class MessageUtil {
             }
         };
     }
-    
+
     private static final Func1<DisposableWrapper<? extends FullHttpMessage>, String> _FULLMSG_TO_STRING = new Func1<DisposableWrapper<? extends FullHttpMessage>, String>() {
         @Override
         public String call(final DisposableWrapper<? extends FullHttpMessage> dwfullmsg) {
@@ -346,11 +346,11 @@ public class MessageUtil {
             return obsinteraction.flatMap(_INTERACTION_TO_OBS_STRING);
         }
     };
-    
+
     public static Transformer<Interaction, String> responseAsString() {
         return _AS_STRING;
     }
-    
+
     public static Interact interact(final HttpClient client) {
         final InitiatorBuilder _initiatorBuilder = client.initiator();
         final AtomicBoolean _isSSLEnabled = new AtomicBoolean(false);
@@ -358,7 +358,7 @@ public class MessageUtil {
                 fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET));
         final List<String> _nvs = new ArrayList<>();
         final AtomicReference<URI> _uriRef = new AtomicReference<>();
-        
+
         return new Interact() {
             private void updateObsRequest(final Action1<Object> action) {
                 _obsreqRef.set(_obsreqRef.get().doOnNext(action));
@@ -369,10 +369,10 @@ public class MessageUtil {
                     updateObsRequest(MessageUtil.addQueryParam(_nvs.toArray(new String[0])));
                 }
             }
-            
+
             private void extractUriWithHost(final Object...reqbeans) {
                 if (null == _uriRef.get()) {
-                    for (Object bean : reqbeans) {
+                    for (final Object bean : reqbeans) {
                         try {
                             final Path path = bean.getClass().getAnnotation(Path.class);
                             if (null != path) {
@@ -382,8 +382,8 @@ public class MessageUtil {
                                     return;
                                 }
                             }
-                        } catch (Exception e) {
-                            LOG.warn("exception when extract uri from bean {}, detail: {}", 
+                        } catch (final Exception e) {
+                            LOG.warn("exception when extract uri from bean {}, detail: {}",
                                     bean, ExceptionUtils.exception2detail(e));
                         }
                     }
@@ -395,7 +395,7 @@ public class MessageUtil {
                     throw new RuntimeException("remote address not set.");
                 }
             }
-            
+
             private InitiatorBuilder addSSLFeatureIfNeed(final InitiatorBuilder builder) {
                 if (_isSSLEnabled.get()) {
                     return builder;
@@ -405,7 +405,7 @@ public class MessageUtil {
                     return builder;
                 }
             }
-            
+
             @Override
             public Interact method(final HttpMethod method) {
                 updateObsRequest(MessageUtil.setMethod(method));
@@ -419,7 +419,7 @@ public class MessageUtil {
                     _uriRef.set(uri);
                     _initiatorBuilder.remoteAddress(uri2addr(uri));
                     updateObsRequest(MessageUtil.setHost(uri));
-                } catch (URISyntaxException e) {
+                } catch (final URISyntaxException e) {
                     throw new RuntimeException(e);
                 }
                 return this;
@@ -447,27 +447,29 @@ public class MessageUtil {
 
             @Override
             public Interact body(final Observable<? extends MessageBody> body) {
-                _obsreqRef.set(_obsreqRef.get().compose(MessageUtil.addBody(body)));
+                _obsreqRef.set(_obsreqRef.get().compose(addBody(body)));
                 return this;
             }
-            
+
             @Override
             public Interact body(final Object bean, final ContentEncoder contentEncoder) {
-                return body(toBody(bean, contentEncoder.contentType(), contentEncoder.encoder()));
+                _obsreqRef.set(_obsreqRef.get().compose(
+                        addBodyWithContentLength(toBody(bean, contentEncoder.contentType(), contentEncoder.encoder()))));
+                return this;
             }
-            
+
 //            @Override
 //            public Interact disposeBodyOnTerminate(final boolean doDispose) {
 //                _doDisposeBody.set(doDispose);
 //                return this;
 //            }
-            
+
             @Override
             public Interact onrequest(final Action1<Object> action) {
                 updateObsRequest(action);
                 return this;
             }
-            
+
             @Override
             public Interact feature(final Feature... features) {
                 _initiatorBuilder.feature(features);
@@ -478,7 +480,7 @@ public class MessageUtil {
             }
 
             private boolean isSSLEnabled(final Feature... features) {
-                for (Feature f : features) {
+                for (final Feature f : features) {
                     if (f instanceof Feature.ENABLE_SSL) {
                         return true;
                     }
@@ -489,11 +491,11 @@ public class MessageUtil {
             private Observable<? extends Object> hookDisposeBody(final Observable<Object> obsreq, final HttpInitiator initiator) {
                 return obsreq.doOnNext(DisposableWrapperUtil.disposeOnForAny(initiator));
             }
-            
+
             private Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final HttpInitiator initiator) {
                 return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator));
             }
-            
+
             @Override
             public Observable<? extends Interaction> execution() {
                 checkAddr();
@@ -502,7 +504,7 @@ public class MessageUtil {
                         .map(new Func1<HttpInitiator, Interaction>() {
                             @Override
                             public Interaction call(final HttpInitiator initiator) {
-                                final Observable<? extends DisposableWrapper<HttpObject>> interaction = 
+                                final Observable<? extends DisposableWrapper<HttpObject>> interaction =
                                         defineInteraction(initiator);
                                 return new Interaction() {
                                     @Override
@@ -519,7 +521,7 @@ public class MessageUtil {
             }
         };
     }
-    
+
     public static SocketAddress uri2addr(final URI uri) {
         final int port = -1 == uri.getPort() ? ( "https".equals(uri.getScheme()) ? 443 : 80 ) : uri.getPort();
         return new InetSocketAddress(uri.getHost(), port);
@@ -530,13 +532,13 @@ public class MessageUtil {
         if (null!=path) {
             try {
                 return uri2addr(new URI(path.value()));
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 throw new RuntimeException(e);
             }
         }
         throw new RuntimeException("bean class ("+ bean.getClass() +") without @Path annotation");
     }
-    
+
     public static Action1<Object> setMethod(final HttpMethod method) {
         return new Action1<Object>() {
             @Override
@@ -546,7 +548,7 @@ public class MessageUtil {
                 }
             }};
     }
-    
+
     public static Action1<Object> setHost(final URI uri) {
         return new Action1<Object>() {
             @Override
@@ -556,7 +558,7 @@ public class MessageUtil {
                 }
             }};
     }
-    
+
     public static Action1<Object> setPath(final String path) {
         return new Action1<Object>() {
             @Override
@@ -566,7 +568,7 @@ public class MessageUtil {
                 }
             }};
     }
-    
+
     public static Action1<Object> addQueryParam(final String... nvs) {
         return new Action1<Object>() {
             @Override
@@ -585,14 +587,14 @@ public class MessageUtil {
                 }
             }};
     }
-    
+
     public static Action1<Object> toRequest(final Object... beans) {
         return new Action1<Object>() {
             @Override
             public void call(final Object obj) {
                 if (obj instanceof HttpRequest) {
                     final HttpRequest request = (HttpRequest)obj;
-                    for (Object bean : beans) {
+                    for (final Object bean : beans) {
                         setUriToRequest(request, bean);
                         addQueryParams(request, bean);
                         addHeaderParams(request, bean);
@@ -600,7 +602,7 @@ public class MessageUtil {
                 }
             }};
     }
-    
+
     static void setUriToRequest(final HttpRequest request, final Object bean) {
         final Path apath = bean.getClass().getAnnotation(Path.class);
         if (null!=apath) {
@@ -609,11 +611,11 @@ public class MessageUtil {
                 if (null != uri.getHost() && null == request.headers().get(HttpHeaderNames.HOST)) {
                     request.headers().set(HttpHeaderNames.HOST, uri.getHost());
                 }
-                
+
                 if (null != uri.getRawPath() && request.uri().isEmpty()) {
                     request.setUri(uri.getRawPath());
                 }
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 throw new RuntimeException(e);
             }
         }
@@ -622,14 +624,14 @@ public class MessageUtil {
     private static void addHeaderParams(final HttpRequest request, final Object bean) {
         final Field[] headerFields = ReflectUtils.getAnnotationFieldsOf(bean.getClass(), HeaderParam.class);
         if ( headerFields.length > 0 ) {
-            for ( Field field : headerFields ) {
+            for ( final Field field : headerFields ) {
                 try {
                     final Object value = field.get(bean);
                     if ( null != value ) {
                         final String headername = field.getAnnotation(HeaderParam.class).value();
                         request.headers().set(headername, value);
                     }
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     LOG.warn("exception when get value from field:[{}], detail:{}",
                             field, ExceptionUtils.exception2detail(e));
                 }
@@ -641,7 +643,7 @@ public class MessageUtil {
         final Field[] queryFields = ReflectUtils.getAnnotationFieldsOf(bean.getClass(), QueryParam.class);
         if ( queryFields.length > 0 ) {
             final QueryStringEncoder encoder = new QueryStringEncoder(request.uri());
-            for (Field field : queryFields) {
+            for (final Field field : queryFields) {
                 try {
                     final Object value = field.get(bean);
                     if ( null != value ) {
@@ -649,12 +651,12 @@ public class MessageUtil {
                         encoder.addParam(paramkey, String.valueOf(value));
                     }
                 }
-                catch (Exception e) {
-                    LOG.warn("exception when get field({})'s value, detail:{}", 
+                catch (final Exception e) {
+                    LOG.warn("exception when get field({})'s value, detail:{}",
                             field, ExceptionUtils.exception2detail(e));
                 }
             }
-            
+
             request.setUri(encoder.toString());
         }
     }
@@ -688,7 +690,40 @@ public class MessageUtil {
             }
         };
     }
-    
+
+    public static Transformer<Object, Object> addBodyWithContentLength(final Observable<? extends MessageBody> obsbody) {
+        return new Transformer<Object, Object>() {
+            @Override
+            public Observable<Object> call(final Observable<Object> msg) {
+                return msg.concatMap(new Func1<Object, Observable<Object>>() {
+                    @Override
+                    public Observable<Object> call(final Object obj) {
+                        if (obj instanceof HttpMessage) {
+                            final HttpMessage httpmsg = (HttpMessage)obj;
+                            return obsbody.flatMap(new Func1<MessageBody, Observable<Object>>() {
+                                @Override
+                                public Observable<Object> call(final MessageBody body) {
+                                    return body.content().toList().flatMap(new Func1<List<? extends DisposableWrapper<ByteBuf>>, Observable<Object>>() {
+                                        @Override
+                                        public Observable<Object> call(final List<? extends DisposableWrapper<ByteBuf>> dwbs) {
+                                            int length = 0;
+                                            for (final DisposableWrapper<ByteBuf> dwb : dwbs) {
+                                                length +=dwb.unwrap().readableBytes();
+                                            }
+                                            httpmsg.headers().set(HttpHeaderNames.CONTENT_TYPE, body.contentType());
+                                            // set content-length
+                                            httpmsg.headers().set(HttpHeaderNames.CONTENT_LENGTH, length);
+                                            return Observable.concat(Observable.just(httpmsg), Observable.from(dwbs));
+                                        }});
+                                }});
+                        } else {
+                            return Observable.just(obj);
+                        }
+                    }});
+            }
+        };
+    }
+
     public static Observable<? extends MessageBody> toBody(
             final Object bean,
             final String contentType,
@@ -708,15 +743,15 @@ public class MessageUtil {
                 return bean2dwbs(bean, encoder);
             }});
     }
-    
+
     final private static Func1<DisposableWrapper<ByteBuf>, ByteBuf> _UNWRAP_DWB = new Func1<DisposableWrapper<ByteBuf>, ByteBuf>() {
         @Override
         public ByteBuf call(final DisposableWrapper<ByteBuf> dwb) {
             return dwb.unwrap();
         }};
-        
+
     private static Observable<DisposableWrapper<ByteBuf>> bean2dwbs(final Object bean, final Action2<Object, OutputStream> encoder) {
-        final BufsOutputStream<DisposableWrapper<ByteBuf>> bufout = 
+        final BufsOutputStream<DisposableWrapper<ByteBuf>> bufout =
                 new BufsOutputStream<>(pooledAllocator(null, 8192), _UNWRAP_DWB);
         return fromBufout(bufout, new Action0() {
             @Override
@@ -728,11 +763,11 @@ public class MessageUtil {
     public static Observable<Object> fullRequestWithoutBody(final HttpVersion version, final HttpMethod method) {
         return Observable.<Object>just(new DefaultHttpRequest(version, method, ""), LastHttpContent.EMPTY_LAST_CONTENT);
     }
-    
+
     public static Observable<Object> fullRequest(final Object... beans) {
         return fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET).doOnNext(MessageUtil.toRequest(beans));
     }
-    
+
     private final static Transformer<DisposableWrapper<HttpObject>, MessageBody> _AS_BODY = new Transformer<DisposableWrapper<HttpObject>, MessageBody>() {
         @Override
         public Observable<MessageBody> call(final Observable<DisposableWrapper<HttpObject>> dwhs) {
@@ -761,11 +796,11 @@ public class MessageUtil {
                     });
         }
     };
-        
+
     public static Transformer<DisposableWrapper<HttpObject>, MessageBody> asBody() {
         return _AS_BODY;
     }
-    
+
     private final static Transformer<DisposableWrapper<HttpObject>, FullMessage> _AS_FULLMSG = new Transformer<DisposableWrapper<HttpObject>, FullMessage>() {
         @Override
         public Observable<FullMessage> call(final Observable<DisposableWrapper<HttpObject>> dwhs) {
@@ -779,12 +814,12 @@ public class MessageUtil {
                                 public String contentType() {
                                     return msg.headers().get(HttpHeaderNames.CONTENT_TYPE);
                                 }
-    
+
                                 @Override
                                 public int contentLength() {
                                     return HttpUtil.getContentLength(msg, -1);
                                 }
-    
+
                                 @Override
                                 public Observable<? extends DisposableWrapper<ByteBuf>> content() {
                                     return cached.flatMap(RxNettys.message2body());
@@ -806,11 +841,11 @@ public class MessageUtil {
                     });
         }
     };
-    
+
     public static Transformer<DisposableWrapper<HttpObject>, FullMessage> asFullMessage() {
         return _AS_FULLMSG;
     }
-    
+
     public static <T> Observable<? extends T> decodeAs(final MessageBody body, final Class<T> type) {
         if (null != body.contentType()) {
             if (body.contentType().startsWith(HttpHeaderValues.APPLICATION_JSON.toString())) {
@@ -825,7 +860,7 @@ public class MessageUtil {
     public static <T> Observable<? extends T> decodeJsonAs(final MessageBody body, final Class<T> type) {
         return decodeContentAs(body.content(), new Func2<InputStream, Class<T>, T>() {
             @Override
-            public T call(final InputStream is, Class<T> clazz) {
+            public T call(final InputStream is, final Class<T> clazz) {
                 return unserializeAsJson(is, clazz);
             }
         }, type);
@@ -834,7 +869,7 @@ public class MessageUtil {
     public static <T> Observable<? extends T> decodeXmlAs(final MessageBody body, final Class<T> type) {
         return decodeContentAs(body.content(), new Func2<InputStream, Class<T>, T>() {
             @Override
-            public T call(final InputStream is, Class<T> clazz) {
+            public T call(final InputStream is, final Class<T> clazz) {
                 return unserializeAsXml(is, clazz);
             }
         }, type);
@@ -855,7 +890,7 @@ public class MessageUtil {
             }
         });
     }
-    
+
     public static <T> Observable<T> fromBufout(final BufsOutputStream<T> bufout, final Action0 out) {
         return Observable.unsafeCreate(new OnSubscribe<T>() {
             @Override
@@ -869,7 +904,7 @@ public class MessageUtil {
                     try {
                         out.call();
                         subscriber.onCompleted();
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         subscriber.onError(e);
                     } finally {
                         bufout.setOutput(null);
@@ -878,8 +913,8 @@ public class MessageUtil {
             }
         });
     }
-    
-    public static <T> Observable<T> fromBufout(final Func0<BufsOutputStream<T>> createout, 
+
+    public static <T> Observable<T> fromBufout(final Func0<BufsOutputStream<T>> createout,
             final Action1<OutputStream> fillout) {
         return Observable.unsafeCreate(new OnSubscribe<T>() {
             @Override
@@ -893,7 +928,7 @@ public class MessageUtil {
                             }});
                         fillout.call(bufout);
                         subscriber.onCompleted();
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         subscriber.onError(e);
                     }
                 }
