@@ -12,31 +12,36 @@ import rx.Observable;
 import rx.functions.Func1;
 
 public interface BlobRepo {
+    interface PutObjectResult {
+        public String objectName();
+        public String etag();
+    }
+
     public interface PutObjectBuilder {
-        
+
         //  required
         public PutObjectBuilder objectName(final String objectName);
-        
+
         //  required
         public PutObjectBuilder content(final MessageBody body);
-        
-        public Func1<Interact, Observable<String>> build();
+
+        public Func1<Interact, Observable<PutObjectResult>> build();
     }
-    
+
     /**
      * put object to OSS's Bucket
      * @return
      */
     public PutObjectBuilder putObject();
-    
+
     public interface SimplifiedObjectMeta {
         public String getETag();
         public long getSize();
         public Date getLastModified();
     }
-    
+
     public Func1<Interact, Observable<SimplifiedObjectMeta>> getSimplifiedObjectMeta(final String objectName);
-    
+
     @Deprecated
     public interface Blob extends ReferenceCounted {
         public String name();
@@ -44,7 +49,7 @@ public interface BlobRepo {
         public String contentType();
         public int contentLength();
         public InputStream inputStream();
-        
+
         @Override
         Blob retain();
 
@@ -56,10 +61,10 @@ public interface BlobRepo {
 
         @Override
         Blob touch(Object hint);
-        
+
         public static class Util {
             public static Blob fromByteArray(
-                    final byte[] content, 
+                    final byte[] content,
                     final String contentType,
                     final String filename,
                     final String name) {
@@ -95,7 +100,7 @@ public interface BlobRepo {
                         return this;
                     }
                     @Override
-                    public Blob retain(int increment) {
+                    public Blob retain(final int increment) {
                         return this;
                     }
                     @Override
@@ -103,7 +108,7 @@ public interface BlobRepo {
                         return this;
                     }
                     @Override
-                    public Blob touch(Object hint) {
+                    public Blob touch(final Object hint) {
                         return this;
                     }
                     @Override
@@ -111,7 +116,7 @@ public interface BlobRepo {
                         return false;
                     }
                     @Override
-                    public boolean release(int decrement) {
+                    public boolean release(final int decrement) {
                         return false;
                     }
                     @Override
@@ -125,12 +130,12 @@ public interface BlobRepo {
             }
         }
     }
-    
+
     public interface PutResult {
         public String key();
         public Blob   blob();
     }
-    
+
     /**
      * @param key
      * @param blob
@@ -139,30 +144,30 @@ public interface BlobRepo {
      */
     @Deprecated
     public Observable<PutResult> putBlob(final String key, final Blob blob);
-    
+
     public Observable<Blob> getBlob(final String key);
-    
+
     public Observable<String> copyBlob(final String sourceKey, final String destinationKey);
-    
+
     public Observable<String> deleteBlob(final String key);
-    
+
     public static class Util {
         private static Func1<PutResult, Blob> _RESULT2BLOB = new Func1<PutResult, Blob>() {
             @Override
             public Blob call(final PutResult result) {
                 return result.blob();
             }};
-            
+
         public static Func1<PutResult, Blob> result2Blob() {
             return _RESULT2BLOB;
         }
-        
+
         private static Func1<PutResult, String> _RESULT2KEY = new Func1<PutResult, String>() {
             @Override
             public String call(final PutResult result) {
                 return result.key();
             }};
-            
+
         public static Func1<PutResult, String> result2key() {
             return _RESULT2KEY;
         }
