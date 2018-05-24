@@ -52,6 +52,7 @@ import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.subscriptions.Subscriptions;
 
@@ -81,7 +82,7 @@ public class RxNettys {
                 });
             }});
     }
-    
+
     public static Observable<? extends Channel> channelObservableFromFuture(final ChannelFuture future) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<Channel>() {
             @Override
@@ -102,7 +103,7 @@ public class RxNettys {
                 });
             }});
     }
-    
+
     public static Func1<Channel, Observable<? extends Channel>> asyncConnectTo(
             final SocketAddress remoteAddress) {
         return new Func1<Channel, Observable<? extends Channel>>() {
@@ -120,9 +121,9 @@ public class RxNettys {
                     }});
             }};
     }
-    
+
     public static Func1<Channel, Observable<? extends Channel>> asyncConnectToMaybeSSL(
-            final SocketAddress remoteAddress) {
+            final Func0<SocketAddress> remoteAddressProvider) {
         return new Func1<Channel, Observable<? extends Channel>>() {
             @Override
             public Observable<? extends Channel> call(final Channel channel) {
@@ -133,8 +134,8 @@ public class RxNettys {
                         	final boolean sslEnabled = Nettys.isHandlerApplied(channel.pipeline(), HttpHandlers.SSL);
                         	if (sslEnabled) {
                                 enableSSLNotifier(channel, subscriber);
-                        	} 
-                            final ChannelFuture f = channel.connect(remoteAddress);
+                        	}
+                            final ChannelFuture f = channel.connect(remoteAddressProvider.call());
                             if (!sslEnabled) {
                         	    f.addListener(onSuccessNotifier(subscriber));
                         	}
@@ -144,7 +145,7 @@ public class RxNettys {
                     }});
             }};
     }
-    
+
     private static ChannelFutureListener onSuccessNotifier(final Subscriber<? super Channel> subscriber) {
         return new ChannelFutureListener() {
             @Override
@@ -156,7 +157,7 @@ public class RxNettys {
                 }
             }};
     }
-    
+
     private static ChannelFutureListener onErrorNotifier(final Subscriber<? super Channel> subscriber) {
         return new ChannelFutureListener() {
             @Override
@@ -166,9 +167,9 @@ public class RxNettys {
                 }
             }};
     }
-    
+
 	private static void enableSSLNotifier(final Channel channel, final Subscriber<? super Channel> subscriber) {
-	    Nettys.applyHandler(channel.pipeline(), HttpHandlers.SSLNOTIFY, 
+	    Nettys.applyHandler(channel.pipeline(), HttpHandlers.SSLNOTIFY,
 		    new Action1<Channel>() {
 		        @Override
 		        public void call(final Channel ch) {
@@ -188,7 +189,7 @@ public class RxNettys {
 		                    ExceptionUtils.exception2detail(e));
 		        }});
 	}
-	    
+
     public static Subscription subscriptionForCloseChannel(final Channel channel) {
         return Subscriptions.create(new Action0() {
             @Override
@@ -196,7 +197,7 @@ public class RxNettys {
                 channel.close();
             }});
     }
-    
+
     public static byte[] httpObjectsAsBytes(final Iterator<HttpObject> itr)
             throws IOException {
         final CompositeByteBuf composite = Unpooled.compositeBuffer();
@@ -208,7 +209,7 @@ public class RxNettys {
                 }
             }
             composite.setIndex(0, composite.capacity());
-            
+
             @SuppressWarnings("resource")
             final InputStream is = new ByteBufInputStream(composite);
             final byte[] bytes = new byte[is.available()];
@@ -218,27 +219,27 @@ public class RxNettys {
             ReferenceCountUtil.release(composite);
         }
     }
-    
+
     public static <T> void releaseObjects(final Collection<T> objs) {
         synchronized (objs) {
             try {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("start to releaseObjects ({}).", UnsafeOp.toAddress(objs));
                 }
-                for (T obj : objs) {
+                for (final T obj : objs) {
                     try {
                         if (ReferenceCountUtil.release(obj)) {
                             if (LOG.isDebugEnabled()) {
-                                LOG.debug("({}) released and deallocated success.", obj); 
+                                LOG.debug("({}) released and deallocated success.", obj);
                             }
                         } else {
                             if (LOG.isDebugEnabled()) {
                                 if ( obj instanceof ReferenceCounted) {
-                                    LOG.debug("({}) released BUT refcnt == {} > 0.", obj, ((ReferenceCounted)obj).refCnt()); 
+                                    LOG.debug("({}) released BUT refcnt == {} > 0.", obj, ((ReferenceCounted)obj).refCnt());
                                 }
                             }
                         }
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         LOG.warn("exception when ReferenceCountUtil.release {}, detail: {}",
                                 obj, ExceptionUtils.exception2detail(e));
                     }
@@ -251,7 +252,7 @@ public class RxNettys {
             }
         }
     }
-    
+
     public static <E, T> Observable.Transformer<? super T, ? extends T> releaseAtLast(final Collection<E> objs) {
         return new Observable.Transformer<T, T>() {
             @Override
@@ -274,7 +275,7 @@ public class RxNettys {
                         }});
             }};
     }
-    
+
     public static Observable<HttpObject> response401Unauthorized(
             final HttpVersion version, final String vlaueOfWWWAuthenticate) {
         final HttpResponse response = new DefaultFullHttpResponse(
@@ -283,7 +284,7 @@ public class RxNettys {
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
         return Observable.<HttpObject>just(response);
     }
-    
+
     public static Observable<HttpObject> response200OK(
             final HttpVersion version) {
         final HttpResponse response = new DefaultFullHttpResponse(
@@ -291,7 +292,7 @@ public class RxNettys {
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
         return Observable.<HttpObject>just(response);
     }
-    
+
     public static Observable<HttpObject> response404NOTFOUND(
             final HttpVersion version) {
         final HttpResponse response = new DefaultFullHttpResponse(
@@ -299,8 +300,8 @@ public class RxNettys {
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
         return Observable.<HttpObject>just(response);
     }
-    
-    private final static Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>> _MSGTOBODY = 
+
+    private final static Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>> _MSGTOBODY =
             new Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>>() {
         @Override
         public Observable<? extends DisposableWrapper<ByteBuf>> call(final DisposableWrapper<HttpObject> dwh) {
@@ -310,21 +311,21 @@ public class RxNettys {
                 return Observable.empty();
             }
         }};
-        
+
     public static Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>> message2body() {
         return _MSGTOBODY;
     }
-    
+
     private static List<HttpObject> dwhs2hobjs(final Iterable<DisposableWrapper<HttpObject>> dwhs) {
         final List<HttpObject> hobjs = new LinkedList<>();
-        for (DisposableWrapper<HttpObject> dwh : dwhs) {
+        for (final DisposableWrapper<HttpObject> dwh : dwhs) {
             hobjs.add(dwh.unwrap());
         }
         return hobjs;
     }
 
     private static void disposeAll(final Iterable<DisposableWrapper<HttpObject>> dwhs) {
-        for (DisposableWrapper<HttpObject> dwh : dwhs) {
+        for (final DisposableWrapper<HttpObject> dwh : dwhs) {
             dwh.dispose();
         }
     }
@@ -388,33 +389,33 @@ public class RxNettys {
             }
         };
     }
-    
+
     public static Func1<HttpObject[], FullHttpRequest> BUILD_FULL_REQUEST = new Func1<HttpObject[], FullHttpRequest>() {
         @Override
         public FullHttpRequest call(final HttpObject[] httpobjs) {
             if (LOG.isDebugEnabled()) {
                 int idx = 0;
-                for (HttpObject httpobj : httpobjs) {
+                for (final HttpObject httpobj : httpobjs) {
                     LOG.debug("BUILD_FULL_REQUEST: dump [{}] httpobj {}", ++idx, httpobj);
                 }
             }
-            
-            if (httpobjs.length>0 
-            && (httpobjs[0] instanceof HttpRequest) 
+
+            if (httpobjs.length>0
+            && (httpobjs[0] instanceof HttpRequest)
             && (httpobjs[httpobjs.length-1] instanceof LastHttpContent)) {
                 if (httpobjs[0] instanceof FullHttpRequest) {
                     return ((FullHttpRequest)httpobjs[0]).retainedDuplicate();
                 }
-                
+
                 final HttpRequest req = (HttpRequest)httpobjs[0];
                 final ByteBuf[] bufs = new ByteBuf[httpobjs.length-1];
                 for (int idx = 1; idx<httpobjs.length; idx++) {
                     bufs[idx-1] = ((HttpContent)httpobjs[idx]).content().retain();
                 }
                 final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
-                        req.protocolVersion(), 
-                        req.method(), 
-                        req.uri(), 
+                        req.protocolVersion(),
+                        req.method(),
+                        req.uri(),
                         Unpooled.wrappedBuffer(bufs));
                 fullreq.headers().add(req.headers());
                 //  ? need update Content-Length header field ?
@@ -426,20 +427,20 @@ public class RxNettys {
     public static Func1<HttpObject[], FullHttpResponse> BUILD_FULL_RESPONSE = new Func1<HttpObject[], FullHttpResponse>() {
         @Override
         public FullHttpResponse call(final HttpObject[] httpobjs) {
-            if (httpobjs.length>0 
-            && (httpobjs[0] instanceof HttpResponse) 
+            if (httpobjs.length>0
+            && (httpobjs[0] instanceof HttpResponse)
             && (httpobjs[httpobjs.length-1] instanceof LastHttpContent)) {
                 if (httpobjs[0] instanceof FullHttpResponse) {
                     return ((FullHttpResponse)httpobjs[0]).retainedDuplicate();
                 }
-                
+
                 final HttpResponse resp = (HttpResponse)httpobjs[0];
                 final ByteBuf[] bufs = new ByteBuf[httpobjs.length-1];
                 for (int idx = 1; idx<httpobjs.length; idx++) {
                     bufs[idx-1] = ((HttpContent)httpobjs[idx]).content().retain();
                 }
                 final DefaultFullHttpResponse fullresp = new DefaultFullHttpResponse(
-                        resp.protocolVersion(), 
+                        resp.protocolVersion(),
                         resp.status(),
                         Unpooled.wrappedBuffer(bufs));
                 fullresp.headers().add(resp.headers());
@@ -449,12 +450,12 @@ public class RxNettys {
                 return null;
             }
         }};
-        
+
     public static Func1<HttpObject, Observable<? extends HttpObject>> splitFullHttpMessage() {
         return SPLIT_FULLHTTPMSG;
     }
 
-    private final static Func1<HttpObject, Observable<? extends HttpObject>> SPLIT_FULLHTTPMSG = 
+    private final static Func1<HttpObject, Observable<? extends HttpObject>> SPLIT_FULLHTTPMSG =
             new Func1<HttpObject, Observable<? extends HttpObject>>() {
             @Override
             public Observable<? extends HttpObject> call(final HttpObject obj) {
@@ -466,15 +467,15 @@ public class RxNettys {
                     return Observable.just(obj);
                 }
             }};
-            
+
     private static HttpRequest requestOf(final HttpRequest req) {
         return new ProxyBuilder<>(HttpRequest.class, req).buildProxy();
     }
-    
+
     private static HttpResponse responseOf(final HttpResponse resp) {
         return new ProxyBuilder<>(HttpResponse.class, resp).buildProxy();
     }
-    
+
     private static LastHttpContent lastContentOf(final FullHttpMessage msg) {
         return new ProxyBuilder<>(LastHttpContent.class, msg).buildProxy();
     }
@@ -499,7 +500,7 @@ public class RxNettys {
             }
         }
     };
-            
+
     //  对 HttpMessage 中的 HttpContent 产生独立的 readIndex & writeIndex
     public static Observable.Transformer<? super HttpObject, ? extends HttpObject> duplicateHttpContent() {
         return new Observable.Transformer<HttpObject, HttpObject>() {
@@ -517,7 +518,7 @@ public class RxNettys {
             }};
     }
 
-    private final static Observable.Transformer<HttpObject, HttpRequest> AS_HTTPREQ = 
+    private final static Observable.Transformer<HttpObject, HttpRequest> AS_HTTPREQ =
         new Observable.Transformer<HttpObject, HttpRequest>() {
             @Override
             public Observable<HttpRequest> call(final Observable<HttpObject> httpMessage) {
@@ -531,12 +532,12 @@ public class RxNettys {
                         }
                     }});
             }};
-        
+
     public static Observable.Transformer<? super HttpObject, ? extends HttpRequest> asHttpRequest() {
         return AS_HTTPREQ;
     }
-    
-    private final static Observable.Transformer<HttpObject, HttpResponse> AS_HTTPRESP = 
+
+    private final static Observable.Transformer<HttpObject, HttpResponse> AS_HTTPRESP =
             new Observable.Transformer<HttpObject, HttpResponse>() {
                 @Override
                 public Observable<HttpResponse> call(final Observable<HttpObject> httpMessage) {
@@ -550,11 +551,11 @@ public class RxNettys {
                             }
                         }});
                 }};
-            
+
     public static Observable.Transformer<? super HttpObject, ? extends HttpResponse> asHttpResponse() {
         return AS_HTTPRESP;
     }
-        
+
     private final static Func1<HttpObject, HttpMessage> _HOBJ2MSG = new Func1<HttpObject, HttpMessage>() {
         @Override
         public HttpMessage call(final HttpObject httpobj) {
@@ -564,19 +565,19 @@ public class RxNettys {
                 throw new RuntimeException("First HttpObject is not HttpMessage.");
             }
         }};
-        
-    private final static Observable.Transformer<HttpObject, HttpMessage> _AS_HTTPMSG = 
+
+    private final static Observable.Transformer<HttpObject, HttpMessage> _AS_HTTPMSG =
             new Observable.Transformer<HttpObject, HttpMessage>() {
                 @Override
                 public Observable<HttpMessage> call(final Observable<HttpObject> hobjs) {
                     return hobjs.first().map(_HOBJ2MSG);
                 }};
-            
+
     public static Observable.Transformer<? super HttpObject, ? extends HttpMessage> asHttpMessage() {
         return _AS_HTTPMSG;
     }
-    
-    private final static Observable.Transformer<ChannelFuture, Channel> CHANNELFUTURE_CHANNEL = 
+
+    private final static Observable.Transformer<ChannelFuture, Channel> CHANNELFUTURE_CHANNEL =
             new Observable.Transformer<ChannelFuture, Channel>() {
                 @Override
                 public Observable<Channel> call(final Observable<ChannelFuture> source) {
@@ -587,7 +588,7 @@ public class RxNettys {
                             return channelObservableFromFuture(f);
                         }});
                 }};
-                
+
     public static Observable.Transformer<ChannelFuture, Channel> channelFutureToChannel() {
         return CHANNELFUTURE_CHANNEL;
     }
@@ -598,7 +599,7 @@ public class RxNettys {
             String logmsg = null;
             if (LOG.isTraceEnabled()) {
                 logmsg = obj.toString() + " disposed at " +
-                    ExceptionUtils.dumpCallStack(new Throwable(), null, 3) + 
+                    ExceptionUtils.dumpCallStack(new Throwable(), null, 3) +
                     "\r\n and release with ({})"
                 ;
             }
@@ -607,12 +608,12 @@ public class RxNettys {
                 LOG.trace(logmsg, released);
             }
         }};
-    
+
     @SuppressWarnings("unchecked")
     public static <T> Action1<T> disposerOf() {
         return (Action1<T>)DISPOSE_REF;
     }
-    
+
     public static <T> DisposableWrapper<T> wrap4release(final T unwrap) {
         return DisposableWrapperUtil.wrap(unwrap, RxNettys.<T>disposerOf());
     }
@@ -629,7 +630,7 @@ public class RxNettys {
                 public boolean equals(final Object o) {
                     return unwrap().equals(DisposableWrapperUtil.unwrap(o));
                 }
-                
+
                 @Override
                 public ByteBuf unwrap() {
                     return ((HttpContent) dwh.unwrap()).content();
@@ -670,7 +671,7 @@ public class RxNettys {
             }
         };
     }
-    
+
     private static Func1<DisposableWrapper<HttpObject>, Observable<? extends Integer>> limitBufferSizeTo(
             final int maxBufSize) {
         final AtomicInteger size = new AtomicInteger(0);
@@ -689,7 +690,7 @@ public class RxNettys {
             }
         };
     }
-    
+
     private static Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>> assemble(
             final Terminable terminable) {
         return new Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>>() {
@@ -698,7 +699,7 @@ public class RxNettys {
                     final List<? extends DisposableWrapper<HttpObject>> dwhs) {
                 final Queue<DisposableWrapper<HttpObject>> assembled = new LinkedList<>();
                 final Queue<DisposableWrapper<ByteBuf>> dwbs = new LinkedList<>();
-                for (DisposableWrapper<HttpObject> dwh : dwhs) {
+                for (final DisposableWrapper<HttpObject> dwh : dwhs) {
                     if (dwh.unwrap() instanceof HttpMessage) {
                         assembled.add(dwh);
                     } else if (dwh.unwrap() instanceof LastHttpContent) {
@@ -715,7 +716,7 @@ public class RxNettys {
     }
 
     private static DisposableWrapper<HttpObject> dwbs2dwh(
-            final Collection<DisposableWrapper<ByteBuf>> dwbs, 
+            final Collection<DisposableWrapper<ByteBuf>> dwbs,
             final boolean islast,
             final Terminable terminable) {
         if (!dwbs.isEmpty()) {
@@ -728,10 +729,10 @@ public class RxNettys {
                     return RxNettys.wrap4release(hobj);
                 }
             } finally {
-                for (DisposableWrapper<ByteBuf> dwb : dwbs) {
+                for (final DisposableWrapper<ByteBuf> dwb : dwbs) {
                     try {
                         dwb.dispose();
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                     }
                 }
                 dwbs.clear();

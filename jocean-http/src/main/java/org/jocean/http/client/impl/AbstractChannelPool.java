@@ -9,9 +9,10 @@ import io.netty.channel.Channel;
 import io.netty.channel.EventLoop;
 import rx.Observable;
 import rx.Subscriber;
+import rx.functions.Func0;
 
 public abstract class AbstractChannelPool implements ChannelPool {
-    
+
     private static final Logger LOG =
             LoggerFactory.getLogger(AbstractChannelPool.class);
 
@@ -23,7 +24,16 @@ public abstract class AbstractChannelPool implements ChannelPool {
                 doRetainChannel(address, subscriber);
             }});
     }
-    
+
+    @Override
+    public Observable<Channel> retainChannel(final Func0<SocketAddress> addressProvider) {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<Channel>() {
+            @Override
+            public void call(final Subscriber<? super Channel> subscriber) {
+                doRetainChannel(addressProvider.call(), subscriber);
+            }});
+    }
+
     protected abstract Channel findActiveChannel(final SocketAddress address);
 
     private void doRetainChannel(final SocketAddress address,
@@ -45,10 +55,10 @@ public abstract class AbstractChannelPool implements ChannelPool {
             subscriber.onError(new RuntimeException("Nonreused Channel"));
         }
     }
-    
+
     private void reuseActiveChannelOrContinue(
             final SocketAddress address,
-            final Channel channel, 
+            final Channel channel,
             final Subscriber<? super Channel> subscriber) {
         if (!subscriber.isUnsubscribed()) {
             if (channel.isActive()) {
