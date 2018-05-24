@@ -417,7 +417,12 @@ public class MessageUtil {
                 try {
                     final URI uri = new URI(uriAsString);
                     _uriRef.set(uri);
-                    _initiatorBuilder.remoteAddress(uri2addr(uri));
+                    _initiatorBuilder.remoteAddress(new Func0<SocketAddress>() {
+                        @Override
+                        public SocketAddress call() {
+                            return uri2addr(uri);
+                        }
+                    });
                     updateObsRequest(MessageUtil.setHost(uri));
                 } catch (final URISyntaxException e) {
                     throw new RuntimeException(e);
@@ -527,14 +532,18 @@ public class MessageUtil {
         return new InetSocketAddress(uri.getHost(), port);
     }
 
-    public static SocketAddress bean2addr(final Object bean) {
+    public static Func0<SocketAddress> bean2addr(final Object bean) {
         final Path path = bean.getClass().getAnnotation(Path.class);
         if (null!=path) {
-            try {
-                return uri2addr(new URI(path.value()));
-            } catch (final Exception e) {
-                throw new RuntimeException(e);
-            }
+            return new Func0<SocketAddress>() {
+                @Override
+                public SocketAddress call() {
+                    try {
+                        return uri2addr(new URI(path.value()));
+                    } catch (final Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }};
         }
         throw new RuntimeException("bean class ("+ bean.getClass() +") without @Path annotation");
     }
