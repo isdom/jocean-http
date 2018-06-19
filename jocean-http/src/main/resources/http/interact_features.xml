@@ -8,7 +8,7 @@
 
     <bean id="interactTransformer" class="org.jocean.http.InteractUtil" 
         factory-method="applyFeatures"
-        name="${features.name}">
+        name="${name}">
         <constructor-arg ref="httpfeatures"/>
     </bean>
 
