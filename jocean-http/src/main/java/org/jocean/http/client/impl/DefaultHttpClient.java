@@ -16,6 +16,7 @@ import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys.ChannelAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.http.util.TrafficCounterAware;
+import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceUtils;
 import org.jocean.idiom.ReflectUtils;
@@ -32,9 +33,12 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
+import rx.Subscriber;
+import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
+import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -174,6 +178,16 @@ public class DefaultHttpClient implements HttpClient {
         }};
     }
 
+    private final Action1<HttpInitiator> ON_INITIATOR = new Action1<HttpInitiator>() {
+        @Override
+        public void call(final HttpInitiator initiator) {
+            _initiatorObserver.foreachComponent(new Action1<Subscriber<? super HttpInitiator>>() {
+                @Override
+                public void call(final Subscriber<? super HttpInitiator> subscriber) {
+                    subscriber.onNext(initiator);
+                }});
+        }};
+
     private Observable<? extends HttpInitiator> initiator0(
             final Func0<SocketAddress> remoteAddressProvider,
             final Feature... features) {
@@ -181,7 +195,9 @@ public class DefaultHttpClient implements HttpClient {
         return this._channelPool.retainChannel(remoteAddressProvider)
             .onErrorResumeNext(createChannelAndConnectTo(remoteAddressProvider, allfeatures))
             .doOnNext(fillChannelAware(allfeatures))
-            .map(channel2initiator(allfeatures));
+            .map(channel2initiator(allfeatures))
+            .doOnNext(ON_INITIATOR)
+            ;
     }
 
     private Func1<Channel, HttpInitiator> channel2initiator(final Feature[] features) {
@@ -365,6 +381,25 @@ public class DefaultHttpClient implements HttpClient {
         this._channelCreator.close();
     }
 
+    public Observable<HttpInitiator> onInitiator() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<HttpInitiator>() {
+            @Override
+            public void call(final Subscriber<? super HttpInitiator> subscriber) {
+                addInitiatorSubscriber(subscriber);
+            }});
+    }
+
+    private void addInitiatorSubscriber(final Subscriber<? super HttpInitiator> subscriber) {
+        if (!subscriber.isUnsubscribed()) {
+            this._initiatorObserver.addComponent(subscriber);
+            subscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    _initiatorObserver.removeComponent(subscriber);
+                }}));
+        }
+    }
+
     private int _lowWaterMark = -1;
     private int _highWaterMark = -1;
     private int _sendBufSize = -1;
@@ -377,6 +412,9 @@ public class DefaultHttpClient implements HttpClient {
     static final Feature2Handler _FOR_INTERACTION;
 
     static final Feature2Handler _FOR_CHANNEL;
+
+    private final COWCompositeSupport<Subscriber<? super HttpInitiator>> _initiatorObserver =
+            new COWCompositeSupport<>();
 
     static {
         _FOR_INTERACTION = new Feature2Handler();

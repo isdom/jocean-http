@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package org.jocean.http.client.impl;
 
@@ -33,10 +33,10 @@ import rx.subscriptions.Subscriptions;
  */
 class DefaultHttpInitiator extends IOBase<HttpInitiator>
     implements HttpInitiator, Comparable<DefaultHttpInitiator>{
-    
+
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpInitiator.class);
-    
+
     @Override
     public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
@@ -49,14 +49,14 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
     Channel channel() {
         return this._channel;
     }
-    
+
     boolean isKeepAlive() {
         return this._isKeepAlive;
     }
-    
+
     DefaultHttpInitiator(final Channel channel) {
         super(channel);
-        
+
         this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
     }
 
@@ -64,7 +64,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
             final Observable<? extends Object> obsRequest,
             final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
         if (subscriber.isUnsubscribed()) {
-            LOG.info("response subscriber ({}) has been unsubscribed, ignore", 
+            LOG.info("response subscriber ({}) has been unsubscribed, ignore",
                     subscriber);
             return;
         }
@@ -112,7 +112,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
     protected boolean needRead() {
         return inTransacting();
     }
-    
+
     @Override
     protected void onInboundMessage(final HttpObject inmsg) {
         startRecving();
@@ -122,7 +122,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
     protected void onInboundCompleted() {
         endofTransaction();
     }
-    
+
     @Override
     protected void beforeSendingOutbound(final Object outmsg) {
         if (LOG.isDebugEnabled()) {
@@ -130,7 +130,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
         }
         // set in transacting flag
         startSending();
-        
+
         if (outmsg instanceof HttpRequest) {
             this._isKeepAlive = HttpUtil.isKeepAlive((HttpRequest)outmsg);
         }
@@ -147,15 +147,15 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
     private void startSending() {
         transferStatus(STATUS_IDLE, STATUS_SEND);
     }
-    
+
     private void startRecving() {
         transferStatus(STATUS_SEND, STATUS_RECV);
     }
-    
+
     private void endofTransaction() {
         transferStatus(STATUS_RECV, STATUS_IDLE);
     }
-    
+
     private String transactionStatusAsString() {
         switch(transactionStatus()) {
         case STATUS_IDLE:
@@ -171,11 +171,11 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
 
     private static final int STATUS_SEND = 1;
     private static final int STATUS_RECV = 2;
-    
+
     private volatile boolean _isKeepAlive = true;
-    
+
     private volatile boolean _isRequestCompleted = false;
-    
+
     private final long _createTimeMillis = System.currentTimeMillis();
 
     private final Op _op;
@@ -185,12 +185,12 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
                 final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber);
-        
+
         public void doOnUnsubscribeResponse(
                 final DefaultHttpInitiator initiator,
                 final Subscriber<? super DisposableWrapper<HttpObject>> subscriber);
     }
-    
+
     private static final Op OP_ACTIVE = new Op() {
       @Override
       public void subscribeResponse(
@@ -199,7 +199,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
               final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
           initiator.subscribeResponse(request, subscriber);
       }
-      
+
       @Override
       public void doOnUnsubscribeResponse(
               final DefaultHttpInitiator initiator,
@@ -207,7 +207,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
           initiator.doOnUnsubscribeResponse(subscriber);
       }
   };
-  
+
   private static final Op OP_UNACTIVE = new Op() {
       @Override
       public void subscribeResponse(
@@ -216,7 +216,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
               final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
           subscriber.onError(new RuntimeException("http connection unactive."));
       }
-      
+
       @Override
       public void doOnUnsubscribeResponse(
               final DefaultHttpInitiator initiator,
@@ -230,20 +230,20 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
           if (msg instanceof HttpRequest) {
               final HttpRequest request = (HttpRequest)msg;
               request.headers().add(
-                  HttpHeaderNames.ACCEPT_ENCODING, 
+                  HttpHeaderNames.ACCEPT_ENCODING,
                   HttpHeaderValues.GZIP + "," + HttpHeaderValues.DEFLATE);
           }
       }};
-      
+
   private static final AtomicInteger _IDSRC = new AtomicInteger(1);
-  
+
   private final int _id = _IDSRC.getAndIncrement();
 
   @Override
   public int compareTo(final DefaultHttpInitiator o) {
       return this._id - o._id;
   }
-  
+
   /* (non-Javadoc)
    * @see java.lang.Object#hashCode()
    */
@@ -266,7 +266,7 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
           return false;
       if (getClass() != obj.getClass())
           return false;
-      DefaultHttpInitiator other = (DefaultHttpInitiator) obj;
+      final DefaultHttpInitiator other = (DefaultHttpInitiator) obj;
       if (this._id != other._id)
           return false;
       return true;
@@ -274,15 +274,15 @@ class DefaultHttpInitiator extends IOBase<HttpInitiator>
 
   @Override
   public String toString() {
-      final StringBuilder builder = new StringBuilder();
-      builder.append("DefaultHttpInitiator [create at:")
+      return new StringBuilder().append("DefaultHttpInitiator [create at:")
               .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
+              .append(", onTerminateCnt=").append(this._terminateAwareSupport.onTerminateCount())
               .append(", isActive=").append(isActive())
               .append(", transactionStatus=").append(transactionStatusAsString())
               .append(", isKeepAlive=").append(isKeepAlive())
               .append(", isRequestCompleted=").append(_isRequestCompleted)
               .append(", channel=").append(_channel)
-              .append("]");
-      return builder.toString();
+              .append("]")
+              .toString();
   }
 }

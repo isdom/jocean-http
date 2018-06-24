@@ -108,7 +108,7 @@ public abstract class IOBase<T> implements Inbound, Outbound, AutoCloseable, Ter
 
     private final TrafficCounter _traffic;
 
-    private final TerminateAwareSupport<T> _terminateAwareSupport;
+    protected final TerminateAwareSupport<T> _terminateAwareSupport;
 
     @Override
     public void close() {
