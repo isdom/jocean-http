@@ -620,37 +620,7 @@ public class RxNettys {
 
     public static DisposableWrapper<ByteBuf> dwc2dwb(final DisposableWrapper<? extends HttpObject> dwh) {
         if (dwh.unwrap() instanceof HttpContent) {
-            return new DisposableWrapper<ByteBuf>() {
-                @Override
-                public int hashCode() {
-                    return unwrap().hashCode();
-                }
-
-                @Override
-                public boolean equals(final Object o) {
-                    return unwrap().equals(DisposableWrapperUtil.unwrap(o));
-                }
-
-                @Override
-                public ByteBuf unwrap() {
-                    return ((HttpContent) dwh.unwrap()).content();
-                }
-
-                @Override
-                public void dispose() {
-                    dwh.dispose();
-                }
-
-                @Override
-                public boolean isDisposed() {
-                    return dwh.isDisposed();
-                }
-
-                @Override
-                public String toString() {
-                    return "DisposableWrapper<ByteBuf>[" + dwh.toString() + "]";
-                }
-            };
+            return DisposableWrapperUtil.wrap(((HttpContent) dwh.unwrap()).content(), dwh);
         } else {
             return null;
         }
