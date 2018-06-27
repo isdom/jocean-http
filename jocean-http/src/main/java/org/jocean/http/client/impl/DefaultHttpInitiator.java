@@ -131,6 +131,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
         // set in transacting flag
         startSending();
 
+        //  TBD, outmsg id DisposableWrapper<?>
         if (outmsg instanceof HttpRequest) {
             this._isKeepAlive = HttpUtil.isKeepAlive((HttpRequest)outmsg);
         }

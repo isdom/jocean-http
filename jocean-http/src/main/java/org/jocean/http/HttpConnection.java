@@ -20,6 +20,7 @@ import org.jocean.idiom.rx.Action1_N;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -471,28 +472,27 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     private void doSendOutmsg(final Object outmsg) {
-        if (outmsg instanceof DoFlush) {
-            this._channel.flush();
-        } else {
-            onOutmsgSending(outmsg);
-            beforeSendingOutbound(outmsg);
-
-            writeOutmsgToChannel(outmsg)
-            .addListener(new ChannelFutureListener() {
-                @Override
-                public void operationComplete(final ChannelFuture future)
-                        throws Exception {
-                    if (future.isSuccess()) {
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug("send http outmsg {} success.", outmsg);
-                        }
-                        onOutmsgSended(outmsg);
-                    } else {
-                        LOG.warn("exception when send outmsg: {}, detail: {}",
-                                outmsg, ExceptionUtils.exception2detail(future.cause()));
-                        fireClosed(new TransportException("send outmsg error", future.cause()));
+        final ChannelFutureListener whenComplete = new ChannelFutureListener() {
+            @Override
+            public void operationComplete(final ChannelFuture future)
+                    throws Exception {
+                if (future.isSuccess()) {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("send http outmsg {} success.", outmsg);
                     }
-                }});
+                    onOutmsgSended(outmsg);
+                } else {
+                    LOG.warn("exception when send outmsg: {}, detail: {}",
+                            outmsg, ExceptionUtils.exception2detail(future.cause()));
+                    fireClosed(new TransportException("send outmsg error", future.cause()));
+                }
+            }};
+        onOutmsgSending(outmsg);
+        if (outmsg instanceof DoFlush) {
+            this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(whenComplete);
+        } else {
+            beforeSendingOutbound(outmsg);
+            writeOutmsgToChannel(outmsg).addListener(whenComplete);
         }
     }
 
