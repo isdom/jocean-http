@@ -327,6 +327,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                     subscriber.onNext(DisposableWrapperUtil.wrap(new ReadAction() {
                         @Override
                         public void read() {
+                            LOG.debug("invoke read for {}", HttpConnection.this);
                             _iobaseop.readMessage(HttpConnection.this);
                         }}, (Action1<HttpObject>)null));
                 }
