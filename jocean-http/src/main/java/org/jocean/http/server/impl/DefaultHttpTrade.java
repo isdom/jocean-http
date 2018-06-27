@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package org.jocean.http.server.impl;
 
@@ -7,10 +7,10 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.jocean.http.DoRead;
 import org.jocean.http.HttpConnection;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.rx.RxSubscribers;
@@ -26,6 +26,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import rx.Observable;
+import rx.Observable.Transformer;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action1;
@@ -35,17 +36,22 @@ import rx.functions.Func1;
  * @author isdom
  *
  */
-class DefaultHttpTrade extends HttpConnection<HttpTrade> 
+class DefaultHttpTrade extends HttpConnection<HttpTrade>
     implements HttpTrade, Comparable<DefaultHttpTrade> {
-    
+
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
-    
+
+    @Override
+    public void setAutoRead(final boolean autoRead) {
+        this._autoRead = autoRead;
+    }
+
     @Override
     public Observable<? extends DisposableWrapper<HttpObject>> inbound() {
         return this._obsRequest;
     }
-    
+
     @Override
     public Subscription outbound(final Observable<? extends Object> message) {
         return setOutbound(message);
@@ -54,19 +60,38 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     boolean isKeepAlive() {
         return this._isKeepAlive;
     }
-    
+
     DefaultHttpTrade(final Channel channel) {
         this(channel, 0);
     }
-    
+
     DefaultHttpTrade(final Channel channel, final int maxBufSize) {
         super(channel);
-        
+
         if (!channel.eventLoop().inEventLoop()) {
             throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
         }
-        
-        this._obsRequest = buildObsRequest(maxBufSize).cache().doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
+
+        this._obsRequest = buildObsRequest(maxBufSize)
+                .compose(new Transformer<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
+                    @Override
+                    public Observable<DisposableWrapper<HttpObject>> call(final Observable<DisposableWrapper<HttpObject>> org) {
+                        return org.doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
+                            @Override
+                            public void call(final DisposableWrapper<HttpObject> hobj) {
+                                if (_autoRead) {
+                                    final Object o = DisposableWrapperUtil.unwrap(hobj);
+                                    if ( o instanceof DoRead) {
+                                        ((DoRead)o).read();
+                                    }
+                                }
+                            }}).filter(new Func1<DisposableWrapper<HttpObject>, Boolean>() {
+                                @Override
+                                public Boolean call(final DisposableWrapper<HttpObject> hobj) {
+                                    return !(_autoRead && (DisposableWrapperUtil.unwrap(hobj) instanceof DoRead));
+                                }});
+                    }})
+                .cache().doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
             @Override
             public void call(final DisposableWrapper<HttpObject> wrapper) {
                 if (wrapper.isDisposed()) {
@@ -89,7 +114,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
                 holdInboundAndInstallHandler(subscriber);
             }
-        }).compose(RxNettys.assembleTo(maxBufSize, DefaultHttpTrade.this));
+        })/*.compose(RxNettys.assembleTo(maxBufSize, DefaultHttpTrade.this))*/;
     }
 
     @Override
@@ -109,7 +134,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     protected boolean needRead() {
         return inRecving();
     }
-    
+
     @Override
     protected void onInboundMessage(final HttpObject inmsg) {
         if (LOG.isDebugEnabled()) {
@@ -127,12 +152,12 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
         this._requestUri = req.uri();
         this._isKeepAlive = HttpUtil.isKeepAlive(req);
     }
-    
+
     @Override
     protected void onInboundCompleted() {
         endofRecving();
     }
-    
+
     @Override
     protected void beforeSendingOutbound(final Object outmsg) {
         if (LOG.isDebugEnabled()) {
@@ -141,7 +166,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
         // set in transacting flag
         startSending();
     }
-    
+
     @Override
     protected void onOutboundCompleted() {
         // force flush for _isFlushPerWrite = false
@@ -170,27 +195,27 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
                 }
             }};
     }
-    
+
     private void startRecving() {
         transferStatus(STATUS_IDLE, STATUS_RECV);
     }
-    
+
     private void endofRecving() {
         transferStatus(STATUS_RECV, STATUS_RECV_END);
     }
-    
+
     private void startSending() {
         transferStatus(STATUS_RECV_END, STATUS_SEND);
     }
-    
+
     private void endofTransaction() {
         transferStatus(STATUS_SEND, STATUS_IDLE);
     }
-    
+
     private boolean inRecving() {
         return transactionStatus() == STATUS_RECV;
     }
-    
+
     private String transactionStatusAsString() {
         switch(transactionStatus()) {
         case STATUS_IDLE:
@@ -205,15 +230,17 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             return "UNKNOWN";
         }
     }
-    
+
     private static final int STATUS_RECV = 1;
     private static final int STATUS_RECV_END = 2;
     private static final int STATUS_SEND = 3;
-    
+
     private final Observable<? extends DisposableWrapper<HttpObject>> _obsRequest;
-    
+
+    private volatile boolean _autoRead = true;
+
     private volatile boolean _isKeepAlive = false;
-    
+
     private final long _createTimeMillis = System.currentTimeMillis();
     private String _requestMethod;
     private String _requestUri;
@@ -228,16 +255,16 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             }
         }
     };
-        
+
     private static final AtomicInteger _IDSRC = new AtomicInteger(1);
-    
+
     private final int _id = _IDSRC.getAndIncrement();
-    
+
     @Override
     public int compareTo(final DefaultHttpTrade o) {
         return this._id - o._id;
     }
-    
+
     /* (non-Javadoc)
      * @see java.lang.Object#hashCode()
      */
@@ -253,14 +280,14 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
      * @see java.lang.Object#equals(java.lang.Object)
      */
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(final Object obj) {
         if (this == obj)
             return true;
         if (obj == null)
             return false;
         if (getClass() != obj.getClass())
             return false;
-        DefaultHttpTrade other = (DefaultHttpTrade) obj;
+        final DefaultHttpTrade other = (DefaultHttpTrade) obj;
         if (_id != other._id)
             return false;
         return true;

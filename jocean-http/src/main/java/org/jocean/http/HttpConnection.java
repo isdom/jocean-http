@@ -631,6 +631,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
     protected abstract void onChannelInactive();
 
+    @SuppressWarnings("unused")
     private volatile Single<?> _whenToRead = null;
 
     private volatile long _unreadBegin = 0;

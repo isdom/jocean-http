@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package org.jocean.http.server;
 
@@ -26,39 +26,45 @@ import rx.functions.Func0;
  *
  */
 public interface HttpServerBuilder extends Closeable {
-    
+
     public Observable<? extends HttpTrade> defineServer(
-            final SocketAddress localAddress, 
+            final SocketAddress localAddress,
             final Feature ... features);
-    
+
     public Observable<? extends HttpTrade> defineServer(
-            final SocketAddress localAddress, 
+            final SocketAddress localAddress,
             final Func0<Feature[]> featuresBuilder);
-    
+
     public Observable<? extends HttpTrade> defineServer(
-            final SocketAddress localAddress, 
+            final SocketAddress localAddress,
             final Func0<Feature[]> featuresBuilder,
             final Feature ... features);
-    
-    public interface HttpTrade 
+
+    public interface HttpTrade
         extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpTrade> {
+
+        void setAutoRead(boolean autoRead);
+
         public Observable<? extends DisposableWrapper<HttpObject>> inbound();
-        
+
         public Subscription outbound(final Observable<? extends Object> message);
-        
+
         public Object transport();
-        
+
         public Action0 closer();
         //  try to abort trade explicit
+        @Override
         public void close();
-        
+
         public TrafficCounter traffic();
         public boolean isActive();
-        
+
         // from Outtraffic
+        @Override
         public WriteCtrl writeCtrl();
-        
+
         // from Intraffic
+        @Override
         public void setReadPolicy(final ReadPolicy readPolicy);
     }
 }
