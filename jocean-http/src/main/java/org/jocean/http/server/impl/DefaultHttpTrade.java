@@ -7,7 +7,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.jocean.http.IOBase;
+import org.jocean.http.HttpConnection;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.RxNettys;
@@ -35,7 +35,7 @@ import rx.functions.Func1;
  * @author isdom
  *
  */
-class DefaultHttpTrade extends IOBase<HttpTrade> 
+class DefaultHttpTrade extends HttpConnection<HttpTrade> 
     implements HttpTrade, Comparable<DefaultHttpTrade> {
     
     private static final Logger LOG =

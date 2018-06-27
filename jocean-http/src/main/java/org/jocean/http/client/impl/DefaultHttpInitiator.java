@@ -7,7 +7,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.jocean.http.IOBase;
+import org.jocean.http.HttpConnection;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.Nettys;
@@ -31,7 +31,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpInitiator extends IOBase<HttpInitiator>
+class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
     implements HttpInitiator, Comparable<DefaultHttpInitiator>{
 
     private static final Logger LOG =
