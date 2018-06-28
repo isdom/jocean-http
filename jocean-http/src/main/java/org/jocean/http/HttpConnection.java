@@ -302,7 +302,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
     }
 
-    static abstract class ReadAction implements HttpObject, DoRead {
+    static abstract class DoRead implements HttpObject, ReadComplete {
         @Override
         public DecoderResult decoderResult() {
             return null;
@@ -325,9 +325,9 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             final Subscriber<? super DisposableWrapper<HttpObject>> subscriber = inboundSubscriberUpdater.get(this);
             if (null != subscriber) {
                 if (!subscriber.isUnsubscribed()) {
-                    subscriber.onNext(DisposableWrapperUtil.wrap(new ReadAction() {
+                    subscriber.onNext(DisposableWrapperUtil.wrap(new DoRead() {
                         @Override
-                        public void read() {
+                        public void readInbound() {
                             LOG.debug("invoke read for {}", HttpConnection.this);
                             _iobaseop.readMessage(HttpConnection.this);
                         }}, (Action1<HttpObject>)null));

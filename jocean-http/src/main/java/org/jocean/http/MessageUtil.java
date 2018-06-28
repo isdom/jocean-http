@@ -303,7 +303,7 @@ public class MessageUtil {
                 return obsinteraction.flatMap(new Func1<Interaction, Observable<RESP>>() {
                     @Override
                     public Observable<RESP> call(final Interaction interaction) {
-                        return interaction.execute().compose(DoRead.Util.<DisposableWrapper<HttpObject>>autoread())
+                        return interaction.execute().compose(ReadComplete.Util.<DisposableWrapper<HttpObject>>autoread())
                                 .compose(RxNettys.message2fullresp(interaction.initiator(), true))
                                 .doOnUnsubscribe(interaction.initiator().closer())
                                 .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
@@ -336,7 +336,7 @@ public class MessageUtil {
     private static final Func1<Interaction, Observable<String>> _INTERACTION_TO_OBS_STRING = new Func1<Interaction, Observable<String>>() {
         @Override
         public Observable<String> call(final Interaction interaction) {
-            return interaction.execute().compose(DoRead.Util.<DisposableWrapper<HttpObject>>autoread())
+            return interaction.execute().compose(ReadComplete.Util.<DisposableWrapper<HttpObject>>autoread())
                     .compose(RxNettys.message2fullresp(interaction.initiator(), true))
                     .doOnUnsubscribe(interaction.initiator().closer()).map(_FULLMSG_TO_STRING);
         }

@@ -7,23 +7,23 @@ import rx.Observable.Transformer;
 import rx.functions.Action1;
 import rx.functions.Func1;
 
-public interface DoRead {
-    public void read();
+public interface ReadComplete {
+    public void readInbound();
 
     public static class Util {
         final static Action1<Object> READ_ALWAYS = new Action1<Object>() {
             @Override
             public void call(final Object obj) {
                 final Object o = DisposableWrapperUtil.unwrap(obj);
-                if ( o instanceof DoRead) {
-                    ((DoRead)o).read();
+                if ( o instanceof ReadComplete) {
+                    ((ReadComplete)o).readInbound();
                 }
             }};
 
         final static Func1<Object, Boolean> NOT_DOREAD = new Func1<Object, Boolean>() {
             @Override
             public Boolean call(final Object obj) {
-                return !(DisposableWrapperUtil.unwrap(obj) instanceof DoRead);
+                return !(DisposableWrapperUtil.unwrap(obj) instanceof ReadComplete);
             }};
 
         final static Transformer<Object, Object> AUTO_READ = new Transformer<Object, Object>() {

@@ -7,7 +7,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.jocean.http.DoRead;
+import org.jocean.http.ReadComplete;
 import org.jocean.http.HttpConnection;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
@@ -81,14 +81,14 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
                             public void call(final DisposableWrapper<HttpObject> hobj) {
                                 if (_autoRead) {
                                     final Object o = DisposableWrapperUtil.unwrap(hobj);
-                                    if ( o instanceof DoRead) {
-                                        ((DoRead)o).read();
+                                    if ( o instanceof ReadComplete) {
+                                        ((ReadComplete)o).readInbound();
                                     }
                                 }
                             }}).filter(new Func1<DisposableWrapper<HttpObject>, Boolean>() {
                                 @Override
                                 public Boolean call(final DisposableWrapper<HttpObject> hobj) {
-                                    return !(_autoRead && (DisposableWrapperUtil.unwrap(hobj) instanceof DoRead));
+                                    return !(_autoRead && (DisposableWrapperUtil.unwrap(hobj) instanceof ReadComplete));
                                 }});
                     }})
                 .cache().doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
