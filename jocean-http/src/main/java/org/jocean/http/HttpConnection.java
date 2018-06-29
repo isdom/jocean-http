@@ -429,13 +429,10 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
     private void processInmsg(final Subscriber<? super Object> subscriber, final HttpObject inmsg) {
 
-        LOG.debug("processInmsg Step1");
         onInboundMessage(inmsg);
 
-        LOG.debug("processInmsg Step2");
         try {
             subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
-            LOG.debug("processInmsg Step3");
         } finally {
             if (inmsg instanceof LastHttpContent) {
                 /*
@@ -450,13 +447,9 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                  * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
                  * 因此，无需在channelInactive处，针对该情况做特殊处理
                  */
-                LOG.debug("processInmsg Step4");
                 if (unholdInboundAndUninstallHandler(subscriber)) {
-                    LOG.debug("processInmsg Step5");
                     onInboundCompleted();
-                    LOG.debug("processInmsg Step6");
                     subscriber.onCompleted();
-                    LOG.debug("processInmsg Step7");
                 }
             }
         }
