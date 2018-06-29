@@ -1,6 +1,5 @@
 package org.jocean.http;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
@@ -28,14 +27,12 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
-import io.netty.handler.codec.DecoderResult;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
-import rx.Observer;
 import rx.Single;
 import rx.Subscriber;
 import rx.Subscription;
@@ -302,35 +299,25 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
     }
 
-    static abstract class DoRead implements HttpObject, ReadComplete {
-        @Override
-        public DecoderResult decoderResult() {
-            return null;
-        }
-
-        @Override
-        public void setDecoderResult(final DecoderResult result) {
-        }
-
-        @Override
-        public DecoderResult getDecoderResult() {
-            return null;
-        }
-    }
-
     private void onReadComplete() {
         this._unreadBegin = System.currentTimeMillis();
         if (needRead()) {
             @SuppressWarnings("unchecked")
-            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber = inboundSubscriberUpdater.get(this);
+            final Subscriber<? super Object> subscriber = inboundSubscriberUpdater.get(this);
             if (null != subscriber) {
                 if (!subscriber.isUnsubscribed()) {
-                    subscriber.onNext(DisposableWrapperUtil.wrap(new DoRead() {
+                    subscriber.onNext(new ReadComplete() {
                         @Override
                         public void readInbound() {
                             LOG.debug("invoke read for {}", HttpConnection.this);
                             _iobaseop.readMessage(HttpConnection.this);
-                        }}, (Action1<HttpObject>)null));
+                        }
+
+                        @Override
+                        public String toString() {
+                            return new StringBuilder().append("ReadComplete for ").append(_channel.toString())
+                                    .toString();
+                        }});
                 }
             }
 
@@ -390,7 +377,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
     }
 
-    protected boolean holdInboundAndInstallHandler(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+    protected boolean holdInboundAndInstallHandler(final Subscriber<? super Object> subscriber) {
         if (holdInboundSubscriber(subscriber)) {
             final ChannelHandler handler = buildInboundHandler(subscriber);
             Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
@@ -401,7 +388,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
     }
 
-    protected boolean unholdInboundAndUninstallHandler(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+    protected boolean unholdInboundAndUninstallHandler(final Subscriber<? super Object> subscriber) {
         if (unholdInboundSubscriber(subscriber)) {
             removeInboundHandler();
             return true;
@@ -430,25 +417,25 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
     }
 
-    private SimpleChannelInboundHandler<HttpObject> buildInboundHandler(
-            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+    private SimpleChannelInboundHandler<HttpObject> buildInboundHandler(final Subscriber<? super Object> subscriber) {
         return new SimpleChannelInboundHandler<HttpObject>(false) {
             @Override
             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject inmsg) throws Exception {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("HttpConnection: channel({})/handler({}): channelRead0 and call with msg({}).",
-                        ctx.channel(), ctx.name(), inmsg);
-                }
+                LOG.debug("HttpConnection: channel({})/handler({}): channelRead0 and call with msg({}).",
+                    ctx.channel(), ctx.name(), inmsg);
                 _iobaseop.onInmsgRecvd(HttpConnection.this, subscriber, inmsg);
             }};
     }
 
-    private void processInmsg(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber, final HttpObject inmsg) {
+    private void processInmsg(final Subscriber<? super Object> subscriber, final HttpObject inmsg) {
 
+        LOG.debug("processInmsg Step1");
         onInboundMessage(inmsg);
 
+        LOG.debug("processInmsg Step2");
         try {
             subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
+            LOG.debug("processInmsg Step3");
         } finally {
             if (inmsg instanceof LastHttpContent) {
                 /*
@@ -463,9 +450,13 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                  * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
                  * 因此，无需在channelInactive处，针对该情况做特殊处理
                  */
+                LOG.debug("processInmsg Step4");
                 if (unholdInboundAndUninstallHandler(subscriber)) {
+                    LOG.debug("processInmsg Step5");
                     onInboundCompleted();
+                    LOG.debug("processInmsg Step6");
                     subscriber.onCompleted();
+                    LOG.debug("processInmsg Step7");
                 }
             }
         }
@@ -566,31 +557,48 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     private Subscription doSetOutbound(final Observable<? extends Object> outbound) {
-        if (this._isOutboundSetted.compareAndSet(false, true)) {
-            final Subscription subscription = outbound.subscribe(buildOutboundObserver());
-            setOutboundSubscription(subscription);
+        final Subscription placeholder = buildPlaceholderSubscription();
+
+        if (outboundSubscriptionUpdater.compareAndSet(this, null, placeholder)) {
+            final Subscriber<Object> outboundSubscriber = buildOutboundSubscriber();
+            final Subscription subscription = outbound.subscribe(outboundSubscriber);
+            outboundSubscriptionUpdater.set(this, subscription);
+            outboundSubscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    outboundSubscriptionUpdater.compareAndSet(HttpConnection.this, subscription, null);
+                }}));
             return subscription;
         } else {
-            LOG.warn("iobase ({}) 's outbound message has setted, ignore this outbound({})",
+            LOG.warn("({}) 's outbound message has setted, ignore this outbound({})",
                     this, outbound);
             return null;
         }
     }
 
-    private Observer<Object> buildOutboundObserver() {
-        return new Observer<Object>() {
+    private Subscription buildPlaceholderSubscription() {
+        return new Subscription() {
+            @Override
+            public void unsubscribe() {
+            }
+            @Override
+            public boolean isUnsubscribed() {
+                return true;
+            }};
+    }
+
+    private Subscriber<Object> buildOutboundSubscriber() {
+        return new Subscriber<Object>() {
                 @Override
                 public void onCompleted() {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("outound invoke onCompleted for iobase: {}", HttpConnection.this);
-                    }
+                    LOG.debug("outound invoke onCompleted for {}", HttpConnection.this);
                     _iobaseop.onOutmsgCompleted(HttpConnection.this);
                 }
 
                 @Override
                 public void onError(final Throwable e) {
                     if (!(e instanceof CloseException)) {
-                        LOG.warn("outound invoke onError with ({}), try close iobase: {}",
+                        LOG.warn("outound invoke onError with ({}), try close {}",
                                 ExceptionUtils.exception2detail(e), HttpConnection.this);
                     }
                     fireClosed(e);
@@ -598,15 +606,9 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
                 @Override
                 public void onNext(final Object outmsg) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("outbound invoke onNext({}) for iobase: {}", outmsg, HttpConnection.this);
-                    }
+                    LOG.debug("outbound invoke onNext({}) for {}", outmsg, HttpConnection.this);
                     _iobaseop.sendOutmsg(HttpConnection.this, outmsg);
                 }};
-    }
-
-    private void setOutboundSubscription(final Subscription subscription) {
-        outboundSubscriptionUpdater.set(this, subscription);
     }
 
     private void unsubscribeOutbound() {
@@ -665,8 +667,6 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     @SuppressWarnings("unused")
     private volatile ChannelHandler _inboundHandler;
 
-    private final AtomicBoolean _isOutboundSetted = new AtomicBoolean(false);
-
     @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<HttpConnection, Subscription> outboundSubscriptionUpdater =
             AtomicReferenceFieldUpdater.newUpdater(HttpConnection.class, Subscription.class, "_outboundSubscription");
@@ -698,7 +698,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     protected interface IOBaseOp {
         public void onInmsgRecvd(
                 final HttpConnection<?> io,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
+                final Subscriber<? super Object> subscriber,
                 final HttpObject msg);
 
         public Subscription setOutbound(final HttpConnection<?> io, final Observable<? extends Object> outbound);
@@ -720,7 +720,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         @Override
         public void onInmsgRecvd(
                 final HttpConnection<?> iobase,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
+                final Subscriber<? super Object> subscriber,
                 final HttpObject inmsg) {
             iobase.processInmsg(subscriber, inmsg);
         }
@@ -768,7 +768,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         @Override
         public void onInmsgRecvd(
                 final HttpConnection<?> iobase,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber,
+                final Subscriber<? super Object> subscriber,
                 final HttpObject inmsg) {
             ReferenceCountUtil.release(inmsg);
             LOG.warn("HttpConnection(inactive): channelRead0 and release msg({}).", inmsg);

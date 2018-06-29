@@ -12,10 +12,8 @@ import org.jocean.http.Outbound;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.WriteCtrl;
-import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.TerminateAware;
 
-import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -45,7 +43,7 @@ public interface HttpServerBuilder extends Closeable {
 
         void setAutoRead(boolean autoRead);
 
-        public Observable<? extends DisposableWrapper<HttpObject>> inbound();
+        public Observable<? extends Object> inbound();
 
         public Subscription outbound(final Observable<? extends Object> message);
 

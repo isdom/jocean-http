@@ -11,7 +11,6 @@ import org.jocean.http.HttpConnection;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.Nettys;
-import org.jocean.idiom.DisposableWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,16 +31,16 @@ import rx.subscriptions.Subscriptions;
  *
  */
 class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
-    implements HttpInitiator, Comparable<DefaultHttpInitiator>{
+    implements HttpInitiator, Comparable<DefaultHttpInitiator> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpInitiator.class);
 
     @Override
-    public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final Observable<? extends Object> request) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
+    public Observable<? extends Object> defineInteraction(final Observable<? extends Object> request) {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
             @Override
-            public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+            public void call(final Subscriber<? super Object> subscriber) {
                 _op.subscribeResponse(DefaultHttpInitiator.this, request, subscriber);
             }});
     }
@@ -62,7 +61,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
 
     private void subscribeResponse(
             final Observable<? extends Object> obsRequest,
-            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+            final Subscriber<? super Object> subscriber) {
         if (subscriber.isUnsubscribed()) {
             LOG.info("response subscriber ({}) has been unsubscribed, ignore",
                     subscriber);
@@ -89,8 +88,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
         }
     }
 
-    private void doOnUnsubscribeResponse(
-            final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+    private void doOnUnsubscribeResponse(final Subscriber<? super Object> subscriber) {
         if (unholdInboundAndUninstallHandler(subscriber)) {
             // unsubscribe before OnCompleted or OnError
             fireClosed(new RuntimeException("unsubscribe response"));
@@ -185,11 +183,11 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
         public void subscribeResponse(
                 final DefaultHttpInitiator initiator,
                 final Observable<? extends Object> request,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber);
+                final Subscriber<? super Object> subscriber);
 
         public void doOnUnsubscribeResponse(
                 final DefaultHttpInitiator initiator,
-                final Subscriber<? super DisposableWrapper<HttpObject>> subscriber);
+                final Subscriber<? super Object> subscriber);
     }
 
     private static final Op OP_ACTIVE = new Op() {
@@ -197,14 +195,14 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
       public void subscribeResponse(
               final DefaultHttpInitiator initiator,
               final Observable<? extends Object> request,
-              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+              final Subscriber<? super Object> subscriber) {
           initiator.subscribeResponse(request, subscriber);
       }
 
       @Override
       public void doOnUnsubscribeResponse(
               final DefaultHttpInitiator initiator,
-              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+              final Subscriber<? super Object> subscriber) {
           initiator.doOnUnsubscribeResponse(subscriber);
       }
   };
@@ -214,14 +212,14 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
       public void subscribeResponse(
               final DefaultHttpInitiator initiator,
               final Observable<? extends Object> request,
-              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+              final Subscriber<? super Object> subscriber) {
           subscriber.onError(new RuntimeException("http connection unactive."));
       }
 
       @Override
       public void doOnUnsubscribeResponse(
               final DefaultHttpInitiator initiator,
-              final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+              final Subscriber<? super Object> subscriber) {
       }
   };
 

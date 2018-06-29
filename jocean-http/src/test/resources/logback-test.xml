@@ -26,7 +26,7 @@
         </encoder>
     </appender>
     
-    <logger name="org.jocean.http.util.RxNettys" level="TRACE"/>
+    <logger name="org.jocean.http.util.RxNettys" level="DEBUG"/>
     
     <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
         <includeCallerData>true</includeCallerData>

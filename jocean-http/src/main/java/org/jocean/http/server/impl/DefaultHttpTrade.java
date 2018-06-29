@@ -7,8 +7,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.jocean.http.ReadComplete;
 import org.jocean.http.HttpConnection;
+import org.jocean.http.ReadComplete;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.idiom.DisposableWrapper;
@@ -48,7 +48,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     }
 
     @Override
-    public Observable<? extends DisposableWrapper<HttpObject>> inbound() {
+    public Observable<? extends Object> inbound() {
         return this._obsRequest;
     }
 
@@ -73,28 +73,27 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
         }
 
         this._obsRequest = buildObsRequest(maxBufSize)
-                .compose(new Transformer<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
+                .compose(new Transformer<Object, Object>() {
                     @Override
-                    public Observable<DisposableWrapper<HttpObject>> call(final Observable<DisposableWrapper<HttpObject>> org) {
-                        return org.doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
+                    public Observable<Object> call(final Observable<Object> org) {
+                        return org.doOnNext(new Action1<Object>() {
                             @Override
-                            public void call(final DisposableWrapper<HttpObject> hobj) {
+                            public void call(final Object obj) {
                                 if (_autoRead) {
-                                    final Object o = DisposableWrapperUtil.unwrap(hobj);
-                                    if ( o instanceof ReadComplete) {
-                                        ((ReadComplete)o).readInbound();
+                                    if (obj instanceof ReadComplete) {
+                                        ((ReadComplete)obj).readInbound();
                                     }
                                 }
-                            }}).filter(new Func1<DisposableWrapper<HttpObject>, Boolean>() {
+                            }}).filter(new Func1<Object, Boolean>() {
                                 @Override
-                                public Boolean call(final DisposableWrapper<HttpObject> hobj) {
-                                    return !(_autoRead && (DisposableWrapperUtil.unwrap(hobj) instanceof ReadComplete));
+                                public Boolean call(final Object obj) {
+                                    return !(_autoRead && (obj instanceof ReadComplete));
                                 }});
                     }})
-                .cache().doOnNext(new Action1<DisposableWrapper<HttpObject>>() {
+                .cache().doOnNext(new Action1<Object>() {
             @Override
-            public void call(final DisposableWrapper<HttpObject> wrapper) {
-                if (wrapper.isDisposed()) {
+            public void call(final Object obj) {
+                if (obj instanceof DisposableWrapper && ((DisposableWrapper<?>)obj).isDisposed()) {
                     throw new RuntimeException("httpobject wrapper is disposed!");
                 }
             }
@@ -108,10 +107,10 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
         });
     }
 
-    private Observable<? extends DisposableWrapper<HttpObject>> buildObsRequest(final int maxBufSize) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<HttpObject>>() {
+    private Observable<? extends Object> buildObsRequest(final int maxBufSize) {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
             @Override
-            public void call(final Subscriber<? super DisposableWrapper<HttpObject>> subscriber) {
+            public void call(final Subscriber<? super Object> subscriber) {
                 holdInboundAndInstallHandler(subscriber);
             }
         })/*.compose(RxNettys.assembleTo(maxBufSize, DefaultHttpTrade.this))*/;
@@ -235,7 +234,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final int STATUS_RECV_END = 2;
     private static final int STATUS_SEND = 3;
 
-    private final Observable<? extends DisposableWrapper<HttpObject>> _obsRequest;
+    private final Observable<? extends Object> _obsRequest;
 
     private volatile boolean _autoRead = true;
 
@@ -245,13 +244,15 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private String _requestMethod;
     private String _requestUri;
 
-    private final Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>> _DUPLICATE_CONTENT = new Func1<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
+    private final Func1<Object, Object> _DUPLICATE_CONTENT = new Func1<Object, Object>() {
         @Override
-        public DisposableWrapper<HttpObject> call(final DisposableWrapper<HttpObject> wrapper) {
-            if (wrapper.unwrap() instanceof HttpContent) {
-                return DisposableWrapperUtil.<HttpObject>wrap(((HttpContent) wrapper.unwrap()).duplicate(), wrapper);
+        public Object call(final Object obj) {
+            if ((obj instanceof DisposableWrapper)
+                && (DisposableWrapperUtil.unwrap(obj) instanceof HttpContent)) {
+                return DisposableWrapperUtil.<HttpObject>wrap(((HttpContent) DisposableWrapperUtil.unwrap(obj)).duplicate(),
+                        (DisposableWrapper<?>)obj);
             } else {
-                return wrapper;
+                return obj;
             }
         }
     };

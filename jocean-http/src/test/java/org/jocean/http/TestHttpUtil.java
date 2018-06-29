@@ -2,16 +2,13 @@ package org.jocean.http;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 
-import java.util.List;
 import java.util.concurrent.BlockingQueue;
 
 import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.server.impl.AbstractBootstrapCreator;
 import org.jocean.http.server.impl.DefaultHttpServerBuilder;
-import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.rx.RxActions;
@@ -36,14 +33,12 @@ import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action1;
 import rx.functions.Action2;
-import rx.functions.Func0;
-import rx.functions.Func1;
 
 public class TestHttpUtil {
-    
+
     private static final Logger LOG =
             LoggerFactory.getLogger(TestHttpUtil.class);
-    
+
     public final static HttpServerBuilder TEST_SERVER_BUILDER = new DefaultHttpServerBuilder(
             new AbstractBootstrapCreator(
             new DefaultEventLoopGroup(1), new DefaultEventLoopGroup()) {
@@ -59,12 +54,14 @@ public class TestHttpUtil {
                 .subscribe(new Action1<HttpTrade>() {
                     @Override
                     public void call(final HttpTrade trade) {
-                        trade.inbound().compose(RxNettys.message2fullreq(trade)).map(DisposableWrapperUtil.<FullHttpRequest>unwrap())
-                                .subscribe(RxActions.bindLastParameter(onRequestCompleted, trade));
+                        trade.inbound()
+                        .compose(MessageUtil.dwhWithAutoread())
+                            .compose(RxNettys.message2fullreq(trade)).map(DisposableWrapperUtil.<FullHttpRequest>unwrap())
+                            .subscribe(RxActions.bindLastParameter(onRequestCompleted, trade));
                     }
                 });
     }
-    
+
     public static Subscription createTestServerWith(final String acceptId, final Action1<HttpTrade> onRequestCompleted,
             final Feature... features) {
         return TEST_SERVER_BUILDER.defineServer(new LocalAddress(acceptId), features)
@@ -76,7 +73,7 @@ public class TestHttpUtil {
                     }
                 });
     }
-    
+
     public static Subscription createTestServerWith(
             final String acceptId,
             final BlockingQueue<HttpTrade> trades,
@@ -89,28 +86,28 @@ public class TestHttpUtil {
                     try {
                         trades.put(trade);
                         LOG.debug("after offer trade {}", trade);
-                    } catch (InterruptedException e) {
+                    } catch (final InterruptedException e) {
                         LOG.warn("exception when put trade, detail: {}", ExceptionUtils.exception2detail(e));
                     }
                 }});
     }
-    
+
     public static Observable<HttpObject> buildBytesResponse(
-            final String contentType, 
+            final String contentType,
             final byte[] content) {
         final FullHttpResponse response = new DefaultFullHttpResponse(
-                HttpVersion.HTTP_1_1, OK, 
+                HttpVersion.HTTP_1_1, OK,
                 Unpooled.wrappedBuffer(content));
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
         return  Observable.<HttpObject>just(response);
     }
-    
+
     public static Observable<HttpObject> buildByteBufResponse(
-            final String contentType, 
+            final String contentType,
             final ByteBuf content) {
         final FullHttpResponse response = new DefaultFullHttpResponse(
-                HttpVersion.HTTP_1_1, OK, 
+                HttpVersion.HTTP_1_1, OK,
                 content);
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());

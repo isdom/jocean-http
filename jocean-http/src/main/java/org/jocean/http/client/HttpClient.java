@@ -11,10 +11,8 @@ import org.jocean.http.Outbound;
 import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.WriteCtrl;
-import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.TerminateAware;
 
-import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 import rx.functions.Action0;
 import rx.functions.Func0;
@@ -29,8 +27,7 @@ public interface HttpClient extends AutoCloseable {
 
     public interface HttpInitiator
     extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpInitiator> {
-        public Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(
-                final Observable<? extends Object> request);
+        public Observable<? extends Object> defineInteraction(final Observable<? extends Object> request);
 
         public Object transport();
 

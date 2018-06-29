@@ -1,7 +1,5 @@
 package org.jocean.http;
 
-import org.jocean.idiom.DisposableWrapperUtil;
-
 import rx.Observable;
 import rx.Observable.Transformer;
 import rx.functions.Action1;
@@ -14,22 +12,21 @@ public interface ReadComplete {
         final static Action1<Object> READ_ALWAYS = new Action1<Object>() {
             @Override
             public void call(final Object obj) {
-                final Object o = DisposableWrapperUtil.unwrap(obj);
-                if ( o instanceof ReadComplete) {
-                    ((ReadComplete)o).readInbound();
+                if (obj instanceof ReadComplete) {
+                    ((ReadComplete)obj).readInbound();
                 }
             }};
 
-        final static Func1<Object, Boolean> NOT_DOREAD = new Func1<Object, Boolean>() {
+        final static Func1<Object, Boolean> NOT_READCOMPLETE = new Func1<Object, Boolean>() {
             @Override
             public Boolean call(final Object obj) {
-                return !(DisposableWrapperUtil.unwrap(obj) instanceof ReadComplete);
+                return !(obj instanceof ReadComplete);
             }};
 
         final static Transformer<Object, Object> AUTO_READ = new Transformer<Object, Object>() {
             @Override
             public Observable<Object> call(final Observable<Object> org) {
-                return org.doOnNext(READ_ALWAYS).filter(NOT_DOREAD);
+                return org.doOnNext(READ_ALWAYS).filter(NOT_READCOMPLETE);
             }};
 
         @SuppressWarnings("unchecked")

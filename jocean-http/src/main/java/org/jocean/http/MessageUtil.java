@@ -74,8 +74,27 @@ public class MessageUtil {
     private static final Logger LOG =
             LoggerFactory.getLogger(MessageUtil.class);
 
+    final static private Func1<Object, DisposableWrapper<HttpObject>> OBJ_TO_DWH =
+        new Func1<Object, DisposableWrapper<HttpObject>>() {
+            @SuppressWarnings("unchecked")
+            @Override
+            public DisposableWrapper<HttpObject> call(final Object obj) {
+                return (DisposableWrapper<HttpObject>)obj;
+            }};
+
+    final static private Transformer<Object, DisposableWrapper<HttpObject>> AUTOREAD_AND_TODWH =
+        new Transformer<Object, DisposableWrapper<HttpObject>>() {
+            @Override
+            public Observable<DisposableWrapper<HttpObject>> call(final Observable<Object> org) {
+                return org.compose(ReadComplete.Util.autoread()).map(OBJ_TO_DWH);
+            }};
+
     private MessageUtil() {
         throw new IllegalStateException("No instances!");
+    }
+
+    public static Transformer<Object, DisposableWrapper<HttpObject>> dwhWithAutoread() {
+        return AUTOREAD_AND_TODWH;
     }
 
     public static Func0<DisposableWrapper<ByteBuf>> pooledAllocator(final Terminable terminable, final int pageSize) {
@@ -303,7 +322,7 @@ public class MessageUtil {
                 return obsinteraction.flatMap(new Func1<Interaction, Observable<RESP>>() {
                     @Override
                     public Observable<RESP> call(final Interaction interaction) {
-                        return interaction.execute().compose(ReadComplete.Util.<DisposableWrapper<HttpObject>>autoread())
+                        return interaction.execute().compose(dwhWithAutoread())
                                 .compose(RxNettys.message2fullresp(interaction.initiator(), true))
                                 .doOnUnsubscribe(interaction.initiator().closer())
                                 .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
@@ -336,7 +355,7 @@ public class MessageUtil {
     private static final Func1<Interaction, Observable<String>> _INTERACTION_TO_OBS_STRING = new Func1<Interaction, Observable<String>>() {
         @Override
         public Observable<String> call(final Interaction interaction) {
-            return interaction.execute().compose(ReadComplete.Util.<DisposableWrapper<HttpObject>>autoread())
+            return interaction.execute().compose(dwhWithAutoread())
                     .compose(RxNettys.message2fullresp(interaction.initiator(), true))
                     .doOnUnsubscribe(interaction.initiator().closer()).map(_FULLMSG_TO_STRING);
         }
@@ -499,7 +518,7 @@ public class MessageUtil {
                 return obsreq.doOnNext(DisposableWrapperUtil.disposeOnForAny(initiator));
             }
 
-            private Observable<? extends DisposableWrapper<HttpObject>> defineInteraction(final HttpInitiator initiator) {
+            private Observable<? extends Object> defineInteraction(final HttpInitiator initiator) {
                 return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator));
             }
 
@@ -511,8 +530,7 @@ public class MessageUtil {
                         .map(new Func1<HttpInitiator, Interaction>() {
                             @Override
                             public Interaction call(final HttpInitiator initiator) {
-                                final Observable<? extends DisposableWrapper<HttpObject>> interaction =
-                                        defineInteraction(initiator);
+                                final Observable<? extends Object> interaction = defineInteraction(initiator);
                                 return new Interaction() {
                                     @Override
                                     public HttpInitiator initiator() {
@@ -520,7 +538,7 @@ public class MessageUtil {
                                     }
 
                                     @Override
-                                    public Observable<? extends DisposableWrapper<HttpObject>> execute() {
+                                    public Observable<? extends Object> execute() {
                                         return interaction;
                                     }};
                             }

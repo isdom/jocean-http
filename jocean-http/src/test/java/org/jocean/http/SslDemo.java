@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Charsets;
 
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
@@ -29,12 +28,12 @@ public class SslDemo {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(SslDemo.class);
-    
-    public static void main(String[] args) throws Exception {
-        
+
+    public static void main(final String[] args) throws Exception {
+
         final SslContext sslCtx = SslContextBuilder.forClient().build();
         final Feature sslfeature = new Feature.ENABLE_SSL(sslCtx);
-        
+
         try (final HttpClient client = new DefaultHttpClient()) {
             {
                 final String host = "www.sina.com.cn";
@@ -45,13 +44,13 @@ public class SslDemo {
                 request.headers().set(HttpHeaderNames.HOST, host);
 
                 LOG.debug("send request:{}", request);
-              
-                final String content = sendRequestAndRecv(client, 
-                		host, 
-                		443, 
+
+                final String content = sendRequestAndRecv(client,
+                		host,
+                		443,
                 		request,
                         sslfeature,
-                        Feature.ENABLE_LOGGING,
+                        Feature.ENABLE_LOGGING_OVER_SSL,
                         Feature.ENABLE_COMPRESSOR
                         );
 //                LOG.info("recv:{}", content);
@@ -66,7 +65,7 @@ public class SslDemo {
                 request.headers().set(HttpHeaderNames.HOST, host);
 
                 LOG.debug("send request:{}", request);
-              
+
                 LOG.info("recv:{}", sendRequestAndRecv(client, request, host, sslfeature));
             }
             */
@@ -80,7 +79,7 @@ public class SslDemo {
                 request.headers().set(HttpHeaderNames.HOST, host);
 
                 LOG.debug("send request:{}", request);
-              
+
                 LOG.info("recv:{}", sendRequestAndRecv(client, request, host, sslfeature));
             }
             */
@@ -88,7 +87,7 @@ public class SslDemo {
     }
 
     private static String sendRequestAndRecv(final HttpClient client,
-            final String host, 
+            final String host,
             final int port,
             final DefaultFullHttpRequest request,
             final Feature... features) {
@@ -98,23 +97,23 @@ public class SslDemo {
                 .build()
                 .toBlocking()
                 .single();
-        
+
         final TrafficCounter counter = initiator.traffic();
         final String resp1 = sendAndRecv(initiator, request).toBlocking().single();
         LOG.debug("1 interaction: {}", resp1);
-        
+
         final String resp2 = sendAndRecv(initiator, request).toBlocking().single();
         LOG.debug("2 interaction: {}", resp2);
-        
+
         LOG.debug("upload {}/download {}", counter.outboundBytes(), counter.inboundBytes());
         initiator.close();
         return resp1 /* + resp2 */;
-        
+
 //        .flatMap(new Func1<HttpInitiator, Observable<String>>() {
 //            @Override
 //            public Observable<String> call(final HttpInitiator initiator) {
 //                final TrafficCounter counter = initiator.enable(APPLY.TRAFFICCOUNTER);
-//                
+//
 //                final Observable<String> respContent = sendAndRecv(initiator, request);
 //                return respContent.doOnUnsubscribe(new Action0() {
 //                    @Override
@@ -130,14 +129,15 @@ public class SslDemo {
             final HttpInitiator initiator,
             final DefaultFullHttpRequest request) {
         return initiator.defineInteraction(Observable.just(request))
+            .compose(MessageUtil.dwhWithAutoread())
             .compose(RxNettys.message2fullresp(initiator))
             .map(DisposableWrapperUtil.<FullHttpResponse>unwrap())
             .map(new Func1<FullHttpResponse, String>() {
                 @Override
-                public String call(FullHttpResponse resp) {
+                public String call(final FullHttpResponse resp) {
                     try {
                         return new String(Nettys.dumpByteBufAsBytes(resp.content()), Charsets.UTF_8);
-                    } catch (IOException e) {
+                    } catch (final IOException e) {
                         e.printStackTrace();
                         return null;
                     }
