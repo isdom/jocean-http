@@ -480,21 +480,26 @@ public class RxNettys {
         return new ProxyBuilder<>(LastHttpContent.class, msg).buildProxy();
     }
 
-    public static Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<HttpObject>>> splitdwhs() {
+    public static Func1<Object, Observable<? extends Object>> splitdwhs() {
         return SPLIT_DWHS;
     }
 
-    private final static Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<HttpObject>>> SPLIT_DWHS = new Func1<DisposableWrapper<HttpObject>, Observable<? extends DisposableWrapper<HttpObject>>>() {
+    private final static Func1<Object, Observable<? extends Object>> SPLIT_DWHS = new Func1<Object, Observable<? extends Object>>() {
         @Override
-        public Observable<? extends DisposableWrapper<HttpObject>> call(final DisposableWrapper<HttpObject> dwh) {
-            if (dwh.unwrap() instanceof FullHttpRequest) {
+        public Observable<? extends Object> call(final Object dwh) {
+            if (DisposableWrapperUtil.unwrap(dwh) instanceof FullHttpRequest) {
                 return Observable.just(
-                        DisposableWrapperUtil.<HttpObject>wrap(requestOf((HttpRequest) dwh.unwrap()), dwh),
-                        DisposableWrapperUtil.<HttpObject>wrap(lastContentOf((FullHttpMessage) dwh.unwrap()), dwh));
-            } else if (dwh.unwrap() instanceof FullHttpResponse) {
-                return Observable.just(
-                        DisposableWrapperUtil.<HttpObject>wrap(responseOf((HttpResponse) dwh.unwrap()), dwh),
-                        DisposableWrapperUtil.<HttpObject>wrap(lastContentOf((FullHttpMessage) dwh.unwrap()), dwh));
+                        DisposableWrapperUtil.<HttpObject>wrap(
+                                requestOf((HttpRequest) DisposableWrapperUtil.unwrap(dwh)), (DisposableWrapper<?>) dwh),
+                        DisposableWrapperUtil.<HttpObject>wrap(
+                                lastContentOf((FullHttpMessage) DisposableWrapperUtil.unwrap(dwh)),
+                                (DisposableWrapper<?>) dwh));
+            } else if (DisposableWrapperUtil.unwrap(dwh) instanceof FullHttpResponse) {
+                return Observable.just(DisposableWrapperUtil.<HttpObject>wrap(
+                        responseOf((HttpResponse) DisposableWrapperUtil.unwrap(dwh)), (DisposableWrapper<?>) dwh),
+                        DisposableWrapperUtil.<HttpObject>wrap(
+                                lastContentOf((FullHttpMessage) DisposableWrapperUtil.unwrap(dwh)),
+                                (DisposableWrapper<?>) dwh));
             } else {
                 return Observable.just(dwh);
             }
