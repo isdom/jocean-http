@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package org.jocean.http.server.impl;
 
@@ -60,14 +60,14 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             InternalLoggerFactory.setDefaultFactory(Slf4JLoggerFactory.INSTANCE);
         }
     }
-    
+
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpServerBuilder.class);
-    
+
     public void setMbeanSuffix(final String mbeanSuffix) {
         this._mbeanSuffix = mbeanSuffix;
     }
-    
+
     @Override
     public void setMBeanRegister(final MBeanRegister register) {
         register.registerMBean(this._mbeanSuffix, new HttpServerMXBean() {
@@ -81,27 +81,27 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             public int getWorkThreadCount() {
                 return _workThreadCount;
             }
-            
+
             @Override
             public int getCurrentInboundMemoryInBytes() {
                 return _currentInboundMemory.get();
             }
-            
+
             @Override
             public int getPeakInboundMemoryInBytes() {
                 return _peakInboundMemory.get();
             }
-            
+
             @Override
             public float getCurrentInboundMemoryInMBs() {
                 return getCurrentInboundMemoryInBytes() / (float)(1024 * 1024);
             }
-            
+
             @Override
             public float getPeakInboundMemoryInMBs() {
                 return getPeakInboundMemoryInBytes() / (float)(1024 * 1024);
             }
-            
+
             @Override
             public int getNumActiveTrades() {
                 return _trades.size();
@@ -111,22 +111,22 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             public long getNumStartedTrades() {
                 return _numStartedTrades.get();
             }
-            
+
             @Override
             public long getNumCompletedTrades() {
                 return _numCompletedTrades.get();
             }
-            
+
             @Override
             public String[] getAllActiveTrade() {
                 final List<String> infos = new ArrayList<>();
-                for (HttpTrade t : _trades) {
+                for (final HttpTrade t : _trades) {
                     infos.add(t.toString());
                 }
                 return infos.toArray(new String[0]);
             }});
     }
-    
+
     public int getInboundBlockSize() {
         return this._inboundBlockSize;
     }
@@ -142,32 +142,33 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
     public void setInboundRecvBufSize(final int inboundRecvBufSize) {
         this._inboundRecvBufSize = inboundRecvBufSize;
     }
-    
+
     private HttpTrade addToTrades(final HttpTrade trade) {
         this._trades.add(trade);
         return trade;
     }
-    
+
     private void removeFromTrades(final HttpTrade trade) {
         final boolean deleted = this._trades.remove(trade);
         if (deleted) {
 //            LOG.debug("trade{} has been erased.", trade);
         }
     }
-    
+
+    @Override
     public Observable<? extends HttpTrade> defineServer(
-            final SocketAddress localAddress, 
+            final SocketAddress localAddress,
             final Func0<Feature[]> featuresBuilder) {
         return defineServer(localAddress, featuresBuilder, (Feature[])null);
     }
-    
+
     @Override
     public Observable<? extends HttpTrade> defineServer(
             final SocketAddress localAddress,
             final Feature... features) {
         return defineServer(localAddress, null, features);
     }
-    
+
     private static abstract class Initializer extends ChannelInitializer<Channel> implements Ordered {
         @Override
         public String toString() {
@@ -178,9 +179,10 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             return -1000;
         }
     }
-    
+
+    @Override
     public Observable<? extends HttpTrade> defineServer(
-            final SocketAddress localAddress, 
+            final SocketAddress localAddress,
             final Func0<Feature[]> featuresBuilder,
             final Feature... features) {
         return Observable.unsafeCreate(new Observable.OnSubscribe<HttpTrade>() {
@@ -194,23 +196,23 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                         protected void initChannel(final Channel channel) throws Exception {
                             channel.config().setAutoRead(false);
                             if (LOG.isDebugEnabled()) {
-                                LOG.debug("dump inbound channel({})'s config: \n{}", 
+                                LOG.debug("dump inbound channel({})'s config: \n{}",
                                         channel, Nettys.dumpChannelConfig(channel.config()));
                             }
                             if ( _inboundRecvBufSize > 0) {
                                 if (LOG.isDebugEnabled()) {
                                     LOG.debug("channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
-                                            channel, 
-                                            channel.config().getOption(ChannelOption.SO_RCVBUF), 
+                                            channel,
+                                            channel.config().getOption(ChannelOption.SO_RCVBUF),
                                             _inboundRecvBufSize);
                                 }
                                 channel.config().setOption(ChannelOption.SO_RCVBUF, _inboundRecvBufSize);
                             }
-                            final Feature[] actualFeatures = JOArrays.addFirst(Feature[].class, 
+                            final Feature[] actualFeatures = JOArrays.addFirst(Feature[].class,
                                     featuresOf(featuresBuilder), features);
-                            final Feature[] applyFeatures = 
+                            final Feature[] applyFeatures =
                                     (null != actualFeatures && actualFeatures.length > 0 ) ? actualFeatures : _defaultFeatures;
-                            for (Feature feature : applyFeatures) {
+                            for (final Feature feature : applyFeatures) {
                                 if (feature instanceof FeatureOverChannelHandler) {
                                     ((FeatureOverChannelHandler)feature).call(_APPLY_BUILDER, channel.pipeline());
                                     if (LOG.isDebugEnabled()) {
@@ -231,7 +233,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                                 while (!awaitChannels.isEmpty()) {
                                     try {
                                         awaitChannels.remove(0).close();
-                                    } catch (Exception e) {
+                                    } catch (final Exception e) {
                                         LOG.warn("exception when remove all awaitChannels, detail: {}",
                                                 ExceptionUtils.exception2detail(e));
                                     }
@@ -243,7 +245,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                                 serverChannelAware.setServerChannel((ServerChannel)future.channel());
                             }
                         }
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         subscriber.onError(e);
                     }
                 }
@@ -253,20 +255,20 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
 
     private void awaitInboundRequest(
             final Channel channel,
-            final Subscriber<? super HttpTrade> subscriber, 
+            final Subscriber<? super HttpTrade> subscriber,
             final List<Channel> awaitChannels) {
         awaitChannels.add(channel);
-        Nettys.applyHandler(channel.pipeline(), HttpHandlers.ON_CHANNEL_READ, 
+        Nettys.applyHandler(channel.pipeline(), HttpHandlers.ON_CHANNEL_READ,
             new Action0() {
                 @Override
                 public void call() {
                     awaitChannels.remove(channel);
                     if (!subscriber.isUnsubscribed()) {
-                        final HttpTrade trade = httpTradeOf(channel, 
+                        final HttpTrade trade = httpTradeOf(channel,
                                 doRecycleChannel(channel, subscriber, awaitChannels),
                                 new Action1<HttpTrade>() {
                                     @Override
-                                    public void call(HttpTrade t) {
+                                    public void call(final HttpTrade t) {
                                         _numCompletedTrades.incrementAndGet();
                                     }}
                                 );
@@ -288,7 +290,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
         final int current = this._currentInboundMemory.addAndGet(delta);
         if (delta > 0) {
             boolean updated = false;
-            
+
             do {
                 // try to update peak memory value
                 final int peak = this._peakInboundMemory.get();
@@ -300,22 +302,22 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             } while (!updated);
         }
     }
-    
+
     @SafeVarargs
-    private final HttpTrade httpTradeOf(final Channel channel, 
+    private final HttpTrade httpTradeOf(final Channel channel,
         final Action1<HttpTrade> ... onTerminates) {
         this._numStartedTrades.incrementAndGet();
-        final DefaultHttpTrade trade = new DefaultHttpTrade(channel, this._inboundBlockSize);
-        
+        final DefaultHttpTrade trade = new DefaultHttpTrade(channel /*, this._inboundBlockSize*/ );
+
         addToTrades(trade);
-        for (Action1<HttpTrade> onTerminate : onTerminates) {
+        for (final Action1<HttpTrade> onTerminate : onTerminates) {
             trade.doOnTerminate(onTerminate);
         }
-        
+
 //        trade.inboundHolder().setMaxBlockSize(this._inboundBlockSize);
-        
+
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
-        
+
         /* TBD FIX TODO
         trade.inbound().subscribe(new Action1<HttpObject>() {
             @Override
@@ -336,10 +338,10 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             }});
         return trade;
     }
-    
+
     private Action1<HttpTrade> doRecycleChannel(
             final Channel channel,
-            final Subscriber<? super HttpTrade> subscriber, 
+            final Subscriber<? super HttpTrade> subscriber,
             final List<Channel> awaitChannels) {
         return new Action1<HttpTrade>() {
             @Override
@@ -356,34 +358,34 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                 }
             }};
     }
-    
+
     public DefaultHttpServerBuilder() {
         this(1, 0, Feature.EMPTY_FEATURES);
     }
-    
+
     public DefaultHttpServerBuilder(
-            final int processThreadNumberForAccept, 
+            final int processThreadNumberForAccept,
             final int processThreadNumberForWork
             ) {
         this(processThreadNumberForAccept, processThreadNumberForWork, Feature.EMPTY_FEATURES);
     }
-    
+
     public DefaultHttpServerBuilder(
-            final int processThreadNumberForAccept, 
+            final int processThreadNumberForAccept,
             final int processThreadNumberForWork,
             final Feature... defaultFeatures) {
         this(new AbstractBootstrapCreator(
-                new NioEventLoopGroup(processThreadNumberForAccept), 
+                new NioEventLoopGroup(processThreadNumberForAccept),
                 new NioEventLoopGroup(processThreadNumberForWork)) {
             @Override
-            protected void initializeBootstrap(ServerBootstrap bootstrap) {
+            protected void initializeBootstrap(final ServerBootstrap bootstrap) {
                 bootstrap.option(ChannelOption.SO_BACKLOG, 1024);
                 bootstrap.channel(NioServerSocketChannel.class);
             }}, defaultFeatures);
         this._acceptThreadCount = processThreadNumberForAccept;
         this._workThreadCount = processThreadNumberForWork;
     }
-    
+
     public DefaultHttpServerBuilder(
             final BootstrapCreator creator,
             final Feature... defaultFeatures) {
@@ -395,28 +397,28 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
     public void close() throws IOException {
         this._creator.close();
     }
-    
+
     private static Feature[] featuresOf(final Func0<Feature[]> featuresBuilder) {
         return null != featuresBuilder ? featuresBuilder.call() : null;
     }
-    
+
     private static ServerChannelAware serverChannelAwareOf(
             final Feature[] applyFeatures) {
-        final ServerChannelAware serverChannelAware = 
-                InterfaceUtils.compositeIncludeType(ServerChannelAware.class, 
+        final ServerChannelAware serverChannelAware =
+                InterfaceUtils.compositeIncludeType(ServerChannelAware.class,
                     (Object[])applyFeatures);
         return serverChannelAware;
     }
 
     private final BootstrapCreator _creator;
     private final Feature[] _defaultFeatures;
-    
+
     private int _inboundRecvBufSize = -1;
     private int _inboundBlockSize = 0;
     private String _mbeanSuffix;
-    
+
     private static final Feature2Handler _APPLY_BUILDER;
-    
+
     private final AtomicLong     _numStartedTrades = new AtomicLong(0);
     private final AtomicLong     _numCompletedTrades = new AtomicLong(0);
     private final Set<HttpTrade> _trades = new ConcurrentSkipListSet<HttpTrade>();
@@ -424,7 +426,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
     private final AtomicInteger  _peakInboundMemory = new AtomicInteger(0);
     private int _acceptThreadCount = 0;
     private int _workThreadCount = 0;
-        
+
     static {
         _APPLY_BUILDER = new Feature2Handler();
         _APPLY_BUILDER.register(Feature.ENABLE_LOGGING.getClass(), HttpHandlers.LOGGING);
