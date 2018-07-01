@@ -28,10 +28,10 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import rx.Observable;
+import rx.Observable.Transformer;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action1;
-import rx.functions.Func0;
 import rx.functions.Func1;
 
 /**
@@ -64,12 +64,15 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
 
     @Override
     public Observable<? extends Object> inbound() {
+        return this._obsRequest;
+        /*
         return request().flatMap(new Func1<HttpRequest, Observable<Object>>() {
             @Override
             public Observable<Object> call(final HttpRequest req) {
                 return Observable.from(_inboundForepart).concatWith(_sharedRawInbound).map(_DUPLICATE_CONTENT);
             }
         });
+        */
     }
 
     @Override
@@ -88,6 +91,39 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
         }
 
+        this._obsRequest = rawInbound()
+                .compose(new Transformer<Object, Object>() {
+                    @Override
+                    public Observable<Object> call(final Observable<Object> org) {
+                        return org.doOnNext(new Action1<Object>() {
+                            @Override
+                            public void call(final Object obj) {
+                                if (obj instanceof ReadComplete) {
+                                    ((ReadComplete)obj).readInbound();
+                                }
+                            }}).filter(new Func1<Object, Boolean>() {
+                                @Override
+                                public Boolean call(final Object obj) {
+                                    return !(obj instanceof ReadComplete);
+                                }});
+                    }})
+                .cache().doOnNext(new Action1<Object>() {
+            @Override
+            public void call(final Object obj) {
+                if (obj instanceof DisposableWrapper && ((DisposableWrapper<?>)obj).isDisposed()) {
+                    throw new RuntimeException("httpobject wrapper is disposed!");
+                }
+            }
+        }).map(_DUPLICATE_CONTENT);
+
+        this._obsRequest.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
+            @Override
+            public void call(final Throwable e) {
+                LOG.warn("HttpTrade: {}'s inbound with onError {}", this, errorAsString(e));
+            }
+        });
+
+        /*
         this._sharedRawInbound = rawInbound().share();
         this._cachedRequest = this._sharedRawInbound.flatMap(new Func1<Object, Observable<HttpRequest>>() {
             @Override
@@ -112,11 +148,13 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
         }, new Func1<Throwable, Observable<HttpRequest>>() {
             @Override
             public Observable<HttpRequest> call(final Throwable e) {
+                LOG.warn("recv request, and cache full request");
                 return Observable.error(e);
             }
         }, new Func0<Observable<HttpRequest>>() {
             @Override
             public Observable<HttpRequest> call() {
+                LOG.info("recv full request, and cache full request");
                 return torequest(_inboundForepart, _sharedRawInbound);
             }
         }).first().cache();
@@ -127,6 +165,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
                 LOG.warn("HttpTrade: {}'s cached request with onError {}", this, errorAsString(e));
             }
         });
+        */
     }
 
     private Observable<HttpRequest> torequest(final List<Object> inboundForepart,
@@ -263,11 +302,13 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final int STATUS_RECV_END = 2;
     private static final int STATUS_SEND = 3;
 
+    private final Observable<? extends Object> _obsRequest;
+
     private final List<Object> _inboundForepart = new ArrayList<>();
 
-    private final Observable<? extends Object> _sharedRawInbound;
+    private Observable<? extends Object> _sharedRawInbound;
 
-    private final Observable<? extends HttpRequest> _cachedRequest;
+    private Observable<? extends HttpRequest> _cachedRequest;
 
     private volatile boolean _isKeepAlive = false;
 
