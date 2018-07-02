@@ -42,6 +42,8 @@ public interface HttpServerBuilder extends Closeable {
     public interface HttpTrade
         extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpTrade> {
 
+        public Observable<? extends Object> inboundCompleted();
+
         public Observable<? extends HttpRequest> request();
 
         public Observable<? extends Object> inbound();

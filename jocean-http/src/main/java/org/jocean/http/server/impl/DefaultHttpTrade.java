@@ -30,9 +30,12 @@ import io.netty.handler.codec.http.HttpUtil;
 import rx.Observable;
 import rx.Subscriber;
 import rx.Subscription;
+import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
+import rx.subscriptions.CompositeSubscription;
+import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -56,6 +59,25 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             }
         }
     };
+
+    private final CompositeSubscription _inboundCompleted = new CompositeSubscription();
+    private static final Object IC_NOTIFIY = new Object();
+
+    @Override
+    public Observable<? extends Object> inboundCompleted() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
+            @Override
+            public void call(final Subscriber<? super Object> subscriber) {
+                _inboundCompleted.add(Subscriptions.create(new Action0() {
+                    @Override
+                    public void call() {
+                        if (!subscriber.isUnsubscribed()) {
+                            subscriber.onNext(IC_NOTIFIY);
+                            subscriber.onCompleted();
+                        }
+                    }}));
+            }});
+    }
 
     @Override
     public Observable<? extends HttpRequest> request() {
@@ -176,9 +198,14 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
 
     private void buildInbound(final List<Object> inboundForepart, final Observable<? extends Object> sharedRawInbound) {
         if (null != sharedRawInbound) {
-            sharedRawInbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
+            sharedRawInbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError(), new Action0() {
+                @Override
+                public void call() {
+                    _inboundCompleted.unsubscribe();
+                }});
             this._inbound = Observable.from(inboundForepart).concatWith(sharedRawInbound).map(_DUPLICATE_CONTENT);
         } else {
+            this._inboundCompleted.unsubscribe();
             this._inbound = Observable.from(inboundForepart).map(_DUPLICATE_CONTENT);
         }
     }
