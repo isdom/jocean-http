@@ -28,10 +28,10 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import rx.Observable;
-import rx.Observable.Transformer;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action1;
+import rx.functions.Func0;
 import rx.functions.Func1;
 
 /**
@@ -64,15 +64,12 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
 
     @Override
     public Observable<? extends Object> inbound() {
-        return this._obsRequest;
-        /*
-        return request().flatMap(new Func1<HttpRequest, Observable<Object>>() {
+        return request().flatMap(new Func1<HttpRequest, Observable<? extends Object>>() {
             @Override
-            public Observable<Object> call(final HttpRequest req) {
-                return Observable.from(_inboundForepart).concatWith(_sharedRawInbound).map(_DUPLICATE_CONTENT);
+            public Observable<? extends Object> call(final HttpRequest req) {
+                return _inbound;
             }
         });
-        */
     }
 
     @Override
@@ -91,7 +88,8 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
         }
 
-        this._obsRequest = rawInbound()
+        /*
+        this._inbound = rawInbound()
                 .compose(new Transformer<Object, Object>() {
                     @Override
                     public Observable<Object> call(final Observable<Object> org) {
@@ -116,31 +114,35 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             }
         }).map(_DUPLICATE_CONTENT);
 
-        this._obsRequest.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
+        this._inbound.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
             @Override
             public void call(final Throwable e) {
                 LOG.warn("HttpTrade: {}'s inbound with onError {}", this, errorAsString(e));
             }
         });
+        */
 
-        /*
-        this._sharedRawInbound = rawInbound().share();
-        this._cachedRequest = this._sharedRawInbound.flatMap(new Func1<Object, Observable<HttpRequest>>() {
+        final List<Object> inboundForepart = new ArrayList<>();
+
+        final Observable<? extends Object> sharedRawInbound = rawInbound().share();
+
+        this._cachedRequest = sharedRawInbound.flatMap(new Func1<Object, Observable<HttpRequest>>() {
             @Override
             public Observable<HttpRequest> call(final Object obj) {
                 if (obj instanceof ReadComplete) {
-                    if (_inboundForepart.isEmpty()) {
+                    if (inboundForepart.isEmpty()) {
                         // keep reading until get valid http request
                         LOG.info("readComplete without valid http request, continue read inbound");
                         ((ReadComplete) obj).readInbound();
                         return Observable.empty();
                     } else {
                         LOG.info("recv part request, and try to cache request");
-                        _inboundForepart.add(obj);
-                        return torequest(_inboundForepart, _sharedRawInbound);
+                        inboundForepart.add(obj);
+                        buildInbound(inboundForepart, sharedRawInbound);
+                        return torequest(inboundForepart);
                     }
                 } else {
-                    _inboundForepart.add(obj);
+                    inboundForepart.add(obj);
                     LOG.info("recv valid http request content {}, recv rest until readComplete.", obj);
                     return Observable.empty();
                 }
@@ -155,7 +157,8 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             @Override
             public Observable<HttpRequest> call() {
                 LOG.info("recv full request, and cache full request");
-                return torequest(_inboundForepart, _sharedRawInbound);
+                buildInbound(inboundForepart, null);
+                return torequest(inboundForepart);
             }
         }).first().cache();
 
@@ -165,14 +168,19 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
                 LOG.warn("HttpTrade: {}'s cached request with onError {}", this, errorAsString(e));
             }
         });
-        */
     }
 
-    private Observable<HttpRequest> torequest(final List<Object> inboundForepart,
-            final Observable<? extends Object> sharedRawInbound) {
-        sharedRawInbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
-
+    private Observable<HttpRequest> torequest(final List<Object> inboundForepart) {
         return Observable.just((HttpRequest)DisposableWrapperUtil.unwrap(inboundForepart.get(0)) );
+    }
+
+    private void buildInbound(final List<Object> inboundForepart, final Observable<? extends Object> sharedRawInbound) {
+        if (null != sharedRawInbound) {
+            sharedRawInbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
+            this._inbound = Observable.from(inboundForepart).concatWith(sharedRawInbound).map(_DUPLICATE_CONTENT);
+        } else {
+            this._inbound = Observable.from(inboundForepart).map(_DUPLICATE_CONTENT);
+        }
     }
 
     private Observable<? extends Object> rawInbound() {
@@ -302,13 +310,9 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final int STATUS_RECV_END = 2;
     private static final int STATUS_SEND = 3;
 
-    private final Observable<? extends Object> _obsRequest;
+    private Observable<? extends Object> _inbound;
 
-    private final List<Object> _inboundForepart = new ArrayList<>();
-
-    private Observable<? extends Object> _sharedRawInbound;
-
-    private Observable<? extends HttpRequest> _cachedRequest;
+    private final Observable<? extends HttpRequest> _cachedRequest;
 
     private volatile boolean _isKeepAlive = false;
 

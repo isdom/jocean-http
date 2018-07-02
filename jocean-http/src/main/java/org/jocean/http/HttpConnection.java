@@ -556,6 +556,8 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             final Subscriber<Object> outboundSubscriber = buildOutboundSubscriber();
             final Subscription subscription = outbound.subscribe(outboundSubscriber);
             outboundSubscriptionUpdater.set(this, subscription);
+            //  TODO:
+            //  when outbound unsubscribe early, how to do (close HttpConnection instance ?)
             outboundSubscriber.add(Subscriptions.create(new Action0() {
                 @Override
                 public void call() {

@@ -90,7 +90,11 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
 
     private void doOnUnsubscribeResponse(final Subscriber<? super Object> subscriber) {
         if (unholdInboundAndUninstallHandler(subscriber)) {
-            // unsubscribe before OnCompleted or OnError
+            // when OnCompleted or OnError trigger unsubscribe,
+            //      unholdInboundAndUninstallHandler will invoked already,
+            //      so now call unholdInboundAndUninstallHandler will return false
+            // if invoke unholdInboundAndUninstallHandler return true
+            //      it means unsubscribe before OnCompleted or OnError
             fireClosed(new RuntimeException("unsubscribe response"));
         }
     }
