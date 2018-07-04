@@ -15,6 +15,7 @@ import org.jocean.http.WriteCtrl;
 import org.jocean.idiom.TerminateAware;
 
 import io.netty.handler.codec.http.HttpRequest;
+import rx.Completable;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -42,7 +43,7 @@ public interface HttpServerBuilder extends Closeable {
     public interface HttpTrade
         extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpTrade> {
 
-        public Observable<? extends Object> inboundCompleted();
+        public Completable inboundCompleted();
 
         public Observable<? extends HttpRequest> request();
 

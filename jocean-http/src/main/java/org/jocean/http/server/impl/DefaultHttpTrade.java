@@ -27,6 +27,8 @@ import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
+import rx.Completable;
+import rx.CompletableSubscriber;
 import rx.Observable;
 import rx.Subscriber;
 import rx.Subscription;
@@ -61,20 +63,16 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     };
 
     private final CompositeSubscription _inboundCompleted = new CompositeSubscription();
-    private static final Object IC_NOTIFIY = new Object();
 
     @Override
-    public Observable<? extends Object> inboundCompleted() {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
+    public Completable inboundCompleted() {
+        return Completable.create(new Completable.OnSubscribe() {
             @Override
-            public void call(final Subscriber<? super Object> subscriber) {
+            public void call(final CompletableSubscriber subscriber) {
                 _inboundCompleted.add(Subscriptions.create(new Action0() {
                     @Override
                     public void call() {
-                        if (!subscriber.isUnsubscribed()) {
-                            subscriber.onNext(IC_NOTIFIY);
-                            subscriber.onCompleted();
-                        }
+                        subscriber.onCompleted();
                     }}));
             }});
     }
