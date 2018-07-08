@@ -7,12 +7,12 @@ import rx.Observable;
 import rx.functions.Func1;
 
 public class HttpSliceUtil {
-    public static Observable<DisposableWrapper<? extends HttpObject>> slice2dwhs(final HttpSlice current) {
+    public static Observable<DisposableWrapper<? extends HttpObject>> elementAndSucceed(final HttpSlice current) {
         return Observable.concat(current.element(),
                 current.next().flatMap(new Func1<HttpSlice, Observable<DisposableWrapper<? extends HttpObject>>>() {
                     @Override
                     public Observable<DisposableWrapper<? extends HttpObject>> call(final HttpSlice next) {
-                        return slice2dwhs(next);
+                        return elementAndSucceed(next);
                     }
                 }));
     }
