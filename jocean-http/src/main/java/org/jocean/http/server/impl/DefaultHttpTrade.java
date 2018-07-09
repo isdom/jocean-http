@@ -75,7 +75,8 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
         return inbound().flatMap(new Func1<HttpSlice, Observable<HttpRequest>>() {
             @Override
             public Observable<HttpRequest> call(final HttpSlice slice) {
-                return slice.element().map(DisposableWrapperUtil.unwrap()).compose(RxNettys.asHttpRequest());
+                return slice.element().map(DisposableWrapperUtil.<HttpObject>unwrap())
+                        .compose(RxNettys.asHttpRequest());
             }});
     }
 
