@@ -43,9 +43,8 @@ public class HttpServerForCloopen {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-//                    final HttpMessageHolder holder = new HttpMessageHolder();
                     trade.outbound(trade.inbound()
-                            .compose(MessageUtil.dwhWithAutoread())
+                            .compose(MessageUtil.rollout2dwhs())
                             .compose(RxNettys.message2fullreq(trade))
                             .map(DisposableWrapperUtil.<FullHttpRequest>unwrap()).map(new Func1<FullHttpRequest, HttpObject>() {
                                 @Override

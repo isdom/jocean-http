@@ -74,27 +74,23 @@ public class MessageUtil {
     private static final Logger LOG =
             LoggerFactory.getLogger(MessageUtil.class);
 
-    final static private Func1<Object, DisposableWrapper<HttpObject>> OBJ_TO_DWH =
-        new Func1<Object, DisposableWrapper<HttpObject>>() {
-            @SuppressWarnings("unchecked")
+    final static private Transformer<HttpSlice, DisposableWrapper<? extends HttpObject>> ROLLOUT_TO_DWHS =
+        new Transformer<HttpSlice, DisposableWrapper<? extends HttpObject>>() {
             @Override
-            public DisposableWrapper<HttpObject> call(final Object obj) {
-                return (DisposableWrapper<HttpObject>)obj;
-            }};
-
-    final static private Transformer<Object, DisposableWrapper<HttpObject>> AUTOREAD_AND_TODWH =
-        new Transformer<Object, DisposableWrapper<HttpObject>>() {
-            @Override
-            public Observable<DisposableWrapper<HttpObject>> call(final Observable<Object> org) {
-                return org.compose(ReadComplete.Util.autoread()).map(OBJ_TO_DWH);
+            public Observable<DisposableWrapper<? extends HttpObject>> call(final Observable<HttpSlice> org) {
+                return org.flatMap(new Func1<HttpSlice, Observable<DisposableWrapper<? extends HttpObject>>>() {
+                    @Override
+                    public Observable<DisposableWrapper<? extends HttpObject>> call(final HttpSlice slice) {
+                        return HttpSliceUtil.elementAndSucceed(slice);
+                    }});
             }};
 
     private MessageUtil() {
         throw new IllegalStateException("No instances!");
     }
 
-    public static Transformer<Object, DisposableWrapper<HttpObject>> dwhWithAutoread() {
-        return AUTOREAD_AND_TODWH;
+    public static Transformer<HttpSlice, DisposableWrapper<? extends HttpObject>> rollout2dwhs() {
+        return ROLLOUT_TO_DWHS;
     }
 
     public static Func0<DisposableWrapper<ByteBuf>> pooledAllocator(final Terminable terminable, final int pageSize) {
@@ -322,7 +318,7 @@ public class MessageUtil {
                 return obsinteraction.flatMap(new Func1<Interaction, Observable<RESP>>() {
                     @Override
                     public Observable<RESP> call(final Interaction interaction) {
-                        return interaction.execute().compose(dwhWithAutoread())
+                        return interaction.execute().compose(rollout2dwhs())
                                 .compose(RxNettys.message2fullresp(interaction.initiator(), true))
                                 .doOnUnsubscribe(interaction.initiator().closer())
                                 .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
@@ -355,7 +351,7 @@ public class MessageUtil {
     private static final Func1<Interaction, Observable<String>> _INTERACTION_TO_OBS_STRING = new Func1<Interaction, Observable<String>>() {
         @Override
         public Observable<String> call(final Interaction interaction) {
-            return interaction.execute().compose(dwhWithAutoread())
+            return interaction.execute().compose(rollout2dwhs())
                     .compose(RxNettys.message2fullresp(interaction.initiator(), true))
                     .doOnUnsubscribe(interaction.initiator().closer()).map(_FULLMSG_TO_STRING);
         }
@@ -518,7 +514,7 @@ public class MessageUtil {
                 return obsreq.doOnNext(DisposableWrapperUtil.disposeOnForAny(initiator));
             }
 
-            private Observable<? extends Object> defineInteraction(final HttpInitiator initiator) {
+            private Observable<? extends HttpSlice> defineInteraction(final HttpInitiator initiator) {
                 return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator));
             }
 
@@ -530,7 +526,7 @@ public class MessageUtil {
                         .map(new Func1<HttpInitiator, Interaction>() {
                             @Override
                             public Interaction call(final HttpInitiator initiator) {
-                                final Observable<? extends Object> interaction = defineInteraction(initiator);
+                                final Observable<? extends HttpSlice> interaction = defineInteraction(initiator);
                                 return new Interaction() {
                                     @Override
                                     public HttpInitiator initiator() {
@@ -538,7 +534,7 @@ public class MessageUtil {
                                     }
 
                                     @Override
-                                    public Observable<? extends Object> execute() {
+                                    public Observable<? extends HttpSlice> execute() {
                                         return interaction;
                                     }};
                             }

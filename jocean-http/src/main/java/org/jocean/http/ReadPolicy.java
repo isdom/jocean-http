@@ -1,13 +1,9 @@
 package org.jocean.http;
 
+import org.jocean.http.Inbound.Intraffic;
+
 import rx.Single;
 
 public interface ReadPolicy {
     public Single<?> whenToRead(final Intraffic intraffic);
-
-    public interface Intraffic {
-        public long durationFromRead();
-        public long durationFromBegin();
-        public long inboundBytes();
-    }
 }

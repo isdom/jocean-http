@@ -4,18 +4,15 @@
 package org.jocean.http.server.impl;
 
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.HttpConnection;
-import org.jocean.http.ReadComplete;
+import org.jocean.http.HttpSlice;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.idiom.DisposableWrapper;
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapperUtil;
-import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,18 +20,14 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import rx.Completable;
 import rx.CompletableSubscriber;
 import rx.Observable;
-import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
-import rx.functions.Action1;
-import rx.functions.Func0;
 import rx.functions.Func1;
 import rx.subscriptions.CompositeSubscription;
 import rx.subscriptions.Subscriptions;
@@ -49,18 +42,18 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
 
-    private static final Func1<Object, Object> _DUPLICATE_CONTENT = new Func1<Object, Object>() {
-        @Override
-        public Object call(final Object obj) {
-            if ((obj instanceof DisposableWrapper)
-                && (DisposableWrapperUtil.unwrap(obj) instanceof HttpContent)) {
-                return DisposableWrapperUtil.<HttpObject>wrap(((HttpContent) DisposableWrapperUtil.unwrap(obj)).duplicate(),
-                        (DisposableWrapper<?>)obj);
-            } else {
-                return obj;
-            }
-        }
-    };
+//    private static final Func1<Object, Object> _DUPLICATE_CONTENT = new Func1<Object, Object>() {
+//        @Override
+//        public Object call(final Object obj) {
+//            if ((obj instanceof DisposableWrapper)
+//                && (DisposableWrapperUtil.unwrap(obj) instanceof HttpContent)) {
+//                return DisposableWrapperUtil.<HttpObject>wrap(((HttpContent) DisposableWrapperUtil.unwrap(obj)).duplicate(),
+//                        (DisposableWrapper<?>)obj);
+//            } else {
+//                return obj;
+//            }
+//        }
+//    };
 
     private final CompositeSubscription _inboundCompleted = new CompositeSubscription();
 
@@ -79,17 +72,16 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
 
     @Override
     public Observable<? extends HttpRequest> request() {
-        return this._cachedRequest;
+        return inbound().flatMap(new Func1<HttpSlice, Observable<HttpRequest>>() {
+            @Override
+            public Observable<HttpRequest> call(final HttpSlice slice) {
+                return slice.element().map(DisposableWrapperUtil.unwrap()).compose(RxNettys.asHttpRequest());
+            }});
     }
 
     @Override
-    public Observable<? extends Object> inbound() {
-        return request().flatMap(new Func1<HttpRequest, Observable<? extends Object>>() {
-            @Override
-            public Observable<? extends Object> call(final HttpRequest req) {
-                return _inbound;
-            }
-        });
+    public Observable<? extends HttpSlice> inbound() {
+        return this._cachedInbound;
     }
 
     @Override
@@ -108,113 +100,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
         }
 
-        /*
-        this._inbound = rawInbound()
-                .compose(new Transformer<Object, Object>() {
-                    @Override
-                    public Observable<Object> call(final Observable<Object> org) {
-                        return org.doOnNext(new Action1<Object>() {
-                            @Override
-                            public void call(final Object obj) {
-                                if (obj instanceof ReadComplete) {
-                                    ((ReadComplete)obj).readInbound();
-                                }
-                            }}).filter(new Func1<Object, Boolean>() {
-                                @Override
-                                public Boolean call(final Object obj) {
-                                    return !(obj instanceof ReadComplete);
-                                }});
-                    }})
-                .cache().doOnNext(new Action1<Object>() {
-            @Override
-            public void call(final Object obj) {
-                if (obj instanceof DisposableWrapper && ((DisposableWrapper<?>)obj).isDisposed()) {
-                    throw new RuntimeException("httpobject wrapper is disposed!");
-                }
-            }
-        }).map(_DUPLICATE_CONTENT);
-
-        this._inbound.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
-            @Override
-            public void call(final Throwable e) {
-                LOG.warn("HttpTrade: {}'s inbound with onError {}", this, errorAsString(e));
-            }
-        });
-        */
-
-        final List<Object> inboundForepart = new ArrayList<>();
-
-        final Observable<? extends Object> sharedRawInbound = rawInbound().share();
-
-        this._cachedRequest = sharedRawInbound.flatMap(new Func1<Object, Observable<HttpRequest>>() {
-            @Override
-            public Observable<HttpRequest> call(final Object obj) {
-                if (obj instanceof ReadComplete) {
-                    if (inboundForepart.isEmpty()) {
-                        // keep reading until get valid http request
-                        LOG.info("readComplete without valid http request, continue read inbound");
-                        ((ReadComplete) obj).readInbound();
-                        return Observable.empty();
-                    } else {
-                        LOG.info("recv part request, and try to cache request");
-                        inboundForepart.add(obj);
-                        buildInbound(inboundForepart, sharedRawInbound);
-                        return torequest(inboundForepart);
-                    }
-                } else {
-                    inboundForepart.add(obj);
-                    LOG.info("recv valid http request content {}, recv rest until readComplete.", obj);
-                    return Observable.empty();
-                }
-            }
-        }, new Func1<Throwable, Observable<HttpRequest>>() {
-            @Override
-            public Observable<HttpRequest> call(final Throwable e) {
-                LOG.warn("recv request, and cache full request");
-                return Observable.error(e);
-            }
-        }, new Func0<Observable<HttpRequest>>() {
-            @Override
-            public Observable<HttpRequest> call() {
-                LOG.info("recv full request, and cache full request");
-                buildInbound(inboundForepart, null);
-                return torequest(inboundForepart);
-            }
-        }).first().cache();
-
-        this._cachedRequest.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
-            @Override
-            public void call(final Throwable e) {
-                LOG.warn("HttpTrade: {}'s cached request with onError {}", this, errorAsString(e));
-            }
-        });
-    }
-
-    private Observable<HttpRequest> torequest(final List<Object> inboundForepart) {
-        return Observable.just((HttpRequest)DisposableWrapperUtil.unwrap(inboundForepart.get(0)) );
-    }
-
-    private void buildInbound(final List<Object> inboundForepart, final Observable<? extends Object> sharedRawInbound) {
-        if (null != sharedRawInbound) {
-            sharedRawInbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError(), new Action0() {
-                @Override
-                public void call() {
-                    _inboundCompleted.unsubscribe();
-                }});
-            this._inbound = Observable.from(inboundForepart).concatWith(sharedRawInbound).map(_DUPLICATE_CONTENT);
-        } else {
-            this._inboundCompleted.unsubscribe();
-            this._inbound = Observable.from(inboundForepart).map(_DUPLICATE_CONTENT);
-        }
-    }
-
-    private Observable<? extends Object> rawInbound() {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
-            @Override
-            public void call(final Subscriber<? super Object> subscriber) {
-                holdInboundAndInstallHandler(subscriber);
-            }
-        });
+        this._cachedInbound = nextSlice().cache();
     }
 
     @Override
@@ -231,16 +117,9 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     }
 
     @Override
-    protected boolean needRead() {
-        return inRecving();
-    }
-
-    @Override
     protected void onInboundMessage(final HttpObject inmsg) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("HttpTrade: channel({}) invoke channelRead0 and call with msg({}).",
-                this._channel, inmsg);
-        }
+        LOG.debug("{} read msg({}).", this, inmsg);
+
         startRecving();
         if (inmsg instanceof HttpRequest) {
             onHttpRequest((HttpRequest)inmsg);
@@ -256,13 +135,13 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     @Override
     protected void onInboundCompleted() {
         endofRecving();
+        this._inboundCompleted.unsubscribe();
     }
 
     @Override
     protected void beforeSendingOutbound(final Object outmsg) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("sending http response msg {}", outmsg);
-        }
+        LOG.debug("{} sending response msg({})", this, outmsg);
+
         // set in transacting flag
         startSending();
     }
@@ -286,8 +165,8 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             @Override
             public void operationComplete(final ChannelFuture future)
                     throws Exception {
-                endofTransaction();
                 if (future.isSuccess()) {
+                    endofTransaction();
                     // close normally
                     close();
                 } else {
@@ -300,6 +179,11 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
         transferStatus(STATUS_IDLE, STATUS_RECV);
     }
 
+    //  TODO:
+    //  when 100 continue income
+    //      we need first response by 100 ok
+    //      then trade should continue receiving income
+    //  https://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html#sec8.2.3
     private void endofRecving() {
         transferStatus(STATUS_RECV, STATUS_RECV_END);
     }
@@ -310,10 +194,6 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
 
     private void endofTransaction() {
         transferStatus(STATUS_SEND, STATUS_IDLE);
-    }
-
-    private boolean inRecving() {
-        return transactionStatus() == STATUS_RECV;
     }
 
     private String transactionStatusAsString() {
@@ -335,9 +215,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final int STATUS_RECV_END = 2;
     private static final int STATUS_SEND = 3;
 
-    private Observable<? extends Object> _inbound;
-
-    private final Observable<? extends HttpRequest> _cachedRequest;
+    private final Observable<? extends HttpSlice> _cachedInbound;
 
     private volatile boolean _isKeepAlive = false;
 

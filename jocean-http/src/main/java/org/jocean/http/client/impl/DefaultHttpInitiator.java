@@ -8,9 +8,11 @@ import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.HttpConnection;
+import org.jocean.http.HttpSlice;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.Nettys;
+import org.jocean.idiom.rx.RxObservables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,10 +23,8 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import rx.Observable;
-import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
-import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -37,12 +37,14 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
             LoggerFactory.getLogger(DefaultHttpInitiator.class);
 
     @Override
-    public Observable<? extends Object> defineInteraction(final Observable<? extends Object> request) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<Object>() {
+    public Observable<? extends HttpSlice> defineInteraction(final Observable<? extends Object> request) {
+        return nextSlice().doOnSubscribe(new Action0() {
             @Override
-            public void call(final Subscriber<? super Object> subscriber) {
-                _op.subscribeResponse(DefaultHttpInitiator.this, request, subscriber);
-            }});
+            public void call() {
+                readMessage();
+                setOutbound(wrapRequest(request));
+            }
+        }).compose(RxObservables.<HttpSlice>ensureSubscribeAtmostOnce());
     }
 
     Channel channel() {
@@ -55,29 +57,6 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
 
     DefaultHttpInitiator(final Channel channel) {
         super(channel);
-
-        this._op = this._selector.build(Op.class, OP_ACTIVE, OP_UNACTIVE);
-    }
-
-    private void subscribeResponse(
-            final Observable<? extends Object> obsRequest,
-            final Subscriber<? super Object> subscriber) {
-        if (subscriber.isUnsubscribed()) {
-            LOG.info("response subscriber ({}) has been unsubscribed, ignore",
-                    subscriber);
-            return;
-        }
-        if (holdInboundAndInstallHandler(subscriber)) {
-            setOutbound(wrapRequest(obsRequest));
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _op.doOnUnsubscribeResponse(DefaultHttpInitiator.this, subscriber);
-                }}));
-        } else {
-            // _respSubscriber field has already setted
-            subscriber.onError(new RuntimeException("Transaction in progress"));
-        }
     }
 
     private Observable<? extends Object> wrapRequest(final Observable<? extends Object> request) {
@@ -88,31 +67,13 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
         }
     }
 
-    private void doOnUnsubscribeResponse(final Subscriber<? super Object> subscriber) {
-        if (unholdInboundAndUninstallHandler(subscriber)) {
-            // when OnCompleted or OnError trigger unsubscribe,
-            //      unholdInboundAndUninstallHandler will invoked already,
-            //      so now call unholdInboundAndUninstallHandler will return false
-            // if invoke unholdInboundAndUninstallHandler return true
-            //      it means unsubscribe before OnCompleted or OnError
-            fireClosed(new RuntimeException("unsubscribe response"));
-        }
-    }
-
     @Override
     protected void onChannelInactive() {
         if (inTransacting()) {
             fireClosed(new TransportException("channelInactive of " + this._channel));
         } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
-            }
+            LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
         }
-    }
-
-    @Override
-    protected boolean needRead() {
-        return inTransacting();
     }
 
     @Override
@@ -127,13 +88,11 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
 
     @Override
     protected void beforeSendingOutbound(final Object outmsg) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("sending http request msg {}", outmsg);
-        }
+        LOG.debug("{} sending request msg({})", this, outmsg);
+
         // set in transacting flag
         startSending();
 
-        //  TBD, outmsg id DisposableWrapper<?>
         if (outmsg instanceof HttpRequest) {
             this._isKeepAlive = HttpUtil.isKeepAlive((HttpRequest)outmsg);
         }
@@ -144,7 +103,6 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
         // force flush for _isFlushPerWrite = false
         this._channel.flush();
         this._isRequestCompleted = true;
-        this.readMessage();
     }
 
     private void startSending() {
@@ -180,52 +138,6 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
     private volatile boolean _isRequestCompleted = false;
 
     private final long _createTimeMillis = System.currentTimeMillis();
-
-    private final Op _op;
-
-    protected interface Op {
-        public void subscribeResponse(
-                final DefaultHttpInitiator initiator,
-                final Observable<? extends Object> request,
-                final Subscriber<? super Object> subscriber);
-
-        public void doOnUnsubscribeResponse(
-                final DefaultHttpInitiator initiator,
-                final Subscriber<? super Object> subscriber);
-    }
-
-    private static final Op OP_ACTIVE = new Op() {
-      @Override
-      public void subscribeResponse(
-              final DefaultHttpInitiator initiator,
-              final Observable<? extends Object> request,
-              final Subscriber<? super Object> subscriber) {
-          initiator.subscribeResponse(request, subscriber);
-      }
-
-      @Override
-      public void doOnUnsubscribeResponse(
-              final DefaultHttpInitiator initiator,
-              final Subscriber<? super Object> subscriber) {
-          initiator.doOnUnsubscribeResponse(subscriber);
-      }
-  };
-
-  private static final Op OP_UNACTIVE = new Op() {
-      @Override
-      public void subscribeResponse(
-              final DefaultHttpInitiator initiator,
-              final Observable<? extends Object> request,
-              final Subscriber<? super Object> subscriber) {
-          subscriber.onError(new RuntimeException("http connection unactive."));
-      }
-
-      @Override
-      public void doOnUnsubscribeResponse(
-              final DefaultHttpInitiator initiator,
-              final Subscriber<? super Object> subscriber) {
-      }
-  };
 
   private static final Action1<Object> _ADD_ACCEPT_ENCODING = new Action1<Object>() {
       @Override
@@ -288,4 +200,5 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
               .append("]")
               .toString();
   }
+
 }

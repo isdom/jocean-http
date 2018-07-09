@@ -6,9 +6,9 @@ package org.jocean.http.client;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
+import org.jocean.http.HttpSlice;
 import org.jocean.http.Inbound;
 import org.jocean.http.Outbound;
-import org.jocean.http.ReadPolicy;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.WriteCtrl;
 import org.jocean.idiom.TerminateAware;
@@ -27,7 +27,7 @@ public interface HttpClient extends AutoCloseable {
 
     public interface HttpInitiator
     extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpInitiator> {
-        public Observable<? extends Object> defineInteraction(final Observable<? extends Object> request);
+        public Observable<? extends HttpSlice> defineInteraction(final Observable<? extends Object> request);
 
         public Object transport();
 
@@ -39,13 +39,13 @@ public interface HttpClient extends AutoCloseable {
 
         public boolean isActive();
 
-        // from Outtraffic
+        // from Outbound
         @Override
         public WriteCtrl writeCtrl();
 
-        // from Intraffic
+        // from Inbound
         @Override
-        public void setReadPolicy(final ReadPolicy readPolicy);
+        public Intraffic intraffic();
     }
 
     public interface InitiatorBuilder {

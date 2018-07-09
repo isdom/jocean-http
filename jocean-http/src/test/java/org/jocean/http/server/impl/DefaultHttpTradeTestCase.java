@@ -140,10 +140,10 @@ public class DefaultHttpTradeTestCase {
         final EmbeddedChannel channel = new EmbeddedChannel();
         final HttpTrade trade = new DefaultHttpTrade(channel);
 
-        final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber = new TestSubscriber<>();
+        final TestSubscriber<DisposableWrapper<? extends HttpObject>> reqSubscriber = new TestSubscriber<>();
 
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
+        .compose(MessageUtil.rollout2dwhs())
         .subscribe(reqSubscriber);
 
         trade.close();
@@ -165,10 +165,10 @@ public class DefaultHttpTradeTestCase {
         final EmbeddedChannel channel = new EmbeddedChannel();
         final HttpTrade trade = new DefaultHttpTrade(channel);
 
-        final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber = new TestSubscriber<>();
+        final TestSubscriber<DisposableWrapper<? extends HttpObject>> reqSubscriber = new TestSubscriber<>();
 
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
+        .compose(MessageUtil.rollout2dwhs())
         .subscribe(reqSubscriber);
 
         writeToInboundAndFlush(channel, request);
@@ -196,9 +196,9 @@ public class DefaultHttpTradeTestCase {
         trade.close();
         assertTrue(!trade.isActive());
 
-        final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber = new TestSubscriber<>();
+        final TestSubscriber<DisposableWrapper<? extends HttpObject>> reqSubscriber = new TestSubscriber<>();
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
+        .compose(MessageUtil.rollout2dwhs())
         .subscribe(reqSubscriber);
 
         reqSubscriber.assertTerminalEvent();
@@ -217,9 +217,9 @@ public class DefaultHttpTradeTestCase {
         final HttpTrade trade = new DefaultHttpTrade(channel);
 //        trade.inboundHolder().setMaxBlockSize(-1);
 
-        final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber = new TestSubscriber<>();
+        final TestSubscriber<DisposableWrapper<? extends HttpObject>> reqSubscriber = new TestSubscriber<>();
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
+        .compose(MessageUtil.rollout2dwhs())
         .subscribe(reqSubscriber);
 
         writeToInboundAndFlush(channel, request);
@@ -248,19 +248,19 @@ public class DefaultHttpTradeTestCase {
         final HttpTrade trade = new DefaultHttpTrade(channel);
 //        trade.inboundHolder().setMaxBlockSize(-1);
 
-        final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber1 = new TestSubscriber<>();
+        final TestSubscriber<DisposableWrapper<? extends HttpObject>> reqSubscriber1 = new TestSubscriber<>();
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
+        .compose(MessageUtil.rollout2dwhs())
         .subscribe(reqSubscriber1);
 
-        final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber2 = new TestSubscriber<>();
+        final TestSubscriber<DisposableWrapper<? extends HttpObject>> reqSubscriber2 = new TestSubscriber<>();
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
+        .compose(MessageUtil.rollout2dwhs())
         .subscribe(reqSubscriber2);
 
-        final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber3 = new TestSubscriber<>();
+        final TestSubscriber<DisposableWrapper<? extends HttpObject>> reqSubscriber3 = new TestSubscriber<>();
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
+        .compose(MessageUtil.rollout2dwhs())
         .subscribe(reqSubscriber3);
 
         writeToInboundAndFlush(channel, request);
@@ -289,9 +289,9 @@ public class DefaultHttpTradeTestCase {
         final HttpTrade trade = new DefaultHttpTrade(channel);
 //        trade.inboundHolder().setMaxBlockSize(-1);
 
-        final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber1 = new TestSubscriber<>();
+        final TestSubscriber<DisposableWrapper<? extends HttpObject>> reqSubscriber1 = new TestSubscriber<>();
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
+        .compose(MessageUtil.rollout2dwhs())
         .subscribe(reqSubscriber1);
 
         writeToInboundAndFlush(channel, request);
@@ -299,9 +299,9 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber1.assertValueCount(1);
         reqSubscriber1.assertValues(RxNettys.<HttpObject>wrap4release(request));
 
-        final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber2 = new TestSubscriber<>();
+        final TestSubscriber<DisposableWrapper<? extends HttpObject>> reqSubscriber2 = new TestSubscriber<>();
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
+        .compose(MessageUtil.rollout2dwhs())
         .subscribe(reqSubscriber2);
 
         writeToInboundAndFlush(channel, req_contents[0]);
@@ -312,9 +312,9 @@ public class DefaultHttpTradeTestCase {
         reqSubscriber2.assertValueCount(2);
         reqSubscriber2.assertValues(RxNettys.<HttpObject>wrap4release(request), RxNettys.<HttpObject>wrap4release(req_contents[0]));
 
-        final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber3 = new TestSubscriber<>();
+        final TestSubscriber<DisposableWrapper<? extends HttpObject>> reqSubscriber3 = new TestSubscriber<>();
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
+        .compose(MessageUtil.rollout2dwhs())
         .subscribe(reqSubscriber3);
 
         reqSubscriber1.assertValueCount(2);
@@ -399,9 +399,9 @@ public class DefaultHttpTradeTestCase {
         final HttpTrade trade = new DefaultHttpTrade(channel);
 //        trade.inboundHolder().setMaxBlockSize(-1);
 
-        final TestSubscriber<DisposableWrapper<HttpObject>> reqSubscriber = new TestSubscriber<>();
+        final TestSubscriber<DisposableWrapper<? extends HttpObject>> reqSubscriber = new TestSubscriber<>();
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
+        .compose(MessageUtil.rollout2dwhs())
         .subscribe(reqSubscriber);
 
         Observable.<HttpObject>concat(
@@ -500,7 +500,7 @@ public class DefaultHttpTradeTestCase {
         //  inbound.subscribe();    double subscribe holder.assembleAndHold()
 
         final FullHttpRequest recvreq = trade.inbound()
-                .compose(MessageUtil.dwhWithAutoread())
+                .compose(MessageUtil.rollout2dwhs())
                 .compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap();
 
         assertNotNull(recvreq);
@@ -545,12 +545,12 @@ public class DefaultHttpTradeTestCase {
 
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
                 trade.inbound()
-                .compose(MessageUtil.dwhWithAutoread())
+                .compose(MessageUtil.rollout2dwhs())
                 .compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(),
                 REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
                 trade.inbound()
-                .compose(MessageUtil.dwhWithAutoread())
+                .compose(MessageUtil.rollout2dwhs())
                 .compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(),
                 REQ_CONTENT.getBytes(Charsets.UTF_8), 1);
     }
@@ -570,13 +570,13 @@ public class DefaultHttpTradeTestCase {
         // TODO, why 4 & 5 refCnt ?
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
             trade.inbound()
-            .compose(MessageUtil.dwhWithAutoread())
+            .compose(MessageUtil.rollout2dwhs())
             .compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(),
             REQ_CONTENT.getBytes(Charsets.UTF_8), 4);
 
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
                 trade.inbound()
-                .compose(MessageUtil.dwhWithAutoread())
+                .compose(MessageUtil.rollout2dwhs())
                 .compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(),
             REQ_CONTENT.getBytes(Charsets.UTF_8), 5);
     }
@@ -602,13 +602,13 @@ public class DefaultHttpTradeTestCase {
         // TODO, why 4 & 5 refCnt ?
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
                 trade.inbound()
-                .compose(MessageUtil.dwhWithAutoread())
+                .compose(MessageUtil.rollout2dwhs())
                 .compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(),
                 REQ_CONTENT.getBytes(Charsets.UTF_8), 4);
 
         callByteBufHolderBuilderOnceAndAssertDumpContentAndRefCnt(
                 trade.inbound()
-                .compose(MessageUtil.dwhWithAutoread())
+                .compose(MessageUtil.rollout2dwhs())
                 .compose(RxNettys.message2fullreq(trade)).toBlocking().single().unwrap(),
                 REQ_CONTENT.getBytes(Charsets.UTF_8), 5);
     }
@@ -625,10 +625,10 @@ public class DefaultHttpTradeTestCase {
         final AtomicReference<DefaultFullHttpRequest> ref1 =
                 new AtomicReference<DefaultFullHttpRequest>();
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
-        .subscribe(new Action1<DisposableWrapper<HttpObject>>() {
+        .compose(MessageUtil.rollout2dwhs())
+        .subscribe(new Action1<DisposableWrapper<? extends HttpObject>>() {
             @Override
-            public void call(final DisposableWrapper<HttpObject> dwh) {
+            public void call(final DisposableWrapper<? extends HttpObject> dwh) {
                 ref1.set((DefaultFullHttpRequest)dwh.unwrap());
             }
         });
@@ -637,10 +637,10 @@ public class DefaultHttpTradeTestCase {
                 new AtomicReference<DefaultFullHttpRequest>();
 
         trade.inbound()
-        .compose(MessageUtil.dwhWithAutoread())
-        .subscribe(new Action1<DisposableWrapper<HttpObject>>() {
+        .compose(MessageUtil.rollout2dwhs())
+        .subscribe(new Action1<DisposableWrapper<? extends HttpObject>>() {
             @Override
-            public void call(final DisposableWrapper<HttpObject> dwh) {
+            public void call(final DisposableWrapper<? extends HttpObject> dwh) {
                 ref2.set((DefaultFullHttpRequest)dwh.unwrap());
             }
         });

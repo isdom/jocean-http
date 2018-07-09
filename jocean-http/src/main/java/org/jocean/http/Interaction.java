@@ -6,5 +6,5 @@ import rx.Observable;
 
 public interface Interaction {
     public HttpInitiator  initiator();
-    public Observable<? extends Object> execute();
+    public Observable<? extends HttpSlice> execute();
 }

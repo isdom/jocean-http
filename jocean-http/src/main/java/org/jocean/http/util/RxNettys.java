@@ -316,36 +316,36 @@ public class RxNettys {
         return _MSGTOBODY;
     }
 
-    private static List<HttpObject> dwhs2hobjs(final Iterable<DisposableWrapper<HttpObject>> dwhs) {
+    private static List<HttpObject> dwhs2hobjs(final Iterable<DisposableWrapper<? extends HttpObject>> dwhs) {
         final List<HttpObject> hobjs = new LinkedList<>();
-        for (final DisposableWrapper<HttpObject> dwh : dwhs) {
+        for (final DisposableWrapper<? extends HttpObject> dwh : dwhs) {
             hobjs.add(dwh.unwrap());
         }
         return hobjs;
     }
 
-    private static void disposeAll(final Iterable<DisposableWrapper<HttpObject>> dwhs) {
-        for (final DisposableWrapper<HttpObject> dwh : dwhs) {
+    private static void disposeAll(final Iterable<DisposableWrapper<? extends HttpObject>> dwhs) {
+        for (final DisposableWrapper<? extends HttpObject> dwh : dwhs) {
             dwh.dispose();
         }
     }
 
-    public static Observable.Transformer<? super DisposableWrapper<HttpObject>, ? extends DisposableWrapper<FullHttpRequest>> message2fullreq(
+    public static Observable.Transformer<? super DisposableWrapper<? extends HttpObject>, ? extends DisposableWrapper<FullHttpRequest>> message2fullreq(
             final Terminable terminable) {
         return message2fullreq(terminable, false);
     }
 
-    public static Observable.Transformer<? super DisposableWrapper<HttpObject>, ? extends DisposableWrapper<FullHttpRequest>> message2fullreq(
+    public static Observable.Transformer<? super DisposableWrapper<? extends HttpObject>, ? extends DisposableWrapper<FullHttpRequest>> message2fullreq(
             final Terminable terminable, final boolean disposemsg) {
-        return new Observable.Transformer<DisposableWrapper<HttpObject>, DisposableWrapper<FullHttpRequest>>() {
+        return new Observable.Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<FullHttpRequest>>() {
             @Override
             public Observable<DisposableWrapper<FullHttpRequest>> call(
-                    final Observable<DisposableWrapper<HttpObject>> dwhs) {
+                    final Observable<DisposableWrapper<? extends HttpObject>> dwhs) {
                 return dwhs.toList()
-                        .map(new Func1<List<DisposableWrapper<HttpObject>>, DisposableWrapper<FullHttpRequest>>() {
+                        .map(new Func1<List<DisposableWrapper<? extends HttpObject>>, DisposableWrapper<FullHttpRequest>>() {
                             @Override
                             public DisposableWrapper<FullHttpRequest> call(
-                                    final List<DisposableWrapper<HttpObject>> dwhs) {
+                                    final List<DisposableWrapper<? extends HttpObject>> dwhs) {
                                 final FullHttpRequest fullreq = Nettys.httpobjs2fullreq(dwhs2hobjs(dwhs));
                                 try {
                                     return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release(fullreq));
@@ -360,22 +360,22 @@ public class RxNettys {
         };
     }
 
-    public static Observable.Transformer<? super DisposableWrapper<HttpObject>, ? extends DisposableWrapper<FullHttpResponse>> message2fullresp(
+    public static Observable.Transformer<? super DisposableWrapper<? extends HttpObject>, ? extends DisposableWrapper<FullHttpResponse>> message2fullresp(
             final Terminable terminable) {
         return message2fullresp(terminable, false);
     }
 
-    public static Observable.Transformer<? super DisposableWrapper<HttpObject>, ? extends DisposableWrapper<FullHttpResponse>> message2fullresp(
+    public static Observable.Transformer<? super DisposableWrapper<? extends HttpObject>, ? extends DisposableWrapper<FullHttpResponse>> message2fullresp(
             final Terminable terminable, final boolean disposemsg) {
-        return new Observable.Transformer<DisposableWrapper<HttpObject>, DisposableWrapper<FullHttpResponse>>() {
+        return new Observable.Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<FullHttpResponse>>() {
             @Override
             public Observable<DisposableWrapper<FullHttpResponse>> call(
-                    final Observable<DisposableWrapper<HttpObject>> dwhs) {
+                    final Observable<DisposableWrapper<? extends HttpObject>> dwhs) {
                 return dwhs.toList()
-                        .map(new Func1<List<DisposableWrapper<HttpObject>>, DisposableWrapper<FullHttpResponse>>() {
+                        .map(new Func1<List<DisposableWrapper<? extends HttpObject>>, DisposableWrapper<FullHttpResponse>>() {
                             @Override
                             public DisposableWrapper<FullHttpResponse> call(
-                                    final List<DisposableWrapper<HttpObject>> dwhs) {
+                                    final List<DisposableWrapper<? extends HttpObject>> dwhs) {
                                 final FullHttpResponse fullresp = Nettys.httpobjs2fullresp(dwhs2hobjs(dwhs));
                                 try {
                                     return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release(fullresp));

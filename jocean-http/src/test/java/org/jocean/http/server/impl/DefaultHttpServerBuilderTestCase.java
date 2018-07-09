@@ -64,7 +64,7 @@ public class DefaultHttpServerBuilderTestCase {
                 }
 //                final HttpMessageHolder holder = new HttpMessageHolder();
                 trade.inbound()
-                .compose(MessageUtil.dwhWithAutoread())
+                .compose(MessageUtil.rollout2dwhs())
                 .compose(RxNettys.message2fullreq(trade))
                 .subscribe(new Action1<DisposableWrapper<FullHttpRequest>>() {
                     @Override
@@ -272,7 +272,7 @@ public class DefaultHttpServerBuilderTestCase {
 //            trade1.obsrequest().toCompletable().await();
 
             final FullHttpRequest reqReceived1 = trade1.inbound()
-                    .compose(MessageUtil.dwhWithAutoread())
+                    .compose(MessageUtil.rollout2dwhs())
                     .compose(RxNettys.message2fullreq(trade1))
                     .toBlocking().single().unwrap();
             assertEquals(reqToSend1, reqReceived1);
@@ -302,7 +302,7 @@ public class DefaultHttpServerBuilderTestCase {
 //            trade2.obsrequest().toCompletable().await();
 
             final FullHttpRequest reqReceived2 = trade2.inbound()
-                    .compose(MessageUtil.dwhWithAutoread())
+                    .compose(MessageUtil.rollout2dwhs())
                     .compose(RxNettys.message2fullreq(trade2))
                     .toBlocking().single().unwrap();
             assertEquals(reqToSend2, reqReceived2);

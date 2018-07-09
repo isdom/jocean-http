@@ -36,7 +36,9 @@ public class SslDemo {
 
         try (final HttpClient client = new DefaultHttpClient()) {
             {
-                final String host = "www.sina.com.cn";
+                final String host =
+                        "www.sina.com.cn";
+//                        "www.greatdata.com.cn";
 
                 final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
                         HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
@@ -48,10 +50,12 @@ public class SslDemo {
                 final String content = sendRequestAndRecv(client,
                 		host,
                 		443,
+//                		80,
                 		request,
-                        sslfeature,
-                        Feature.ENABLE_LOGGING_OVER_SSL,
-                        Feature.ENABLE_COMPRESSOR
+                        sslfeature
+//                        Feature.ENABLE_LOGGING,
+//                        Feature.ENABLE_LOGGING_OVER_SSL
+//                        Feature.ENABLE_COMPRESSOR
                         );
 //                LOG.info("recv:{}", content);
             }
@@ -128,8 +132,11 @@ public class SslDemo {
     private static Observable<String> sendAndRecv(
             final HttpInitiator initiator,
             final DefaultFullHttpRequest request) {
-        return initiator.defineInteraction(Observable.just(request))
-            .compose(MessageUtil.dwhWithAutoread())
+        final Observable<? extends HttpSlice> resp = initiator.defineInteraction(Observable.just(request));
+//        return initiator.writeCtrl().sended().first().flatMap(req ->
+//        return initiator.defineInteraction(Observable.just(request))
+//            .compose(MessageUtil.dwhWithAutoread())
+            return resp.flatMap(slice -> HttpSliceUtil.elementAndSucceed(slice))
             .compose(RxNettys.message2fullresp(initiator))
             .map(DisposableWrapperUtil.<FullHttpResponse>unwrap())
             .map(new Func1<FullHttpResponse, String>() {
