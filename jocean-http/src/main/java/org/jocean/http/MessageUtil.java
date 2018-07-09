@@ -793,10 +793,11 @@ public class MessageUtil {
         return fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET).doOnNext(MessageUtil.toRequest(beans));
     }
 
-    private final static Transformer<DisposableWrapper<HttpObject>, MessageBody> _AS_BODY = new Transformer<DisposableWrapper<HttpObject>, MessageBody>() {
+    private final static Transformer<DisposableWrapper<? extends HttpObject>, MessageBody> _AS_BODY =
+            new Transformer<DisposableWrapper<? extends HttpObject>, MessageBody>() {
         @Override
-        public Observable<MessageBody> call(final Observable<DisposableWrapper<HttpObject>> dwhs) {
-            final Observable<? extends DisposableWrapper<HttpObject>> cached = dwhs.cache();
+        public Observable<MessageBody> call(final Observable<DisposableWrapper<? extends HttpObject>> dwhs) {
+            final Observable<? extends DisposableWrapper<? extends HttpObject>> cached = dwhs.cache();
             return cached.map(DisposableWrapperUtil.<HttpObject>unwrap()).compose(RxNettys.asHttpMessage())
                     .map(new Func1<HttpMessage, MessageBody>() {
                         @Override
@@ -822,7 +823,7 @@ public class MessageUtil {
         }
     };
 
-    public static Transformer<DisposableWrapper<HttpObject>, MessageBody> asBody() {
+    public static Transformer<DisposableWrapper<? extends HttpObject>, MessageBody> asBody() {
         return _AS_BODY;
     }
 
