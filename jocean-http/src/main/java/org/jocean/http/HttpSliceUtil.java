@@ -29,7 +29,7 @@ public class HttpSliceUtil {
                             public Observable<? extends DisposableWrapper<? extends HttpObject>> call(final HttpSlice slice) {
                                 return slice.element();
                             }
-                        }).map(DisposableWrapperUtil.unwrap()).first().map(new Func1<HttpObject, T>() {
+                        }).map(DisposableWrapperUtil.<HttpObject>unwrap()).first().map(new Func1<HttpObject, T>() {
                             @SuppressWarnings("unchecked")
                             @Override
                             public T call(final HttpObject httpobj) {
