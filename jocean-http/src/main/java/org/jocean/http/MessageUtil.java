@@ -827,10 +827,11 @@ public class MessageUtil {
         return _AS_BODY;
     }
 
-    private final static Transformer<DisposableWrapper<HttpObject>, FullMessage> _AS_FULLMSG = new Transformer<DisposableWrapper<HttpObject>, FullMessage>() {
+    private final static Transformer<DisposableWrapper<? extends HttpObject>, FullMessage> _AS_FULLMSG =
+            new Transformer<DisposableWrapper<? extends HttpObject>, FullMessage>() {
         @Override
-        public Observable<FullMessage> call(final Observable<DisposableWrapper<HttpObject>> dwhs) {
-            final Observable<? extends DisposableWrapper<HttpObject>> cached = dwhs.cache();
+        public Observable<FullMessage> call(final Observable<DisposableWrapper<? extends HttpObject>> dwhs) {
+            final Observable<? extends DisposableWrapper<? extends HttpObject>> cached = dwhs.cache();
             return cached.map(DisposableWrapperUtil.<HttpObject>unwrap()).compose(RxNettys.asHttpMessage())
                     .map(new Func1<HttpMessage, FullMessage>() {
                         @Override
@@ -868,7 +869,7 @@ public class MessageUtil {
         }
     };
 
-    public static Transformer<DisposableWrapper<HttpObject>, FullMessage> asFullMessage() {
+    public static Transformer<DisposableWrapper<? extends HttpObject>, FullMessage> asFullMessage() {
         return _AS_FULLMSG;
     }
 
