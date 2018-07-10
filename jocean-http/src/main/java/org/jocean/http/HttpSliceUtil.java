@@ -7,6 +7,7 @@ import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 import rx.Observable.Transformer;
+import rx.Single;
 import rx.functions.Func1;
 
 public class HttpSliceUtil {
@@ -44,4 +45,22 @@ public class HttpSliceUtil {
         };
     }
 
+    public static Observable<? extends HttpSlice> single(final Observable<? extends DisposableWrapper<? extends HttpObject>> element) {
+        return Observable.just(new HttpSlice() {
+
+            @Override
+            public Single<Boolean> hasNext() {
+                return Single.just(false);
+            }
+
+            @Override
+            public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
+                return element;
+            }
+
+            @Override
+            public Observable<? extends HttpSlice> next() {
+                return Observable.empty();
+            }});
+    }
 }
