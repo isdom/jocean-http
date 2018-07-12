@@ -29,6 +29,7 @@ import rx.Observable;
 import rx.Observable.Transformer;
 import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.functions.Func1;
 
 /**
  * @author isdom
@@ -51,17 +52,6 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
         }).compose(RxObservables.<HttpSlice>ensureSubscribeAtmostOnce());
     }
 
-    @Override
-    public Observable<? extends HttpSlice> defineInteraction2(final Observable<? extends HttpSlice> request) {
-        return nextSlice().doOnSubscribe(new Action0() {
-            @Override
-            public void call() {
-                readMessage();
-                setOutbound2(wrapSlice(request));
-            }
-        }).compose(RxObservables.<HttpSlice>ensureSubscribeAtmostOnce());
-    }
-
     Channel channel() {
         return this._channel;
     }
@@ -74,22 +64,23 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
         super(channel);
     }
 
-    private Observable<? extends HttpSlice> wrapSlice(final Observable<? extends HttpSlice> request) {
-        if (Nettys.isSupportCompress(this._channel)) {
-            return request.map(HttpSliceUtil.transformElement(new Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<? extends HttpObject>>() {
-                @Override
-                public Observable<DisposableWrapper<? extends HttpObject>> call(
-                        final Observable<DisposableWrapper<? extends HttpObject>> element) {
-                    return element.doOnNext(_ADD_ACCEPT_ENCODING);
-                }}));
-        } else {
-            return request;
-        }
-    }
-
     private Observable<? extends Object> wrapRequest(final Observable<? extends Object> request) {
         if (Nettys.isSupportCompress(this._channel)) {
-            return request.doOnNext(_ADD_ACCEPT_ENCODING);
+            return request.map(new Func1<Object, Object>() {
+                @Override
+                public Object call(final Object obj) {
+                    if (obj instanceof HttpSlice) {
+                        return HttpSliceUtil.transformElement((HttpSlice)obj, new Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<? extends HttpObject>>() {
+                            @Override
+                            public Observable<DisposableWrapper<? extends HttpObject>> call(
+                                    final Observable<DisposableWrapper<? extends HttpObject>> element) {
+                                return element.doOnNext(_ADD_ACCEPT_ENCODING);
+                            }});
+                    } else {
+                        _ADD_ACCEPT_ENCODING.call(obj);
+                        return obj;
+                    }
+                }});
         } else {
             return request;
         }

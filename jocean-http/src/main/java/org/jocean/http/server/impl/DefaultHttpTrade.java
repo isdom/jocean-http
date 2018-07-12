@@ -90,11 +90,6 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
         return setOutbound(message);
     }
 
-    @Override
-    public Subscription outbound2(final Observable<? extends HttpSlice> slices) {
-        return setOutbound2(slices);
-    }
-
     boolean isKeepAlive() {
         return this._isKeepAlive;
     }
@@ -114,9 +109,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
         if (inTransacting()) {
             fireClosed(new TransportException("channelInactive of " + this._channel));
         } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
-            }
+            LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
             // close normally
             close();
         }

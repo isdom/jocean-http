@@ -69,21 +69,28 @@ public class HttpSliceUtil {
         return new Func1<HttpSlice, HttpSlice>() {
             @Override
             public HttpSlice call(final HttpSlice slice) {
-                return new HttpSlice() {
-                    @Override
-                    public Single<Boolean> hasNext() {
-                        return slice.hasNext();
-                    }
+                return transformElement(slice, transformer);
+            }
+        };
+    }
 
-                    @Override
-                    public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
-                        return slice.element().compose(transformer);
-                    }
+    public static HttpSlice transformElement(final HttpSlice slice,
+            final Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<? extends HttpObject>> transformer) {
+        return new HttpSlice() {
+            @Override
+            public Single<Boolean> hasNext() {
+                return slice.hasNext();
+            }
 
-                    @Override
-                    public Observable<? extends HttpSlice> next() {
-                        return slice.next();
-                    }};
-            }};
-        }
+            @Override
+            public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
+                return slice.element().compose(transformer);
+            }
+
+            @Override
+            public Observable<? extends HttpSlice> next() {
+                return slice.next();
+            }
+        };
+    }
 }
