@@ -63,4 +63,27 @@ public class HttpSliceUtil {
                 return Observable.empty();
             }});
     }
+
+    public static Func1<HttpSlice, HttpSlice> transformElement(
+            final Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<? extends HttpObject>> transformer) {
+        return new Func1<HttpSlice, HttpSlice>() {
+            @Override
+            public HttpSlice call(final HttpSlice slice) {
+                return new HttpSlice() {
+                    @Override
+                    public Single<Boolean> hasNext() {
+                        return slice.hasNext();
+                    }
+
+                    @Override
+                    public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
+                        return slice.element().compose(transformer);
+                    }
+
+                    @Override
+                    public Observable<? extends HttpSlice> next() {
+                        return slice.next();
+                    }};
+            }};
+        }
 }

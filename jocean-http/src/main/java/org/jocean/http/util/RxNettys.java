@@ -47,6 +47,8 @@ import io.netty.util.ReferenceCountUtil;
 import io.netty.util.ReferenceCounted;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
+import rx.Completable;
+import rx.CompletableSubscriber;
 import rx.Observable;
 import rx.Subscriber;
 import rx.Subscription;
@@ -54,24 +56,36 @@ import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
+import rx.subscriptions.BooleanSubscription;
 import rx.subscriptions.Subscriptions;
 
 public class RxNettys {
     private static final Logger LOG =
             LoggerFactory.getLogger(RxNettys.class);
+
     private RxNettys() {
         throw new IllegalStateException("No instances!");
     }
 
-    public static <T, V> Observable<T> observableFromFuture(final Future<V> future) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<T>() {
+    public static <V> Completable future2Completable(final Future<V> future, final boolean cancelWhenUnsubscribe) {
+        return Completable.create(new Completable.OnSubscribe() {
             @Override
-            public void call(final Subscriber<? super T> subscriber) {
+            public void call(final CompletableSubscriber subscriber) {
+                final Subscription subscription = cancelWhenUnsubscribe ? Subscriptions.create(new Action0() {
+                    @Override
+                    public void call() {
+                        if (!future.isDone()) {
+                            future.cancel(false);
+                        }
+                    }
+                }) : new BooleanSubscription();
+
+                subscriber.onSubscribe(subscription);
+
                 future.addListener(new GenericFutureListener<Future<V>>() {
                     @Override
-                    public void operationComplete(final Future<V> f)
-                            throws Exception {
-                        if (!subscriber.isUnsubscribed()) {
+                    public void operationComplete(final Future<V> f) throws Exception {
+                        if (!subscription.isUnsubscribed()) {
                             if (f.isSuccess()) {
                                 subscriber.onCompleted();
                             } else {

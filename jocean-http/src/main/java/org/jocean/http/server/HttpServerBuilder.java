@@ -51,6 +51,8 @@ public interface HttpServerBuilder extends Closeable {
 
         public Subscription outbound(final Observable<? extends Object> message);
 
+        public Subscription outbound2(final Observable<? extends HttpSlice> slices);
+
         public Object transport();
 
         public Action0 closer();

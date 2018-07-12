@@ -29,6 +29,8 @@ public interface HttpClient extends AutoCloseable {
     extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpInitiator> {
         public Observable<? extends HttpSlice> defineInteraction(final Observable<? extends Object> request);
 
+        public Observable<? extends HttpSlice> defineInteraction2(final Observable<? extends HttpSlice> request);
+
         public Object transport();
 
         public Action0 closer();

@@ -32,8 +32,10 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
+import rx.Completable;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
+import rx.Observer;
 import rx.Single;
 import rx.Subscriber;
 import rx.Subscription;
@@ -496,6 +498,10 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
     }
 
+    private Completable doFlush() {
+        return RxNettys.future2Completable(this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER), false);
+    }
+
     private void doSendOutmsg(final Object outmsg) {
         final ChannelFutureListener whenComplete = new ChannelFutureListener() {
             @Override
@@ -583,6 +589,85 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
     }
 
+    private Subscription doSetOutbound2(final Observable<? extends HttpSlice> outbound) {
+        final Subscription placeholder = buildPlaceholderSubscription();
+
+        if (outboundSubscriptionUpdater.compareAndSet(this, null, placeholder)) {
+            final Subscriber<HttpSlice> outboundSubscriber = buildOutboundSubscriber2();
+            final Subscription subscription = outbound.subscribe(outboundSubscriber);
+            outboundSubscriptionUpdater.set(this, subscription);
+            //  TODO:
+            //  when outbound unsubscribe early, how to do (close HttpConnection instance ?)
+            outboundSubscriber.add(Subscriptions.create(new Action0() {
+                @Override
+                public void call() {
+                    outboundSubscriptionUpdater.compareAndSet(HttpConnection.this, subscription, null);
+                }}));
+            return subscription;
+        } else {
+            LOG.warn("({}) 's outbound message has setted, ignore this slices({})", this, outbound);
+            return null;
+        }
+    }
+
+    private Subscriber<HttpSlice> buildOutboundSubscriber2() {
+        return new Subscriber<HttpSlice>() {
+                @Override
+                public void onCompleted() {}
+
+                @Override
+                public void onError(final Throwable e) {
+                    if (!(e instanceof CloseException)) {
+                        LOG.warn("slices invoke onError with ({}), try close {}",
+                                ExceptionUtils.exception2detail(e), HttpConnection.this);
+                    }
+                    fireClosed(e);
+                }
+
+                @Override
+                public void onNext(final HttpSlice slice) {
+                    LOG.debug("slice ({}) income for {}", slice, HttpConnection.this);
+                    slice.element().subscribe(new Observer<DisposableWrapper<? extends HttpObject>>() {
+                        @Override
+                        public void onCompleted() {
+                            _op.flush(HttpConnection.this).andThen(slice.hasNext()).subscribe(new Action1<Boolean>() {
+                                @Override
+                                public void call(final Boolean hasNext) {
+                                    if (hasNext) {
+                                        setOutbound2(slice.next());
+                                    } else {
+                                        LOG.debug("outound slices ended for {}", HttpConnection.this);
+                                        _op.onOutboundCompleted(HttpConnection.this);
+                                    }
+                                }
+                            }, new Action1<Throwable>() {
+                                @Override
+                                public void call(final Throwable e) {
+                                    if (!(e instanceof CloseException)) {
+                                        LOG.warn("slice({})'s flush meet onError with ({}), try close {}",
+                                                slice, ExceptionUtils.exception2detail(e), HttpConnection.this);
+                                    }
+                                    fireClosed(e);
+                                }});
+                        }
+
+                        @Override
+                        public void onError(final Throwable e) {
+                            if (!(e instanceof CloseException)) {
+                                LOG.warn("slice({})'s element invoke onError with ({}), try close {}",
+                                        slice, ExceptionUtils.exception2detail(e), HttpConnection.this);
+                            }
+                            fireClosed(e);
+                        }
+
+                        @Override
+                        public void onNext(final DisposableWrapper<? extends HttpObject> dwh) {
+                            _op.sendOutmsg(HttpConnection.this, dwh);
+                        }});
+
+                }};
+    }
+
     private Subscription doSetOutbound(final Observable<? extends Object> outbound) {
         final Subscription placeholder = buildPlaceholderSubscription();
 
@@ -651,6 +736,10 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         return this._op.setOutbound(this, message);
     }
 
+    protected Subscription setOutbound2(final Observable<? extends HttpSlice> message) {
+        return this._op.setOutbound2(this, message);
+    }
+
     protected abstract void onInboundMessage(final HttpObject inmsg);
 
     protected abstract void onInboundCompleted();
@@ -717,27 +806,31 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
     protected interface ConnectionOp {
         public boolean attachInbound(
-                final HttpConnection<?> io,
+                final HttpConnection<?> connection,
                 final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber);
 
         public void onInmsgRecvd(
-                final HttpConnection<?> io,
+                final HttpConnection<?> connection,
                 final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber,
                 final HttpObject msg);
 
-        public Subscription setOutbound(final HttpConnection<?> io, final Observable<? extends Object> outbound);
+        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound);
 
-        public void sendOutmsg(final HttpConnection<?> io, final Object msg);
+        public Subscription setOutbound2(final HttpConnection<?> connection, final Observable<? extends HttpSlice> outbound);
 
-        public void onOutboundCompleted(final HttpConnection<?> io);
+        public void sendOutmsg(final HttpConnection<?> connection, final Object msg);
 
-        public void readMessage(final HttpConnection<?> io);
+        public Completable flush(final HttpConnection<?> connection);
 
-        public void setWriteBufferWaterMark(final HttpConnection<?> io, final int low, final int high);
+        public void onOutboundCompleted(final HttpConnection<?> connection);
 
-        public boolean isWritable(final HttpConnection<?> io);
+        public void readMessage(final HttpConnection<?> connection);
 
-        public Future<?> runAtEventLoop(final HttpConnection<?> io, final Runnable task);
+        public void setWriteBufferWaterMark(final HttpConnection<?> connection, final int low, final int high);
+
+        public boolean isWritable(final HttpConnection<?> connection);
+
+        public Future<?> runAtEventLoop(final HttpConnection<?> connection, final Runnable task);
     }
 
     private static final ConnectionOp WHEN_ACTIVE = new ConnectionOp() {
@@ -762,8 +855,18 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
 
         @Override
+        public Subscription setOutbound2(final HttpConnection<?> connection, final Observable<? extends HttpSlice> outbound) {
+            return connection.doSetOutbound2(outbound);
+        }
+
+        @Override
         public void sendOutmsg(final HttpConnection<?> connection, final Object msg) {
             connection.doSendOutmsg(msg);
+        }
+
+        @Override
+        public Completable flush(final HttpConnection<?> connection) {
+            return connection.doFlush();
         }
 
         @Override
@@ -820,6 +923,12 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
 
         @Override
+        public Subscription setOutbound2(final HttpConnection<?> connection, final Observable<? extends HttpSlice> outbound) {
+            LOG.warn("{} has terminated, ignore setOutbound2({})", connection, outbound);
+            return null;
+        }
+
+        @Override
         public void sendOutmsg(final HttpConnection<?> connection, final Object outmsg) {
             LOG.warn("{} has terminated, ignore send outmsg({})", connection, outmsg);
         }
@@ -827,6 +936,12 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         @Override
         public void onOutboundCompleted(final HttpConnection<?> connection) {
             LOG.warn("{} has terminated, ignore onOutmsgCompleted event", connection);
+        }
+
+        @Override
+        public Completable flush(final HttpConnection<?> connection) {
+            LOG.warn("{} has terminated, ignore flush event", connection);
+            return Completable.error(new RuntimeException(connection + " has terminated"));
         }
 
         @Override

@@ -90,6 +90,11 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
         return setOutbound(message);
     }
 
+    @Override
+    public Subscription outbound2(final Observable<? extends HttpSlice> slices) {
+        return setOutbound2(slices);
+    }
+
     boolean isKeepAlive() {
         return this._isKeepAlive;
     }

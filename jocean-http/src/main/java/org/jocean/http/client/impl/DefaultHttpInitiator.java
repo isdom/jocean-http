@@ -9,9 +9,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.HttpConnection;
 import org.jocean.http.HttpSlice;
+import org.jocean.http.HttpSliceUtil;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.Nettys;
+import org.jocean.idiom.DisposableWrapper;
+import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.rx.RxObservables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +26,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import rx.Observable;
+import rx.Observable.Transformer;
 import rx.functions.Action0;
 import rx.functions.Action1;
 
@@ -47,6 +51,17 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
         }).compose(RxObservables.<HttpSlice>ensureSubscribeAtmostOnce());
     }
 
+    @Override
+    public Observable<? extends HttpSlice> defineInteraction2(final Observable<? extends HttpSlice> request) {
+        return nextSlice().doOnSubscribe(new Action0() {
+            @Override
+            public void call() {
+                readMessage();
+                setOutbound2(wrapSlice(request));
+            }
+        }).compose(RxObservables.<HttpSlice>ensureSubscribeAtmostOnce());
+    }
+
     Channel channel() {
         return this._channel;
     }
@@ -57,6 +72,19 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
 
     DefaultHttpInitiator(final Channel channel) {
         super(channel);
+    }
+
+    private Observable<? extends HttpSlice> wrapSlice(final Observable<? extends HttpSlice> request) {
+        if (Nettys.isSupportCompress(this._channel)) {
+            return request.map(HttpSliceUtil.transformElement(new Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<? extends HttpObject>>() {
+                @Override
+                public Observable<DisposableWrapper<? extends HttpObject>> call(
+                        final Observable<DisposableWrapper<? extends HttpObject>> element) {
+                    return element.doOnNext(_ADD_ACCEPT_ENCODING);
+                }}));
+        } else {
+            return request;
+        }
     }
 
     private Observable<? extends Object> wrapRequest(final Observable<? extends Object> request) {
@@ -142,8 +170,8 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
   private static final Action1<Object> _ADD_ACCEPT_ENCODING = new Action1<Object>() {
       @Override
       public void call(final Object msg) {
-          if (msg instanceof HttpRequest) {
-              final HttpRequest request = (HttpRequest)msg;
+          if (DisposableWrapperUtil.unwrap(msg) instanceof HttpRequest) {
+              final HttpRequest request = (HttpRequest)DisposableWrapperUtil.unwrap(msg);
               request.headers().add(
                   HttpHeaderNames.ACCEPT_ENCODING,
                   HttpHeaderValues.GZIP + "," + HttpHeaderValues.DEFLATE);
