@@ -146,7 +146,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
 
     @Override
     protected void beforeSendingOutbound(final Object outmsg) {
-        LOG.debug("{} sending response msg({})", this, outmsg);
+        LOG.debug("sending response msg({}) for {}", outmsg, this);
 
         // set in transacting flag
         startSending();

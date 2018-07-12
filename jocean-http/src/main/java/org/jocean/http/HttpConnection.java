@@ -308,10 +308,10 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             //  SSL enabled 连接:
             //  收到 READ COMPLETE 事件时，可能会由于当前接收到的数据不够，还未能解出有效的 inmsg ，
             //  此时应继续调用 channel.read(), 来继续获取对端发送来的 加密数据
-            LOG.debug("!NO! inmsg received, continue read");
+            LOG.debug("!NO! inmsg received, continue read for {}", this);
             readMessage();
         } else {
-            LOG.debug("inmsg received, stop read and wait");
+            LOG.debug("inmsg received, stop read and wait for {}", this);
             this._unreadBegin = System.currentTimeMillis();
             final Subscriber<?> subscriber = inboundSubscriberUpdater.get(this);
             if (null != subscriber && !subscriber.isUnsubscribed()) {
@@ -407,7 +407,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         cachedInbound.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
             @Override
             public void call(final Throwable e) {
-                LOG.warn("{} httpSlice's cached inbound with onError {}", this, errorAsString(e));
+                LOG.warn("httpSlice's cached inbound meet onError {} for {}", errorAsString(e), HttpConnection.this);
             }
         });
 
@@ -419,7 +419,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     private void doReadMessage() {
-        LOG.info("{} trigger read message", this);
+        LOG.info("trigger read message for {}", this);
         this._channel.read();
         this._unreadBegin = 0;
         readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
@@ -472,8 +472,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         return new SimpleChannelInboundHandler<HttpObject>(false) {
             @Override
             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject inmsg) throws Exception {
-                LOG.debug("HttpConnection: channel({})/handler({}): channelRead0 and call with msg({}).",
-                    ctx.channel(), ctx.name(), inmsg);
+                LOG.debug("channelRead0 income msg({}) for {}", inmsg, HttpConnection.this);
                 _op.onInmsgRecvd(HttpConnection.this, subscriber, inmsg);
             }};
     }
