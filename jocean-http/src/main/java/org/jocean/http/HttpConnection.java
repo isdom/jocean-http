@@ -499,11 +499,11 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             public void operationComplete(final ChannelFuture future)
                     throws Exception {
                 if (future.isSuccess()) {
-                    LOG.debug("{} send outmsg({}) success.", HttpConnection.this, outmsg);
+                    LOG.debug("send outmsg({}) success for {}", outmsg, HttpConnection.this);
                     onOutmsgSended(outmsg);
                 } else {
-                    LOG.warn("exception when {} send outmsg({}), detail: {}", HttpConnection.this,
-                            outmsg, ExceptionUtils.exception2detail(future.cause()));
+                    LOG.warn("exception when send outmsg({}) for {}, detail: {}",
+                            outmsg, HttpConnection.this, ExceptionUtils.exception2detail(future.cause()));
                     fireClosed(new TransportException("send outmsg error", future.cause()));
                 }
             }};
