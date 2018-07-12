@@ -634,6 +634,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                                 @Override
                                 public void call(final Boolean hasNext) {
                                     if (hasNext) {
+                                        LOG.debug("outound slices hasNext, so fetch next slice for {}", HttpConnection.this);
                                         setOutbound2(slice.next());
                                     } else {
                                         LOG.debug("outound slices ended for {}", HttpConnection.this);
