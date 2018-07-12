@@ -382,6 +382,16 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             @Override
             public void call(final DisposableWrapper<? extends HttpObject> dwh) {
                 if (dwh.unwrap() instanceof LastHttpContent) {
+                    /*
+                     * netty 参考代码:
+                     *   https://github.com/netty/netty/blob/netty-4.0.26.Final /codec/src/main/java/io/netty/handler/codec/ByteToMessageDecoder.java#L274
+                     *   https://github.com/netty/netty/blob/netty-4.0.26.Final/codec-http/src/main/java/io/netty/handler/codec/http/HttpObjectDecoder.java#L398
+                     * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件 currentState ==
+                     * State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() &&
+                     * !chunked 即没有指定Content-Length头域，也不是CHUNKED传输模式
+                     * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
+                     * 因此，无需在channelInactive处，针对该情况做特殊处理
+                     */
                     onInboundCompleted();
                 }
             }
@@ -477,24 +487,6 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             this._inmsgRecvd = true;
             subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
         } finally {
-//            if (inmsg instanceof LastHttpContent) {
-//                /*
-//                 * netty 参考代码: https://github.com/netty/netty/blob/netty-
-//                 * 4.0.26.Final /codec/src /main/java/io/netty/handler/codec
-//                 * /ByteToMessageDecoder .java#L274 https://github.com/netty
-//                 * /netty/blob/netty-4.0.26.Final /codec-http /src/main/java
-//                 * /io/netty/handler/codec/http/HttpObjectDecoder .java#L398
-//                 * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件 currentState ==
-//                 * State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() &&
-//                 * !chunked 即没有指定Content-Length头域，也不是CHUNKED传输模式
-//                 * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
-//                 * 因此，无需在channelInactive处，针对该情况做特殊处理
-//                 */
-//                if (unholdInboundAndUninstallHandler(subscriber)) {
-//                    onInboundCompleted();
-//                    subscriber.onCompleted();
-//                }
-//            }
         }
     }
 
