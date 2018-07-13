@@ -1,8 +1,10 @@
 package org.jocean.http;
 
+import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
@@ -47,17 +49,14 @@ public class HttpSliceUtil {
 
     public static Observable<? extends HttpSlice> single(final Observable<? extends DisposableWrapper<? extends HttpObject>> element) {
         return Observable.just(new HttpSlice() {
-
             @Override
             public Single<Boolean> hasNext() {
                 return Single.just(false);
             }
-
             @Override
             public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
                 return element;
             }
-
             @Override
             public Observable<? extends HttpSlice> next() {
                 return Observable.empty();
@@ -81,16 +80,39 @@ public class HttpSliceUtil {
             public Single<Boolean> hasNext() {
                 return slice.hasNext();
             }
-
             @Override
             public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
                 return slice.element().compose(transformer);
             }
-
             @Override
             public Observable<? extends HttpSlice> next() {
                 return slice.next();
             }
         };
+    }
+
+    private final static Func1<HttpSlice, ByteBufSlice> _HSTOBBS = new Func1<HttpSlice, ByteBufSlice>() {
+        @Override
+        public ByteBufSlice call(final HttpSlice slice) {
+            return new ByteBufSlice() {
+                @Override
+                public Single<Boolean> hasNext() {
+                    return slice.hasNext();
+                }
+
+                @Override
+                public Observable<? extends DisposableWrapper<? extends ByteBuf>> element() {
+                    return slice.element().flatMap(RxNettys.message2body());
+                }
+
+                @Override
+                public Observable<? extends ByteBufSlice> next() {
+                    return slice.next().map(_HSTOBBS);
+                }};
+        }
+    };
+
+    public static Func1<HttpSlice, ByteBufSlice> hs2bbs() {
+        return _HSTOBBS;
     }
 }
