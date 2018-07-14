@@ -71,18 +71,13 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     }
 
     @Override
-    public Observable<? extends HttpRequest> request() {
-        return inbound().flatMap(new Func1<HttpSlice, Observable<HttpRequest>>() {
-            @Override
-            public Observable<HttpRequest> call(final HttpSlice slice) {
-                return slice.element().map(DisposableWrapperUtil.<HttpObject>unwrap())
-                        .compose(RxNettys.asHttpRequest());
-            }});
+    public Observable<HttpRequest> request() {
+        return _cachedRequest;
     }
 
     @Override
-    public Observable<? extends HttpSlice> inbound() {
-        return this._cachedInbound;
+    public Observable<HttpSlice> inbound() {
+        return this._inbound;
     }
 
     @Override
@@ -101,7 +96,13 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
         }
 
-        this._cachedInbound = nextSlice().cache();
+        this._inbound = httpSlices();
+        this._cachedRequest = this._inbound.flatMap(new Func1<HttpSlice, Observable<HttpRequest>>() {
+            @Override
+            public Observable<HttpRequest> call(final HttpSlice slice) {
+                return slice.element().map(DisposableWrapperUtil.<HttpObject>unwrap())
+                        .compose(RxNettys.asHttpRequest());
+            }}).cache();
     }
 
     @Override
@@ -214,7 +215,9 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final int STATUS_RECV_END = 2;
     private static final int STATUS_SEND = 3;
 
-    private final Observable<? extends HttpSlice> _cachedInbound;
+    private final Observable<HttpSlice> _inbound;
+
+    private final Observable<HttpRequest> _cachedRequest;
 
     private volatile boolean _isKeepAlive = false;
 

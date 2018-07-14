@@ -81,7 +81,11 @@ public class MessageUtil {
                 return org.flatMap(new Func1<HttpSlice, Observable<DisposableWrapper<? extends HttpObject>>>() {
                     @Override
                     public Observable<DisposableWrapper<? extends HttpObject>> call(final HttpSlice slice) {
-                        return HttpSliceUtil.elementAndSucceed(slice);
+                        try {
+                            return slice.element();
+                        } finally {
+                            slice.next();
+                        }
                     }});
             }};
 

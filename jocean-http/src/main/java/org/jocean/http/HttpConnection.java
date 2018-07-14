@@ -1,6 +1,5 @@
 package org.jocean.http;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
@@ -13,11 +12,10 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
+import org.jocean.idiom.Nextable;
 import org.jocean.idiom.TerminateAware;
 import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.idiom.rx.Action1_N;
-import org.jocean.idiom.rx.RxIterator;
-import org.jocean.idiom.rx.RxObservables;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,16 +33,18 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import rx.Completable;
+import rx.CompletableSubscriber;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
-import rx.Single;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.ActionN;
+import rx.functions.Func0;
 import rx.functions.Func1;
+import rx.subscriptions.CompositeSubscription;
 import rx.subscriptions.Subscriptions;
 
 public abstract class HttpConnection<T> implements Inbound, Outbound, AutoCloseable, TerminateAware<T> {
@@ -338,7 +338,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         _op.readMessage(this);
     }
 
-    private Observable<? extends DisposableWrapper<? extends HttpObject>> rawInbound() {
+    private Observable<DisposableWrapper<? extends HttpObject>> rawInbound() {
         return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<? extends HttpObject>>() {
             @Override
             public void call(final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber) {
@@ -351,28 +351,50 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         });
     }
 
-    private HttpSlice buildHttpSlice(final boolean hasNext,
-            final Observable<? extends DisposableWrapper<? extends HttpObject>> cachedInbound) {
-        return new HttpSlice() {
+    private Observable<HttpSlice> sliceWithNext(
+            final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound) {
+        final CompositeSubscription cs = new CompositeSubscription();
+        final Completable invokeNext = Completable.create(new Completable.OnSubscribe() {
+                @Override
+                public void call(final CompletableSubscriber subscriber) {
+                    cs.add(Subscriptions.create(new Action0() {
+                        @Override
+                        public void call() {
+                            subscriber.onCompleted();
+                        }}));
+                }});
+
+        final Observable<HttpSlice> current = Observable.just(new HttpSlice() {
             @Override
-            public Single<Boolean> hasNext() {
-                return Single.just(hasNext);
+            public void next() {
+                cs.unsubscribe();
             }
 
             @Override
-            public Observable<? extends HttpSlice> next() {
-                return hasNext ? nextSlice().doOnSubscribe(new Action0() {
-                    @Override
-                    public void call() {
-                        readMessage();
-                    }
-                }).compose(RxObservables.<HttpSlice>ensureSubscribeAtmostOnce()) : Observable.<HttpSlice>empty();
-            }
-
-            @Override
-            public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
+            public Observable<DisposableWrapper<? extends HttpObject>> element() {
                 return cachedInbound;
-            }};
+            }});
+
+        return current.concatWith(invokeNext.andThen(Observable.defer(new Func0<Observable<HttpSlice>>() {
+            @Override
+            public Observable<HttpSlice> call() {
+                try {
+                    return httpSlices();
+                } finally {
+                    readMessage();
+                }
+            }})));
+    }
+
+    private Observable<HttpSlice> lastSlice(final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound) {
+        return Observable.just(new HttpSlice() {
+            @Override
+            public void next() {}
+
+            @Override
+            public Observable<DisposableWrapper<? extends HttpObject>> element() {
+                return cachedInbound;
+            }});
     }
 
     private boolean hasNext(final DisposableWrapper<? extends HttpObject> last) {
@@ -400,11 +422,10 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         };
     }
 
-    protected Observable<? extends HttpSlice> nextSlice() {
+    protected Observable<HttpSlice> httpSlices() {
         // install inbound slice subscriber
-        final Observable<? extends DisposableWrapper<? extends HttpObject>> cachedInbound = rawInbound()
+        final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound = rawInbound()
                 .doOnNext(checkInboundCompleted()).cache();
-
         // force subscribe for cache
         cachedInbound.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
             @Override
@@ -413,10 +434,10 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             }
         });
 
-        return cachedInbound.last().map(new Func1<DisposableWrapper<? extends HttpObject>, HttpSlice>() {
+        return cachedInbound.last().flatMap(new Func1<DisposableWrapper<? extends HttpObject>, Observable<HttpSlice>>() {
             @Override
-            public HttpSlice call(final DisposableWrapper<? extends HttpObject> last) {
-                return buildHttpSlice(hasNext(last), cachedInbound);
+            public Observable<HttpSlice> call(final DisposableWrapper<? extends HttpObject> last) {
+                return hasNext(last) ? sliceWithNext(cachedInbound) : lastSlice(cachedInbound);
             }});
     }
 
@@ -576,11 +597,11 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
     }
 
-    private Subscription doSetOutbound(final Observable<? extends Object> outbound, final boolean force) {
-        LOG.debug("doSetOutbound with force:{}/outbound:{} for {}", force, outbound, this);
+    private Subscription doSetOutbound(final Observable<? extends Object> outbound) {
+        LOG.debug("doSetOutbound with outbound:{} for {}", outbound, this);
         final Subscription placeholder = buildPlaceholderSubscription();
 
-        if (force || outboundSubscriptionUpdater.compareAndSet(this, null, placeholder)) {
+        if (outboundSubscriptionUpdater.compareAndSet(this, null, placeholder)) {
             final Subscriber<Object> outboundSubscriber = buildOutboundSubscriber();
             final Subscription subscription = outbound.subscribe(outboundSubscriber);
             outboundSubscriptionUpdater.set(this, subscription);
@@ -603,14 +624,11 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     private Subscriber<Object> buildOutboundSubscriber() {
-        final AtomicBoolean isRxIterator = new AtomicBoolean(false);
         return new Subscriber<Object>() {
                 @Override
                 public void onCompleted() {
-                    if (!isRxIterator.get()) {
-                        LOG.debug("outound meet onCompleted for {}", HttpConnection.this);
-                        _op.onOutboundCompleted(HttpConnection.this);
-                    }
+                    LOG.debug("outound meet onCompleted for {}", HttpConnection.this);
+                    _op.onOutboundCompleted(HttpConnection.this);
                 }
 
                 @Override
@@ -624,62 +642,59 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
                 @Override
                 public void onNext(final Object obj) {
-                    if (obj instanceof RxIterator) {
-                        LOG.debug("handle ({}) as RxIterator for {}", obj, HttpConnection.this);
-                        isRxIterator.set(true);
-                        handleRxIterator((RxIterator<?>)obj);
-                    } else {
-                        LOG.debug("handle ({}) as sending msg for {}", obj, HttpConnection.this);
-                        _op.sendOutmsg(HttpConnection.this, obj);
-                    }
+                    handleOutobj(obj);
                 }};
     }
 
-    private void handleRxIterator(final RxIterator<?> rxiter) {
-        sendElementAndFetchNext(rxiter, rxiter.element() instanceof Observable ? (Observable<?>) rxiter.element()
-                : Observable.just(rxiter.element()));
+    private void handleOutobj(final Object obj) {
+        if (obj instanceof Nextable) {
+            LOG.debug("handle ({}) as Nextable for {}", obj, HttpConnection.this);
+            handleNextable((Nextable<?>)obj);
+        } else {
+            LOG.debug("handle ({}) as sending msg for {}", obj, HttpConnection.this);
+            _op.sendOutmsg(HttpConnection.this, obj);
+        }
     }
 
-    private void sendElementAndFetchNext(final RxIterator<?> rxiter, final Observable<?> element) {
+    private void handleNextable(final Nextable<?> nextable) {
+        sendElementAndFetchNext(nextable, nextable.element() instanceof Observable ? (Observable<?>) nextable.element()
+                : Observable.just(nextable.element()));
+    }
+
+    private void sendElementAndFetchNext(final Nextable<?> nextable, final Observable<?> element) {
         element.subscribe(new Observer<Object>() {
             @Override
             public void onCompleted() {
-                flushThenSendNext(rxiter);
+                flushThenMoveon(nextable);
             }
 
             @Override
             public void onError(final Throwable e) {
                 if (!(e instanceof CloseException)) {
                     LOG.warn("outbound unit({})'s element invoke onError with ({}), try close {}",
-                            rxiter, ExceptionUtils.exception2detail(e), HttpConnection.this);
+                            nextable, ExceptionUtils.exception2detail(e), HttpConnection.this);
                 }
                 fireClosed(e);
             }
 
             @Override
-            public void onNext(final Object msg) {
-                _op.sendOutmsg(HttpConnection.this, msg);
+            public void onNext(final Object obj) {
+                handleOutobj(obj);
             }});
     }
 
-    private void flushThenSendNext(final RxIterator<?> rxiter) {
-        _op.flush(HttpConnection.this).andThen(rxiter.hasNext()).subscribe(new Action1<Boolean>() {
+    private void flushThenMoveon(final Nextable<?> nextable) {
+        _op.flush(HttpConnection.this).subscribe(new Action0() {
             @Override
-            public void call(final Boolean hasNext) {
-                if (hasNext) {
-                    LOG.debug("outound unit hasNext, so fetch next unit for {}", HttpConnection.this);
-                    _op.setOutbound(HttpConnection.this, rxiter.next(), true);
-                } else {
-                    LOG.debug("outound ended for {}", HttpConnection.this);
-                    _op.onOutboundCompleted(HttpConnection.this);
-                }
+            public void call() {
+                nextable.next();
             }
         }, new Action1<Throwable>() {
             @Override
             public void call(final Throwable e) {
                 if (!(e instanceof CloseException)) {
                     LOG.warn("outbound unit({})'s flush meet onError with ({}), try close {}",
-                            rxiter, ExceptionUtils.exception2detail(e), HttpConnection.this);
+                            nextable, ExceptionUtils.exception2detail(e), HttpConnection.this);
                 }
                 fireClosed(e);
             }});
@@ -704,7 +719,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     protected Subscription setOutbound(final Observable<? extends Object> message) {
-        return this._op.setOutbound(this, message, false);
+        return this._op.setOutbound(this, message);
     }
 
     protected abstract void onInboundMessage(final HttpObject inmsg);
@@ -781,7 +796,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                 final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber,
                 final HttpObject msg);
 
-        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound, final boolean force);
+        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound);
 
         public void sendOutmsg(final HttpConnection<?> connection, final Object msg);
 
@@ -815,8 +830,8 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
 
         @Override
-        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound, final boolean force) {
-            return connection.doSetOutbound(outbound, force);
+        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound) {
+            return connection.doSetOutbound(outbound);
         }
 
         @Override
@@ -877,7 +892,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
 
         @Override
-        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound, final boolean force) {
+        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound) {
             LOG.warn("{} has terminated, ignore setOutbound({})", connection, outbound);
             return null;
         }

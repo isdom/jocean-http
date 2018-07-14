@@ -315,10 +315,10 @@ public class RxNettys {
         return Observable.<HttpObject>just(response);
     }
 
-    private final static Func1<DisposableWrapper<? extends HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>>
-        _MSGTOBODY = new Func1<DisposableWrapper<? extends HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>>() {
+    private final static Func1<DisposableWrapper<? extends HttpObject>, Observable<DisposableWrapper<ByteBuf>>>
+        _MSGTOBODY = new Func1<DisposableWrapper<? extends HttpObject>, Observable<DisposableWrapper<ByteBuf>>>() {
         @Override
-        public Observable<? extends DisposableWrapper<ByteBuf>> call(final DisposableWrapper<? extends HttpObject> dwh) {
+        public Observable<DisposableWrapper<ByteBuf>> call(final DisposableWrapper<? extends HttpObject> dwh) {
             if (dwh.unwrap() instanceof HttpContent) {
                 return Observable.just(dwc2dwb(dwh));
             } else {
@@ -326,7 +326,7 @@ public class RxNettys {
             }
         }};
 
-    public static Func1<DisposableWrapper<? extends HttpObject>, Observable<? extends DisposableWrapper<ByteBuf>>> message2body() {
+    public static Func1<DisposableWrapper<? extends HttpObject>, Observable<DisposableWrapper<ByteBuf>>> message2body() {
         return _MSGTOBODY;
     }
 

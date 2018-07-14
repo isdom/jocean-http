@@ -9,19 +9,18 @@ import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 import rx.Observable.Transformer;
-import rx.Single;
 import rx.functions.Func1;
 
 public class HttpSliceUtil {
-    public static Observable<DisposableWrapper<? extends HttpObject>> elementAndSucceed(final HttpSlice current) {
-        return Observable.concat(current.element(),
-                current.next().flatMap(new Func1<HttpSlice, Observable<DisposableWrapper<? extends HttpObject>>>() {
-                    @Override
-                    public Observable<DisposableWrapper<? extends HttpObject>> call(final HttpSlice next) {
-                        return elementAndSucceed(next);
-                    }
-                }));
-    }
+//    public static Observable<DisposableWrapper<? extends HttpObject>> elementAndSucceed(final HttpSlice current) {
+//        return Observable.concat(current.element(),
+//                current.next().flatMap(new Func1<HttpSlice, Observable<DisposableWrapper<? extends HttpObject>>>() {
+//                    @Override
+//                    public Observable<DisposableWrapper<? extends HttpObject>> call(final HttpSlice next) {
+//                        return elementAndSucceed(next);
+//                    }
+//                }));
+//    }
 
     public static <T extends HttpMessage> Transformer<HttpSlice, T> extractHttpMessage() {
         return new Transformer<HttpSlice, T>() {
@@ -47,20 +46,14 @@ public class HttpSliceUtil {
         };
     }
 
-    public static Observable<? extends HttpSlice> single(final Observable<? extends DisposableWrapper<? extends HttpObject>> element) {
+    public static Observable<? extends HttpSlice> single(final Observable<DisposableWrapper<? extends HttpObject>> element) {
         return Observable.just(new HttpSlice() {
             @Override
-            public Single<Boolean> hasNext() {
-                return Single.just(false);
-            }
-            @Override
-            public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
+            public Observable<DisposableWrapper<? extends HttpObject>> element() {
                 return element;
             }
             @Override
-            public Observable<? extends HttpSlice> next() {
-                return Observable.empty();
-            }});
+            public void next() {}});
     }
 
     public static Func1<HttpSlice, HttpSlice> transformElement(
@@ -77,16 +70,12 @@ public class HttpSliceUtil {
             final Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<? extends HttpObject>> transformer) {
         return new HttpSlice() {
             @Override
-            public Single<Boolean> hasNext() {
-                return slice.hasNext();
-            }
-            @Override
-            public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
+            public Observable<DisposableWrapper<? extends HttpObject>> element() {
                 return slice.element().compose(transformer);
             }
             @Override
-            public Observable<? extends HttpSlice> next() {
-                return slice.next();
+            public void next() {
+                slice.next();
             }
         };
     }
@@ -96,18 +85,13 @@ public class HttpSliceUtil {
         public ByteBufSlice call(final HttpSlice slice) {
             return new ByteBufSlice() {
                 @Override
-                public Single<Boolean> hasNext() {
-                    return slice.hasNext();
-                }
-
-                @Override
-                public Observable<? extends DisposableWrapper<? extends ByteBuf>> element() {
+                public Observable<DisposableWrapper<? extends ByteBuf>> element() {
                     return slice.element().flatMap(RxNettys.message2body());
                 }
 
                 @Override
-                public Observable<? extends ByteBufSlice> next() {
-                    return slice.next().map(_HSTOBBS);
+                public void next() {
+                    slice.next();
                 }};
         }
     };

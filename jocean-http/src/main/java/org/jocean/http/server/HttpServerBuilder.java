@@ -45,9 +45,9 @@ public interface HttpServerBuilder extends Closeable {
 
         public Completable inboundCompleted();
 
-        public Observable<? extends HttpRequest> request();
+        public Observable<HttpRequest> request();
 
-        public Observable<? extends HttpSlice> inbound();
+        public Observable<HttpSlice> inbound();
 
         public Subscription outbound(final Observable<? extends Object> message);
 

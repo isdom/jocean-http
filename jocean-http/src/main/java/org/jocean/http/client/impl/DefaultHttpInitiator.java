@@ -42,8 +42,8 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
             LoggerFactory.getLogger(DefaultHttpInitiator.class);
 
     @Override
-    public Observable<? extends HttpSlice> defineInteraction(final Observable<? extends Object> request) {
-        return nextSlice().doOnSubscribe(new Action0() {
+    public Observable<HttpSlice> defineInteraction(final Observable<? extends Object> request) {
+        return httpSlices().doOnSubscribe(new Action0() {
             @Override
             public void call() {
                 readMessage();
