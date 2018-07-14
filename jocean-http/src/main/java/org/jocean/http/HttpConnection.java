@@ -576,10 +576,11 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
     }
 
-    private Subscription doSetOutbound(final Observable<? extends Object> outbound) {
+    private Subscription doSetOutbound(final Observable<? extends Object> outbound, final boolean force) {
+        LOG.debug("doSetOutbound with force:{}/outbound:{} for {}", force, outbound, this);
         final Subscription placeholder = buildPlaceholderSubscription();
 
-        if (outboundSubscriptionUpdater.compareAndSet(this, null, placeholder)) {
+        if (outboundSubscriptionUpdater.compareAndSet(this, null, placeholder) && !force) {
             final Subscriber<Object> outboundSubscriber = buildOutboundSubscriber();
             final Subscription subscription = outbound.subscribe(outboundSubscriber);
             outboundSubscriptionUpdater.set(this, subscription);
@@ -588,7 +589,11 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             outboundSubscriber.add(Subscriptions.create(new Action0() {
                 @Override
                 public void call() {
-                    outboundSubscriptionUpdater.compareAndSet(HttpConnection.this, subscription, null);
+                    if (outboundSubscriptionUpdater.compareAndSet(HttpConnection.this, subscription, null)) {
+                        LOG.debug("reset _outboundSubscription to null");
+                    } else {
+                        LOG.debug("_outboundSubscription has changed, MAYBE force replace to next outbound, ignore reset");
+                    }
                 }}));
             return subscription;
         } else {
@@ -639,26 +644,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         element.subscribe(new Observer<Object>() {
             @Override
             public void onCompleted() {
-                _op.flush(HttpConnection.this).andThen(rxiter.hasNext()).subscribe(new Action1<Boolean>() {
-                    @Override
-                    public void call(final Boolean hasNext) {
-                        if (hasNext) {
-                            LOG.debug("outound unit hasNext, so fetch next unit for {}", HttpConnection.this);
-                            setOutbound(rxiter.next());
-                        } else {
-                            LOG.debug("outound ended for {}", HttpConnection.this);
-                            _op.onOutboundCompleted(HttpConnection.this);
-                        }
-                    }
-                }, new Action1<Throwable>() {
-                    @Override
-                    public void call(final Throwable e) {
-                        if (!(e instanceof CloseException)) {
-                            LOG.warn("outbound unit({})'s flush meet onError with ({}), try close {}",
-                                    rxiter, ExceptionUtils.exception2detail(e), HttpConnection.this);
-                        }
-                        fireClosed(e);
-                    }});
+                flushThenSendNext(rxiter);
             }
 
             @Override
@@ -673,6 +659,29 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             @Override
             public void onNext(final Object msg) {
                 _op.sendOutmsg(HttpConnection.this, msg);
+            }});
+    }
+
+    private void flushThenSendNext(final RxIterator<?> rxiter) {
+        _op.flush(HttpConnection.this).andThen(rxiter.hasNext()).subscribe(new Action1<Boolean>() {
+            @Override
+            public void call(final Boolean hasNext) {
+                if (hasNext) {
+                    LOG.debug("outound unit hasNext, so fetch next unit for {}", HttpConnection.this);
+                    _op.setOutbound(HttpConnection.this, rxiter.next(), true);
+                } else {
+                    LOG.debug("outound ended for {}", HttpConnection.this);
+                    _op.onOutboundCompleted(HttpConnection.this);
+                }
+            }
+        }, new Action1<Throwable>() {
+            @Override
+            public void call(final Throwable e) {
+                if (!(e instanceof CloseException)) {
+                    LOG.warn("outbound unit({})'s flush meet onError with ({}), try close {}",
+                            rxiter, ExceptionUtils.exception2detail(e), HttpConnection.this);
+                }
+                fireClosed(e);
             }});
     }
 
@@ -695,7 +704,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     protected Subscription setOutbound(final Observable<? extends Object> message) {
-        return this._op.setOutbound(this, message);
+        return this._op.setOutbound(this, message, false);
     }
 
     protected abstract void onInboundMessage(final HttpObject inmsg);
@@ -772,7 +781,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                 final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber,
                 final HttpObject msg);
 
-        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound);
+        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound, final boolean force);
 
         public void sendOutmsg(final HttpConnection<?> connection, final Object msg);
 
@@ -806,8 +815,8 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
 
         @Override
-        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound) {
-            return connection.doSetOutbound(outbound);
+        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound, final boolean force) {
+            return connection.doSetOutbound(outbound, force);
         }
 
         @Override
@@ -868,7 +877,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
 
         @Override
-        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound) {
+        public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound, final boolean force) {
             LOG.warn("{} has terminated, ignore setOutbound({})", connection, outbound);
             return null;
         }
