@@ -580,7 +580,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         LOG.debug("doSetOutbound with force:{}/outbound:{} for {}", force, outbound, this);
         final Subscription placeholder = buildPlaceholderSubscription();
 
-        if (outboundSubscriptionUpdater.compareAndSet(this, null, placeholder) && !force) {
+        if (force || outboundSubscriptionUpdater.compareAndSet(this, null, placeholder)) {
             final Subscriber<Object> outboundSubscriber = buildOutboundSubscriber();
             final Subscription subscription = outbound.subscribe(outboundSubscriber);
             outboundSubscriptionUpdater.set(this, subscription);
