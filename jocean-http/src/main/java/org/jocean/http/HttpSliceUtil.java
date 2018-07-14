@@ -85,7 +85,7 @@ public class HttpSliceUtil {
         public ByteBufSlice call(final HttpSlice slice) {
             return new ByteBufSlice() {
                 @Override
-                public Observable<DisposableWrapper<? extends ByteBuf>> element() {
+                public Observable<DisposableWrapper<ByteBuf>> element() {
                     return slice.element().flatMap(RxNettys.message2body());
                 }
 

@@ -364,7 +364,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                         }}));
                 }});
 
-        final Observable<HttpSlice> current = Observable.just(new HttpSlice() {
+        final Observable<HttpSlice> current = Observable.<HttpSlice>just(new HttpSlice() {
             @Override
             public void next() {
                 cs.unsubscribe();
@@ -387,7 +387,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     private Observable<HttpSlice> lastSlice(final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound) {
-        return Observable.just(new HttpSlice() {
+        return Observable.<HttpSlice>just(new HttpSlice() {
             @Override
             public void next() {}
 
