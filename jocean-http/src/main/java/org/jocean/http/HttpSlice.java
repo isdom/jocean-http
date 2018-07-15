@@ -6,5 +6,5 @@ import org.jocean.idiom.Nextable;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
 
-public interface HttpSlice extends Nextable<Observable<DisposableWrapper<? extends HttpObject>>> {
+public interface HttpSlice extends Nextable<Observable<? extends DisposableWrapper<? extends HttpObject>>> {
 }

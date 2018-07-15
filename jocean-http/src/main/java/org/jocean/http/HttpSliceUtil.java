@@ -46,10 +46,10 @@ public class HttpSliceUtil {
         };
     }
 
-    public static Observable<? extends HttpSlice> single(final Observable<DisposableWrapper<? extends HttpObject>> element) {
+    public static Observable<HttpSlice> single(final Observable<? extends DisposableWrapper<? extends HttpObject>> element) {
         return Observable.just(new HttpSlice() {
             @Override
-            public Observable<DisposableWrapper<? extends HttpObject>> element() {
+            public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
                 return element;
             }
             @Override

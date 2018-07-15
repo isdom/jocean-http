@@ -78,9 +78,9 @@ public class MessageUtil {
         new Transformer<HttpSlice, DisposableWrapper<? extends HttpObject>>() {
             @Override
             public Observable<DisposableWrapper<? extends HttpObject>> call(final Observable<HttpSlice> org) {
-                return org.flatMap(new Func1<HttpSlice, Observable<DisposableWrapper<? extends HttpObject>>>() {
+                return org.flatMap(new Func1<HttpSlice, Observable<? extends DisposableWrapper<? extends HttpObject>>>() {
                     @Override
-                    public Observable<DisposableWrapper<? extends HttpObject>> call(final HttpSlice slice) {
+                    public Observable<? extends DisposableWrapper<? extends HttpObject>> call(final HttpSlice slice) {
                         try {
                             return slice.element();
                         } finally {
