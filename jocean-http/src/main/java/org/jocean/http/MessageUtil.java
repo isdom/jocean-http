@@ -84,7 +84,7 @@ public class MessageUtil {
                         try {
                             return slice.element();
                         } finally {
-                            slice.next();
+                            slice.step();
                         }
                     }});
             }};

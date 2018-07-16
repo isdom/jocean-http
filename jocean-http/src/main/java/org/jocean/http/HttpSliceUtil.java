@@ -53,7 +53,7 @@ public class HttpSliceUtil {
                 return element;
             }
             @Override
-            public void next() {}});
+            public void step() {}});
     }
 
     public static Func1<HttpSlice, HttpSlice> transformElement(
@@ -74,8 +74,8 @@ public class HttpSliceUtil {
                 return slice.element().compose(transformer);
             }
             @Override
-            public void next() {
-                slice.next();
+            public void step() {
+                slice.step();
             }
         };
     }
@@ -90,8 +90,8 @@ public class HttpSliceUtil {
                 }
 
                 @Override
-                public void next() {
-                    slice.next();
+                public void step() {
+                    slice.step();
                 }};
         }
     };

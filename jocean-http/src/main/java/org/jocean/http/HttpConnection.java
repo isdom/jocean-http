@@ -12,7 +12,7 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
-import org.jocean.idiom.Nextable;
+import org.jocean.idiom.Stepable;
 import org.jocean.idiom.TerminateAware;
 import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.idiom.rx.Action1_N;
@@ -366,7 +366,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
         final Observable<HttpSlice> current = Observable.<HttpSlice>just(new HttpSlice() {
             @Override
-            public void next() {
+            public void step() {
                 cs.unsubscribe();
             }
 
@@ -389,7 +389,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     private Observable<HttpSlice> lastSlice(final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound) {
         return Observable.<HttpSlice>just(new HttpSlice() {
             @Override
-            public void next() {}
+            public void step() {}
 
             @Override
             public Observable<DisposableWrapper<? extends HttpObject>> element() {
@@ -647,32 +647,32 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     private void handleOutobj(final Object obj) {
-        if (obj instanceof Nextable) {
+        if (obj instanceof Stepable) {
             LOG.debug("handle ({}) as Nextable for {}", obj, HttpConnection.this);
-            handleNextable((Nextable<?>)obj);
+            handleNextable((Stepable<?>)obj);
         } else {
             LOG.debug("handle ({}) as sending msg for {}", obj, HttpConnection.this);
             _op.sendOutmsg(HttpConnection.this, obj);
         }
     }
 
-    private void handleNextable(final Nextable<?> nextable) {
-        sendElementAndFetchNext(nextable, nextable.element() instanceof Observable ? (Observable<?>) nextable.element()
-                : Observable.just(nextable.element()));
+    private void handleNextable(final Stepable<?> stepable) {
+        sendElementAndFetchNext(stepable, stepable.element() instanceof Observable ? (Observable<?>) stepable.element()
+                : Observable.just(stepable.element()));
     }
 
-    private void sendElementAndFetchNext(final Nextable<?> nextable, final Observable<?> element) {
+    private void sendElementAndFetchNext(final Stepable<?> stepable, final Observable<?> element) {
         element.subscribe(new Observer<Object>() {
             @Override
             public void onCompleted() {
-                flushThenMoveon(nextable);
+                flushThenStep(stepable);
             }
 
             @Override
             public void onError(final Throwable e) {
                 if (!(e instanceof CloseException)) {
                     LOG.warn("outbound unit({})'s element invoke onError with ({}), try close {}",
-                            nextable, ExceptionUtils.exception2detail(e), HttpConnection.this);
+                            stepable, ExceptionUtils.exception2detail(e), HttpConnection.this);
                 }
                 fireClosed(e);
             }
@@ -683,18 +683,18 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             }});
     }
 
-    private void flushThenMoveon(final Nextable<?> nextable) {
+    private void flushThenStep(final Stepable<?> stepable) {
         _op.flush(HttpConnection.this).subscribe(new Action0() {
             @Override
             public void call() {
-                nextable.next();
+                stepable.step();
             }
         }, new Action1<Throwable>() {
             @Override
             public void call(final Throwable e) {
                 if (!(e instanceof CloseException)) {
                     LOG.warn("outbound unit({})'s flush meet onError with ({}), try close {}",
-                            nextable, ExceptionUtils.exception2detail(e), HttpConnection.this);
+                            stepable, ExceptionUtils.exception2detail(e), HttpConnection.this);
                 }
                 fireClosed(e);
             }});
