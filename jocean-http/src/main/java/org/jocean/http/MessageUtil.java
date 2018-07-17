@@ -885,7 +885,12 @@ public class MessageUtil {
                 return decodeXmlAs(body, type);
             }
         }
-        return Observable.error(new RuntimeException("can't decodeAs type:" + type));
+        try {
+            LOG.warn("contentType is {}, can't decode from body, just return empty {} instance", body.contentType(), type);
+            return Observable.just(type.newInstance());
+        } catch (final Exception e) {
+            return Observable.error(e);
+        }
     }
 
     public static <T> Observable<? extends T> decodeJsonAs(final MessageBody body, final Class<T> type) {
