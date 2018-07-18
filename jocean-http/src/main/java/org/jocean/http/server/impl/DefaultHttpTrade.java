@@ -264,8 +264,8 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
 
     @Override
     public String toString() {
-        final StringBuilder builder = new StringBuilder();
-        builder.append("DefaultHttpTrade [create at:")
+        return new StringBuilder()
+                .append("DefaultHttpTrade [create at:")
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
                 .append(", onTerminateCnt=").append(this._terminateAwareSupport.onTerminateCount())
                 .append(", requestMethod=").append(this._requestMethod)
@@ -274,7 +274,6 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
                 .append(", transactionStatus=").append(transactionStatusAsString())
                 .append(", isActive=").append(isActive())
                 .append(", channel=").append(_channel)
-                .append("]");
-        return builder.toString();
+                .append("]").toString();
     }
 }
