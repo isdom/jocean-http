@@ -43,7 +43,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
 
     @Override
     public Observable<HttpSlice> defineInteraction(final Observable<? extends Object> request) {
-        return httpSlices().doOnSubscribe(new Action0() {
+        return rawInbound().doOnSubscribe(new Action0() {
             @Override
             public void call() {
                 readMessage();

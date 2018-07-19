@@ -13,6 +13,7 @@ import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapperUtil;
+import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,6 +56,13 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
 //        }
 //    };
 
+    private static final Func1<HttpSlice, Observable<HttpRequest>> _1ST_TO_REQ = new Func1<HttpSlice, Observable<HttpRequest>>() {
+        @Override
+        public Observable<HttpRequest> call(final HttpSlice slice) {
+            return slice.element().map(DisposableWrapperUtil.<HttpObject>unwrap())
+                    .compose(RxNettys.asHttpRequest());
+        }};
+
     private final CompositeSubscription _inboundCompleted = new CompositeSubscription();
 
     @Override
@@ -72,12 +80,12 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
 
     @Override
     public Observable<HttpRequest> request() {
-        return _cachedRequest;
+        return this._1stSlice.flatMap(_1ST_TO_REQ);
     }
 
     @Override
     public Observable<HttpSlice> inbound() {
-        return this._inbound;
+        return this._1stSlice.concatWith(this._rawInbound);
     }
 
     @Override
@@ -96,13 +104,12 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
         }
 
-        this._inbound = httpSlices();
-        this._cachedRequest = this._inbound.flatMap(new Func1<HttpSlice, Observable<HttpRequest>>() {
-            @Override
-            public Observable<HttpRequest> call(final HttpSlice slice) {
-                return slice.element().map(DisposableWrapperUtil.<HttpObject>unwrap())
-                        .compose(RxNettys.asHttpRequest());
-            }}).cache();
+        this._rawInbound = rawInbound().share();
+
+        this._rawInbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
+
+        this._1stSlice = this._rawInbound.first().cache();
+        this._1stSlice.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
     }
 
     @Override
@@ -215,9 +222,8 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final int STATUS_RECV_END = 2;
     private static final int STATUS_SEND = 3;
 
-    private final Observable<HttpSlice> _inbound;
-
-    private final Observable<HttpRequest> _cachedRequest;
+    private final Observable<HttpSlice> _rawInbound;
+    private final Observable<HttpSlice> _1stSlice;
 
     private volatile boolean _isKeepAlive = false;
 

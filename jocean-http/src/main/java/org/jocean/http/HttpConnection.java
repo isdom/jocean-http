@@ -1,7 +1,10 @@
 package org.jocean.http;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
 import org.jocean.http.util.HttpHandlers;
@@ -16,7 +19,6 @@ import org.jocean.idiom.Stepable;
 import org.jocean.idiom.TerminateAware;
 import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.idiom.rx.Action1_N;
-import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +35,6 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import rx.Completable;
-import rx.CompletableSubscriber;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Observer;
@@ -42,9 +43,6 @@ import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.ActionN;
-import rx.functions.Func0;
-import rx.functions.Func1;
-import rx.subscriptions.CompositeSubscription;
 import rx.subscriptions.Subscriptions;
 
 public abstract class HttpConnection<T> implements Inbound, Outbound, AutoCloseable, TerminateAware<T> {
@@ -305,8 +303,10 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }};
 
     private void onReadComplete() {
-        //  可通过 _inmsgRecvd 的状态，判断是否已经解码出有效 inmsg
-        if (!this._inmsgRecvd) {
+        //  如 _inmsgsRef 已经被赋值有 List<?> 实例，则已经解码出有效 inmsg
+        if (null == this._inmsgsRef.get()) {
+            // TODO, check if inbound onCompleted
+
             //  SSL enabled 连接:
             //  收到 READ COMPLETE 事件时，可能会由于当前接收到的数据不够，还未能解出有效的 inmsg ，
             //  此时应继续调用 channel.read(), 来继续获取对端发送来的 加密数据
@@ -315,13 +315,33 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         } else {
             LOG.debug("inmsg received, stop read and wait for {}", this);
             this._unreadBegin = System.currentTimeMillis();
-            final Subscriber<?> subscriber = inboundSubscriberUpdater.get(this);
+            @SuppressWarnings("unchecked")
+            final Subscriber<? super HttpSlice> subscriber = inboundSubscriberUpdater.get(this);
             if (null != subscriber && !subscriber.isUnsubscribed()) {
-                if (unholdInboundAndUninstallHandler(subscriber)) {
-                    subscriber.onCompleted();
-                }
+                subscriber.onNext(currentSlice(true));
             }
         }
+    }
+
+    private HttpSlice currentSlice(final boolean needStep) {
+        final Subscription runOnce = needStep ? Subscriptions.create(new Action0() {
+            @Override
+            public void call() {
+                readMessage();
+            }
+        }) : Subscriptions.unsubscribed();
+
+        final List<DisposableWrapper<HttpObject>> inmsgs = this._inmsgsRef.getAndSet(null);
+
+        return new HttpSlice() {
+            @Override
+            public void step() {
+                runOnce.unsubscribe();
+            }
+            @Override
+            public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
+                return Observable.from(inmsgs);
+            }};
     }
 
 //    @Override
@@ -338,10 +358,92 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         _op.readMessage(this);
     }
 
-    private Observable<DisposableWrapper<? extends HttpObject>> rawInbound() {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<? extends HttpObject>>() {
+//    private Observable<DisposableWrapper<? extends HttpObject>> rawInbound() {
+//        return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<? extends HttpObject>>() {
+//            @Override
+//            public void call(final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber) {
+//                if (!subscriber.isUnsubscribed()) {
+//                    if (!_op.attachInbound(HttpConnection.this, subscriber)) {
+//                        subscriber.onError(new RuntimeException("transaction in progress"));
+//                    }
+//                }
+//            }
+//        });
+//    }
+
+//    private Observable<HttpSlice> sliceWithStep(
+//            final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound) {
+//        final CompositeSubscription cs = new CompositeSubscription();
+//        final Completable invokeNext = Completable.create(new Completable.OnSubscribe() {
+//                @Override
+//                public void call(final CompletableSubscriber subscriber) {
+//                    cs.add(Subscriptions.create(new Action0() {
+//                        @Override
+//                        public void call() {
+//                            subscriber.onCompleted();
+//                        }}));
+//                }});
+//
+//        final Observable<HttpSlice> current = Observable.<HttpSlice>just(new HttpSlice() {
+//            @Override
+//            public void step() {
+//                cs.unsubscribe();
+//            }
+//
+//            @Override
+//            public Observable<DisposableWrapper<? extends HttpObject>> element() {
+//                return cachedInbound;
+//            }});
+//
+//        return current.concatWith(invokeNext.andThen(Observable.defer(new Func0<Observable<HttpSlice>>() {
+//            @Override
+//            public Observable<HttpSlice> call() {
+//                try {
+//                    return httpSlices();
+//                } finally {
+//                    readMessage();
+//                }
+//            }})));
+//    }
+
+//    private Observable<HttpSlice> lastSlice(final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound) {
+//        return Observable.<HttpSlice>just(new HttpSlice() {
+//            @Override
+//            public void step() {}
+//
+//            @Override
+//            public Observable<DisposableWrapper<? extends HttpObject>> element() {
+//                return cachedInbound;
+//            }});
+//    }
+
+//    private boolean needStep(final DisposableWrapper<? extends HttpObject> last) {
+//        return !(last.unwrap() instanceof LastHttpContent);
+//    }
+
+//    protected Observable<HttpSlice> httpSlices() {
+//        // install inbound slice subscriber
+//        final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound = rawInbound()
+//                .doOnNext(checkInboundCompleted()).cache();
+//        // force subscribe for cache
+//        cachedInbound.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
+//            @Override
+//            public void call(final Throwable e) {
+//                LOG.warn("httpSlice's cached inbound meet onError {} for {}", errorAsString(e), HttpConnection.this);
+//            }
+//        });
+//
+//        return cachedInbound.last().flatMap(new Func1<DisposableWrapper<? extends HttpObject>, Observable<HttpSlice>>() {
+//            @Override
+//            public Observable<HttpSlice> call(final DisposableWrapper<? extends HttpObject> last) {
+//                return needStep(last) ? sliceWithStep(cachedInbound) : lastSlice(cachedInbound);
+//            }});
+//    }
+
+    protected Observable<HttpSlice> rawInbound() {
+        return Observable.unsafeCreate(new Observable.OnSubscribe<HttpSlice>() {
             @Override
-            public void call(final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber) {
+            public void call(final Subscriber<? super HttpSlice> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     if (!_op.attachInbound(HttpConnection.this, subscriber)) {
                         subscriber.onError(new RuntimeException("transaction in progress"));
@@ -351,96 +453,6 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         });
     }
 
-    private Observable<HttpSlice> sliceWithNext(
-            final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound) {
-        final CompositeSubscription cs = new CompositeSubscription();
-        final Completable invokeNext = Completable.create(new Completable.OnSubscribe() {
-                @Override
-                public void call(final CompletableSubscriber subscriber) {
-                    cs.add(Subscriptions.create(new Action0() {
-                        @Override
-                        public void call() {
-                            subscriber.onCompleted();
-                        }}));
-                }});
-
-        final Observable<HttpSlice> current = Observable.<HttpSlice>just(new HttpSlice() {
-            @Override
-            public void step() {
-                cs.unsubscribe();
-            }
-
-            @Override
-            public Observable<DisposableWrapper<? extends HttpObject>> element() {
-                return cachedInbound;
-            }});
-
-        return current.concatWith(invokeNext.andThen(Observable.defer(new Func0<Observable<HttpSlice>>() {
-            @Override
-            public Observable<HttpSlice> call() {
-                try {
-                    return httpSlices();
-                } finally {
-                    readMessage();
-                }
-            }})));
-    }
-
-    private Observable<HttpSlice> lastSlice(final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound) {
-        return Observable.<HttpSlice>just(new HttpSlice() {
-            @Override
-            public void step() {}
-
-            @Override
-            public Observable<DisposableWrapper<? extends HttpObject>> element() {
-                return cachedInbound;
-            }});
-    }
-
-    private boolean hasNext(final DisposableWrapper<? extends HttpObject> last) {
-        return !(last.unwrap() instanceof LastHttpContent);
-    }
-
-    private Action1<DisposableWrapper<? extends HttpObject>> checkInboundCompleted() {
-        return new Action1<DisposableWrapper<? extends HttpObject>>() {
-            @Override
-            public void call(final DisposableWrapper<? extends HttpObject> dwh) {
-                if (dwh.unwrap() instanceof LastHttpContent) {
-                    /*
-                     * netty 参考代码:
-                     *   https://github.com/netty/netty/blob/netty-4.0.26.Final /codec/src/main/java/io/netty/handler/codec/ByteToMessageDecoder.java#L274
-                     *   https://github.com/netty/netty/blob/netty-4.0.26.Final/codec-http/src/main/java/io/netty/handler/codec/http/HttpObjectDecoder.java#L398
-                     * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件 currentState ==
-                     * State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() &&
-                     * !chunked 即没有指定Content-Length头域，也不是CHUNKED传输模式
-                     * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
-                     * 因此，无需在channelInactive处，针对该情况做特殊处理
-                     */
-                    onInboundCompleted();
-                }
-            }
-        };
-    }
-
-    protected Observable<HttpSlice> httpSlices() {
-        // install inbound slice subscriber
-        final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound = rawInbound()
-                .doOnNext(checkInboundCompleted()).cache();
-        // force subscribe for cache
-        cachedInbound.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
-            @Override
-            public void call(final Throwable e) {
-                LOG.warn("httpSlice's cached inbound meet onError {} for {}", errorAsString(e), HttpConnection.this);
-            }
-        });
-
-        return cachedInbound.last().flatMap(new Func1<DisposableWrapper<? extends HttpObject>, Observable<HttpSlice>>() {
-            @Override
-            public Observable<HttpSlice> call(final DisposableWrapper<? extends HttpObject> last) {
-                return hasNext(last) ? sliceWithNext(cachedInbound) : lastSlice(cachedInbound);
-            }});
-    }
-
     private void doReadMessage() {
         LOG.info("trigger read message for {}", this);
         this._channel.read();
@@ -448,13 +460,11 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
     }
 
-    private boolean holdInboundAndInstallHandler(
-            final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber) {
+    private boolean holdInboundAndInstallHandler(final Subscriber<? super HttpSlice> subscriber) {
         if (holdInboundSubscriber(subscriber)) {
             final ChannelHandler handler = buildInboundHandler(subscriber);
             Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
             setInboundHandler(handler);
-            this._inmsgRecvd = false;
             return true;
         } else {
             return false;
@@ -464,7 +474,6 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     private boolean unholdInboundAndUninstallHandler(final Subscriber<?> subscriber) {
         if (unholdInboundSubscriber(subscriber)) {
             removeInboundHandler();
-            this._inmsgRecvd = false;
             return true;
         } else {
             return false;
@@ -491,7 +500,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
     }
 
-    private SimpleChannelInboundHandler<HttpObject> buildInboundHandler(final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber) {
+    private SimpleChannelInboundHandler<HttpObject> buildInboundHandler(final Subscriber<? super HttpSlice> subscriber) {
         return new SimpleChannelInboundHandler<HttpObject>(false) {
             @Override
             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject inmsg) throws Exception {
@@ -500,15 +509,44 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             }};
     }
 
-    private void processInmsg(final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber,
-            final HttpObject inmsg) {
+    private void processInmsg(final Subscriber<? super HttpSlice> subscriber, final HttpObject inmsg) {
 
         onInboundMessage(inmsg);
 
-        try {
-            this._inmsgRecvd = true;
-            subscriber.onNext(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
-        } finally {
+        newOrFetchInmsgs().add(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
+
+        if (inmsg instanceof LastHttpContent) {
+            /*
+             * netty 参考代码:
+             *   https://github.com/netty/netty/blob/netty-4.0.26.Final /codec/src/main/java/io/netty/handler/codec/ByteToMessageDecoder.java#L274
+             *   https://github.com/netty/netty/blob/netty-4.0.26.Final/codec-http/src/main/java/io/netty/handler/codec/http/HttpObjectDecoder.java#L398
+             * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件 currentState ==
+             * State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() &&
+             * !chunked 即没有指定Content-Length头域，也不是CHUNKED传输模式
+             * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
+             * 因此，无需在channelInactive处，针对该情况做特殊处理
+             */
+            if (unholdInboundAndUninstallHandler(subscriber)) {
+                if (!subscriber.isUnsubscribed()) {
+                    subscriber.onNext(currentSlice(false));
+                }
+
+                onInboundCompleted();
+
+                if (!subscriber.isUnsubscribed()) {
+                    subscriber.onCompleted();
+                }
+            }
+        }
+    }
+
+    private List<DisposableWrapper<HttpObject>> newOrFetchInmsgs() {
+        final List<DisposableWrapper<HttpObject>> inmsgs = this._inmsgsRef.get();
+        if ( null != inmsgs) {
+            return inmsgs;
+        } else {
+            this._inmsgsRef.set(new ArrayList<DisposableWrapper<HttpObject>>());
+            return this._inmsgsRef.get();
         }
     }
 
@@ -577,6 +615,12 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         invokeInboundOnError(e);
 
         unsubscribeOutbound();
+
+        // clear cached inbound part
+        final List<DisposableWrapper<HttpObject>> inmsgs = this._inmsgsRef.getAndSet(null);
+        if (null != inmsgs) {
+            inmsgs.clear();
+        }
 
         //  fire all pending subscribers onError with unactived exception
         this._terminateAwareSupport.fireAllTerminates((T) this);
@@ -648,15 +692,15 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
     private void handleOutobj(final Object obj) {
         if (obj instanceof Stepable) {
-            LOG.debug("handle ({}) as Nextable for {}", obj, HttpConnection.this);
-            handleNextable((Stepable<?>)obj);
+            LOG.debug("handle ({}) as Stepable for {}", obj, HttpConnection.this);
+            handleStepable((Stepable<?>)obj);
         } else {
             LOG.debug("handle ({}) as sending msg for {}", obj, HttpConnection.this);
             _op.sendOutmsg(HttpConnection.this, obj);
         }
     }
 
-    private void handleNextable(final Stepable<?> stepable) {
+    private void handleStepable(final Stepable<?> stepable) {
         sendElementAndFetchNext(stepable, stepable.element() instanceof Observable ? (Observable<?>) stepable.element()
                 : Observable.just(stepable.element()));
     }
@@ -741,8 +785,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     @SuppressWarnings("unused")
     private volatile long _readBegin = 0;
 
-    //  标记在当前 inboundHandler 期间是否处理过 inmsg
-    private volatile boolean _inmsgRecvd = false;
+    private final AtomicReference<List<DisposableWrapper<HttpObject>>> _inmsgsRef = new AtomicReference<>();
 
     @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<HttpConnection, Subscriber> inboundSubscriberUpdater =
@@ -787,14 +830,9 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     protected interface ConnectionOp {
-        public boolean attachInbound(
-                final HttpConnection<?> connection,
-                final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber);
+        public boolean attachInbound(final HttpConnection<?> connection, final Subscriber<? super HttpSlice> subscriber);
 
-        public void onInmsgRecvd(
-                final HttpConnection<?> connection,
-                final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber,
-                final HttpObject msg);
+        public void onInmsgRecvd(final HttpConnection<?> connection, final Subscriber<? super HttpSlice> subscriber, final HttpObject msg);
 
         public Subscription setOutbound(final HttpConnection<?> connection, final Observable<? extends Object> outbound);
 
@@ -815,17 +853,12 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
     private static final ConnectionOp WHEN_ACTIVE = new ConnectionOp() {
         @Override
-        public boolean attachInbound(
-                final HttpConnection<?> connection,
-                final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber) {
+        public boolean attachInbound(final HttpConnection<?> connection, final Subscriber<? super HttpSlice> subscriber) {
             return connection.holdInboundAndInstallHandler(subscriber);
         }
 
         @Override
-        public void onInmsgRecvd(
-                final HttpConnection<?> connection,
-                final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber,
-                final HttpObject inmsg) {
+        public void onInmsgRecvd(final HttpConnection<?> connection, final Subscriber<? super HttpSlice> subscriber, final HttpObject inmsg) {
             connection.processInmsg(subscriber, inmsg);
         }
 
@@ -873,9 +906,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
     private static final ConnectionOp WHEN_UNACTIVE = new ConnectionOp() {
         @Override
-        public boolean attachInbound(
-                final HttpConnection<?> connection,
-                final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber) {
+        public boolean attachInbound(final HttpConnection<?> connection, final Subscriber<? super HttpSlice> subscriber) {
             if (!subscriber.isUnsubscribed()) {
                 subscriber.onError(new RuntimeException(connection + " has terminated."));
             }
@@ -883,10 +914,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
 
         @Override
-        public void onInmsgRecvd(
-                final HttpConnection<?> connection,
-                final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber,
-                final HttpObject inmsg) {
+        public void onInmsgRecvd(final HttpConnection<?> connection, final Subscriber<? super HttpSlice> subscriber, final HttpObject inmsg) {
             ReferenceCountUtil.release(inmsg);
             LOG.warn("{} has terminated, onInmsgRecvd and just release msg({}).", connection, inmsg);
         }
