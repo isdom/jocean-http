@@ -303,23 +303,26 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }};
 
     private void onReadComplete() {
-        //  如 _inmsgsRef 已经被赋值有 List<?> 实例，则已经解码出有效 inmsg
-        if (null == this._inmsgsRef.get()) {
-            // TODO, check if inbound onCompleted
+        @SuppressWarnings("unchecked")
+        final Subscriber<? super HttpSlice> subscriber = inboundSubscriberUpdater.get(this);
 
-            //  SSL enabled 连接:
-            //  收到 READ COMPLETE 事件时，可能会由于当前接收到的数据不够，还未能解出有效的 inmsg ，
-            //  此时应继续调用 channel.read(), 来继续获取对端发送来的 加密数据
-            LOG.debug("!NO! inmsg received, continue read for {}", this);
-            readMessage();
-        } else {
-            LOG.debug("inmsg received, stop read and wait for {}", this);
-            this._unreadBegin = System.currentTimeMillis();
-            @SuppressWarnings("unchecked")
-            final Subscriber<? super HttpSlice> subscriber = inboundSubscriberUpdater.get(this);
-            if (null != subscriber && !subscriber.isUnsubscribed()) {
+        if (null != subscriber && !subscriber.isUnsubscribed()) {
+            //  如 _inmsgsRef 已经被赋值有 List<?> 实例，则已经解码出有效 inmsg
+            if (null == this._inmsgsRef.get()) {
+                // TODO, check if inbound onCompleted
+
+                //  SSL enabled 连接:
+                //  收到 READ COMPLETE 事件时，可能会由于当前接收到的数据不够，还未能解出有效的 inmsg ，
+                //  此时应继续调用 channel.read(), 来继续获取对端发送来的 加密数据
+                LOG.debug("!NO! inmsg received, continue read for {}", this);
+                readMessage();
+            } else {
+                LOG.debug("inmsg received, stop read and wait for {}", this);
+                this._unreadBegin = System.currentTimeMillis();
                 subscriber.onNext(currentSlice(true));
             }
+        } else {
+            LOG.debug("onReadComplete without valid inbound subscriber, do nothing for {}", this);
         }
     }
 
