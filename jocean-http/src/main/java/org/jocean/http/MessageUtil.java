@@ -771,7 +771,7 @@ public class MessageUtil {
     private static Observable<ByteBufSlice> bean2bbs(final Object bean, final Action2<Object, OutputStream> encoder) {
         final BufsOutputStream<DisposableWrapper<ByteBuf>> bufout =
                 new BufsOutputStream<>(pooledAllocator(null, 8192), _UNWRAP_DWB);
-        return Observable.just(new ByteBufSlice() {
+        return Observable.<ByteBufSlice>just(new ByteBufSlice() {
 
             @Override
             public void step() {}
