@@ -166,7 +166,7 @@ public class DefaultHttpClientTestCase {
                 writePolicy.call(initiator.writeCtrl());
             }
             interaction.interact(initiator, initiator.defineInteraction(request)
-                    .compose(MessageUtil.rollout2dwhs())
+                    .compose(MessageUtil.AUTOSTEP2DWH)
                     .compose(RxNettys.message2fullresp(initiator, true)));
             return initiator;
         }
@@ -220,12 +220,12 @@ public class DefaultHttpClientTestCase {
 
             final Observable<? extends DisposableWrapper<? extends HttpObject>> resp1 = initiator
                     .defineInteraction(Observable.just(fullHttpRequest()))
-                    .compose(MessageUtil.rollout2dwhs())
+                    .compose(MessageUtil.AUTOSTEP2DWH)
                     ;
 
             final Observable<? extends DisposableWrapper<? extends HttpObject>> resp2 = initiator
                     .defineInteraction(Observable.just(fullHttpRequest()))
-                    .compose(MessageUtil.rollout2dwhs())
+                    .compose(MessageUtil.AUTOSTEP2DWH)
                     ;
             resp1.subscribe();
 
@@ -400,7 +400,7 @@ public class DefaultHttpClientTestCase {
             {
                 final Observable<? extends DisposableWrapper<? extends HttpObject>> cached = initiator
                         .defineInteraction(Observable.just(fullHttpRequest()))
-                        .compose(MessageUtil.rollout2dwhs())
+                        .compose(MessageUtil.AUTOSTEP2DWH)
                         .cache();
 
                 cached.subscribe();
@@ -431,7 +431,7 @@ public class DefaultHttpClientTestCase {
             {
                 final Observable<? extends DisposableWrapper<? extends HttpObject>> cached = initiator
                         .defineInteraction(Observable.just(fullHttpRequest()))
-                        .compose(MessageUtil.rollout2dwhs())
+                        .compose(MessageUtil.AUTOSTEP2DWH)
                         .cache();
 
                 final Observable<HttpObject> resp2 = cached.map(DisposableWrapperUtil.unwrap());
@@ -490,7 +490,7 @@ public class DefaultHttpClientTestCase {
             {
                 final Observable<? extends DisposableWrapper<? extends HttpObject>> cached = initiator
                         .defineInteraction(Observable.just(fullHttpRequest()))
-                        .compose(MessageUtil.rollout2dwhs())
+                        .compose(MessageUtil.AUTOSTEP2DWH)
                         .cache();
 
                 cached.subscribe();
@@ -519,7 +519,7 @@ public class DefaultHttpClientTestCase {
             {
                 final Observable<? extends DisposableWrapper<? extends HttpObject>> cached = initiator
                         .defineInteraction(Observable.just(fullHttpRequest()))
-                        .compose(MessageUtil.rollout2dwhs())
+                        .compose(MessageUtil.AUTOSTEP2DWH)
                         .cache();
 
                 cached.subscribe();
@@ -1093,8 +1093,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
 
                         // recv request from client side
-                        trade.inbound()
-                            .compose(MessageUtil.rollout2dwhs())
+                        trade.inbound().compose(MessageUtil.AUTOSTEP2DWH)
                             .doOnNext(DISPOSE_EACH).toCompletable().await();
 
                         // server not send response, and client cancel this interaction
@@ -1153,8 +1152,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
 
                         // recv request from client side
-                        trade.inbound()
-                            .compose(MessageUtil.rollout2dwhs())
+                        trade.inbound().compose(MessageUtil.AUTOSTEP2DWH)
                             .doOnNext(DISPOSE_EACH).toCompletable().await();
 
                         // server not send response, and client cancel this interaction
@@ -1357,8 +1355,7 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
 
                         // recv all request
-                        trade.inbound()
-                            .compose(MessageUtil.rollout2dwhs())
+                        trade.inbound().compose(MessageUtil.AUTOSTEP2DWH)
                             .doOnNext(DISPOSE_EACH).toCompletable().await();
                         assertEquals(0, allActiveAllocationsCount(allocator));
 

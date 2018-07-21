@@ -27,6 +27,7 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ReflectUtils;
+import org.jocean.idiom.StepableUtil;
 import org.jocean.idiom.Terminable;
 import org.jocean.netty.util.BufsOutputStream;
 import org.slf4j.Logger;
@@ -71,30 +72,18 @@ import rx.functions.Func1;
 import rx.functions.Func2;
 
 public class MessageUtil {
+
+    public static final Transformer<HttpSlice, DisposableWrapper<? extends HttpObject>> AUTOSTEP2DWH =
+            StepableUtil.<HttpSlice, DisposableWrapper<? extends HttpObject>>autostep2element();
+
+    public static final Transformer<ByteBufSlice, DisposableWrapper<? extends ByteBuf>> AUTOSTEP2DWB =
+            StepableUtil.<ByteBufSlice, DisposableWrapper<? extends ByteBuf>>autostep2element();
+
     private static final Logger LOG =
             LoggerFactory.getLogger(MessageUtil.class);
 
-    final static private Transformer<HttpSlice, DisposableWrapper<? extends HttpObject>> ROLLOUT_TO_DWHS =
-        new Transformer<HttpSlice, DisposableWrapper<? extends HttpObject>>() {
-            @Override
-            public Observable<DisposableWrapper<? extends HttpObject>> call(final Observable<HttpSlice> org) {
-                return org.flatMap(new Func1<HttpSlice, Observable<? extends DisposableWrapper<? extends HttpObject>>>() {
-                    @Override
-                    public Observable<? extends DisposableWrapper<? extends HttpObject>> call(final HttpSlice slice) {
-                        try {
-                            return slice.element();
-                        } finally {
-                            slice.step();
-                        }
-                    }});
-            }};
-
     private MessageUtil() {
         throw new IllegalStateException("No instances!");
-    }
-
-    public static Transformer<HttpSlice, DisposableWrapper<? extends HttpObject>> rollout2dwhs() {
-        return ROLLOUT_TO_DWHS;
     }
 
     public static Func0<DisposableWrapper<ByteBuf>> pooledAllocator(final Terminable terminable, final int pageSize) {
@@ -322,7 +311,7 @@ public class MessageUtil {
                 return obsinteraction.flatMap(new Func1<Interaction, Observable<RESP>>() {
                     @Override
                     public Observable<RESP> call(final Interaction interaction) {
-                        return interaction.execute().compose(rollout2dwhs())
+                        return interaction.execute().compose(AUTOSTEP2DWH)
                                 .compose(RxNettys.message2fullresp(interaction.initiator(), true))
                                 .doOnUnsubscribe(interaction.initiator().closer())
                                 .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
@@ -355,7 +344,7 @@ public class MessageUtil {
     private static final Func1<Interaction, Observable<String>> _INTERACTION_TO_OBS_STRING = new Func1<Interaction, Observable<String>>() {
         @Override
         public Observable<String> call(final Interaction interaction) {
-            return interaction.execute().compose(rollout2dwhs())
+            return interaction.execute().compose(AUTOSTEP2DWH)
                     .compose(RxNettys.message2fullresp(interaction.initiator(), true))
                     .doOnUnsubscribe(interaction.initiator().closer()).map(_FULLMSG_TO_STRING);
         }
@@ -732,11 +721,11 @@ public class MessageUtil {
                             return obsbody.flatMap(new Func1<MessageBody, Observable<Object>>() {
                                 @Override
                                 public Observable<Object> call(final MessageBody body) {
-                                    return body.content().toList().flatMap(new Func1<List<? extends DisposableWrapper<ByteBuf>>, Observable<Object>>() {
+                                    return body.content().compose(AUTOSTEP2DWB).toList().flatMap(new Func1<List<DisposableWrapper<? extends ByteBuf>>, Observable<Object>>() {
                                         @Override
-                                        public Observable<Object> call(final List<? extends DisposableWrapper<ByteBuf>> dwbs) {
+                                        public Observable<Object> call(final List<DisposableWrapper<? extends ByteBuf>> dwbs) {
                                             int length = 0;
-                                            for (final DisposableWrapper<ByteBuf> dwb : dwbs) {
+                                            for (final DisposableWrapper<? extends ByteBuf> dwb : dwbs) {
                                                 length +=dwb.unwrap().readableBytes();
                                             }
                                             httpmsg.headers().set(HttpHeaderNames.CONTENT_TYPE, body.contentType());
@@ -768,8 +757,8 @@ public class MessageUtil {
                 return -1;
             }
             @Override
-            public Observable<? extends DisposableWrapper<ByteBuf>> content() {
-                return bean2dwbs(bean, encoder);
+            public Observable<? extends ByteBufSlice> content() {
+                return bean2bbs(bean, encoder);
             }});
     }
 
@@ -779,13 +768,21 @@ public class MessageUtil {
             return dwb.unwrap();
         }};
 
-    private static Observable<DisposableWrapper<ByteBuf>> bean2dwbs(final Object bean, final Action2<Object, OutputStream> encoder) {
+    private static Observable<ByteBufSlice> bean2bbs(final Object bean, final Action2<Object, OutputStream> encoder) {
         final BufsOutputStream<DisposableWrapper<ByteBuf>> bufout =
                 new BufsOutputStream<>(pooledAllocator(null, 8192), _UNWRAP_DWB);
-        return fromBufout(bufout, new Action0() {
+        return Observable.just(new ByteBufSlice() {
+
             @Override
-            public void call() {
-                encoder.call(bean, bufout);
+            public void step() {}
+
+            @Override
+            public Observable<? extends DisposableWrapper<? extends ByteBuf>> element() {
+                return fromBufout(bufout, new Action0() {
+                    @Override
+                    public void call() {
+                        encoder.call(bean, bufout);
+                    }});
             }});
     }
 
@@ -797,11 +794,12 @@ public class MessageUtil {
         return fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET).doOnNext(MessageUtil.toRequest(beans));
     }
 
-    private final static Transformer<DisposableWrapper<? extends HttpObject>, MessageBody> _AS_BODY =
-            new Transformer<DisposableWrapper<? extends HttpObject>, MessageBody>() {
+    /*
+    private final static Transformer<HttpSlice, MessageBody> _AS_BODY =
+            new Transformer<HttpSlice, MessageBody>() {
         @Override
-        public Observable<MessageBody> call(final Observable<DisposableWrapper<? extends HttpObject>> dwhs) {
-            final Observable<? extends DisposableWrapper<? extends HttpObject>> cached = dwhs.cache();
+        public Observable<MessageBody> call(final Observable<HttpSlice> slices) {
+            final Observable<? extends DisposableWrapper<? extends HttpObject>> cached = slices.cache();
             return cached.map(DisposableWrapperUtil.<HttpObject>unwrap()).compose(RxNettys.asHttpMessage())
                     .map(new Func1<HttpMessage, MessageBody>() {
                         @Override
@@ -818,7 +816,7 @@ public class MessageUtil {
                                 }
 
                                 @Override
-                                public Observable<? extends DisposableWrapper<ByteBuf>> content() {
+                                public Observable<? extends ByteBufSlice> content() {
                                     return cached.flatMap(RxNettys.message2body());
                                 }
                             };
@@ -827,7 +825,7 @@ public class MessageUtil {
         }
     };
 
-    public static Transformer<DisposableWrapper<? extends HttpObject>, MessageBody> asBody() {
+    public static Transformer<HttpSlice, MessageBody> asBody() {
         return _AS_BODY;
     }
 
@@ -852,7 +850,7 @@ public class MessageUtil {
                                 }
 
                                 @Override
-                                public Observable<? extends DisposableWrapper<ByteBuf>> content() {
+                                public Observable<? extends ByteBufSlice> content() {
                                     return cached.flatMap(RxNettys.message2body());
                                 }
                             };
@@ -876,6 +874,7 @@ public class MessageUtil {
     public static Transformer<DisposableWrapper<? extends HttpObject>, FullMessage> asFullMessage() {
         return _AS_FULLMSG;
     }
+    */
 
     public static <T> Observable<? extends T> decodeAs(final MessageBody body, final Class<T> type) {
         if (null != body.contentType()) {
@@ -912,9 +911,10 @@ public class MessageUtil {
     }
 
     public static <T> Observable<? extends T> decodeContentAs(
-            final Observable<? extends DisposableWrapper<ByteBuf>> content, final Func2<InputStream, Class<T>, T> func,
+            final Observable<? extends ByteBufSlice> content, final Func2<InputStream, Class<T>, T> func,
             final Class<T> type) {
-        return content.map(DisposableWrapperUtil.<ByteBuf>unwrap()).toList().map(new Func1<List<ByteBuf>, T>() {
+        return content.compose(AUTOSTEP2DWB)
+                .map(DisposableWrapperUtil.<ByteBuf>unwrap()).toList().map(new Func1<List<ByteBuf>, T>() {
             @Override
             public T call(final List<ByteBuf> bufs) {
                 final ByteBuf buf = Nettys.composite(bufs);

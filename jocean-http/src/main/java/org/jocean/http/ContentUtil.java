@@ -69,8 +69,18 @@ public class ContentUtil {
                     return length;
                 }
                 @Override
-                public Observable<? extends DisposableWrapper<ByteBuf>> content() {
-                    return Observable.just(DisposableWrapperUtil.wrap(Unpooled.wrappedBuffer(bytes), (Action1<ByteBuf>)null));
+                public Observable<? extends ByteBufSlice> content() {
+                    return Observable.<ByteBufSlice>just(new ByteBufSlice() {
+                        @Override
+                        public Observable<? extends DisposableWrapper<? extends ByteBuf>> element() {
+                            return Observable.just(
+                                    DisposableWrapperUtil.wrap(Unpooled.wrappedBuffer(bytes), (Action1<ByteBuf>) null));
+                        }
+
+                        @Override
+                        public void step() {
+                        }
+                    });
                 }});
         } catch (final Exception e) {
             return Observable.error(e);

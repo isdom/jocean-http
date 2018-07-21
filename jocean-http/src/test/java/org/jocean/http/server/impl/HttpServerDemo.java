@@ -68,7 +68,7 @@ public class HttpServerDemo {
                     @Override
                     public void call(final HttpTrade trade) {
                         trade.outbound(trade.inbound()
-                                .compose(MessageUtil.rollout2dwhs())
+                                .compose(MessageUtil.AUTOSTEP2DWH)
                                 .compose(RxNettys.message2fullreq(trade))
                                 .map(DisposableWrapperUtil.<FullHttpRequest>unwrap()).map(new Func1<FullHttpRequest, HttpObject>() {
                                     @Override

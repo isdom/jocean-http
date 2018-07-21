@@ -301,7 +301,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             initRequestOf(uri),
                             fullfeatures,
                             initiator.onTerminate()))
-                    .compose(MessageUtil.rollout2dwhs())
+                    .compose(MessageUtil.AUTOSTEP2DWH)
                     .compose(RxNettys.message2fullresp(initiator, true))
                     .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
                         @Override

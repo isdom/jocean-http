@@ -135,7 +135,7 @@ public class SslDemo {
         final Observable<? extends HttpSlice> resp = initiator.defineInteraction(Observable.just(request));
 //        return initiator.writeCtrl().sended().first().flatMap(req ->
 //        return initiator.defineInteraction(Observable.just(request))
-            return resp.compose(MessageUtil.rollout2dwhs())
+            return resp.compose(MessageUtil.AUTOSTEP2DWH)
             .compose(RxNettys.message2fullresp(initiator))
             .map(DisposableWrapperUtil.<FullHttpResponse>unwrap())
             .map(new Func1<FullHttpResponse, String>() {
