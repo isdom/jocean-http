@@ -61,22 +61,22 @@ public class Nettys {
     private Nettys() {
         throw new IllegalStateException("No instances!");
     }
-    
+
     public interface ChannelAware {
         public void setChannel(final Channel channel);
     }
-    
+
     public interface ServerChannelAware {
         public void setServerChannel(final ServerChannel serverChannel);
     }
-    
+
     public static ChannelPool unpoolChannels() {
         return new AbstractChannelPool() {
             @Override
             protected Channel findActiveChannel(final SocketAddress address) {
                 return null;
             }
-            
+
             @Override
             public boolean recycleChannel(final Channel channel) {
                 channel.close();
@@ -84,7 +84,7 @@ public class Nettys {
             }
         };
     }
-    
+
     public static PairedVisitor<Object> _NETTY_REFCOUNTED_GUARD = new PairedVisitor<Object>() {
         @Override
         public void visitBegin(final Object obj) {
@@ -102,12 +102,12 @@ public class Nettys {
         public String toString() {
             return "NettyUtils._NETTY_REFCOUNTED_GUARD";
         }};
-        
+
     public static interface ToOrdinal extends Func2<String,ChannelHandler,Integer> {}
-    
+
     public static ChannelHandler insertHandler(
-            final ChannelPipeline pipeline, 
-            final String name, 
+            final ChannelPipeline pipeline,
+            final String name,
             final ChannelHandler handler,
             final ToOrdinal toOrdinal) {
         final int toInsertOrdinal = toOrdinal.call(name, handler);
@@ -118,10 +118,10 @@ public class Nettys {
                 final int order = toOrdinal.call(entry.getKey(), entry.getValue())
                         - toInsertOrdinal;
                 if (order==0) {
-                    //  order equals, same ordered handler already added, 
+                    //  order equals, same ordered handler already added,
                     //  so replaced by new handler
                     LOG.warn("insertHandler: channel ({}) handler order({}) exist, old handler {}/{} will be replace by new handler {}/{}.",
-                            pipeline.channel(), toInsertOrdinal, 
+                            pipeline.channel(), toInsertOrdinal,
                             entry.getKey(), entry.getValue(),
                             name, handler);
                     pipeline.replace(entry.getValue(), name, handler);
@@ -135,14 +135,14 @@ public class Nettys {
                     //  OK, add handler before current handler
                     pipeline.addBefore(entry.getKey(), name, handler);
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("insertHandler: channel ({}) insert handler({}/{}) before({}).", 
+                        LOG.debug("insertHandler: channel ({}) insert handler({}/{}) before({}).",
                                 pipeline.channel(), name, handler, entry.getKey());
                     }
                     return handler;
                 }
-            } catch (IllegalArgumentException e) {
+            } catch (final IllegalArgumentException e) {
                 // throw by toOrdinal.call, so just ignore this entry and continue
-                LOG.warn("insertHandler: channel ({}) insert handler named({}), meet handler entry:{}, which is !NOT! ordinal, just ignore", 
+                LOG.warn("insertHandler: channel ({}) insert handler named({}), meet handler entry:{}, which is !NOT! ordinal, just ignore",
                         pipeline.channel(), name, entry);
                 LOG.warn("call from {}", ExceptionUtils.dumpCallStack(new Throwable(), "", 2));
                 continue;
@@ -150,12 +150,12 @@ public class Nettys {
         }
         pipeline.addLast(name, handler);
         if (LOG.isDebugEnabled()) {
-            LOG.debug("insertHandler: channel ({}) add handler({}/{}) at last.", 
+            LOG.debug("insertHandler: channel ({}) add handler({}/{}) at last.",
                     pipeline.channel(), name, handler);
         }
         return handler;
     }
-    
+
     public static <E extends Enum<E>> ToOrdinal ordinal(final Class<E> cls) {
         return new ToOrdinal() {
             @Override
@@ -168,48 +168,48 @@ public class Nettys {
                 }
             }};
     }
-    
-    
+
+
     public static ChannelHandler applyHandler(
-            final ChannelPipeline pipeline, 
-            final HandlerPrototype prototype, 
+            final ChannelPipeline pipeline,
+            final HandlerPrototype prototype,
             final Object ... args) {
-        if (null==prototype 
+        if (null==prototype
             || null==prototype.factory()) {
             throw new UnsupportedOperationException("HandlerPrototype's factory is null");
         }
         return Nettys.insertHandler(
             pipeline,
-            prototype.name(), 
-            prototype.factory().call(args), 
+            prototype.name(),
+            prototype.factory().call(args),
             prototype.toOrdinal());
     }
-    
+
     public static boolean isHandlerApplied(
-            final ChannelPipeline pipeline, 
+            final ChannelPipeline pipeline,
             final HandlerPrototype prototype) {
         return (pipeline.names().indexOf(prototype.name()) >= 0);
     }
 
     public static boolean removeHandler(
-            final ChannelPipeline pipeline, 
+            final ChannelPipeline pipeline,
             final HandlerPrototype prototype) {
         final ChannelHandlerContext ctx = pipeline.context(prototype.name());
         if (ctx != null) {
             pipeline.remove(ctx.handler());
             if (LOG.isDebugEnabled()) {
-                LOG.debug("removeFrom: channel ({}) remove handler({}/{}) success.", 
+                LOG.debug("removeFrom: channel ({}) remove handler({}/{}) success.",
                         pipeline.channel(), ctx.name(), ctx.handler());
             }
             return true;
         }
         return false;
     }
-    
+
     public static Action0 actionToRemoveHandler(
             final Channel channel,
             final ChannelHandler handler) {
-        return null != handler 
+        return null != handler
             ? new Action0() {
                 @Override
                 public void call() {
@@ -218,7 +218,7 @@ public class Nettys {
                     if (ctx != null) {
                         pipeline.remove(handler);
                         if (LOG.isDebugEnabled()) {
-                            LOG.debug("actionToRemoveHandler: channel ({}) remove handler({}/{}) success.", 
+                            LOG.debug("actionToRemoveHandler: channel ({}) remove handler({}/{}) success.",
                                     channel, ctx.name(), handler);
                         }
                     }
@@ -230,23 +230,23 @@ public class Nettys {
     public static <T extends ChannelHandler,H extends Enum<H>> T applyToChannel(
             final Action1<Action0> onTerminate,
             final Channel channel,
-            final HandlerPrototype prototype, 
+            final HandlerPrototype prototype,
             final Object... args) {
-        final ChannelHandler handler = 
+        final ChannelHandler handler =
             Nettys.applyHandler(channel.pipeline(), prototype, args);
-        
+
         if (null!=onTerminate) {
             onTerminate.call(Nettys.actionToRemoveHandler(channel, handler));
         }
         return (T)handler;
     }
-    
+
     public static void applyFeaturesToChannel(
             final Action1<Action0> onTerminate,
             final Channel channel,
             final HandlerBuilder builder,
             final Feature[] features) {
-        for (Feature feature : features) {
+        for (final Feature feature : features) {
             if (feature instanceof FeatureOverChannelHandler) {
                 final ChannelHandler handler = ((FeatureOverChannelHandler)feature).call(builder, channel.pipeline());
                 if (null != handler && null!=onTerminate) {
@@ -256,17 +256,17 @@ public class Nettys {
             }
         }
     }
-    
+
     private static final AttributeKey<Object> READY_ATTR = AttributeKey.valueOf("__READY");
-    
+
     public static void setChannelReady(final Channel channel) {
         channel.attr(READY_ATTR).set(new Object());
     }
-    
+
     public static boolean isChannelReady(final Channel channel) {
         return null != channel.attr(READY_ATTR).get();
     }
-    
+
     public static byte[] dumpByteBufAsBytes(final ByteBuf bytebuf)
         throws IOException {
         try (final InputStream is = new ByteBufInputStream(bytebuf)) {
@@ -279,7 +279,7 @@ public class Nettys {
     public static String dumpByteBufHolder(final ByteBufHolder holder) {
         final ByteBuf content = holder.content();
         final ByteBuf unwrap = null != content.unwrap() ? content.unwrap() : content;
-        
+
         final StringBuilder sb = new StringBuilder();
         sb.append(unwrap.toString());
         sb.append('@');
@@ -288,7 +288,7 @@ public class Nettys {
     }
 
     public static boolean isFieldAnnotatedOfHttpMethod(final Field field, final HttpMethod httpMethod) {
-        final AnnotationWrapper wrapper = 
+        final AnnotationWrapper wrapper =
                 field.getAnnotation(AnnotationWrapper.class);
         if ( null != wrapper ) {
             return wrapper.value().getSimpleName().equals(httpMethod.name());
@@ -296,13 +296,13 @@ public class Nettys {
             return false;
         }
     }
-    
+
     public static void fillByteBufHolderUsingBytes(final ByteBufHolder holder, final byte[] bytes) {
         try(final OutputStream os = new ByteBufOutputStream(holder.content())) {
             os.write(bytes);
         }
-        catch (Throwable e) {
-            LOG.warn("exception when write bytes to holder {}, detail:{}", 
+        catch (final Throwable e) {
+            LOG.warn("exception when write bytes to holder {}, detail:{}",
                     holder, ExceptionUtils.exception2detail(e));
         }
     }
@@ -310,11 +310,11 @@ public class Nettys {
     public static ByteBuf unwrapIfNeed(final ByteBuf buf) {
         return buf.unwrap() != null ? buf.unwrap() : buf;
     }
-    
+
     public static boolean isSameByteBuf(final ByteBuf buf1, final ByteBuf buf2) {
         return unwrapIfNeed(buf1) == unwrapIfNeed(buf2);
     }
-    
+
     public static String dumpChannelConfig(final ChannelConfig config) {
         final StringBuilder sb = new StringBuilder();
         sb.append("allocator: ");
@@ -325,7 +325,7 @@ public class Nettys {
         sb.append('\n');
         return sb.toString();
     }
-    
+
     public static boolean isSupportCompress(final Channel channel) {
         return isHandlerApplied(channel.pipeline(), HttpHandlers.CONTENT_DECOMPRESSOR);
     }
@@ -339,28 +339,28 @@ public class Nettys {
                 freeonfailed.add(bufs[idx-1]);
             }
             return Unpooled.wrappedBuffer(bufs);
-        } catch (Throwable e) {
-            for (ByteBuf b : freeonfailed) {
+        } catch (final Throwable e) {
+            for (final ByteBuf b : freeonfailed) {
                 b.release();
             }
             throw e;
         }
     }
-    
+
     //  retain when build fullreq
     public static FullHttpRequest httpobjs2fullreq(final List<HttpObject> httpobjs) {
-        if (httpobjs.size() > 0 
-            && (httpobjs.get(0) instanceof HttpRequest) 
+        if (httpobjs.size() > 0
+            && (httpobjs.get(0) instanceof HttpRequest)
             && (httpobjs.get(httpobjs.size()-1) instanceof LastHttpContent)) {
             if (httpobjs.get(0) instanceof FullHttpRequest) {
                 return ((FullHttpRequest)httpobjs.get(0)).retainedDuplicate();
             }
-            
+
             final HttpRequest req = (HttpRequest)httpobjs.get(0);
             final DefaultFullHttpRequest fullreq = new DefaultFullHttpRequest(
-                    req.protocolVersion(), 
-                    req.method(), 
-                    req.uri(), 
+                    req.protocolVersion(),
+                    req.method(),
+                    req.uri(),
                     tobuf(httpobjs));
             fullreq.headers().add(req.headers());
             //  ? need update Content-Length header field ?
@@ -372,16 +372,16 @@ public class Nettys {
 
     //  retain when build fullresp
     public static FullHttpResponse httpobjs2fullresp(final List<HttpObject> httpobjs) {
-        if (httpobjs.size() > 0 
-            && (httpobjs.get(0) instanceof HttpResponse) 
+        if (httpobjs.size() > 0
+            && (httpobjs.get(0) instanceof HttpResponse)
             && (httpobjs.get(httpobjs.size()-1) instanceof LastHttpContent)) {
             if (httpobjs.get(0) instanceof FullHttpResponse) {
                 return ((FullHttpResponse)httpobjs.get(0)).retainedDuplicate();
             }
-            
+
             final HttpResponse resp = (HttpResponse)httpobjs.get(0);
             final DefaultFullHttpResponse fullresp = new DefaultFullHttpResponse(
-                    resp.protocolVersion(), 
+                    resp.protocolVersion(),
                     resp.status(),
                     tobuf(httpobjs));
             fullresp.headers().add(resp.headers());
@@ -391,19 +391,19 @@ public class Nettys {
             throw new RuntimeException("invalid HttpObjects");
         }
     }
-    
+
     //  retain when build composite buf
     public static ByteBuf composite(final List<ByteBuf> bufs) {
         final Queue<ByteBuf> freeonfailed = new LinkedList<>();
         try {
             final ByteBuf[] cbufs = new ByteBuf[bufs.size()];
             int idx = 0;
-            for (ByteBuf b : bufs) {
+            for (final ByteBuf b : bufs) {
                 freeonfailed.add(cbufs[idx++] = b.retain());
             }
             return Unpooled.wrappedBuffer(cbufs);
-        } catch (Throwable e) {
-            for (ByteBuf b : freeonfailed) {
+        } catch (final Throwable e) {
+            for (final ByteBuf b : freeonfailed) {
                 b.release();
             }
             throw e;
@@ -411,17 +411,17 @@ public class Nettys {
     }
 
     //  retain when build composite buf
-    public static ByteBuf dwbs2buf(final Collection<DisposableWrapper<ByteBuf>> dwbs) {
+    public static ByteBuf dwbs2buf(final Collection<DisposableWrapper<? extends ByteBuf>> dwbs) {
         final Queue<ByteBuf> freeonfailed = new LinkedList<>();
         try {
             final ByteBuf[] cbufs = new ByteBuf[dwbs.size()];
             int idx = 0;
-            for (DisposableWrapper<ByteBuf> dwb : dwbs) {
+            for (final DisposableWrapper<? extends ByteBuf> dwb : dwbs) {
                 freeonfailed.add(cbufs[idx++] = dwb.unwrap().retain());
             }
             return Unpooled.wrappedBuffer(cbufs);
-        } catch (Throwable e) {
-            for (ByteBuf b : freeonfailed) {
+        } catch (final Throwable e) {
+            for (final ByteBuf b : freeonfailed) {
                 b.release();
             }
             throw e;

@@ -45,13 +45,13 @@ import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.FullHttpMessage;
-import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
@@ -264,7 +264,7 @@ public class MessageUtil {
         }
     }
 
-    private static InputStream contentAsInputStream(final ByteBuf buf) {
+    public static InputStream contentAsInputStream(final ByteBuf buf) {
         return new ByteBufInputStream(buf.slice());
     }
 
@@ -311,16 +311,28 @@ public class MessageUtil {
                 return obsinteraction.flatMap(new Func1<Interaction, Observable<RESP>>() {
                     @Override
                     public Observable<RESP> call(final Interaction interaction) {
-                        return interaction.execute().compose(AUTOSTEP2DWH)
-                                .compose(RxNettys.message2fullresp(interaction.initiator(), true))
-                                .doOnUnsubscribe(interaction.initiator().closer())
-                                .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
+                        return interaction.execute()
+//                                .compose(AUTOSTEP2DWH)
+//                                .compose(RxNettys.message2fullresp(interaction.initiator(), true))
+                                .flatMap(new Func1<FullMessage<HttpResponse>, Observable<DisposableWrapper<? extends ByteBuf>>>() {
                                     @Override
-                                    public RESP call(final DisposableWrapper<FullHttpResponse> dwresp) {
+                                    public Observable<DisposableWrapper<? extends ByteBuf>> call(final FullMessage<HttpResponse> fullresp) {
+                                        return fullresp.body().flatMap(new Func1<MessageBody, Observable<DisposableWrapper<? extends ByteBuf>>>() {
+                                            @Override
+                                            public Observable<DisposableWrapper<? extends ByteBuf>> call(final MessageBody body) {
+                                                return body.content().compose(AUTOSTEP2DWB);
+                                            }});
+                                    }})
+                                .doOnUnsubscribe(interaction.initiator().closer())
+                                .toList()
+                                .map(new Func1<List<DisposableWrapper<? extends ByteBuf>>, RESP>() {
+                                    @Override
+                                    public RESP call(final List<DisposableWrapper<? extends ByteBuf>> dwbs) {
+                                        final ByteBuf content = Nettys.dwbs2buf(dwbs);
                                         try {
-                                            return decoder.call(contentAsInputStream(dwresp.unwrap().content()), resptype);
+                                            return decoder.call(contentAsInputStream(content), resptype);
                                         } finally {
-                                            dwresp.dispose();
+                                            content.release();
                                         }
                                     }
                                 });
@@ -344,9 +356,31 @@ public class MessageUtil {
     private static final Func1<Interaction, Observable<String>> _INTERACTION_TO_OBS_STRING = new Func1<Interaction, Observable<String>>() {
         @Override
         public Observable<String> call(final Interaction interaction) {
-            return interaction.execute().compose(AUTOSTEP2DWH)
-                    .compose(RxNettys.message2fullresp(interaction.initiator(), true))
-                    .doOnUnsubscribe(interaction.initiator().closer()).map(_FULLMSG_TO_STRING);
+            return interaction.execute()
+//                    .compose(AUTOSTEP2DWH)
+//                    .compose(RxNettys.message2fullresp(interaction.initiator(), true))
+                    .flatMap(new Func1<FullMessage<HttpResponse>, Observable<DisposableWrapper<? extends ByteBuf>>>() {
+                        @Override
+                        public Observable<DisposableWrapper<? extends ByteBuf>> call(final FullMessage<HttpResponse> fullresp) {
+                            return fullresp.body().flatMap(new Func1<MessageBody, Observable<DisposableWrapper<? extends ByteBuf>>>() {
+                                @Override
+                                public Observable<DisposableWrapper<? extends ByteBuf>> call(final MessageBody body) {
+                                    return body.content().compose(AUTOSTEP2DWB);
+                                }});
+                        }})
+                    .doOnUnsubscribe(interaction.initiator().closer())
+                    .toList()
+                    .map(new Func1<List<DisposableWrapper<? extends ByteBuf>>, String>() {
+                        @Override
+                        public String call(final List<DisposableWrapper<? extends ByteBuf>> dwbs) {
+                            final ByteBuf content = Nettys.dwbs2buf(dwbs);
+                            try {
+                                return parseContentAsString(contentAsInputStream(content));
+                            } finally {
+                                content.release();
+                            }
+                        }
+                    });
         }
     };
 
@@ -507,7 +541,7 @@ public class MessageUtil {
                 return obsreq.doOnNext(DisposableWrapperUtil.disposeOnForAny(initiator));
             }
 
-            private Observable<? extends HttpSlice> defineInteraction(final HttpInitiator initiator) {
+            private Observable<FullMessage<HttpResponse>> defineInteraction(final HttpInitiator initiator) {
                 return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator));
             }
 
@@ -519,7 +553,7 @@ public class MessageUtil {
                         .map(new Func1<HttpInitiator, Interaction>() {
                             @Override
                             public Interaction call(final HttpInitiator initiator) {
-                                final Observable<? extends HttpSlice> interaction = defineInteraction(initiator);
+                                final Observable<FullMessage<HttpResponse>> interaction = defineInteraction(initiator);
                                 return new Interaction() {
                                     @Override
                                     public HttpInitiator initiator() {
@@ -527,7 +561,7 @@ public class MessageUtil {
                                     }
 
                                     @Override
-                                    public Observable<? extends HttpSlice> execute() {
+                                    public Observable<? extends FullMessage<HttpResponse>> execute() {
                                         return interaction;
                                     }};
                             }
@@ -829,11 +863,10 @@ public class MessageUtil {
         return _AS_BODY;
     }
 
-    private final static Transformer<DisposableWrapper<? extends HttpObject>, FullMessage> _AS_FULLMSG =
-            new Transformer<DisposableWrapper<? extends HttpObject>, FullMessage>() {
+    private final static Transformer<HttpSlice, FullMessage> _AS_FULLMSG =
+            new Transformer<HttpSlice, FullMessage>() {
         @Override
-        public Observable<FullMessage> call(final Observable<DisposableWrapper<? extends HttpObject>> dwhs) {
-            final Observable<? extends DisposableWrapper<? extends HttpObject>> cached = dwhs.cache();
+        public Observable<FullMessage> call(final Observable<HttpSlice> slices) {
             return cached.map(DisposableWrapperUtil.<HttpObject>unwrap()).compose(RxNettys.asHttpMessage())
                     .map(new Func1<HttpMessage, FullMessage>() {
                         @Override

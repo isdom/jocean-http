@@ -1,23 +1,21 @@
 package org.jocean.http;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.List;
 
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.util.Nettys;
-import org.jocean.http.util.RxNettys;
-import org.jocean.idiom.DisposableWrapperUtil;
+import org.jocean.idiom.DisposableWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Charsets;
-
+import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
@@ -132,22 +130,28 @@ public class SslDemo {
     private static Observable<String> sendAndRecv(
             final HttpInitiator initiator,
             final DefaultFullHttpRequest request) {
-        final Observable<? extends HttpSlice> resp = initiator.defineInteraction(Observable.just(request));
-//        return initiator.writeCtrl().sended().first().flatMap(req ->
-//        return initiator.defineInteraction(Observable.just(request))
-            return resp.compose(MessageUtil.AUTOSTEP2DWH)
-            .compose(RxNettys.message2fullresp(initiator))
-            .map(DisposableWrapperUtil.<FullHttpResponse>unwrap())
-            .map(new Func1<FullHttpResponse, String>() {
-                @Override
-                public String call(final FullHttpResponse resp) {
-                    try {
-                        return new String(Nettys.dumpByteBufAsBytes(resp.content()), Charsets.UTF_8);
-                    } catch (final IOException e) {
-                        e.printStackTrace();
-                        return null;
-                    }
-                }});
+        final Observable<? extends FullMessage<HttpResponse>> resp = initiator.defineInteraction(Observable.just(request));
+        return resp.flatMap(new Func1<FullMessage<HttpResponse>, Observable<DisposableWrapper<? extends ByteBuf>>>() {
+            @Override
+            public Observable<DisposableWrapper<? extends ByteBuf>> call(final FullMessage<HttpResponse> fullresp) {
+                return fullresp.body().flatMap(new Func1<MessageBody, Observable<DisposableWrapper<? extends ByteBuf>>>() {
+                    @Override
+                    public Observable<DisposableWrapper<? extends ByteBuf>> call(final MessageBody body) {
+                        return body.content().compose(MessageUtil.AUTOSTEP2DWB);
+                    }});
+            }})
+        .toList()
+        .map(new Func1<List<DisposableWrapper<? extends ByteBuf>>, String>() {
+            @Override
+            public String call(final List<DisposableWrapper<? extends ByteBuf>> dwbs) {
+                final ByteBuf content = Nettys.dwbs2buf(dwbs);
+                try {
+                    return MessageUtil.parseContentAsString(MessageUtil.contentAsInputStream(content));
+                } finally {
+                    content.release();
+                }
+            }
+        });
     }
 
 }

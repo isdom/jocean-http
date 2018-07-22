@@ -6,13 +6,14 @@ package org.jocean.http.client;
 import java.net.SocketAddress;
 
 import org.jocean.http.Feature;
-import org.jocean.http.HttpSlice;
+import org.jocean.http.FullMessage;
 import org.jocean.http.Inbound;
 import org.jocean.http.Outbound;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.WriteCtrl;
 import org.jocean.idiom.TerminateAware;
 
+import io.netty.handler.codec.http.HttpResponse;
 import rx.Observable;
 import rx.functions.Action0;
 import rx.functions.Func0;
@@ -27,7 +28,7 @@ public interface HttpClient extends AutoCloseable {
 
     public interface HttpInitiator
     extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpInitiator> {
-        public Observable<HttpSlice> defineInteraction(final Observable<? extends Object> request);
+        public Observable<FullMessage<HttpResponse>> defineInteraction(final Observable<? extends Object> request);
 
         public Object transport();
 

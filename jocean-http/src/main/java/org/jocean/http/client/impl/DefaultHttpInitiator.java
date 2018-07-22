@@ -7,15 +7,19 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.jocean.http.ByteBufSlice;
+import org.jocean.http.FullMessage;
 import org.jocean.http.HttpConnection;
 import org.jocean.http.HttpSlice;
 import org.jocean.http.HttpSliceUtil;
+import org.jocean.http.MessageBody;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.rx.RxObservables;
+import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,11 +28,13 @@ import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpUtil;
 import rx.Observable;
 import rx.Observable.Transformer;
 import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.functions.Func0;
 import rx.functions.Func1;
 
 /**
@@ -41,15 +47,60 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpInitiator.class);
 
-    @Override
-    public Observable<HttpSlice> defineInteraction(final Observable<? extends Object> request) {
-        return rawInbound().doOnSubscribe(new Action0() {
+    private Observable<FullMessage<HttpResponse>> doInteraction(final Observable<? extends Object> request) {
+        final Observable<? extends HttpSlice> rawInbound = rawInbound().doOnSubscribe(new Action0() {
             @Override
             public void call() {
                 readMessage();
                 setOutbound(wrapRequest(request));
             }
-        }).compose(RxObservables.<HttpSlice>ensureSubscribeAtmostOnce());
+        }).compose(RxObservables.<HttpSlice>ensureSubscribeAtmostOnce()).share();
+
+        rawInbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
+
+        final Observable<? extends HttpSlice> firstSlice = rawInbound.first().cache();
+
+        return firstSlice.map(new Func1<HttpSlice, FullMessage<HttpResponse>>() {
+            @Override
+            public FullMessage<HttpResponse> call(final HttpSlice slice) {
+                return new FullMessage<HttpResponse>() {
+                    @Override
+                    public Observable<? extends HttpResponse> message() {
+                        return firstSlice.compose(HttpSliceUtil.extractHttpMessage());
+                    }
+
+                    @Override
+                    public Observable<? extends MessageBody> body() {
+                        return message().last().flatMap(new Func1<HttpResponse, Observable<MessageBody>>() {
+                            @Override
+                            public Observable<MessageBody> call(final HttpResponse resp) {
+                                return Observable.just(new MessageBody() {
+                                    @Override
+                                    public String contentType() {
+                                        return resp.headers().get(HttpHeaderNames.CONTENT_TYPE);
+                                    }
+
+                                    @Override
+                                    public int contentLength() {
+                                        return HttpUtil.getContentLength(resp, -1);
+                                    }
+
+                                    @Override
+                                    public Observable<? extends ByteBufSlice> content() {
+                                        return Observable.concat(firstSlice, rawInbound).map(HttpSliceUtil.hs2bbs());
+                                    }});
+                            }});
+                    }};
+            }});
+    }
+
+    @Override
+    public Observable<FullMessage<HttpResponse>> defineInteraction(final Observable<? extends Object> request) {
+        return Observable.defer(new Func0<Observable<FullMessage<HttpResponse>>>() {
+            @Override
+            public Observable<FullMessage<HttpResponse>> call() {
+                return doInteraction(request);
+            }});
     }
 
     Channel channel() {

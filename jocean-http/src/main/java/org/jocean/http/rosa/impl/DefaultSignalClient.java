@@ -24,7 +24,6 @@ import javax.ws.rs.core.MediaType;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeaturesAware;
-import org.jocean.http.MessageUtil;
 import org.jocean.http.PayloadCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient;
@@ -301,8 +300,7 @@ public class DefaultSignalClient implements SignalClient, BeanHolderAware {
                             initRequestOf(uri),
                             fullfeatures,
                             initiator.onTerminate()))
-                    .compose(MessageUtil.AUTOSTEP2DWH)
-                    .compose(RxNettys.message2fullresp(initiator, true))
+                    .compose(RxNettys.fullmsg2fullresp(initiator, true))
                     .map(new Func1<DisposableWrapper<FullHttpResponse>, RESP>() {
                         @Override
                         public RESP call(final DisposableWrapper<FullHttpResponse> dwresp) {
