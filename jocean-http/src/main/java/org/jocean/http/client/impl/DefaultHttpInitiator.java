@@ -66,7 +66,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
                 return new FullMessage<HttpResponse>() {
                     @Override
                     public Observable<? extends HttpResponse> message() {
-                        return firstSlice.compose(HttpSliceUtil.extractHttpMessage());
+                        return firstSlice.compose(HttpSliceUtil.<HttpResponse>extractHttpMessage());
                     }
 
                     @Override
@@ -74,7 +74,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
                         return message().last().flatMap(new Func1<HttpResponse, Observable<MessageBody>>() {
                             @Override
                             public Observable<MessageBody> call(final HttpResponse resp) {
-                                return Observable.just(new MessageBody() {
+                                return Observable.<MessageBody>just(new MessageBody() {
                                     @Override
                                     public String contentType() {
                                         return resp.headers().get(HttpHeaderNames.CONTENT_TYPE);

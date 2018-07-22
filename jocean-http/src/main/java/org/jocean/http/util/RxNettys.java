@@ -435,7 +435,7 @@ public class RxNettys {
                                                     content);
                                             defaultfullresp.headers().add(resp.headers());
                                             try {
-                                                return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release(defaultfullresp));
+                                                return DisposableWrapperUtil.disposeOn(terminable, RxNettys.<FullHttpResponse>wrap4release(defaultfullresp));
                                             } finally {
                                                 if (disposemsg) {
                                                     disposeAll(dwbs);
