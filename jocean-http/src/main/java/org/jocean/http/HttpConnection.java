@@ -361,88 +361,6 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         _op.readMessage(this);
     }
 
-//    private Observable<DisposableWrapper<? extends HttpObject>> rawInbound() {
-//        return Observable.unsafeCreate(new Observable.OnSubscribe<DisposableWrapper<? extends HttpObject>>() {
-//            @Override
-//            public void call(final Subscriber<? super DisposableWrapper<? extends HttpObject>> subscriber) {
-//                if (!subscriber.isUnsubscribed()) {
-//                    if (!_op.attachInbound(HttpConnection.this, subscriber)) {
-//                        subscriber.onError(new RuntimeException("transaction in progress"));
-//                    }
-//                }
-//            }
-//        });
-//    }
-
-//    private Observable<HttpSlice> sliceWithStep(
-//            final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound) {
-//        final CompositeSubscription cs = new CompositeSubscription();
-//        final Completable invokeNext = Completable.create(new Completable.OnSubscribe() {
-//                @Override
-//                public void call(final CompletableSubscriber subscriber) {
-//                    cs.add(Subscriptions.create(new Action0() {
-//                        @Override
-//                        public void call() {
-//                            subscriber.onCompleted();
-//                        }}));
-//                }});
-//
-//        final Observable<HttpSlice> current = Observable.<HttpSlice>just(new HttpSlice() {
-//            @Override
-//            public void step() {
-//                cs.unsubscribe();
-//            }
-//
-//            @Override
-//            public Observable<DisposableWrapper<? extends HttpObject>> element() {
-//                return cachedInbound;
-//            }});
-//
-//        return current.concatWith(invokeNext.andThen(Observable.defer(new Func0<Observable<HttpSlice>>() {
-//            @Override
-//            public Observable<HttpSlice> call() {
-//                try {
-//                    return httpSlices();
-//                } finally {
-//                    readMessage();
-//                }
-//            }})));
-//    }
-
-//    private Observable<HttpSlice> lastSlice(final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound) {
-//        return Observable.<HttpSlice>just(new HttpSlice() {
-//            @Override
-//            public void step() {}
-//
-//            @Override
-//            public Observable<DisposableWrapper<? extends HttpObject>> element() {
-//                return cachedInbound;
-//            }});
-//    }
-
-//    private boolean needStep(final DisposableWrapper<? extends HttpObject> last) {
-//        return !(last.unwrap() instanceof LastHttpContent);
-//    }
-
-//    protected Observable<HttpSlice> httpSlices() {
-//        // install inbound slice subscriber
-//        final Observable<DisposableWrapper<? extends HttpObject>> cachedInbound = rawInbound()
-//                .doOnNext(checkInboundCompleted()).cache();
-//        // force subscribe for cache
-//        cachedInbound.subscribe(RxSubscribers.ignoreNext(), new Action1<Throwable>() {
-//            @Override
-//            public void call(final Throwable e) {
-//                LOG.warn("httpSlice's cached inbound meet onError {} for {}", errorAsString(e), HttpConnection.this);
-//            }
-//        });
-//
-//        return cachedInbound.last().flatMap(new Func1<DisposableWrapper<? extends HttpObject>, Observable<HttpSlice>>() {
-//            @Override
-//            public Observable<HttpSlice> call(final DisposableWrapper<? extends HttpObject> last) {
-//                return needStep(last) ? sliceWithStep(cachedInbound) : lastSlice(cachedInbound);
-//            }});
-//    }
-
     protected Observable<HttpSlice> rawInbound() {
         return Observable.unsafeCreate(new Observable.OnSubscribe<HttpSlice>() {
             @Override
@@ -519,6 +437,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         newOrFetchInmsgs().add(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
 
         if (inmsg instanceof LastHttpContent) {
+            LOG.debug("recv LastHttpContent({}), try to unholdInboundAndUninstallHandler and onInboundCompleted");
             /*
              * netty 参考代码:
              *   https://github.com/netty/netty/blob/netty-4.0.26.Final /codec/src/main/java/io/netty/handler/codec/ByteToMessageDecoder.java#L274
