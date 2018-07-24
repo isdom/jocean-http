@@ -442,7 +442,8 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
 
         if (inmsg instanceof LastHttpContent) {
-            if (-1 != this._currentStatus && this._currentStatus >= 200) {
+            // -1 == _currentStatus means never meet HttpResponse
+            if (-1 == this._currentStatus || this._currentStatus >= 200) {
                 LOG.debug("recv LastHttpContent({}), try to unholdInboundAndUninstallHandler and onInboundCompleted", inmsg);
                 /*
                  * netty 参考代码:
