@@ -31,6 +31,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
@@ -436,28 +437,36 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
         newOrFetchInmsgs().add(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
 
+        if (inmsg instanceof HttpResponse) {
+            this._currentStatus = ((HttpResponse)inmsg).status().code();
+        }
+
         if (inmsg instanceof LastHttpContent) {
-            LOG.debug("recv LastHttpContent({}), try to unholdInboundAndUninstallHandler and onInboundCompleted");
-            /*
-             * netty 参考代码:
-             *   https://github.com/netty/netty/blob/netty-4.0.26.Final /codec/src/main/java/io/netty/handler/codec/ByteToMessageDecoder.java#L274
-             *   https://github.com/netty/netty/blob/netty-4.0.26.Final/codec-http/src/main/java/io/netty/handler/codec/http/HttpObjectDecoder.java#L398
-             * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件 currentState ==
-             * State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() &&
-             * !chunked 即没有指定Content-Length头域，也不是CHUNKED传输模式
-             * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
-             * 因此，无需在channelInactive处，针对该情况做特殊处理
-             */
-            if (unholdInboundAndUninstallHandler(subscriber)) {
-                if (!subscriber.isUnsubscribed()) {
-                    subscriber.onNext(currentSlice(false));
-                }
+            if (-1 != this._currentStatus && this._currentStatus >= 200) {
+                LOG.debug("recv LastHttpContent({}), try to unholdInboundAndUninstallHandler and onInboundCompleted", inmsg);
+                /*
+                 * netty 参考代码:
+                 *   https://github.com/netty/netty/blob/netty-4.0.26.Final /codec/src/main/java/io/netty/handler/codec/ByteToMessageDecoder.java#L274
+                 *   https://github.com/netty/netty/blob/netty-4.0.26.Final/codec-http/src/main/java/io/netty/handler/codec/http/HttpObjectDecoder.java#L398
+                 * 从上述代码可知, 当Connection断开时，首先会检查是否满足特定条件 currentState ==
+                 * State.READ_VARIABLE_LENGTH_CONTENT && !in.isReadable() &&
+                 * !chunked 即没有指定Content-Length头域，也不是CHUNKED传输模式
+                 * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
+                 * 因此，无需在channelInactive处，针对该情况做特殊处理
+                 */
+                if (unholdInboundAndUninstallHandler(subscriber)) {
+                    if (!subscriber.isUnsubscribed()) {
+                        subscriber.onNext(currentSlice(false));
+                    }
 
-                onInboundCompleted();
+                    onInboundCompleted();
 
-                if (!subscriber.isUnsubscribed()) {
-                    subscriber.onCompleted();
+                    if (!subscriber.isUnsubscribed()) {
+                        subscriber.onCompleted();
+                    }
                 }
+            } else {
+                LOG.info("recv LastHttpContent({}) for current status {}, skip and continue recv next response", inmsg, this._currentStatus);
             }
         }
     }
@@ -697,6 +706,8 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     protected abstract void onOutboundCompleted();
 
     protected abstract void onChannelInactive();
+
+    private volatile int _currentStatus = -1;
 
     private volatile long _unreadBegin = 0;
 

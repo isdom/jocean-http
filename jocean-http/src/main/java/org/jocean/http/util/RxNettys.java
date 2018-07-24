@@ -407,9 +407,6 @@ public class RxNettys {
         };
     }
 
-    /*
-     */
-
     public static Observable.Transformer<? super FullMessage<HttpResponse>, ? extends DisposableWrapper<FullHttpResponse>> fullmsg2fullresp(
             final Terminable terminable, final boolean disposemsg) {
         return new Observable.Transformer<FullMessage<HttpResponse>, DisposableWrapper<FullHttpResponse>>() {
@@ -418,31 +415,27 @@ public class RxNettys {
                 return fullmsg.flatMap(new Func1<FullMessage<HttpResponse>, Observable<DisposableWrapper<FullHttpResponse>>>() {
                     @Override
                     public Observable<DisposableWrapper<FullHttpResponse>> call(final FullMessage<HttpResponse> fullresp) {
-                        return fullresp.message().last().flatMap(new Func1<HttpResponse, Observable<DisposableWrapper<FullHttpResponse>>>() {
+                        return fullresp.body().flatMap(new Func1<MessageBody, Observable<DisposableWrapper<? extends ByteBuf>>>() {
                             @Override
-                            public Observable<DisposableWrapper<FullHttpResponse>> call(final HttpResponse resp) {
-                                return fullresp.body().flatMap(new Func1<MessageBody, Observable<DisposableWrapper<? extends ByteBuf>>>() {
-                                    @Override
-                                    public Observable<DisposableWrapper<? extends ByteBuf>> call(final MessageBody body) {
-                                        return body.content().compose(MessageUtil.AUTOSTEP2DWB);
-                                    }}).toList().map(new Func1<List<DisposableWrapper<? extends ByteBuf>>, DisposableWrapper<FullHttpResponse>>() {
-                                        @Override
-                                        public DisposableWrapper<FullHttpResponse> call(final List<DisposableWrapper<? extends ByteBuf>> dwbs) {
-                                            final ByteBuf content = Nettys.dwbs2buf(dwbs);
-                                            final DefaultFullHttpResponse defaultfullresp = new DefaultFullHttpResponse(
-                                                    resp.protocolVersion(),
-                                                    resp.status(),
-                                                    content);
-                                            defaultfullresp.headers().add(resp.headers());
-                                            try {
-                                                return DisposableWrapperUtil.disposeOn(terminable, RxNettys.<FullHttpResponse>wrap4release(defaultfullresp));
-                                            } finally {
-                                                if (disposemsg) {
-                                                    disposeAll(dwbs);
-                                                }
-                                            }
-                                        }});
-                            }});
+                            public Observable<DisposableWrapper<? extends ByteBuf>> call(final MessageBody body) {
+                                return body.content().compose(MessageUtil.AUTOSTEP2DWB);
+                            }}).toList().map(new Func1<List<DisposableWrapper<? extends ByteBuf>>, DisposableWrapper<FullHttpResponse>>() {
+                                @Override
+                                public DisposableWrapper<FullHttpResponse> call(final List<DisposableWrapper<? extends ByteBuf>> dwbs) {
+                                    final ByteBuf content = Nettys.dwbs2buf(dwbs);
+                                    final DefaultFullHttpResponse defaultfullresp = new DefaultFullHttpResponse(
+                                        fullresp.message().protocolVersion(),
+                                        fullresp.message().status(),
+                                        content);
+                                    defaultfullresp.headers().add(fullresp.message().headers());
+                                    try {
+                                        return DisposableWrapperUtil.disposeOn(terminable, RxNettys.<FullHttpResponse>wrap4release(defaultfullresp));
+                                    } finally {
+                                        if (disposemsg) {
+                                            disposeAll(dwbs);
+                                        }
+                                    }
+                                }});
                     }});
             }};
     }

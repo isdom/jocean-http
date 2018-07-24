@@ -19,7 +19,6 @@ import org.jocean.http.util.Nettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.rx.RxObservables;
-import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +29,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpUtil;
+import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
 import rx.Observable.Transformer;
 import rx.functions.Action0;
@@ -56,42 +56,65 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
             }
         }).compose(RxObservables.<HttpSlice>ensureSubscribeAtmostOnce()).share();
 
-        rawInbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
-
-        final Observable<? extends HttpSlice> firstSlice = rawInbound.first().cache();
-
-        return firstSlice.map(new Func1<HttpSlice, FullMessage<HttpResponse>>() {
+        return rawInbound.flatMap(new Func1<HttpSlice, Observable<FullMessage<HttpResponse>>>() {
             @Override
-            public FullMessage<HttpResponse> call(final HttpSlice slice) {
-                return new FullMessage<HttpResponse>() {
+            public Observable<FullMessage<HttpResponse>> call(final HttpSlice slice) {
+                return slice.element().first().map(DisposableWrapperUtil.unwrap()).flatMap(new Func1<HttpObject, Observable<FullMessage<HttpResponse>>>() {
                     @Override
-                    public Observable<? extends HttpResponse> message() {
-                        return firstSlice.compose(HttpSliceUtil.<HttpResponse>extractHttpMessage());
-                    }
+                    public Observable<FullMessage<HttpResponse>> call(final HttpObject hobj) {
+                        if (hobj instanceof HttpResponse) {
+                            final HttpResponse resp = (HttpResponse)hobj;
+                            return Observable.just(new FullMessage<HttpResponse>() {
+                                @Override
+                                public HttpResponse message() {
+                                    return resp;
+                                }
 
-                    @Override
-                    public Observable<? extends MessageBody> body() {
-                        return message().last().flatMap(new Func1<HttpResponse, Observable<MessageBody>>() {
-                            @Override
-                            public Observable<MessageBody> call(final HttpResponse resp) {
-                                return Observable.<MessageBody>just(new MessageBody() {
-                                    @Override
-                                    public String contentType() {
-                                        return resp.headers().get(HttpHeaderNames.CONTENT_TYPE);
-                                    }
+                                @Override
+                                public Observable<? extends MessageBody> body() {
+                                    return Observable.just(new MessageBody() {
+                                        @Override
+                                        public String contentType() {
+                                            return resp.headers().get(HttpHeaderNames.CONTENT_TYPE);
+                                        }
 
-                                    @Override
-                                    public int contentLength() {
-                                        return HttpUtil.getContentLength(resp, -1);
-                                    }
+                                        @Override
+                                        public int contentLength() {
+                                            return HttpUtil.getContentLength(resp, -1);
+                                        }
 
-                                    @Override
-                                    public Observable<? extends ByteBufSlice> content() {
-                                        return Observable.concat(firstSlice, rawInbound).map(HttpSliceUtil.hs2bbs());
-                                    }});
-                            }});
-                    }};
-            }});
+                                        @Override
+                                        public Observable<? extends ByteBufSlice> content() {
+                                            return Observable.just(slice).concatWith(rawInbound).doOnNext(new Action1<HttpSlice>() {
+                                                @Override
+                                                public void call(final HttpSlice slice) {
+                                                    LOG.debug("{}'s content onNext: {}", resp, slice);
+                                                }
+                                            }).takeUntil(new Func1<HttpSlice, Boolean>() {
+                                                @Override
+                                                public Boolean call(final HttpSlice slice) {
+                                                    final HttpObject last = slice.element().last().toBlocking().single().unwrap();
+                                                    LOG.debug("{}'s content onNext's last: {}", resp, last);
+                                                    return last instanceof LastHttpContent;
+                                                }
+                                            }).doOnNext(new Action1<HttpSlice>() {
+                                                @Override
+                                                public void call(final HttpSlice hs) {
+                                                    LOG.debug("{}'s content onNext's hs: {}", resp, hs);
+                                                }
+                                            }).map(HttpSliceUtil.hs2bbs()).doOnNext(new Action1<ByteBufSlice>() {
+                                                @Override
+                                                public void call(final ByteBufSlice bbs) {
+                                                    LOG.debug("{}'s content onNext's bbs: {}", resp, bbs);
+                                                }
+                                            });
+                                        }});
+                                }});
+                        } else {
+                            return Observable.empty();
+                        }
+                    }});
+                }});
     }
 
     @Override
