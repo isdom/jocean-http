@@ -59,12 +59,12 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
         return rawInbound.flatMap(new Func1<HttpSlice, Observable<FullMessage<HttpResponse>>>() {
             @Override
             public Observable<FullMessage<HttpResponse>> call(final HttpSlice slice) {
-                return slice.element().first().map(DisposableWrapperUtil.unwrap()).flatMap(new Func1<HttpObject, Observable<FullMessage<HttpResponse>>>() {
+                return slice.element().first().map(DisposableWrapperUtil.<HttpObject>unwrap()).flatMap(new Func1<HttpObject, Observable<FullMessage<HttpResponse>>>() {
                     @Override
                     public Observable<FullMessage<HttpResponse>> call(final HttpObject hobj) {
                         if (hobj instanceof HttpResponse) {
                             final HttpResponse resp = (HttpResponse)hobj;
-                            return Observable.just(new FullMessage<HttpResponse>() {
+                            return Observable.<FullMessage<HttpResponse>>just(new FullMessage<HttpResponse>() {
                                 @Override
                                 public HttpResponse message() {
                                     return resp;
