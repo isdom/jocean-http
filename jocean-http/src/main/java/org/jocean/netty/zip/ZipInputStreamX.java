@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.io.PushbackInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.CRC32;
+import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
@@ -62,7 +63,7 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
      * @param in the actual input stream
      */
     public ZipInputStreamX(final InputStream in) {
-        super(in);
+        super(new PushbackInputStream(in, 512), new Inflater(true), 512);
     }
 
     /**
@@ -255,6 +256,7 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
     public void close() throws IOException {
         if (!closed) {
             super.close();
+            this.inf.end();
             closed = true;
         }
     }
