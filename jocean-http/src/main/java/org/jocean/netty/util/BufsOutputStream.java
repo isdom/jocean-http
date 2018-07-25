@@ -34,31 +34,19 @@ public class BufsOutputStream<T> extends OutputStream implements DataOutput {
 
     private static final Logger LOG
         = LoggerFactory.getLogger(BufsOutputStream.class);
-    
-//    private static final Func0<ByteBuf> _DEFAULT_NEW_BUFFER = new Func0<ByteBuf>() {
-//        @Override
-//        public ByteBuf call() {
-//            return PooledByteBufAllocator.DEFAULT.buffer(8192, 8192);
-//        }};
-//    
-//    private static final Action1<ByteBuf> _DEFAULT_ON_BUFFER = new Action1<ByteBuf>() {
-//        @Override
-//        public void call(final ByteBuf buf) {
-//            buf.release();
-//        }};
-    
+
     private final Func0<T> _allocator;
     private final Func1<T, ByteBuf> _tobuf;
     private final AtomicReference<Action1<T>> _outputRef = new AtomicReference<>(null);
     private T _data = null;
-    
+
     private boolean _opened = true;
     private final DataOutputStream utf8out = new DataOutputStream(this);
 
     public BufsOutputStream(final Func0<T> allocator, final Func1<T, ByteBuf> tobuf) {
         this(allocator, tobuf, null);
     }
-    
+
     /**
      * Creates a new stream which writes data to the specified {@code buffer}.
      */
@@ -70,7 +58,7 @@ public class BufsOutputStream<T> extends OutputStream implements DataOutput {
         this._tobuf = tobuf;
         setOutput(output);
     }
-    
+
     public void setOutput(final Action1<T> output) {
         this._outputRef.set(output);
     }
@@ -79,9 +67,9 @@ public class BufsOutputStream<T> extends OutputStream implements DataOutput {
         return this._tobuf.call(this._data);
     }
 
-    private ByteBuf currentBuf() {
-        if (!_opened) {
-            throw new RuntimeException("ByteBufArrayOutputStream has closed!");
+    private ByteBuf currentBuf() throws IOException {
+        if (!this._opened) {
+            throw new IOException("BufsOutputStream has closed!");
         }
         if (null == this._data) {
             return newBuf();
@@ -90,7 +78,7 @@ public class BufsOutputStream<T> extends OutputStream implements DataOutput {
             return buf.isWritable() ? buf : newBuf();
         }
     }
-    
+
     private ByteBuf newBuf() {
         flushData();
         this._data = this._allocator.call();
@@ -105,7 +93,7 @@ public class BufsOutputStream<T> extends OutputStream implements DataOutput {
             if (null != output) {
                 try {
                     output.call(old);
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     LOG.warn("exception when call output {}, detail: {}", output, ExceptionUtils.exception2detail(e));
                 }
             } else {
@@ -210,12 +198,13 @@ public class BufsOutputStream<T> extends OutputStream implements DataOutput {
      *
      * @exception  IOException  if an I/O error occurs.
      */
+    @Override
     public synchronized void close() throws IOException {
         flushData();
         if (_opened) {
             _opened = false;
         }
-        
+
         super.close();
     }
 }
