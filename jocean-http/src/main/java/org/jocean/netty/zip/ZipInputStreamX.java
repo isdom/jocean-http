@@ -1,22 +1,24 @@
-package java.util.zip;
+package org.jocean.netty.zip;
 
-import static java.util.zip.ZipConstants64.EFS;
-import static java.util.zip.ZipConstants64.ZIP64_EXTCRC;
-import static java.util.zip.ZipConstants64.ZIP64_EXTHDR;
-import static java.util.zip.ZipConstants64.ZIP64_EXTLEN;
-import static java.util.zip.ZipConstants64.ZIP64_EXTSIZ;
-import static java.util.zip.ZipConstants64.ZIP64_MAGICVAL;
-import static java.util.zip.ZipUtils.dosToJavaTime;
-import static java.util.zip.ZipUtils.get16;
-import static java.util.zip.ZipUtils.get32;
-import static java.util.zip.ZipUtils.get64;
+import static org.jocean.netty.zip.ZipConstants64.ZIP64_EXTCRC;
+import static org.jocean.netty.zip.ZipConstants64.ZIP64_EXTHDR;
+import static org.jocean.netty.zip.ZipConstants64.ZIP64_EXTLEN;
+import static org.jocean.netty.zip.ZipConstants64.ZIP64_EXTSIZ;
+import static org.jocean.netty.zip.ZipConstants64.ZIP64_MAGICVAL;
+import static org.jocean.netty.zip.ZipUtils.dosToJavaTime;
+import static org.jocean.netty.zip.ZipUtils.get16;
+import static org.jocean.netty.zip.ZipUtils.get32;
+import static org.jocean.netty.zip.ZipUtils.get64;
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PushbackInputStream;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.zip.CRC32;
+import java.util.zip.InflaterInputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 
 /**
  * This class implements an input stream filter for reading files in the
@@ -40,7 +42,7 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
     // one entry
     private boolean entryEOF = false;
 
-    private final ZipCoder zc;
+//    private final ZipCoder zc;
 
     /**
      * Check to make sure that this stream has not been closed
@@ -60,7 +62,7 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
      * @param in the actual input stream
      */
     public ZipInputStreamX(final InputStream in) {
-        this(in, StandardCharsets.UTF_8);
+        super(in);
     }
 
     /**
@@ -77,6 +79,7 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
      *
      * @since 1.7
      */
+    /*
     public ZipInputStreamX(final InputStream in, final Charset charset) {
         super(new PushbackInputStream(in, 512), new Inflater(true), 512);
         usesDefaultInflater = true;
@@ -87,6 +90,7 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
             throw new NullPointerException("charset is null");
         this.zc = ZipCoder.get(charset);
     }
+    */
 
     /**
      * Reads the next ZIP file entry and positions the stream at the
@@ -105,8 +109,8 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
         if ((entry = readLOC()) == null) {
             return null;
         }
-        if (entry.method == STORED) {
-            remaining = entry.size;
+        if (entry.getMethod() == STORED) {
+            remaining = entry.getSize();
         }
         entryEOF = false;
         return entry;
@@ -174,7 +178,7 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
         if (entry == null) {
             return -1;
         }
-        switch (entry.method) {
+        switch (entry.getMethod()) {
         case DEFLATED:
             len = super.read(b, off, len);
             if (len == -1) {
@@ -200,9 +204,9 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
             }
             crc.update(b, off, len);
             remaining -= len;
-            if (remaining == 0 && entry.crc != crc.getValue()) {
+            if (remaining == 0 && entry.getCrc() != crc.getValue()) {
                 throw new ZipException(
-                    "invalid entry CRC (expected 0x" + Long.toHexString(entry.crc) +
+                    "invalid entry CRC (expected 0x" + Long.toHexString(entry.getCrc()) +
                     " but got 0x" + Long.toHexString(crc.getValue()) + ")");
             }
             return len;
@@ -289,25 +293,29 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
             throw e;
         }
         // Force to use UTF-8 if the EFS bit is ON, even the cs is NOT UTF-8
-        final ZipEntry e = createZipEntry(((flag & EFS) != 0)
-                                    ? zc.toStringUTF8(b, len)
-                                    : zc.toString(b, len));
+        final ZipEntry e = createZipEntry(
+                // modify by isdom 20180725
+                new String(b, 0, len, StandardCharsets.UTF_8)
+                // dont't using ZipCoder
+//                ((flag & EFS) != 0) ? zc.toStringUTF8(b, len)
+//                                    : zc.toString(b, len)
+                                    );
         // now get the remaining fields for the entry
         if ((flag & 1) == 1) {
             throw new ZipException("encrypted ZIP entry not supported");
         }
-        e.method = get16(tmpbuf, LOCHOW);
-        e.time = dosToJavaTime(get32(tmpbuf, LOCTIM));
+        e.setMethod(get16(tmpbuf, LOCHOW));
+        e.setTime(dosToJavaTime(get32(tmpbuf, LOCTIM)));
         if ((flag & 8) == 8) {
             /* "Data Descriptor" present */
-            if (e.method != DEFLATED) {
+            if (e.getMethod() != DEFLATED) {
                 throw new ZipException(
                         "only DEFLATED entries can have EXT descriptor");
             }
         } else {
-            e.crc = get32(tmpbuf, LOCCRC);
-            e.csize = get32(tmpbuf, LOCSIZ);
-            e.size = get32(tmpbuf, LOCLEN);
+            e.setCrc(get32(tmpbuf, LOCCRC));
+            e.setCompressedSize(get32(tmpbuf, LOCSIZ));
+            e.setSize(get32(tmpbuf, LOCLEN));
         }
         len = get16(tmpbuf, LOCEXT);
         if (len > 0) {
@@ -321,8 +329,10 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
                 ((PushbackInputStream)in).unread(b, 0, unreadlen4b);
                 throw e1;
             }
-            e.setExtra0(extra,
-                        e.csize == ZIP64_MAGICVAL || e.size == ZIP64_MAGICVAL);
+            // modify by isdom 20180725
+//            e.setExtra0(extra,
+//                        e.getCompressedSize() == ZIP64_MAGICVAL || e.getSize() == ZIP64_MAGICVAL);
+            e.setExtra(extra);
         }
         return e;
     }
@@ -354,45 +364,45 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
                 readFully(tmpbuf, 0, ZIP64_EXTHDR);
                 final long sig = get32(tmpbuf, 0);
                 if (sig != EXTSIG) { // no EXTSIG present
-                    e.crc = sig;
-                    e.csize = get64(tmpbuf, ZIP64_EXTSIZ - ZIP64_EXTCRC);
-                    e.size = get64(tmpbuf, ZIP64_EXTLEN - ZIP64_EXTCRC);
+                    e.setCrc(sig);
+                    e.setCompressedSize(get64(tmpbuf, ZIP64_EXTSIZ - ZIP64_EXTCRC));
+                    e.setSize(get64(tmpbuf, ZIP64_EXTLEN - ZIP64_EXTCRC));
                     ((PushbackInputStream)in).unread(
                         tmpbuf, ZIP64_EXTHDR - ZIP64_EXTCRC - 1, ZIP64_EXTCRC);
                 } else {
-                    e.crc = get32(tmpbuf, ZIP64_EXTCRC);
-                    e.csize = get64(tmpbuf, ZIP64_EXTSIZ);
-                    e.size = get64(tmpbuf, ZIP64_EXTLEN);
+                    e.setCrc(get32(tmpbuf, ZIP64_EXTCRC));
+                    e.setCompressedSize(get64(tmpbuf, ZIP64_EXTSIZ));
+                    e.setSize(get64(tmpbuf, ZIP64_EXTLEN));
                 }
             } else {
                 readFully(tmpbuf, 0, EXTHDR);
                 final long sig = get32(tmpbuf, 0);
                 if (sig != EXTSIG) { // no EXTSIG present
-                    e.crc = sig;
-                    e.csize = get32(tmpbuf, EXTSIZ - EXTCRC);
-                    e.size = get32(tmpbuf, EXTLEN - EXTCRC);
+                    e.setCrc(sig);
+                    e.setCompressedSize(get32(tmpbuf, EXTSIZ - EXTCRC));
+                    e.setSize(get32(tmpbuf, EXTLEN - EXTCRC));
                     ((PushbackInputStream)in).unread(
                                                tmpbuf, EXTHDR - EXTCRC - 1, EXTCRC);
                 } else {
-                    e.crc = get32(tmpbuf, EXTCRC);
-                    e.csize = get32(tmpbuf, EXTSIZ);
-                    e.size = get32(tmpbuf, EXTLEN);
+                    e.setCrc(get32(tmpbuf, EXTCRC));
+                    e.setCompressedSize(get32(tmpbuf, EXTSIZ));
+                    e.setSize(get32(tmpbuf, EXTLEN));
                 }
             }
         }
-        if (e.size != inf.getBytesWritten()) {
+        if (e.getSize() != inf.getBytesWritten()) {
             throw new ZipException(
-                "invalid entry size (expected " + e.size +
+                "invalid entry size (expected " + e.getSize() +
                 " but got " + inf.getBytesWritten() + " bytes)");
         }
-        if (e.csize != inf.getBytesRead()) {
+        if (e.getCompressedSize() != inf.getBytesRead()) {
             throw new ZipException(
-                "invalid entry compressed size (expected " + e.csize +
+                "invalid entry compressed size (expected " + e.getCompressedSize() +
                 " but got " + inf.getBytesRead() + " bytes)");
         }
-        if (e.crc != crc.getValue()) {
+        if (e.getCrc() != crc.getValue()) {
             throw new ZipException(
-                "invalid entry CRC (expected 0x" + Long.toHexString(e.crc) +
+                "invalid entry CRC (expected 0x" + Long.toHexString(e.getCrc()) +
                 " but got 0x" + Long.toHexString(crc.getValue()) + ")");
         }
     }
