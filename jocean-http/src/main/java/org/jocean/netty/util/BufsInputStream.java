@@ -62,10 +62,12 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
 
     public void appendBuf(final T buf) {
         this._bufs.add(buf);
+        LOG.debug("appendBuf: {}", buf);
     }
 
     public void appendBufs(final Collection<? extends T> bufs) {
         this._bufs.addAll(bufs);
+        LOG.debug("appendBufs with count {}", bufs.size());
     }
 
     public void markEOS() {
@@ -127,7 +129,7 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
             }
         } catch (final IOException e) {
             if (readed == 0) {
-                LOG.debug("read zero bytes, throw {}", e);
+                LOG.debug("read zero bytes, throw ", e);
                 throw e;
             }
         }
