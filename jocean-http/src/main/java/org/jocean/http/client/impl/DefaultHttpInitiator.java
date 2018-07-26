@@ -66,6 +66,11 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
                             final HttpResponse resp = (HttpResponse)hobj;
                             return Observable.<FullMessage<HttpResponse>>just(new FullMessage<HttpResponse>() {
                                 @Override
+                                public String toString() {
+                                            return new StringBuilder().append("FullMessage [resp=").append(resp)
+                                                    .append("]").toString();
+                                        }
+                                @Override
                                 public HttpResponse message() {
                                     return resp;
                                 }
@@ -73,6 +78,12 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
                                 @Override
                                 public Observable<? extends MessageBody> body() {
                                     return Observable.just(new MessageBody() {
+                                        @Override
+                                        public String toString() {
+                                            return new StringBuilder().append("MessageBody [resp=").append(resp)
+                                                    .append(",body=(start with ").append(slice).append(")]").toString();
+                                        }
+
                                         @Override
                                         public String contentType() {
                                             return resp.headers().get(HttpHeaderNames.CONTENT_TYPE);
@@ -85,29 +96,35 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
 
                                         @Override
                                         public Observable<? extends ByteBufSlice> content() {
-                                            return Observable.just(slice).concatWith(rawInbound).doOnNext(new Action1<HttpSlice>() {
-                                                @Override
-                                                public void call(final HttpSlice slice) {
-                                                    LOG.debug("{}'s content onNext: {}", resp, slice);
-                                                }
-                                            }).takeUntil(new Func1<HttpSlice, Boolean>() {
+                                            return Observable.just(slice).concatWith(rawInbound)
+//                                            .doOnNext(new Action1<HttpSlice>() {
+//                                                @Override
+//                                                public void call(final HttpSlice slice) {
+//                                                    LOG.debug("{}'s content onNext: {}", resp, slice);
+//                                                }
+//                                            })
+                                            .takeUntil(new Func1<HttpSlice, Boolean>() {
                                                 @Override
                                                 public Boolean call(final HttpSlice slice) {
                                                     final HttpObject last = slice.element().last().toBlocking().single().unwrap();
-                                                    LOG.debug("{}'s content onNext's last: {}", resp, last);
+//                                                    LOG.debug("{}'s content onNext's last: {}", resp, last);
                                                     return last instanceof LastHttpContent;
                                                 }
-                                            }).doOnNext(new Action1<HttpSlice>() {
-                                                @Override
-                                                public void call(final HttpSlice hs) {
-                                                    LOG.debug("{}'s content onNext's hs: {}", resp, hs);
-                                                }
-                                            }).map(HttpSliceUtil.hs2bbs()).doOnNext(new Action1<ByteBufSlice>() {
-                                                @Override
-                                                public void call(final ByteBufSlice bbs) {
-                                                    LOG.debug("{}'s content onNext's bbs: {}", resp, bbs);
-                                                }
-                                            });
+                                            })
+//                                            .doOnNext(new Action1<HttpSlice>() {
+//                                                @Override
+//                                                public void call(final HttpSlice hs) {
+//                                                    LOG.debug("{}'s content onNext's hs: {}", resp, hs);
+//                                                }
+//                                            })
+                                            .map(HttpSliceUtil.hs2bbs())
+//                                            .doOnNext(new Action1<ByteBufSlice>() {
+//                                                @Override
+//                                                public void call(final ByteBufSlice bbs) {
+//                                                    LOG.debug("{}'s content onNext's bbs: {}", resp, bbs);
+//                                                }
+//                                            })
+                                            ;
                                         }});
                                 }});
                         } else {

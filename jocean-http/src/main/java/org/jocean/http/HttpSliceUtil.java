@@ -73,12 +73,18 @@ public class HttpSliceUtil {
     private final static Func1<HttpSlice, ByteBufSlice> _HSTOBBS = new Func1<HttpSlice, ByteBufSlice>() {
         @Override
         public ByteBufSlice call(final HttpSlice slice) {
+            final Observable<DisposableWrapper<ByteBuf>> cached =
+                    slice.element().flatMap(RxNettys.message2body()).cache();
             return new ByteBufSlice() {
                 @Override
-                public Observable<DisposableWrapper<ByteBuf>> element() {
-                    return slice.element().flatMap(RxNettys.message2body());
+                public String toString() {
+                    return new StringBuilder().append("ByteBufSlice [from ")
+                            .append(slice).append("]").toString();
                 }
-
+                @Override
+                public Observable<DisposableWrapper<ByteBuf>> element() {
+                    return cached;
+                }
                 @Override
                 public void step() {
                     slice.step();

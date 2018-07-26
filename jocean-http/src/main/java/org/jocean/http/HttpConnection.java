@@ -339,6 +339,13 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
         return new HttpSlice() {
             @Override
+            public String toString() {
+                final int maxLen = 10;
+                return new StringBuilder().append("HttpSlice [step=")
+                        .append(runOnce.isUnsubscribed() ? "called" : "uncall").append(",element=")
+                        .append(inmsgs.subList(0, Math.min(inmsgs.size(), maxLen))).append("]").toString();
+            }
+            @Override
             public void step() {
                 runOnce.unsubscribe();
             }
@@ -363,7 +370,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     protected Observable<HttpSlice> rawInbound() {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<HttpSlice>() {
+        return Observable.unsafeCreate(new OnSubscribe<HttpSlice>() {
             @Override
             public void call(final Subscriber<? super HttpSlice> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
