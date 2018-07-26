@@ -129,11 +129,11 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
             }
         } catch (final IOException e) {
             if (readed == 0) {
-                LOG.debug("read zero bytes, throw ", e);
+                LOG.debug("BufsInputStream's read(b,off,len): {} without any bytes, re-throw it", e.getMessage());
                 throw e;
             }
         }
-        LOG.debug("read return {} bytes", readed);
+        LOG.debug("BufsInputStream's read(b,off,len): read {} bytes", readed);
         return readed;
     }
 
