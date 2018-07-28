@@ -13,7 +13,6 @@ import static org.jocean.netty.zip.ZipUtils.get64;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PushbackInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.CRC32;
 import java.util.zip.Inflater;
