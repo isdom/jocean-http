@@ -27,6 +27,7 @@ import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ReflectUtils;
+import org.jocean.idiom.Stepable;
 import org.jocean.idiom.StepableUtil;
 import org.jocean.idiom.Terminable;
 import org.jocean.netty.util.BufsOutputStream;
@@ -538,7 +539,36 @@ public class MessageUtil {
             }
 
             private Observable<? extends Object> hookDisposeBody(final Observable<Object> obsreq, final HttpInitiator initiator) {
-                return obsreq.doOnNext(DisposableWrapperUtil.disposeOnForAny(initiator));
+                return obsreq.map(new Func1<Object, Object>() {
+                    @Override
+                    public Object call(final Object obj) {
+                        if (obj instanceof Stepable) {
+                            final Stepable<Object> org = (Stepable<Object>)obj;
+                            return new Stepable<Object>() {
+                                @Override
+                                public String toString() {
+                                    return new StringBuilder("[hookDisposeBody for").append(org).append("]").toString();
+                                }
+                                @Override
+                                public void step() {
+                                    org.step();
+                                }
+                                @Override
+                                public Object element() {
+                                    final Object element = org.element();
+                                    if (element instanceof Observable) {
+                                        return ((Observable<Object>)element).doOnNext(DisposableWrapperUtil.disposeOnForAny(initiator));
+                                    } else if (element instanceof DisposableWrapper) {
+                                        return DisposableWrapperUtil.disposeOn(initiator, (DisposableWrapper)element);
+                                    } else {
+                                        return element;
+                                    }
+                                }};
+                        } else {
+                            return obj;
+                        }
+                    }});
+
             }
 
             private Observable<FullMessage<HttpResponse>> defineInteraction(final HttpInitiator initiator) {
