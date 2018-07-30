@@ -540,6 +540,7 @@ public class MessageUtil {
 
             private Observable<? extends Object> hookDisposeBody(final Observable<Object> obsreq, final HttpInitiator initiator) {
                 return obsreq.map(new Func1<Object, Object>() {
+                    @SuppressWarnings("unchecked")
                     @Override
                     public Object call(final Object obj) {
                         if (obj instanceof Stepable) {
@@ -559,12 +560,15 @@ public class MessageUtil {
                                     if (element instanceof Observable) {
                                         return ((Observable<Object>)element).doOnNext(DisposableWrapperUtil.disposeOnForAny(initiator));
                                     } else if (element instanceof DisposableWrapper) {
-                                        return DisposableWrapperUtil.disposeOn(initiator, (DisposableWrapper)element);
+                                        return DisposableWrapperUtil.disposeOn(initiator, (DisposableWrapper<?>)element);
                                     } else {
                                         return element;
                                     }
                                 }};
+                        } else if (obj instanceof DisposableWrapper) {
+                            return DisposableWrapperUtil.disposeOn(initiator, (DisposableWrapper<?>)obj);
                         } else {
+                            // neither Stepable nor DisposableWrapper
                             return obj;
                         }
                     }});
@@ -744,7 +748,7 @@ public class MessageUtil {
     }
 
     // TODO: support multipart/...
-    public static Transformer<Object, Object> addBody(final Observable<? extends MessageBody> body) {
+    private static Transformer<Object, Object> addBody(final Observable<? extends MessageBody> body) {
         return new Transformer<Object, Object>() {
             @Override
             public Observable<Object> call(final Observable<Object> msg) {
@@ -773,7 +777,7 @@ public class MessageUtil {
         };
     }
 
-    public static Transformer<Object, Object> addBodyWithContentLength(final Observable<? extends MessageBody> obsbody) {
+    private static Transformer<Object, Object> addBodyWithContentLength(final Observable<? extends MessageBody> obsbody) {
         return new Transformer<Object, Object>() {
             @Override
             public Observable<Object> call(final Observable<Object> msg) {
