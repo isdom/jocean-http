@@ -748,7 +748,7 @@ public class MessageUtil {
     }
 
     // TODO: support multipart/...
-    private static Transformer<Object, Object> addBody(final Observable<? extends MessageBody> body) {
+    public static Transformer<Object, Object> addBody(final Observable<? extends MessageBody> body) {
         return new Transformer<Object, Object>() {
             @Override
             public Observable<Object> call(final Observable<Object> msg) {
