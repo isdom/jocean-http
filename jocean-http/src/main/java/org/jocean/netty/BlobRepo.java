@@ -1,13 +1,10 @@
 package org.jocean.netty;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.util.Date;
 
 import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
 
-import io.netty.util.ReferenceCounted;
 import rx.Observable;
 import rx.functions.Func1;
 
@@ -42,6 +39,8 @@ public interface BlobRepo {
 
     public Func1<Interact, Observable<SimplifiedObjectMeta>> getSimplifiedObjectMeta(final String objectName);
 
+    public Func1<Interact, Observable<? extends MessageBody>> getObject(final String objname);
+    /*
     @Deprecated
     public interface Blob extends ReferenceCounted {
         public String name();
@@ -136,12 +135,6 @@ public interface BlobRepo {
         public Blob   blob();
     }
 
-    /**
-     * @param key
-     * @param blob
-     * @return
-     * @deprecated 请使用 {@link #putObject()} 代替
-     */
     @Deprecated
     public Observable<PutResult> putBlob(final String key, final Blob blob);
 
@@ -172,4 +165,5 @@ public interface BlobRepo {
             return _RESULT2KEY;
         }
     }
+    */
 }
