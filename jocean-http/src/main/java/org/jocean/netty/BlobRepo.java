@@ -139,11 +139,13 @@ public interface BlobRepo {
     public Observable<PutResult> putBlob(final String key, final Blob blob);
 
     public Observable<Blob> getBlob(final String key);
+    */
 
-    public Observable<String> copyBlob(final String sourceKey, final String destinationKey);
+    public Observable<String> copyObject(final String sourceKey, final String destinationKey);
 
-    public Observable<String> deleteBlob(final String key);
+    public Observable<String> deleteObject(final String key);
 
+    /*
     public static class Util {
         private static Func1<PutResult, Blob> _RESULT2BLOB = new Func1<PutResult, Blob>() {
             @Override
