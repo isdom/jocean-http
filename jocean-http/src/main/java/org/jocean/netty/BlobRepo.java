@@ -39,7 +39,7 @@ public interface BlobRepo {
 
     public Func1<Interact, Observable<SimplifiedObjectMeta>> getSimplifiedObjectMeta(final String objectName);
 
-    public Func1<Interact, Observable<? extends MessageBody>> getObject(final String objname);
+    public Func1<Interact, Observable<MessageBody>> getObject(final String objname);
 
     public Func1<Interact, Observable<String>> copyObject(final String sourceKey, final String destinationKey);
 
