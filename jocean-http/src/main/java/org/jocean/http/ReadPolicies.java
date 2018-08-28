@@ -1,19 +1,12 @@
 package org.jocean.http;
 
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
-import org.jocean.http.Inbound.Intraffic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import rx.Observable;
-import rx.Single;
-import rx.SingleSubscriber;
 import rx.functions.Action1;
 import rx.functions.Func0;
-import rx.functions.Func2;
 
 public class ReadPolicies {
     private static final Logger LOG = LoggerFactory
@@ -50,6 +43,7 @@ public class ReadPolicies {
             }};
     }
 
+    /*
     public static ReadPolicy composite(final ReadPolicy policy1, final ReadPolicy policy2) {
         return new ReadPolicy() {
             @Override
@@ -227,4 +221,5 @@ public class ReadPolicies {
         private final long _maxPendingSize;
         private final AtomicReference<SingleSubscriber<? super Object>> _pendingRead = new AtomicReference<>(null);
     }
+    */
 }
