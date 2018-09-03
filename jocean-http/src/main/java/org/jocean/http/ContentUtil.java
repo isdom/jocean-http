@@ -2,6 +2,7 @@ package org.jocean.http;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
@@ -9,14 +10,21 @@ import javax.ws.rs.core.MediaType;
 
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
+import org.jocean.idiom.ExceptionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.util.CharsetUtil;
 import rx.Observable;
 import rx.functions.Action1;
 import rx.functions.Action2;
 
 public class ContentUtil {
+
+    private static final Logger LOG =
+            LoggerFactory.getLogger(ContentUtil.class);
 
     private ContentUtil() {
         throw new IllegalStateException("No instances!");
@@ -34,6 +42,16 @@ public class ContentUtil {
             MessageUtil.serializeToJson(bean, os);
         }};
 
+    private final static Action2<Object, OutputStream> _ASTEXT = new Action2<Object, OutputStream>() {
+        @Override
+        public void call(final Object bean, final OutputStream os) {
+            try {
+                os.write(bean.toString().getBytes(CharsetUtil.UTF_8));
+            } catch (final IOException e) {
+                LOG.warn("exception when serialize {} to text, detail: {}",
+                        bean, ExceptionUtils.exception2detail(e));
+            }
+        }};
     public static final ContentEncoder TOXML = new ContentEncoder() {
         @Override
         public String contentType() {
@@ -52,6 +70,15 @@ public class ContentUtil {
         @Override
         public Action2<Object, OutputStream> encoder() {
             return _ASJSON;
+        }};
+    public static final ContentEncoder TOTEXT = new ContentEncoder() {
+        @Override
+        public String contentType() {
+            return MediaType.TEXT_PLAIN;
+        }
+        @Override
+        public Action2<Object, OutputStream> encoder() {
+            return _ASTEXT;
         }};
 
     public static Observable<? extends MessageBody> tobody(final String contentType, final File file) {
