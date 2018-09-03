@@ -81,6 +81,15 @@ public class ContentUtil {
             return _ASTEXT;
         }};
 
+    public static final ContentEncoder TOHTML = new ContentEncoder() {
+        @Override
+        public String contentType() {
+            return MediaType.TEXT_HTML;
+        }
+        @Override
+        public Action2<Object, OutputStream> encoder() {
+            return _ASTEXT;
+        }};
     public static Observable<? extends MessageBody> tobody(final String contentType, final File file) {
         try (final InputStream is = new FileInputStream(file)) {
             final int length = is.available();
