@@ -41,7 +41,7 @@ public interface BlobRepo {
 
     public Func1<Interact, Observable<MessageBody>> getObject(final String objname);
 
-    public Func1<Interact, Observable<String>> copyObject(final String sourceKey, final String destinationKey);
+    public Func1<Interact, Observable<CopyObjectResult>> copyObject(final String sourceKey, final String destinationKey);
 
     public Func1<Interact, Observable<String>> deleteObject(final String key);
 }
