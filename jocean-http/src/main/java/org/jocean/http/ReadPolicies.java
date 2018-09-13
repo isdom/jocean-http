@@ -1,18 +1,10 @@
 package org.jocean.http;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import rx.functions.Action1;
-import rx.functions.Func0;
-
 public class ReadPolicies {
-    private static final Logger LOG = LoggerFactory
-            .getLogger(ReadPolicies.class);
-
-    private static final Object _NOTIFIER = new Object();
+//    private static final Logger LOG = LoggerFactory
+//            .getLogger(ReadPolicies.class);
+//
+//    private static final Object _NOTIFIER = new Object();
 
     private ReadPolicies() {
         throw new IllegalStateException("No instances!");
@@ -22,26 +14,26 @@ public class ReadPolicies {
         // inbound.setReadPolicy(ReadPolicies.bysended(writeCtrl, pendingCount(writeCtrl), 0));
     }
 
-    public static Func0<Integer> pendingCount(final WriteCtrl writeCtrl) {
-        final AtomicInteger sendingCount = new AtomicInteger(0);
-        final AtomicInteger sendedCount = new AtomicInteger(0);
+//    public static Func0<Integer> pendingCount(final WriteCtrl writeCtrl) {
+//        final AtomicInteger sendingCount = new AtomicInteger(0);
+//        final AtomicInteger sendedCount = new AtomicInteger(0);
+//
+//        writeCtrl.sending().subscribe(incCounter(sendingCount));
+//        writeCtrl.sended().subscribe(incCounter(sendedCount));
+//        return new Func0<Integer>() {
+//            @Override
+//            public Integer call() {
+//                return sendingCount.get() - sendedCount.get();
+//            }};
+//    }
 
-        writeCtrl.sending().subscribe(incCounter(sendingCount));
-        writeCtrl.sended().subscribe(incCounter(sendedCount));
-        return new Func0<Integer>() {
-            @Override
-            public Integer call() {
-                return sendingCount.get() - sendedCount.get();
-            }};
-    }
-
-    private static Action1<Object> incCounter(final AtomicInteger counter) {
-        return new Action1<Object>() {
-            @Override
-            public void call(final Object t) {
-                counter.incrementAndGet();
-            }};
-    }
+//    private static Action1<Object> incCounter(final AtomicInteger counter) {
+//        return new Action1<Object>() {
+//            @Override
+//            public void call(final Object t) {
+//                counter.incrementAndGet();
+//            }};
+//    }
 
     /*
     public static ReadPolicy composite(final ReadPolicy policy1, final ReadPolicy policy2) {
