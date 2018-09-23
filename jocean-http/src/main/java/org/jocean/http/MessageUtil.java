@@ -356,8 +356,6 @@ public class MessageUtil {
         @Override
         public Observable<String> call(final Interaction interaction) {
             return interaction.execute()
-//                    .compose(AUTOSTEP2DWH)
-//                    .compose(RxNettys.message2fullresp(interaction.initiator(), true))
                     .flatMap(new Func1<FullMessage<HttpResponse>, Observable<DisposableWrapper<? extends ByteBuf>>>() {
                         @Override
                         public Observable<DisposableWrapper<? extends ByteBuf>> call(final FullMessage<HttpResponse> fullresp) {
