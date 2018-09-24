@@ -45,7 +45,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.DefaultHttpRequest;
-import io.netty.handler.codec.http.FullHttpMessage;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMessage;
@@ -341,16 +340,16 @@ public class MessageUtil {
         };
     }
 
-    private static final Func1<DisposableWrapper<? extends FullHttpMessage>, String> _FULLMSG_TO_STRING = new Func1<DisposableWrapper<? extends FullHttpMessage>, String>() {
-        @Override
-        public String call(final DisposableWrapper<? extends FullHttpMessage> dwfullmsg) {
-            try {
-                return parseContentAsString(contentAsInputStream(dwfullmsg.unwrap().content()));
-            } finally {
-                dwfullmsg.dispose();
-            }
-        }
-    };
+//    private static final Func1<DisposableWrapper<? extends FullHttpMessage>, String> _FULLMSG_TO_STRING = new Func1<DisposableWrapper<? extends FullHttpMessage>, String>() {
+//        @Override
+//        public String call(final DisposableWrapper<? extends FullHttpMessage> dwfullmsg) {
+//            try {
+//                return parseContentAsString(contentAsInputStream(dwfullmsg.unwrap().content()));
+//            } finally {
+//                dwfullmsg.dispose();
+//            }
+//        }
+//    };
 
     private static final Func1<Interaction, Observable<String>> _INTERACTION_TO_OBS_STRING = new Func1<Interaction, Observable<String>>() {
         @Override
