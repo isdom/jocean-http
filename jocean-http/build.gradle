@@ -20,7 +20,7 @@ dependencies {
     compile "com.fasterxml.jackson.dataformat:jackson-dataformat-xml:${jacksonVersion}"
 	
 	testCompile 'junit:junit:4.12'
-    testCompile 'ch.qos.logback:logback-classic:1.2.2'
+    testCompile 'ch.qos.logback:logback-classic:1.2.3'
     testCompile 'com.google.guava:guava:20.0'
     testCompile 'org.apache.httpcomponents:httpclient:4.4'
     testCompile 'org.apache.httpcomponents:httpmime:4.4'
