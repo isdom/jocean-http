@@ -43,19 +43,6 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
 
-//    private static final Func1<Object, Object> _DUPLICATE_CONTENT = new Func1<Object, Object>() {
-//        @Override
-//        public Object call(final Object obj) {
-//            if ((obj instanceof DisposableWrapper)
-//                && (DisposableWrapperUtil.unwrap(obj) instanceof HttpContent)) {
-//                return DisposableWrapperUtil.<HttpObject>wrap(((HttpContent) DisposableWrapperUtil.unwrap(obj)).duplicate(),
-//                        (DisposableWrapper<?>)obj);
-//            } else {
-//                return obj;
-//            }
-//        }
-//    };
-
     private static final Func1<HttpSlice, Observable<HttpRequest>> _1ST_TO_REQ = new Func1<HttpSlice, Observable<HttpRequest>>() {
         @Override
         public Observable<HttpRequest> call(final HttpSlice slice) {
