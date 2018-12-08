@@ -70,7 +70,7 @@ public class HttpSliceUtil {
         };
     }
 
-    private final static Func1<HttpSlice, ByteBufSlice> _HSTOBBS = new Func1<HttpSlice, ByteBufSlice>() {
+    private final static Func1<HttpSlice, ByteBufSlice> _HS2BBS = new Func1<HttpSlice, ByteBufSlice>() {
         @Override
         public ByteBufSlice call(final HttpSlice slice) {
             final Observable<DisposableWrapper<ByteBuf>> cached =
@@ -93,6 +93,6 @@ public class HttpSliceUtil {
     };
 
     public static Func1<HttpSlice, ByteBufSlice> hs2bbs() {
-        return _HSTOBBS;
+        return _HS2BBS;
     }
 }
