@@ -14,9 +14,12 @@ import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLException;
 
+import org.jocean.http.DoFlush;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.ENABLE_SSL;
 import org.jocean.http.FullMessage;
@@ -38,6 +41,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PoolArenaMetric;
 import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.local.LocalAddress;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
@@ -51,6 +55,7 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
@@ -309,6 +314,76 @@ public class DefaultHttpClientTestCase {
                 });
         } finally {
             assertEquals(0, allActiveAllocationsCount(allocator));
+            client.close();
+            server.unsubscribe();
+        }
+    }
+
+    @Test(timeout=5000)
+    public void testInitiatorInteraction100ContinueAsHttp()
+        throws Exception {
+        final BlockingQueue<HttpTrade> trades = new ArrayBlockingQueue<>(1);
+        final String addr = UUID.randomUUID().toString();
+        final Subscription server = TestHttpUtil.createTestServerWith(addr,
+                trades,
+                Feature.ENABLE_LOGGING);
+        final DefaultHttpClient client =
+                new DefaultHttpClient(new TestChannelCreator(),
+                Feature.ENABLE_LOGGING);
+        try {
+            try (final HttpInitiator initiator = client.initiator().remoteAddress(new LocalAddress(addr)).build().toBlocking().single()) {
+                final Observable<FullMessage<HttpResponse>> resps = initiator.defineInteraction(Observable.just(fullHttpRequest()));
+
+                final AtomicInteger msgcnt = new AtomicInteger(0);
+                final AtomicReference<FullMessage<HttpResponse>> respRef1 = new AtomicReference<>();
+                final CountDownLatch respRef1Latch = new CountDownLatch(1);
+                final AtomicReference<FullMessage<HttpResponse>> respRef2 = new AtomicReference<>();
+                final CountDownLatch respRef2Latch = new CountDownLatch(1);
+
+                resps.subscribe(fulmsg -> {
+                    final int msgidx = msgcnt.incrementAndGet();
+                    if (1 == msgidx) {
+                        respRef1.set(fulmsg);
+                        respRef1Latch.countDown();
+                        fulmsg.body().subscribe(body -> {
+                            body.content().subscribe(slice -> {
+                                LOG.debug("msg1 content's slice: {}", slice);
+                                slice.step();
+                            });
+                        });
+                    } else if (2 == msgidx) {
+                        respRef2.set(fulmsg);
+                        respRef2Latch.countDown();
+                        fulmsg.body().subscribe(body -> {
+                            body.content().subscribe(slice -> {
+                                LOG.debug("msg2 content's slice: {}", slice);
+                                slice.step();
+                            });
+                        });
+                    }
+                });
+
+                // server side recv req
+                final HttpTrade trade = trades.take();
+
+                final DefaultFullHttpResponse _100continue_resp =
+                        new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.CONTINUE, Unpooled.EMPTY_BUFFER);
+                    HttpUtil.setContentLength(_100continue_resp, 0);
+
+                final DefaultFullHttpResponse _200ok_resp =
+                        new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, Unpooled.EMPTY_BUFFER);
+                HttpUtil.setContentLength(_200ok_resp, 0);
+
+                trade.outbound(Observable.<HttpObject>just(_100continue_resp, DoFlush.Util.flushOnly(), _200ok_resp));
+
+                respRef1Latch.await();
+                assertEquals(HttpResponseStatus.CONTINUE, respRef1.get().message().status());
+
+                respRef2Latch.await();
+                assertEquals(HttpResponseStatus.OK, respRef2.get().message().status());
+            }
+
+        } finally {
             client.close();
             server.unsubscribe();
         }
