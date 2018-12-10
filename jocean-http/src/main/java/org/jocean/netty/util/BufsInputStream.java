@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.util.ReferenceCounted;
 import rx.functions.Action1;
+import rx.functions.Actions;
 import rx.functions.Func1;
 
 public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
@@ -58,7 +59,7 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
 
     public BufsInputStream(final Func1<T, ByteBuf> tobuf, final Action1<T> onreaded) {
         this._tobuf = tobuf;
-        this._onreaded = onreaded;
+        this._onreaded = null != onreaded ? onreaded : Actions.empty();
     }
 
     public void appendBuf(final T buf) {
