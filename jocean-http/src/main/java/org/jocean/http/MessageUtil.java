@@ -74,10 +74,10 @@ import rx.functions.Func2;
 public class MessageUtil {
 
     public static final Transformer<HttpSlice, DisposableWrapper<? extends HttpObject>> AUTOSTEP2DWH =
-            StepableUtil.<HttpSlice, DisposableWrapper<? extends HttpObject>>autostep2element();
+            StepableUtil.<HttpSlice, DisposableWrapper<? extends HttpObject>>autostep2element2();
 
     public static final Transformer<ByteBufSlice, DisposableWrapper<? extends ByteBuf>> AUTOSTEP2DWB =
-            StepableUtil.<ByteBufSlice, DisposableWrapper<? extends ByteBuf>>autostep2element();
+            StepableUtil.<ByteBufSlice, DisposableWrapper<? extends ByteBuf>>autostep2element2();
 
     private static final Logger LOG =
             LoggerFactory.getLogger(MessageUtil.class);
@@ -832,20 +832,30 @@ public class MessageUtil {
         }};
 
     private static Observable<ByteBufSlice> bean2bbs(final Object bean, final Action2<Object, OutputStream> encoder) {
-        final BufsOutputStream<DisposableWrapper<ByteBuf>> bufout =
-                new BufsOutputStream<>(pooledAllocator(null, 8192), _UNWRAP_DWB);
         return Observable.<ByteBufSlice>just(new ByteBufSlice() {
 
             @Override
             public void step() {}
 
             @Override
-            public Observable<? extends DisposableWrapper<? extends ByteBuf>> element() {
-                return fromBufout(bufout, new Action0() {
+            public Iterable<? extends DisposableWrapper<? extends ByteBuf>> element() {
+                final List<DisposableWrapper<ByteBuf>> dwbs = new ArrayList<>();
+                final BufsOutputStream<DisposableWrapper<ByteBuf>> bufout =
+                        new BufsOutputStream<>(pooledAllocator(null, 8192), _UNWRAP_DWB);
+                bufout.setOutput(new Action1<DisposableWrapper<ByteBuf>>() {
                     @Override
-                    public void call() {
-                        encoder.call(bean, bufout);
+                    public void call(final DisposableWrapper<ByteBuf> dwb) {
+                        dwbs.add(dwb);
                     }});
+                try {
+                    encoder.call(bean, bufout);
+                    bufout.flush();
+                } catch (final Exception e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    bufout.setOutput(null);
+                }
+                return dwbs;
             }});
     }
 

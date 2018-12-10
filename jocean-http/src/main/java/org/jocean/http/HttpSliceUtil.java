@@ -1,17 +1,19 @@
 package org.jocean.http;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
-import org.jocean.idiom.DisposableWrapperUtil;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import rx.Observable;
-import rx.Observable.Transformer;
 import rx.functions.Func1;
 
 public class HttpSliceUtil {
+    /*
     public static <T extends HttpMessage> Transformer<HttpSlice, T> extractHttpMessage() {
         return new Transformer<HttpSlice, T>() {
             @Override
@@ -35,17 +37,19 @@ public class HttpSliceUtil {
             }
         };
     }
+    */
 
-    public static Observable<HttpSlice> single(final Observable<? extends DisposableWrapper<? extends HttpObject>> element) {
+    public static Observable<HttpSlice> single(final Iterable<? extends DisposableWrapper<? extends HttpObject>> element) {
         return Observable.<HttpSlice>just(new HttpSlice() {
             @Override
-            public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
+            public Iterable<? extends DisposableWrapper<? extends HttpObject>> element() {
                 return element;
             }
             @Override
             public void step() {}});
     }
 
+    /*
     public static Func1<HttpSlice, HttpSlice> transformElement(
             final Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<? extends HttpObject>> transformer) {
         return new Func1<HttpSlice, HttpSlice>() {
@@ -60,7 +64,7 @@ public class HttpSliceUtil {
             final Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<? extends HttpObject>> transformer) {
         return new HttpSlice() {
             @Override
-            public Observable<DisposableWrapper<? extends HttpObject>> element() {
+            public Iterable<DisposableWrapper<? extends HttpObject>> element() {
                 return slice.element().compose(transformer);
             }
             @Override
@@ -69,21 +73,27 @@ public class HttpSliceUtil {
             }
         };
     }
+    */
 
     private final static Func1<HttpSlice, ByteBufSlice> _HS2BBS = new Func1<HttpSlice, ByteBufSlice>() {
         @Override
         public ByteBufSlice call(final HttpSlice slice) {
-            final Observable<DisposableWrapper<ByteBuf>> cached =
-                    slice.element().flatMap(RxNettys.message2body()).cache();
+            final List<DisposableWrapper<ByteBuf>> dwbs = new ArrayList<>();
+            for (final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator(); iter.hasNext(); ) {
+                final DisposableWrapper<ByteBuf> dwb = RxNettys.dwc2dwb(iter.next());
+                if (null != dwb) {
+                    dwbs.add(dwb);
+                }
+            }
+
             return new ByteBufSlice() {
                 @Override
                 public String toString() {
-                    return new StringBuilder().append("ByteBufSlice [from ")
-                            .append(slice).append("]").toString();
+                    return new StringBuilder().append("ByteBufSlice [from ").append(slice).append("]").toString();
                 }
                 @Override
-                public Observable<DisposableWrapper<ByteBuf>> element() {
-                    return cached;
+                public Iterable<? extends DisposableWrapper<? extends ByteBuf>> element() {
+                    return dwbs;
                 }
                 @Override
                 public void step() {

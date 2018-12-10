@@ -5,6 +5,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.ws.rs.core.MediaType;
 
@@ -108,9 +110,10 @@ public class ContentUtil {
                 public Observable<? extends ByteBufSlice> content() {
                     return Observable.<ByteBufSlice>just(new ByteBufSlice() {
                         @Override
-                        public Observable<? extends DisposableWrapper<? extends ByteBuf>> element() {
-                            return Observable.just(
-                                    DisposableWrapperUtil.wrap(Unpooled.wrappedBuffer(bytes), (Action1<ByteBuf>) null));
+                        public Iterable<? extends DisposableWrapper<? extends ByteBuf>> element() {
+                            final List<DisposableWrapper<ByteBuf>> dwbs = new ArrayList<>();
+                            dwbs.add(DisposableWrapperUtil.wrap(Unpooled.wrappedBuffer(bytes), (Action1<ByteBuf>) null));
+                            return dwbs;
                         }
 
                         @Override

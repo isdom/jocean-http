@@ -350,8 +350,8 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                 runOnce.unsubscribe();
             }
             @Override
-            public Observable<? extends DisposableWrapper<? extends HttpObject>> element() {
-                return Observable.from(inmsgs);
+            public Iterable<? extends DisposableWrapper<? extends HttpObject>> element() {
+                return inmsgs;
             }};
     }
 

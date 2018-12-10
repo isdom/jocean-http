@@ -11,7 +11,6 @@ import org.jocean.http.HttpConnection;
 import org.jocean.http.HttpSlice;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,20 +41,15 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
 
-    private static final Func1<HttpObject, HttpRequest> HOBJ2HREQ = new Func1<HttpObject, HttpRequest>() {
+    private static final Func1<HttpSlice, HttpRequest> _1ST_TO_REQ = new Func1<HttpSlice, HttpRequest>() {
         @Override
-        public HttpRequest call(final HttpObject httpobj) {
-            if (httpobj instanceof HttpRequest) {
-                return (HttpRequest)httpobj;
+        public HttpRequest call(final HttpSlice slice) {
+            final HttpObject hobj = (HttpRequest)slice.element().iterator().next().unwrap();
+            if (hobj instanceof HttpRequest) {
+                return (HttpRequest)hobj;
             } else {
                 throw new RuntimeException("first http object is not http request.");
             }
-        }};
-
-    private static final Func1<HttpSlice, Observable<HttpRequest>> _1ST_TO_REQ = new Func1<HttpSlice, Observable<HttpRequest>>() {
-        @Override
-        public Observable<HttpRequest> call(final HttpSlice slice) {
-            return slice.element().first().map(DisposableWrapperUtil.<HttpObject>unwrap()).map(HOBJ2HREQ);
         }};
 
     private final CompositeSubscription _inboundCompleted = new CompositeSubscription();
@@ -75,7 +69,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
 
     @Override
     public Observable<HttpRequest> request() {
-        return this._1stSlice.flatMap(_1ST_TO_REQ);
+        return this._1stSlice.map(_1ST_TO_REQ);
     }
 
     @Override
