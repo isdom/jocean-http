@@ -57,9 +57,10 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
      * {@link ReferenceCounted#retain()} if necessary.
      */
 
+    @SuppressWarnings("unchecked")
     public BufsInputStream(final Func1<T, ByteBuf> tobuf, final Action1<T> onreaded) {
         this._tobuf = tobuf;
-        this._onreaded = null != onreaded ? onreaded : Actions.empty();
+        this._onreaded = null != onreaded ? onreaded : (Action1<T>)Actions.empty();
     }
 
     public void appendBuf(final T buf) {
