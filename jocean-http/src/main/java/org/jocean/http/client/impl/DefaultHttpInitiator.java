@@ -5,6 +5,7 @@ package org.jocean.http.client.impl;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.ByteBufSlice;
@@ -16,7 +17,7 @@ import org.jocean.http.MessageBody;
 import org.jocean.http.TransportException;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.util.Nettys;
-import org.jocean.idiom.DisposableWrapperUtil;
+import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.rx.RxObservables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,18 +57,17 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
         return rawInbound.flatMap(new Func1<HttpSlice, Observable<FullMessage<HttpResponse>>>() {
             @Override
             public Observable<FullMessage<HttpResponse>> call(final HttpSlice slice) {
-                // TODO
-                return Observable.from(slice.element()).first().map(DisposableWrapperUtil.<HttpObject>unwrap()).flatMap(new Func1<HttpObject, Observable<FullMessage<HttpResponse>>>() {
-                    @Override
-                    public Observable<FullMessage<HttpResponse>> call(final HttpObject hobj) {
-                        if (hobj instanceof HttpResponse) {
-                            final HttpResponse resp = (HttpResponse)hobj;
-                            return Observable.<FullMessage<HttpResponse>>just(fullResponse(resp, slice, rawInbound));
-                        } else {
-                            return Observable.empty();
-                        }
-                    }});
-                }});
+                final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
+                if (iter.hasNext()) {
+                    final HttpObject hobj = iter.next().unwrap();
+                    if (hobj instanceof HttpResponse) {
+                        final HttpResponse resp = (HttpResponse)hobj;
+                        return Observable.<FullMessage<HttpResponse>>just(fullResponse(resp, slice, rawInbound));
+                    }
+                }
+                return Observable.empty();
+            }
+        });
     }
 
     private FullMessage<HttpResponse> fullResponse(
@@ -115,10 +115,13 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
                         .takeUntil(new Func1<HttpSlice, Boolean>() {
                             @Override
                             public Boolean call(final HttpSlice slice) {
-                                // TODO
-                                final HttpObject last = Observable.from(slice.element()).last().toBlocking().single().unwrap();
+                                final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
+                                HttpObject last = null;
+                                while (iter.hasNext()) {
+                                    last = iter.next().unwrap();
+                                }
+                                return null != last && last instanceof LastHttpContent;
 //                                LOG.debug("{}'s content onNext's last: {}", resp, last);
-                                return last instanceof LastHttpContent;
                             }
                         })
 //                        .doOnNext(new Action1<HttpSlice>() {
