@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -68,6 +69,15 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
     public void appendBufs(final Collection<? extends T> bufs) {
         this._bufs.addAll(bufs);
         LOG.debug("appendBufs with count {}", bufs.size());
+    }
+
+    public void appendIterable(final Iterable<? extends T> bufs) {
+        int size = 0;
+        for (final Iterator<? extends T> iter = bufs.iterator(); iter.hasNext(); ) {
+            appendBuf(iter.next());
+            size++;
+        }
+        LOG.debug("appendBufs(Iterable) with count {}", size);
     }
 
     public void markEOS() {
