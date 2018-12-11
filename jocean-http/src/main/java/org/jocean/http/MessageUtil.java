@@ -61,10 +61,7 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
 import rx.Observable;
-import rx.Observable.OnSubscribe;
 import rx.Observable.Transformer;
-import rx.Subscriber;
-import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Action2;
 import rx.functions.Func0;
@@ -903,51 +900,6 @@ public class MessageUtil {
                     return func.call(contentAsInputStream(buf), type);
                 } finally {
                     ReferenceCountUtil.release(buf);
-                }
-            }
-        });
-    }
-
-    public static <T> Observable<T> fromBufout(final BufsOutputStream<T> bufout, final Action0 out) {
-        return Observable.unsafeCreate(new OnSubscribe<T>() {
-            @Override
-            public void call(final Subscriber<? super T> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    bufout.setOutput(new Action1<T>() {
-                        @Override
-                        public void call(final T t) {
-                            subscriber.onNext(t);
-                        }});
-                    try {
-                        out.call();
-                        subscriber.onCompleted();
-                    } catch (final Exception e) {
-                        subscriber.onError(e);
-                    } finally {
-                        bufout.setOutput(null);
-                    }
-                }
-            }
-        });
-    }
-
-    public static <T> Observable<T> fromBufout(final Func0<BufsOutputStream<T>> createout,
-            final Action1<OutputStream> fillout) {
-        return Observable.unsafeCreate(new OnSubscribe<T>() {
-            @Override
-            public void call(final Subscriber<? super T> subscriber) {
-                if (!subscriber.isUnsubscribed()) {
-                    try (final BufsOutputStream<T> bufout = createout.call()) {
-                        bufout.setOutput(new Action1<T>() {
-                            @Override
-                            public void call(final T t) {
-                                subscriber.onNext(t);
-                            }});
-                        fillout.call(bufout);
-                        subscriber.onCompleted();
-                    } catch (final Exception e) {
-                        subscriber.onError(e);
-                    }
                 }
             }
         });
