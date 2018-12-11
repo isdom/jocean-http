@@ -640,8 +640,12 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     private void handleStepable(final Stepable<?> stepable) {
-        sendElementAndFetchNext(stepable, stepable.element() instanceof Observable ? (Observable<?>) stepable.element()
-                : Observable.just(stepable.element()));
+        sendElementAndFetchNext(stepable, element2observable(stepable.element()));
+    }
+
+    private Observable<?> element2observable(final Object element) {
+        return element instanceof Observable ? (Observable<?>) element
+                : (element instanceof Iterable ? Observable.from((Iterable<?>)element) : Observable.just(element) );
     }
 
     private void sendElementAndFetchNext(final Stepable<?> stepable, final Observable<?> element) {
