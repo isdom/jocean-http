@@ -953,22 +953,22 @@ public class MessageUtil {
         });
     }
 
-    public static Iterable<? extends DisposableWrapper<? extends ByteBuf>> out2dwbs(
-            final BufsOutputStream<DisposableWrapper<ByteBuf>> bufout, final Action1<OutputStream> fillout) {
-        final List<DisposableWrapper<ByteBuf>> dwbs = new ArrayList<>();
-        bufout.setOutput(new Action1<DisposableWrapper<ByteBuf>>() {
+    public static <T> Iterable<T> out2dwbs(final BufsOutputStream<T> bufout, final Action1<OutputStream> fillout) {
+        final List<T> bufs = new ArrayList<>();
+        bufout.setOutput(new Action1<T>() {
             @Override
-            public void call(final DisposableWrapper<ByteBuf> dwb) {
-                dwbs.add(dwb);
+            public void call(final T buf) {
+                bufs.add(buf);
             }});
+
         try {
             fillout.call(bufout);
             bufout.flush();
+            return bufs;
         } catch (final Exception e) {
             throw new RuntimeException(e);
         } finally {
             bufout.setOutput(null);
         }
-        return dwbs;
     }
 }
