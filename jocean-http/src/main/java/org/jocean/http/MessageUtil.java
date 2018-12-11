@@ -839,23 +839,13 @@ public class MessageUtil {
 
             @Override
             public Iterable<? extends DisposableWrapper<? extends ByteBuf>> element() {
-                final List<DisposableWrapper<ByteBuf>> dwbs = new ArrayList<>();
-                final BufsOutputStream<DisposableWrapper<ByteBuf>> bufout =
-                        new BufsOutputStream<>(pooledAllocator(null, 8192), _UNWRAP_DWB);
-                bufout.setOutput(new Action1<DisposableWrapper<ByteBuf>>() {
-                    @Override
-                    public void call(final DisposableWrapper<ByteBuf> dwb) {
-                        dwbs.add(dwb);
-                    }});
-                try {
-                    encoder.call(bean, bufout);
-                    bufout.flush();
-                } catch (final Exception e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    bufout.setOutput(null);
-                }
-                return dwbs;
+                return out2dwbs(new BufsOutputStream<>(pooledAllocator(null, 8192), _UNWRAP_DWB),
+                        new Action1<OutputStream>() {
+                            @Override
+                            public void call(final OutputStream out) {
+                                encoder.call(bean, out);
+                            }
+                        });
             }});
     }
 
@@ -961,5 +951,24 @@ public class MessageUtil {
                 }
             }
         });
+    }
+
+    public static Iterable<? extends DisposableWrapper<? extends ByteBuf>> out2dwbs(
+            final BufsOutputStream<DisposableWrapper<ByteBuf>> bufout, final Action1<OutputStream> fillout) {
+        final List<DisposableWrapper<ByteBuf>> dwbs = new ArrayList<>();
+        bufout.setOutput(new Action1<DisposableWrapper<ByteBuf>>() {
+            @Override
+            public void call(final DisposableWrapper<ByteBuf> dwb) {
+                dwbs.add(dwb);
+            }});
+        try {
+            fillout.call(bufout);
+            bufout.flush();
+        } catch (final Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            bufout.setOutput(null);
+        }
+        return dwbs;
     }
 }
