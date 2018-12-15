@@ -382,6 +382,42 @@ public class RxNettys {
         return message2fullresp(terminable, false);
     }
 
+    public static Observable.Transformer<FullMessage<HttpRequest>, ? extends DisposableWrapper<FullHttpRequest>> fullmessage2dwq(
+            final Terminable terminable, final boolean disposemsg) {
+        return new Observable.Transformer<FullMessage<HttpRequest>, DisposableWrapper<FullHttpRequest>>() {
+            @Override
+            public Observable<DisposableWrapper<FullHttpRequest>> call(final Observable<FullMessage<HttpRequest>> fullmsg) {
+                return fullmsg.flatMap(new Func1<FullMessage<HttpRequest>, Observable<DisposableWrapper<FullHttpRequest>>>() {
+                    @Override
+                    public Observable<DisposableWrapper<FullHttpRequest>> call(final FullMessage<HttpRequest> fullreq) {
+                        return fullreq.body().flatMap(new Func1<MessageBody, Observable<DisposableWrapper<? extends ByteBuf>>>() {
+                            @Override
+                            public Observable<DisposableWrapper<? extends ByteBuf>> call(final MessageBody body) {
+                                return body.content().compose(MessageUtil.AUTOSTEP2DWB);
+                            }}).map(DisposableWrapperUtil.unwrap()).toList().map(new Func1<List<ByteBuf>, DisposableWrapper<FullHttpRequest>>() {
+                                @Override
+                                public DisposableWrapper<FullHttpRequest> call(final List<ByteBuf> bufs) {
+                                    final HttpRequest req = fullreq.message();
+                                    final DefaultFullHttpRequest dfreq = new DefaultFullHttpRequest(
+                                            req.protocolVersion(),
+                                            req.method(),
+                                            req.uri(),
+                                            Nettys.composite(bufs));
+                                    dfreq.headers().add(req.headers());
+                                    //  ? need update Content-Length header field ?
+                                    return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release(dfreq));
+//                                    try {
+//                                    } finally {
+//                                        if (disposemsg) {
+//                                            disposeAll(dwhs);
+//                                        }
+//                                    }
+                                }});
+                    }});
+            }
+        };
+    }
+
     public static Observable.Transformer<? super DisposableWrapper<? extends HttpObject>, ? extends DisposableWrapper<FullHttpResponse>> message2fullresp(
             final Terminable terminable, final boolean disposemsg) {
         return new Observable.Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<FullHttpResponse>>() {

@@ -13,7 +13,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
-import org.jocean.http.MessageUtil;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
@@ -63,9 +62,7 @@ public class DefaultHttpServerBuilderTestCase {
                     transportRef.set(trade.transport());
                 }
 //                final HttpMessageHolder holder = new HttpMessageHolder();
-                trade.inbound()
-                .compose(MessageUtil.AUTOSTEP2DWH)
-                .compose(RxNettys.message2fullreq(trade))
+                trade.inbound().compose(RxNettys.fullmessage2dwq(trade, true))
                 .subscribe(new Action1<DisposableWrapper<FullHttpRequest>>() {
                     @Override
                     public void call(final DisposableWrapper<FullHttpRequest> dwreq) {
@@ -271,9 +268,7 @@ public class DefaultHttpServerBuilderTestCase {
             // trade receive all inbound msg
 //            trade1.obsrequest().toCompletable().await();
 
-            final FullHttpRequest reqReceived1 = trade1.inbound()
-                    .compose(MessageUtil.AUTOSTEP2DWH)
-                    .compose(RxNettys.message2fullreq(trade1))
+            final FullHttpRequest reqReceived1 = trade1.inbound().compose(RxNettys.fullmessage2dwq(trade1, true))
                     .toBlocking().single().unwrap();
             assertEquals(reqToSend1, reqReceived1);
 
@@ -301,9 +296,7 @@ public class DefaultHttpServerBuilderTestCase {
             //  receive all inbound msg
 //            trade2.obsrequest().toCompletable().await();
 
-            final FullHttpRequest reqReceived2 = trade2.inbound()
-                    .compose(MessageUtil.AUTOSTEP2DWH)
-                    .compose(RxNettys.message2fullreq(trade2))
+            final FullHttpRequest reqReceived2 = trade2.inbound().compose(RxNettys.fullmessage2dwq(trade2, true))
                     .toBlocking().single().unwrap();
             assertEquals(reqToSend2, reqReceived2);
         } finally {

@@ -75,9 +75,9 @@ public class DefaultHttpClientTestCase {
 
     public static final byte[] CONTENT = { 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd' };
 
-    private static final Action1<DisposableWrapper<? extends HttpObject>> DISPOSE_EACH = new Action1<DisposableWrapper<? extends HttpObject>>() {
+    private static final Action1<DisposableWrapper<?>> DISPOSE_EACH = new Action1<DisposableWrapper<?>>() {
         @Override
-        public void call(final DisposableWrapper<? extends HttpObject> dwh) {
+        public void call(final DisposableWrapper<?> dwh) {
             dwh.dispose();
         }};
 
@@ -281,15 +281,15 @@ public class DefaultHttpClientTestCase {
 //                        final FullHttpRequest req = trade.inbound().compose(MessageUtil.dwhWithAutoread())
 //                            .compose(RxNettys.message2fullreq(trade, true))
 //                            .toBlocking().single().unwrap();
-                        final HttpRequest req1 = trade.request().toBlocking().single();
+                        final HttpRequest req1 = trade.inbound().toBlocking().single().message();
 
                         LOG.info("1st: trade's inbound request: {}", req1);
 
-                        final HttpRequest req2 = trade.request().toBlocking().single();
+                        final HttpRequest req2 = trade.inbound().toBlocking().single().message();
 
                         LOG.info("2nd: trade's inbound request: {}", req2);
 
-                        final HttpRequest req3 = trade.request().toBlocking().single();
+                        final HttpRequest req3 = trade.inbound().toBlocking().single().message();
 
                         LOG.info("3rd: trade's inbound request: {}", req3);
 
@@ -1170,7 +1170,8 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
 
                         // recv request from client side
-                        trade.inbound().compose(MessageUtil.AUTOSTEP2DWH)
+                        trade.inbound().flatMap(fullreq -> fullreq.body()).flatMap(body -> body.content())
+                            .compose(MessageUtil.AUTOSTEP2DWB)
                             .doOnNext(DISPOSE_EACH).toCompletable().await();
 
                         // server not send response, and client cancel this interaction
@@ -1229,7 +1230,8 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
 
                         // recv request from client side
-                        trade.inbound().compose(MessageUtil.AUTOSTEP2DWH)
+                        trade.inbound().flatMap(fullreq -> fullreq.body()).flatMap(body -> body.content())
+                        .compose(MessageUtil.AUTOSTEP2DWB)
                             .doOnNext(DISPOSE_EACH).toCompletable().await();
 
                         // server not send response, and client cancel this interaction
@@ -1432,7 +1434,8 @@ public class DefaultHttpClientTestCase {
                         final HttpTrade trade = trades.take();
 
                         // recv all request
-                        trade.inbound().compose(MessageUtil.AUTOSTEP2DWH)
+                        trade.inbound().flatMap(fullreq -> fullreq.body()).flatMap(body -> body.content())
+                        .compose(MessageUtil.AUTOSTEP2DWB)
                             .doOnNext(DISPOSE_EACH).toCompletable().await();
                         assertEquals(0, allActiveAllocationsCount(allocator));
 

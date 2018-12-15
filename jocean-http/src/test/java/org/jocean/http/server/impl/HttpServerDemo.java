@@ -4,7 +4,6 @@ import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 import org.jocean.http.Feature;
-import org.jocean.http.MessageUtil;
 import org.jocean.http.client.impl.DefaultHttpClient;
 import org.jocean.http.client.impl.TestChannelCreator;
 import org.jocean.http.server.HttpServerBuilder;
@@ -67,9 +66,7 @@ public class HttpServerDemo {
                 .subscribe(new Action1<HttpTrade>() {
                     @Override
                     public void call(final HttpTrade trade) {
-                        trade.outbound(trade.inbound()
-                                .compose(MessageUtil.AUTOSTEP2DWH)
-                                .compose(RxNettys.message2fullreq(trade))
+                        trade.outbound(trade.inbound().compose(RxNettys.fullmessage2dwq(trade, true))
                                 .map(DisposableWrapperUtil.<FullHttpRequest>unwrap()).map(new Func1<FullHttpRequest, HttpObject>() {
                                     @Override
                                     public HttpObject call(final FullHttpRequest fullreq) {

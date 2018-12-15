@@ -5,7 +5,6 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 import java.net.InetSocketAddress;
 
-import org.jocean.http.MessageUtil;
 import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.Nettys;
@@ -43,9 +42,7 @@ public class HttpServerForCloopen {
             .subscribe(new Action1<HttpTrade>() {
                 @Override
                 public void call(final HttpTrade trade) {
-                    trade.outbound(trade.inbound()
-                            .compose(MessageUtil.AUTOSTEP2DWH)
-                            .compose(RxNettys.message2fullreq(trade))
+                    trade.outbound(trade.inbound().compose(RxNettys.fullmessage2dwq(trade, true))
                             .map(DisposableWrapperUtil.<FullHttpRequest>unwrap()).map(new Func1<FullHttpRequest, HttpObject>() {
                                 @Override
                                 public HttpObject call(final FullHttpRequest fullreq) {

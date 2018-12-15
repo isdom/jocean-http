@@ -5,12 +5,18 @@ package org.jocean.http.server.impl;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.jocean.http.ByteBufSlice;
+import org.jocean.http.FullMessage;
 import org.jocean.http.HttpConnection;
 import org.jocean.http.HttpSlice;
+import org.jocean.http.HttpSliceUtil;
+import org.jocean.http.MessageBody;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
+import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,14 +25,17 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
+import io.netty.handler.codec.http.LastHttpContent;
 import rx.Completable;
 import rx.CompletableSubscriber;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action0;
+import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.subscriptions.CompositeSubscription;
 import rx.subscriptions.Subscriptions;
@@ -41,16 +50,16 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
 
-    private static final Func1<HttpSlice, HttpRequest> _1ST_TO_REQ = new Func1<HttpSlice, HttpRequest>() {
-        @Override
-        public HttpRequest call(final HttpSlice slice) {
-            final HttpObject hobj = (HttpRequest)slice.element().iterator().next().unwrap();
-            if (hobj instanceof HttpRequest) {
-                return (HttpRequest)hobj;
-            } else {
-                throw new RuntimeException("first http object is not http request.");
-            }
-        }};
+//    private static final Func1<HttpSlice, HttpRequest> _1ST_TO_REQ = new Func1<HttpSlice, HttpRequest>() {
+//        @Override
+//        public HttpRequest call(final HttpSlice slice) {
+//            final HttpObject hobj = (HttpRequest)slice.element().iterator().next().unwrap();
+//            if (hobj instanceof HttpRequest) {
+//                return (HttpRequest)hobj;
+//            } else {
+//                throw new RuntimeException("first http object is not http request.");
+//            }
+//        }};
 
     private final CompositeSubscription _inboundCompleted = new CompositeSubscription();
 
@@ -68,13 +77,8 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     }
 
     @Override
-    public Observable<HttpRequest> request() {
-        return this._1stSlice.map(_1ST_TO_REQ);
-    }
-
-    @Override
-    public Observable<HttpSlice> inbound() {
-        return this._1stSlice.concatWith(this._rawInbound);
+    public Observable<FullMessage<HttpRequest>> inbound() {
+        return this._inbound;
     }
 
     @Override
@@ -93,12 +97,95 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
             throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
         }
 
-        this._rawInbound = rawInbound().share();
+        final Observable<? extends HttpSlice> rawInbound = rawInbound().share();
 
-        this._rawInbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
+        this._inbound = rawInbound.flatMap(new Func1<HttpSlice, Observable<FullMessage<HttpRequest>>>() {
+            @Override
+            public Observable<FullMessage<HttpRequest>> call(final HttpSlice slice) {
+                final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
+                if (iter.hasNext()) {
+                    final HttpObject hobj = iter.next().unwrap();
+                    if (hobj instanceof HttpRequest) {
+                        final HttpRequest req = (HttpRequest)hobj;
+                        return Observable.<FullMessage<HttpRequest>>just(fullRequest(req, slice, rawInbound));
+                    }
+                }
+                return Observable.empty();
+            }
+        }).cache();
 
-        this._1stSlice = this._rawInbound.first().cache();
-        this._1stSlice.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
+        this._inbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
+    }
+
+    private FullMessage<HttpRequest> fullRequest(
+            final HttpRequest req,
+            final HttpSlice sliceWithReq,
+            final Observable<? extends HttpSlice> rawInbound) {
+        return new FullMessage<HttpRequest>() {
+            @Override
+            public String toString() {
+                return new StringBuilder().append("FullMessage [req=").append(req).append("]").toString();
+            }
+            @Override
+            public HttpRequest message() {
+                return req;
+            }
+
+            @Override
+            public Observable<? extends MessageBody> body() {
+                return Observable.just(new MessageBody() {
+                    @Override
+                    public String toString() {
+                        return new StringBuilder().append("MessageBody [req=").append(req)
+                                .append(",body=(start with ").append(sliceWithReq).append(")]").toString();
+                    }
+
+                    @Override
+                    public String contentType() {
+                        return req.headers().get(HttpHeaderNames.CONTENT_TYPE);
+                    }
+
+                    @Override
+                    public int contentLength() {
+                        return HttpUtil.getContentLength(req, -1);
+                    }
+
+                    @Override
+                    public Observable<? extends ByteBufSlice> content() {
+                        return Observable.just(sliceWithReq).concatWith(rawInbound)
+                        .doOnNext(new Action1<HttpSlice>() {
+                            @Override
+                            public void call(final HttpSlice slice) {
+                                LOG.debug("{}'s content onNext: {}", req, slice);
+                            }
+                        })
+                        .takeUntil(new Func1<HttpSlice, Boolean>() {
+                            @Override
+                            public Boolean call(final HttpSlice slice) {
+                                final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
+                                HttpObject last = null;
+                                while (iter.hasNext()) {
+                                    last = iter.next().unwrap();
+                                }
+                                return null != last && last instanceof LastHttpContent;
+                            }
+                        })
+                        .doOnNext(new Action1<HttpSlice>() {
+                            @Override
+                            public void call(final HttpSlice hs) {
+                                LOG.debug("{}'s content onNext's hs: {}", req, hs);
+                            }
+                        })
+                        .map(HttpSliceUtil.hs2bbs())
+                        .doOnNext(new Action1<ByteBufSlice>() {
+                            @Override
+                            public void call(final ByteBufSlice bbs) {
+                                LOG.debug("{}'s content onNext's bbs: {}", req, bbs);
+                            }
+                        })
+                        ;
+                    }});
+            }};
     }
 
     @Override
@@ -211,8 +298,8 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final int STATUS_RECV_END = 2;
     private static final int STATUS_SEND = 3;
 
-    private final Observable<HttpSlice> _rawInbound;
-    private final Observable<HttpSlice> _1stSlice;
+    private final Observable<FullMessage<HttpRequest>> _inbound;
+//    private final Observable<HttpSlice> _1stSlice;
 
     private volatile boolean _isKeepAlive = false;
 
