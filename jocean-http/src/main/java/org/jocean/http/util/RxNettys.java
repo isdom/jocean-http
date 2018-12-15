@@ -394,7 +394,9 @@ public class RxNettys {
                             @Override
                             public Observable<DisposableWrapper<? extends ByteBuf>> call(final MessageBody body) {
                                 return body.content().compose(MessageUtil.AUTOSTEP2DWB);
-                            }}).map(DisposableWrapperUtil.unwrap()).toList().map(new Func1<List<ByteBuf>, DisposableWrapper<FullHttpRequest>>() {
+                            }})
+                            .map(DisposableWrapperUtil.<ByteBuf>unwrap()).toList()
+                            .map(new Func1<List<ByteBuf>, DisposableWrapper<FullHttpRequest>>() {
                                 @Override
                                 public DisposableWrapper<FullHttpRequest> call(final List<ByteBuf> bufs) {
                                     final HttpRequest req = fullreq.message();
@@ -405,7 +407,7 @@ public class RxNettys {
                                             Nettys.composite(bufs));
                                     dfreq.headers().add(req.headers());
                                     //  ? need update Content-Length header field ?
-                                    return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release(dfreq));
+                                    return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release((FullHttpRequest)dfreq));
 //                                    try {
 //                                    } finally {
 //                                        if (disposemsg) {
