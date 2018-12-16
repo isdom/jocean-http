@@ -50,17 +50,6 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
 
-//    private static final Func1<HttpSlice, HttpRequest> _1ST_TO_REQ = new Func1<HttpSlice, HttpRequest>() {
-//        @Override
-//        public HttpRequest call(final HttpSlice slice) {
-//            final HttpObject hobj = (HttpRequest)slice.element().iterator().next().unwrap();
-//            if (hobj instanceof HttpRequest) {
-//                return (HttpRequest)hobj;
-//            } else {
-//                throw new RuntimeException("first http object is not http request.");
-//            }
-//        }};
-
     private final CompositeSubscription _inboundCompleted = new CompositeSubscription();
 
     @Override
@@ -299,7 +288,6 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
     private static final int STATUS_SEND = 3;
 
     private final Observable<FullMessage<HttpRequest>> _inbound;
-//    private final Observable<HttpSlice> _1stSlice;
 
     private volatile boolean _isKeepAlive = false;
 
