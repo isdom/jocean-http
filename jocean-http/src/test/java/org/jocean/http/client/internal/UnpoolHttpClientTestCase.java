@@ -1,4 +1,4 @@
-package org.jocean.http.client.impl;
+package org.jocean.http.client.internal;
 
 import static org.jocean.http.Feature.ENABLE_LOGGING;
 import static org.junit.Assert.assertEquals;

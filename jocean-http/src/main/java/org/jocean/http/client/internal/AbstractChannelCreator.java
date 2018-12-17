@@ -1,7 +1,7 @@
 /**
  * 
  */
-package org.jocean.http.client.impl;
+package org.jocean.http.client.internal;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;

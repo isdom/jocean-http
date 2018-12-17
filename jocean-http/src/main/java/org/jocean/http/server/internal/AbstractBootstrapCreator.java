@@ -1,4 +1,4 @@
-package org.jocean.http.server.impl;
+package org.jocean.http.server.internal;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.EventLoopGroup;

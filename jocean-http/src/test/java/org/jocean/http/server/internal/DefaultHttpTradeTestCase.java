@@ -1,4 +1,4 @@
-package org.jocean.http.server.impl;
+package org.jocean.http.server.internal;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.FullMessage;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
+import org.jocean.http.server.internal.DefaultHttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys4Test;
 import org.jocean.http.util.RxNettys;

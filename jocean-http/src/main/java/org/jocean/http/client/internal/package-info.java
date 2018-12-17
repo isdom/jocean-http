@@ -5,4 +5,4 @@
  * @author isdom
  *
  */
-package org.jocean.http.server.impl;
+package org.jocean.http.client.internal;

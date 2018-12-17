@@ -6,8 +6,8 @@ import java.util.concurrent.BlockingQueue;
 
 import org.jocean.http.server.HttpServerBuilder;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.http.server.impl.AbstractBootstrapCreator;
-import org.jocean.http.server.impl.DefaultHttpServerBuilder;
+import org.jocean.http.server.internal.AbstractBootstrapCreator;
+import org.jocean.http.server.internal.DefaultHttpServerBuilder;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapperUtil;
 import org.jocean.idiom.ExceptionUtils;

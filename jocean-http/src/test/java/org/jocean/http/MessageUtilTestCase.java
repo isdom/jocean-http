@@ -10,7 +10,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.core.MediaType;
 
 import org.jocean.http.client.HttpClient;
-import org.jocean.http.client.impl.DefaultHttpClient;
+import org.jocean.http.client.internal.DefaultHttpClient;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.netty.util.BufsOutputStream;
 import org.junit.Test;

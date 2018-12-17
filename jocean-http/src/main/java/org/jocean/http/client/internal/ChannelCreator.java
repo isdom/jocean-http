@@ -1,4 +1,4 @@
-package org.jocean.http.client.impl;
+package org.jocean.http.client.internal;
 
 import io.netty.channel.Channel;
 import rx.Observable;

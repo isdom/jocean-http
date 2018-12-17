@@ -1,4 +1,4 @@
-package org.jocean.http.client.impl;
+package org.jocean.http.client.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
@@ -29,6 +29,7 @@ import org.jocean.http.TransportException;
 import org.jocean.http.WriteCtrl;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.HttpClient.InitiatorBuilder;
+import org.jocean.http.client.internal.DefaultHttpClient;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;

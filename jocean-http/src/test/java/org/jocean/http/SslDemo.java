@@ -5,7 +5,7 @@ import java.util.List;
 
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.HttpClient.HttpInitiator;
-import org.jocean.http.client.impl.DefaultHttpClient;
+import org.jocean.http.client.internal.DefaultHttpClient;
 import org.jocean.http.util.Nettys;
 import org.jocean.idiom.DisposableWrapper;
 import org.slf4j.Logger;

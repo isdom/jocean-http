@@ -382,6 +382,36 @@ public class RxNettys {
         return message2fullresp(terminable, false);
     }
 
+    public static Observable.Transformer<FullMessage<?>, ? extends DisposableWrapper<ByteBuf>> fullmessage2dwb(
+            final Terminable terminable, final boolean disposemsg) {
+        return new Observable.Transformer<FullMessage<?>, DisposableWrapper<ByteBuf>>() {
+            @Override
+            public Observable<DisposableWrapper<ByteBuf>> call(final Observable<FullMessage<?>> fullmsg) {
+                return fullmsg.flatMap(new Func1<FullMessage<?>, Observable<DisposableWrapper<ByteBuf>>>() {
+                    @Override
+                    public Observable<DisposableWrapper<ByteBuf>> call(final FullMessage<?> fullmsg) {
+                        return fullmsg.body().flatMap(new Func1<MessageBody, Observable<DisposableWrapper<? extends ByteBuf>>>() {
+                            @Override
+                            public Observable<DisposableWrapper<? extends ByteBuf>> call(final MessageBody body) {
+                                return body.content().compose(MessageUtil.AUTOSTEP2DWB);
+                            }})
+                            .map(DisposableWrapperUtil.<ByteBuf>unwrap()).toList()
+                            .map(new Func1<List<ByteBuf>, DisposableWrapper<ByteBuf>>() {
+                                @Override
+                                public DisposableWrapper<ByteBuf> call(final List<ByteBuf> bufs) {
+                                    return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release(Nettys.composite(bufs)));
+//                                    try {
+//                                    } finally {
+//                                        if (disposemsg) {
+//                                            disposeAll(dwhs);
+//                                        }
+//                                    }
+                                }});
+                    }});
+            }
+        };
+    }
+
     public static Observable.Transformer<FullMessage<HttpRequest>, ? extends DisposableWrapper<FullHttpRequest>> fullmessage2dwq(
             final Terminable terminable, final boolean disposemsg) {
         return new Observable.Transformer<FullMessage<HttpRequest>, DisposableWrapper<FullHttpRequest>>() {

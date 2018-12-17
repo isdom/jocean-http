@@ -1,7 +1,7 @@
 /**
  *
  */
-package org.jocean.http.server.impl;
+package org.jocean.http.server.internal;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;

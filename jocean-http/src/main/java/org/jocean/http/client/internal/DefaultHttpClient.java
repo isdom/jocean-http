@@ -1,7 +1,7 @@
 /**
  *
  */
-package org.jocean.http.client.impl;
+package org.jocean.http.client.internal;
 
 import java.net.SocketAddress;
 import java.util.ArrayList;

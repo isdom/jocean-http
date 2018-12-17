@@ -4,7 +4,7 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd">
         
-    <bean id="httpServerBuilder" class="org.jocean.http.server.impl.DefaultHttpServerBuilder">
+    <bean id="httpServerBuilder" class="org.jocean.http.server.internal.DefaultHttpServerBuilder">
         <constructor-arg value="${http.server.accept.thread.count:1}"/>
         <constructor-arg value="${http.server.work.thread.count:0}"/>
         

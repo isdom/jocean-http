@@ -4,7 +4,7 @@ import java.net.InetSocketAddress;
 
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.HttpClient.HttpInitiator;
-import org.jocean.http.client.impl.DefaultHttpClient;
+import org.jocean.http.client.internal.DefaultHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

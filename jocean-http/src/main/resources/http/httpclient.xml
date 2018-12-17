@@ -4,7 +4,7 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
         http://www.springframework.org/schema/beans/spring-beans.xsd">
         
-    <bean id="httpClient" class="org.jocean.http.client.impl.DefaultHttpClient">
+    <bean id="httpClient" class="org.jocean.http.client.internal.DefaultHttpClient">
         <constructor-arg index="0" value="${http.client.thread.count:0}"/>
         <constructor-arg index="1" value="${http.client.pooled:true}"/>
         <!-- property name="inboundBlockSize" value="${http.client.inbound.blocksize:0}"/ -->

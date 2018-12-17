@@ -1,4 +1,4 @@
-package org.jocean.http.client.impl;
+package org.jocean.http.client.internal;
 
 import io.netty.channel.Channel;
 
@@ -6,6 +6,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.jocean.http.client.internal.DefaultChannelPool;
 import org.jocean.http.util.HttpHandlers;
 
 public class TestChannelPool extends DefaultChannelPool {
