@@ -2,7 +2,9 @@ package org.jocean.http;
 
 import org.jocean.http.client.HttpClient;
 
+import rx.Observable;
+
 public interface InteractBuilder {
-    
-    public Interact interact(final HttpClient client);
+
+    public Observable<Interact> interact(final HttpClient client);
 }
