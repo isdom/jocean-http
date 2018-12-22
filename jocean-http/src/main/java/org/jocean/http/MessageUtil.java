@@ -303,7 +303,7 @@ public class MessageUtil {
                                 LOG.warn("exception when call {}.onPropertyEncode, detail:{}",
                                         encodeAware, ExceptionUtils.exception2detail(e));
                             }
-                            return false;
+                            return true;
                         }}},
                     null,
                     JSON.DEFAULT_GENERATE_FEATURE);
