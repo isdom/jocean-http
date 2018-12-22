@@ -17,6 +17,7 @@ import javax.ws.rs.HeaderParam;
 import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
 
+import org.jocean.http.ContentEncoder.EncodeAware;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.HttpClient.InitiatorBuilder;
@@ -35,6 +36,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.serializer.PropertyFilter;
+import com.alibaba.fastjson.serializer.SerializeConfig;
+import com.alibaba.fastjson.serializer.SerializeFilter;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
@@ -279,6 +283,30 @@ public class MessageUtil {
     public static void serializeToJson(final Object bean, final OutputStream out) {
         try {
             JSON.writeJSONString(out, CharsetUtil.UTF_8, bean);
+            out.flush();
+        } catch (final IOException e) {
+            LOG.warn("exception when serialize {} to json, detail: {}",
+                    bean, ExceptionUtils.exception2detail(e));
+        }
+    }
+
+    public static void serializeToJsonWithEncodeAware(final Object bean, final OutputStream out, final EncodeAware encodeAware) {
+        try {
+            JSON.writeJSONString(out, CharsetUtil.UTF_8, bean,
+                    SerializeConfig.globalInstance,
+                    new SerializeFilter[]{new PropertyFilter() {
+                        @Override
+                        public boolean apply(final Object object, final String name, final Object value) {
+                            try {
+                                encodeAware.onPropertyEncode(object, name, value);
+                            } catch (final Exception e) {
+                                LOG.warn("exception when call {}.onPropertyEncode, detail:{}",
+                                        encodeAware, ExceptionUtils.exception2detail(e));
+                            }
+                            return false;
+                        }}},
+                    null,
+                    JSON.DEFAULT_GENERATE_FEATURE);
             out.flush();
         } catch (final IOException e) {
             LOG.warn("exception when serialize {} to json, detail: {}",

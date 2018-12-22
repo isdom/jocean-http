@@ -63,7 +63,13 @@ public class ContentUtil {
         @Override
         public Action2<Object, OutputStream> encoder() {
             return _ASXML;
+        }
+
+        @Override
+        public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
+            return _ASXML;
         }};
+
     public static final ContentEncoder TOJSON = new ContentEncoder() {
         @Override
         public String contentType() {
@@ -72,7 +78,16 @@ public class ContentUtil {
         @Override
         public Action2<Object, OutputStream> encoder() {
             return _ASJSON;
+        }
+        @Override
+        public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
+            return new Action2<Object, OutputStream>() {
+                @Override
+                public void call(final Object bean, final OutputStream os) {
+                    MessageUtil.serializeToJsonWithEncodeAware(bean, os, encodeAware);
+                }};
         }};
+
     public static final ContentEncoder TOTEXT = new ContentEncoder() {
         @Override
         public String contentType() {
@@ -80,6 +95,10 @@ public class ContentUtil {
         }
         @Override
         public Action2<Object, OutputStream> encoder() {
+            return _ASTEXT;
+        }
+        @Override
+        public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
             return _ASTEXT;
         }};
 
@@ -90,6 +109,10 @@ public class ContentUtil {
         }
         @Override
         public Action2<Object, OutputStream> encoder() {
+            return _ASTEXT;
+        }
+        @Override
+        public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
             return _ASTEXT;
         }};
     public static Observable<? extends MessageBody> tobody(final String contentType, final File file) {
