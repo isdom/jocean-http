@@ -35,17 +35,17 @@ public class XMLSerializeInterceptor implements XMLStreamWriter {
 
     @Override
     public void writeStartElement(final String localName) throws XMLStreamException {
-        this._elements.push(localName);
+        this._elements.addLast(localName);
     }
 
     @Override
     public void writeStartElement(final String namespaceURI, final String localName) throws XMLStreamException {
-        this._elements.push(localName);
+        this._elements.addLast(localName);
     }
 
     @Override
     public void writeStartElement(final String prefix, final String localName, final String namespaceURI) throws XMLStreamException {
-        this._elements.push(localName);
+        this._elements.addLast(localName);
     }
 
     @Override
@@ -65,7 +65,7 @@ public class XMLSerializeInterceptor implements XMLStreamWriter {
 
     @Override
     public void writeEndElement() throws XMLStreamException {
-        this._elements.pop();
+        this._elements.removeLast();
     }
 
     @Override
