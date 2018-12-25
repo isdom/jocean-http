@@ -95,7 +95,12 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
                 if (iter.hasNext()) {
                     final HttpObject hobj = iter.next().unwrap();
                     if (hobj instanceof HttpRequest) {
+                        // TODO, wrap request as pure http request while income FullHttpRequest
+                        // or when sending
                         final HttpRequest req = (HttpRequest)hobj;
+//                        private static HttpRequest requestOf(final HttpRequest req) {
+//                            return new ProxyBuilder<>(HttpRequest.class, req).buildProxy();
+//                        }
                         return Observable.<FullMessage<HttpRequest>>just(fullRequest(req, slice, rawInbound));
                     }
                 }

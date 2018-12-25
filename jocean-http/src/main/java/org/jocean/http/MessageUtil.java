@@ -28,6 +28,7 @@ import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.HttpClient.InitiatorBuilder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
+import org.jocean.http.xml.XMLSerializeInterceptor;
 import org.jocean.idiom.Beans;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
@@ -195,6 +196,7 @@ public class MessageUtil {
 
     public static <T> T unserializeAsXml(final InputStream is, final Class<T> type) {
         final XmlMapper mapper = new XmlMapper();
+
         mapper.addHandler(new DeserializationProblemHandler() {
             @Override
             public boolean handleUnknownProperty(final DeserializationContext ctxt, final JsonParser p,
@@ -205,6 +207,19 @@ public class MessageUtil {
                 return true;
             }});
         try {
+//            final XMLStreamReader sr = mapper.getFactory().getXMLInputFactory().createXMLStreamReader(is);
+//
+//            final XMLStreamReader proxysr = (XMLStreamReader)Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+//                    new Class[]{XMLStreamReader.class}, new InvocationHandler() {
+//                        @Override
+//                        public Object invoke(final Object proxy, final Method method, final Object[] args) throws Throwable {
+//                            LOG.info("unserializeAsXml: {}.{} called with args {}",
+//                                    method.getDeclaringClass().getSimpleName(),
+//                                    method.getName(),
+//                                    Arrays.toString(args));
+//                            return method.invoke(sr, args);
+//                        }});
+//            return mapper.readValue(proxysr, type);
             return mapper.readValue(is, type);
         } catch (final Exception e) {
             LOG.warn("exception when parse as xml, detail: {}", ExceptionUtils.exception2detail(e));
@@ -278,16 +293,34 @@ public class MessageUtil {
         final XmlMapper mapper = new XmlMapper();
 //        mapper.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
         try {
+            mapper.writeValue(out, bean);
+        } catch (final Exception e) {
+            LOG.warn("exception when serialize {} to xml, detail: {}",
+                    bean, ExceptionUtils.exception2detail(e));
+        }
+    }
+
+    public static void serializeToXmlWithEncodeAware(final Object bean, final OutputStream out, final EncodeAware encodeAware) {
+        final XmlMapper mapper = new XmlMapper();
+//        mapper.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
+        try {
             final XMLStreamWriter sw = mapper.getFactory().getXMLOutputFactory().createXMLStreamWriter(out);
+            final XMLStreamWriter interceptor = new XMLSerializeInterceptor(encodeAware);
 
             final XMLStreamWriter proxysw = (XMLStreamWriter)Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
                     new Class[]{XMLStreamWriter.class}, new InvocationHandler() {
                         @Override
                         public Object invoke(final Object proxy, final Method method, final Object[] args) throws Throwable {
-                            LOG.info("serializeToXml: {}.{} called with args {}",
+                            LOG.debug("serializeToXmlWithEncodeAware: {}.{} called with args {}",
                                     method.getDeclaringClass().getSimpleName(),
                                     method.getName(),
                                     Arrays.toString(args));
+                            try {
+                                method.invoke(interceptor, args);
+                            } catch (final Exception e) {
+                                LOG.warn("exception when invoke interceptor's {} with {}, detail: {}",
+                                        method, Arrays.toString(args), ExceptionUtils.exception2detail(e));
+                            }
                             return method.invoke(sw, args);
                         }});
 

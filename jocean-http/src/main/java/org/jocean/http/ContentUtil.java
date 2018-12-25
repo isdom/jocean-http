@@ -67,7 +67,12 @@ public class ContentUtil {
 
         @Override
         public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
-            return _ASXML;
+            return new Action2<Object, OutputStream>() {
+                @Override
+                public void call(final Object bean, final OutputStream os) {
+                    MessageUtil.serializeToXmlWithEncodeAware(bean, os, encodeAware);
+                }};
+
         }};
 
     public static final ContentEncoder TOJSON = new ContentEncoder() {
