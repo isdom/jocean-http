@@ -4,11 +4,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -16,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
+import javax.xml.stream.XMLStreamWriter;
 
 import org.jocean.http.ContentEncoder.EncodeAware;
 import org.jocean.http.client.HttpClient;
@@ -273,7 +278,21 @@ public class MessageUtil {
         final XmlMapper mapper = new XmlMapper();
 //        mapper.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
         try {
-            mapper.writeValue(out, bean);
+            final XMLStreamWriter sw = mapper.getFactory().getXMLOutputFactory().createXMLStreamWriter(out);
+
+            final XMLStreamWriter proxysw = (XMLStreamWriter)Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                    new Class[]{XMLStreamWriter.class}, new InvocationHandler() {
+                        @Override
+                        public Object invoke(final Object proxy, final Method method, final Object[] args) throws Throwable {
+                            LOG.info("serializeToXml: {}.{} called with args {}",
+                                    method.getDeclaringClass().getSimpleName(),
+                                    method.getName(),
+                                    Arrays.toString(args));
+                            return method.invoke(sw, args);
+                        }});
+
+//            mapper.writeValue(out, bean);
+            mapper.writeValue(proxysw, bean);
         } catch (final Exception e) {
             LOG.warn("exception when serialize {} to xml, detail: {}",
                     bean, ExceptionUtils.exception2detail(e));
