@@ -22,6 +22,7 @@ import io.netty.util.CharsetUtil;
 import rx.Observable;
 import rx.functions.Action1;
 import rx.functions.Action2;
+import rx.functions.Func2;
 
 public class ContentUtil {
 
@@ -32,19 +33,19 @@ public class ContentUtil {
         throw new IllegalStateException("No instances!");
     }
 
-    private final static Action2<Object, OutputStream> _ASXML = new Action2<Object, OutputStream>() {
+    private final static Action2<Object, OutputStream> _TOXML = new Action2<Object, OutputStream>() {
         @Override
         public void call(final Object bean, final OutputStream os) {
             MessageUtil.serializeToXml(bean, os);
         }};
 
-    private final static Action2<Object, OutputStream> _ASJSON = new Action2<Object, OutputStream>() {
+    private final static Action2<Object, OutputStream> _TOJSON = new Action2<Object, OutputStream>() {
         @Override
         public void call(final Object bean, final OutputStream os) {
             MessageUtil.serializeToJson(bean, os);
         }};
 
-    private final static Action2<Object, OutputStream> _ASTEXT = new Action2<Object, OutputStream>() {
+    private final static Action2<Object, OutputStream> _TOTEXT = new Action2<Object, OutputStream>() {
         @Override
         public void call(final Object bean, final OutputStream os) {
             try {
@@ -62,7 +63,7 @@ public class ContentUtil {
 
         @Override
         public Action2<Object, OutputStream> encoder() {
-            return _ASXML;
+            return _TOXML;
         }
 
         @Override
@@ -82,7 +83,7 @@ public class ContentUtil {
         }
         @Override
         public Action2<Object, OutputStream> encoder() {
-            return _ASJSON;
+            return _TOJSON;
         }
         @Override
         public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
@@ -100,11 +101,11 @@ public class ContentUtil {
         }
         @Override
         public Action2<Object, OutputStream> encoder() {
-            return _ASTEXT;
+            return _TOTEXT;
         }
         @Override
         public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
-            return _ASTEXT;
+            return _TOTEXT;
         }};
 
     public static final ContentEncoder TOHTML = new ContentEncoder() {
@@ -114,12 +115,28 @@ public class ContentUtil {
         }
         @Override
         public Action2<Object, OutputStream> encoder() {
-            return _ASTEXT;
+            return _TOTEXT;
         }
         @Override
         public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
-            return _ASTEXT;
+            return _TOTEXT;
         }};
+
+    private final static Func2<InputStream, Class<?>, Object> _ASJSON = new Func2<InputStream, Class<?>, Object>() {
+        @Override
+        public Object call(final InputStream is, final Class<?> type) {
+            return MessageUtil.unserializeAsJson(is, type);
+        }};
+    public static final ContentDecoder ASJSON = new ContentDecoder() {
+        @Override
+        public String contentType() {
+            return MediaType.APPLICATION_JSON;
+        }
+        @Override
+        public Func2<InputStream, Class<?>, Object> decoder() {
+            return _ASJSON;
+        }};
+
     public static Observable<? extends MessageBody> tobody(final String contentType, final File file) {
         try (final InputStream is = new FileInputStream(file)) {
             final int length = is.available();
