@@ -137,6 +137,42 @@ public class ContentUtil {
             return _ASJSON;
         }};
 
+    private final static Func2<InputStream, Class<?>, Object> _ASXML = new Func2<InputStream, Class<?>, Object>() {
+        @Override
+        public Object call(final InputStream is, final Class<?> type) {
+            return MessageUtil.unserializeAsXml(is, type);
+        }};
+    public static final ContentDecoder ASXML = new ContentDecoder() {
+        @Override
+        public String contentType() {
+            return MediaType.APPLICATION_XML;
+        }
+        @Override
+        public Func2<InputStream, Class<?>, Object> decoder() {
+            return _ASXML;
+        }};
+
+    public static <CODEC extends WithContentType> CODEC selectCodec(final String[] mimeTypes, final CODEC[] codecs) {
+        for (final String type : mimeTypes) {
+            for (final CODEC codec : codecs) {
+                if (type.startsWith(codec.contentType())) {
+                    return codec;
+                }
+            }
+        }
+        return null;
+    }
+
+    public static final ContentEncoder[] DEFAULT_ENCODERS = new ContentEncoder[]{
+            ContentUtil.TOJSON,
+            ContentUtil.TOXML,
+            ContentUtil.TOTEXT,
+            ContentUtil.TOHTML};
+
+    public static final ContentDecoder[] DEFAULT_DECODERS = new ContentDecoder[]{
+            ContentUtil.ASJSON,
+            ContentUtil.ASXML};
+
     public static Observable<? extends MessageBody> tobody(final String contentType, final File file) {
         try (final InputStream is = new FileInputStream(file)) {
             final int length = is.available();
