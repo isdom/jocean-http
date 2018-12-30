@@ -679,16 +679,7 @@ public class MessageUtil {
 
             @Override
             public <T> Observable<T> responseAs(final Class<T> type) {
-                checkAddr();
-                addQueryParams();
-                return addSSLFeatureIfNeed(_initiatorBuilder).build()
-                        .flatMap(new Func1<HttpInitiator, Observable<T>>() {
-                            @Override
-                            public Observable<T> call(final HttpInitiator initiator) {
-                                return defineInteraction(initiator).flatMap(fullmsg2body()).compose(body2bean(type))
-                                        .doOnUnsubscribe(initiator.closer());
-                            }
-                        });
+                return responseAs(null, type);
             }
 
             @Override
@@ -1058,22 +1049,6 @@ public class MessageUtil {
             dwb.dispose();
         }};
 
-    public static <T> Transformer<MessageBody, T> body2bean(final Class<T> type) {
-        final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is = new BufsInputStream<>(UNWRAP_DWB, DISPOSE_DWB);
-        return new Transformer<MessageBody, T>() {
-            @Override
-            public Observable<T> call(final Observable<MessageBody> bodys) {
-                return bodys.flatMap(new Func1<MessageBody, Observable<T>>() {
-                    @Override
-                    public Observable<T> call(final MessageBody body) {
-                        final ContentDecoder decoder = decoderOf(body.contentType());
-                        return body.content().doOnNext(addBufsAndStep(is)).compose(bbs2bean(decoder, is, type));
-                    }
-                });
-            }
-        };
-    }
-
     public static <T> Transformer<MessageBody, T> body2bean(final ContentDecoder decoder, final Class<T> type) {
         final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is = new BufsInputStream<>(UNWRAP_DWB, DISPOSE_DWB);
         return new Transformer<MessageBody, T>() {
@@ -1082,7 +1057,8 @@ public class MessageUtil {
                 return bodys.flatMap(new Func1<MessageBody, Observable<T>>() {
                     @Override
                     public Observable<T> call(final MessageBody body) {
-                        return body.content().doOnNext(addBufsAndStep(is)).compose(bbs2bean(decoder, is, type));
+                        final ContentDecoder beanDecoder = null != decoder ? decoder : decoderOf(body.contentType());
+                        return body.content().doOnNext(addBufsAndStep(is)).compose(bbs2bean(beanDecoder, is, type));
                     }
                 });
             }
