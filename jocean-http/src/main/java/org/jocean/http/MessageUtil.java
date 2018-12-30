@@ -4,15 +4,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -20,15 +16,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
-import javax.xml.stream.XMLStreamWriter;
 
-import org.jocean.http.ContentEncoder.EncodeAware;
 import org.jocean.http.client.HttpClient;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.HttpClient.InitiatorBuilder;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
-import org.jocean.http.xml.XMLSerializeInterceptor;
 import org.jocean.idiom.Beans;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
@@ -43,9 +36,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.serializer.PropertyFilter;
-import com.alibaba.fastjson.serializer.SerializeConfig;
-import com.alibaba.fastjson.serializer.SerializeFilter;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
@@ -301,65 +291,9 @@ public class MessageUtil {
         }
     }
 
-    public static void serializeToXmlWithEncodeAware(final Object bean, final OutputStream out, final EncodeAware encodeAware) {
-        final XmlMapper mapper = new XmlMapper();
-//        mapper.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
-        try {
-            final XMLStreamWriter sw = mapper.getFactory().getXMLOutputFactory().createXMLStreamWriter(out);
-            final XMLStreamWriter interceptor = new XMLSerializeInterceptor(encodeAware);
-
-            final XMLStreamWriter proxysw = (XMLStreamWriter)Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
-                    new Class[]{XMLStreamWriter.class}, new InvocationHandler() {
-                        @Override
-                        public Object invoke(final Object proxy, final Method method, final Object[] args) throws Throwable {
-                            LOG.debug("serializeToXmlWithEncodeAware: {}.{} called with args {}",
-                                    method.getDeclaringClass().getSimpleName(),
-                                    method.getName(),
-                                    Arrays.toString(args));
-                            try {
-                                method.invoke(interceptor, args);
-                            } catch (final Exception e) {
-                                LOG.warn("exception when invoke interceptor's {} with {}, detail: {}",
-                                        method, Arrays.toString(args), ExceptionUtils.exception2detail(e));
-                            }
-                            return method.invoke(sw, args);
-                        }});
-
-//            mapper.writeValue(out, bean);
-            mapper.writeValue(proxysw, bean);
-        } catch (final Exception e) {
-            LOG.warn("exception when serialize {} to xml, detail: {}",
-                    bean, ExceptionUtils.exception2detail(e));
-        }
-    }
-
     public static void serializeToJson(final Object bean, final OutputStream out) {
         try {
             JSON.writeJSONString(out, CharsetUtil.UTF_8, bean);
-            out.flush();
-        } catch (final IOException e) {
-            LOG.warn("exception when serialize {} to json, detail: {}",
-                    bean, ExceptionUtils.exception2detail(e));
-        }
-    }
-
-    public static void serializeToJsonWithEncodeAware(final Object bean, final OutputStream out, final EncodeAware encodeAware) {
-        try {
-            JSON.writeJSONString(out, CharsetUtil.UTF_8, bean,
-                    SerializeConfig.globalInstance,
-                    new SerializeFilter[]{new PropertyFilter() {
-                        @Override
-                        public boolean apply(final Object object, final String name, final Object value) {
-                            try {
-                                encodeAware.onPropertyEncode(object, name, value);
-                            } catch (final Exception e) {
-                                LOG.warn("exception when call {}.onPropertyEncode, detail:{}",
-                                        encodeAware, ExceptionUtils.exception2detail(e));
-                            }
-                            return true;
-                        }}},
-                    null,
-                    JSON.DEFAULT_GENERATE_FEATURE);
             out.flush();
         } catch (final IOException e) {
             LOG.warn("exception when serialize {} to json, detail: {}",

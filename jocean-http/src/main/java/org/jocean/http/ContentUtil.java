@@ -64,16 +64,6 @@ public class ContentUtil {
         @Override
         public Action2<Object, OutputStream> encoder() {
             return _TOXML;
-        }
-
-        @Override
-        public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
-            return new Action2<Object, OutputStream>() {
-                @Override
-                public void call(final Object bean, final OutputStream os) {
-                    MessageUtil.serializeToXmlWithEncodeAware(bean, os, encodeAware);
-                }};
-
         }};
 
     public static final ContentEncoder TOJSON = new ContentEncoder() {
@@ -84,14 +74,6 @@ public class ContentUtil {
         @Override
         public Action2<Object, OutputStream> encoder() {
             return _TOJSON;
-        }
-        @Override
-        public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
-            return new Action2<Object, OutputStream>() {
-                @Override
-                public void call(final Object bean, final OutputStream os) {
-                    MessageUtil.serializeToJsonWithEncodeAware(bean, os, encodeAware);
-                }};
         }};
 
     public static final ContentEncoder TOTEXT = new ContentEncoder() {
@@ -102,10 +84,6 @@ public class ContentUtil {
         @Override
         public Action2<Object, OutputStream> encoder() {
             return _TOTEXT;
-        }
-        @Override
-        public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
-            return _TOTEXT;
         }};
 
     public static final ContentEncoder TOHTML = new ContentEncoder() {
@@ -115,10 +93,6 @@ public class ContentUtil {
         }
         @Override
         public Action2<Object, OutputStream> encoder() {
-            return _TOTEXT;
-        }
-        @Override
-        public Action2<Object, OutputStream> encoder(final EncodeAware encodeAware) {
             return _TOTEXT;
         }};
 
