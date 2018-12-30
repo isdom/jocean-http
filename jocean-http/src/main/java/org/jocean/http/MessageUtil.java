@@ -37,6 +37,7 @@ import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.Stepable;
 import org.jocean.idiom.StepableUtil;
 import org.jocean.idiom.Terminable;
+import org.jocean.netty.util.BufsInputStream;
 import org.jocean.netty.util.BufsOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -468,6 +469,17 @@ public class MessageUtil {
         return _AS_STRING;
     }
 
+    private static final Func1<FullMessage<? extends HttpMessage>, Observable<? extends MessageBody>> FULLMSG2BODY =
+            new Func1<FullMessage<? extends HttpMessage>, Observable<? extends MessageBody>>() {
+        @Override
+        public Observable<? extends MessageBody> call(final FullMessage<? extends HttpMessage> fullmsg) {
+            return fullmsg.body();
+        }};
+
+    public static Func1<FullMessage<? extends HttpMessage>, Observable<? extends MessageBody>> fullmsg2body() {
+        return FULLMSG2BODY;
+    }
+
     public static Interact interact(final HttpClient client) {
         final InitiatorBuilder _initiatorBuilder = client.initiator();
         final AtomicBoolean _isSSLEnabled = new AtomicBoolean(false);
@@ -649,6 +661,34 @@ public class MessageUtil {
 
             private Observable<FullMessage<HttpResponse>> defineInteraction(final HttpInitiator initiator) {
                 return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator));
+            }
+
+            @Override
+            public <T> Observable<T> responseAs(final ContentDecoder decoder, final Class<T> type) {
+                checkAddr();
+                addQueryParams();
+                return addSSLFeatureIfNeed(_initiatorBuilder).build()
+                        .flatMap(new Func1<HttpInitiator, Observable<T>>() {
+                            @Override
+                            public Observable<T> call(final HttpInitiator initiator) {
+                                return defineInteraction(initiator).flatMap(fullmsg2body())
+                                        .compose(body2bean(decoder, type)).doOnUnsubscribe(initiator.closer());
+                            }
+                        });
+            }
+
+            @Override
+            public <T> Observable<T> responseAs(final Class<T> type) {
+                checkAddr();
+                addQueryParams();
+                return addSSLFeatureIfNeed(_initiatorBuilder).build()
+                        .flatMap(new Func1<HttpInitiator, Observable<T>>() {
+                            @Override
+                            public Observable<T> call(final HttpInitiator initiator) {
+                                return defineInteraction(initiator).flatMap(fullmsg2body()).compose(body2bean(type))
+                                        .doOnUnsubscribe(initiator.closer());
+                            }
+                        });
             }
 
             @Override
@@ -1002,5 +1042,90 @@ public class MessageUtil {
         } finally {
             bufout.setOutput(null);
         }
+    }
+
+    public static final Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf> UNWRAP_DWB =
+            new Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf>() {
+        @Override
+        public ByteBuf call(final DisposableWrapper<? extends ByteBuf> dwb) {
+            return dwb.unwrap();
+        }};
+
+    public static final Action1<DisposableWrapper<? extends ByteBuf>> DISPOSE_DWB =
+            new Action1<DisposableWrapper<? extends ByteBuf>>() {
+        @Override
+        public void call(final DisposableWrapper<? extends ByteBuf> dwb) {
+            dwb.dispose();
+        }};
+
+    public static <T> Transformer<MessageBody, T> body2bean(final Class<T> type) {
+        final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is = new BufsInputStream<>(UNWRAP_DWB, DISPOSE_DWB);
+        return new Transformer<MessageBody, T>() {
+            @Override
+            public Observable<T> call(final Observable<MessageBody> bodys) {
+                return bodys.flatMap(new Func1<MessageBody, Observable<T>>() {
+                    @Override
+                    public Observable<T> call(final MessageBody body) {
+                        final ContentDecoder decoder = decoderOf(body.contentType());
+                        return body.content().doOnNext(addBufsAndStep(is)).compose(bbs2bean(decoder, is, type));
+                    }
+                });
+            }
+        };
+    }
+
+    public static <T> Transformer<MessageBody, T> body2bean(final ContentDecoder decoder, final Class<T> type) {
+        final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is = new BufsInputStream<>(UNWRAP_DWB, DISPOSE_DWB);
+        return new Transformer<MessageBody, T>() {
+            @Override
+            public Observable<T> call(final Observable<MessageBody> bodys) {
+                return bodys.flatMap(new Func1<MessageBody, Observable<T>>() {
+                    @Override
+                    public Observable<T> call(final MessageBody body) {
+                        return body.content().doOnNext(addBufsAndStep(is)).compose(bbs2bean(decoder, is, type));
+                    }
+                });
+            }
+        };
+    }
+
+    public static ContentEncoder encoderOf(final String... mimeTypes) {
+        final ContentEncoder encoder = ContentUtil.selectCodec(mimeTypes, ContentUtil.DEFAULT_ENCODERS);
+        return null != encoder ? encoder : ContentUtil.TOJSON;
+    }
+
+    public static ContentDecoder decoderOf(final String... mimeTypes) {
+        final ContentDecoder decoder = ContentUtil.selectCodec(mimeTypes, ContentUtil.DEFAULT_DECODERS);
+        return null != decoder ? decoder : ContentUtil.ASJSON;
+    }
+
+    private static Action1<ByteBufSlice> addBufsAndStep(
+            final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is) {
+        return new Action1<ByteBufSlice>() {
+            @Override
+            public void call(final ByteBufSlice bbs) {
+                try {
+                    is.appendIterable(bbs.element());
+                } finally {
+                    bbs.step();
+                }
+            }
+        };
+    }
+
+    private static <T> Transformer<ByteBufSlice, T> bbs2bean(final ContentDecoder decoder,
+            final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is, final Class<T> type) {
+        return new Transformer<ByteBufSlice, T>() {
+            @Override
+            public Observable<T> call(final Observable<ByteBufSlice> bbses) {
+                return bbses.last().map(new Func1<ByteBufSlice, T>() {
+                    @SuppressWarnings("unchecked")
+                    @Override
+                    public T call(final ByteBufSlice any) {
+                        is.markEOS();
+                        return (T) decoder.decoder().call(is, type);
+                    }
+                });
+            }};
     }
 }
