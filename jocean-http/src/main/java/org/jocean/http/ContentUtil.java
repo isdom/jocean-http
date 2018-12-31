@@ -126,6 +126,21 @@ public class ContentUtil {
             return _ASXML;
         }};
 
+    private final static Func2<InputStream, Class<?>, Object> _ASTEXT = new Func2<InputStream, Class<?>, Object>() {
+        @Override
+        public Object call(final InputStream is, final Class<?> type) {
+            return MessageUtil.parseContentAsString(is);
+        }};
+    public static final ContentDecoder ASTEXT = new ContentDecoder() {
+        @Override
+        public String contentType() {
+            return MediaType.TEXT_PLAIN;
+        }
+        @Override
+        public Func2<InputStream, Class<?>, Object> decoder() {
+            return _ASTEXT;
+        }};
+
     public static <CODEC extends WithContentType> CODEC selectCodec(final String[] mimeTypes, final CODEC[] codecs) {
         for (final String type : mimeTypes) {
             for (final CODEC codec : codecs) {
