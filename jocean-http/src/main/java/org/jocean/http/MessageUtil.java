@@ -315,43 +315,6 @@ public class MessageUtil {
         }
     }
 
-    public static <RESP> Transformer<Interaction, RESP> responseAs(final Class<RESP> resptype,
-            final Func2<InputStream, Class<RESP>, RESP> decoder) {
-        return new Transformer<Interaction, RESP>() {
-            @Override
-            public Observable<RESP> call(final Observable<Interaction> obsinteraction) {
-                return obsinteraction.flatMap(new Func1<Interaction, Observable<RESP>>() {
-                    @Override
-                    public Observable<RESP> call(final Interaction interaction) {
-                        return interaction.execute()
-                                .flatMap(new Func1<FullMessage<HttpResponse>, Observable<DisposableWrapper<? extends ByteBuf>>>() {
-                                    @Override
-                                    public Observable<DisposableWrapper<? extends ByteBuf>> call(final FullMessage<HttpResponse> fullresp) {
-                                        return fullresp.body().flatMap(new Func1<MessageBody, Observable<DisposableWrapper<? extends ByteBuf>>>() {
-                                            @Override
-                                            public Observable<DisposableWrapper<? extends ByteBuf>> call(final MessageBody body) {
-                                                return body.content().compose(AUTOSTEP2DWB);
-                                            }});
-                                    }})
-                                .doOnUnsubscribe(interaction.initiator().closer())
-                                .toList()
-                                .map(new Func1<List<DisposableWrapper<? extends ByteBuf>>, RESP>() {
-                                    @Override
-                                    public RESP call(final List<DisposableWrapper<? extends ByteBuf>> dwbs) {
-                                        final ByteBuf content = Nettys.dwbs2buf(dwbs);
-                                        try {
-                                            return decoder.call(contentAsInputStream(content), resptype);
-                                        } finally {
-                                            content.release();
-                                        }
-                                    }
-                                });
-                    }
-                });
-            }
-        };
-    }
-
 //    private static final Func1<DisposableWrapper<? extends FullHttpMessage>, String> _FULLMSG_TO_STRING = new Func1<DisposableWrapper<? extends FullHttpMessage>, String>() {
 //        @Override
 //        public String call(final DisposableWrapper<? extends FullHttpMessage> dwfullmsg) {
