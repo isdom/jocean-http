@@ -143,9 +143,11 @@ public class ContentUtil {
 
     public static <CODEC extends WithContentType> CODEC selectCodec(final String[] mimeTypes, final CODEC[] codecs) {
         for (final String type : mimeTypes) {
-            for (final CODEC codec : codecs) {
-                if (type.startsWith(codec.contentType())) {
-                    return codec;
+            if (null != type) {
+                for (final CODEC codec : codecs) {
+                    if (null != codec && type.startsWith(codec.contentType())) {
+                        return codec;
+                    }
                 }
             }
         }
