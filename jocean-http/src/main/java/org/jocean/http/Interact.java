@@ -1,6 +1,9 @@
 package org.jocean.http;
 
+import org.jocean.idiom.Terminable;
+
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponse;
 import rx.Observable;
 import rx.functions.Action1;
 
@@ -27,6 +30,8 @@ public interface Interact {
     public <T> Observable<T> responseAs(final ContentDecoder decoder, final Class<T> type);
 
     public <T> Observable<T> responseAs(final Class<T> type);
+
+    public Observable<FullMessage<HttpResponse>> response(final Terminable terminable);
 
     public Observable<? extends Interaction> execution();
 }
