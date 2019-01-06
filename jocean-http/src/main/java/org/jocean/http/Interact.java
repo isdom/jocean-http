@@ -32,6 +32,4 @@ public interface Interact {
     public <T> Observable<T> responseAs(final Class<T> type);
 
     public Observable<FullMessage<HttpResponse>> response(final Terminable terminable);
-
-    public Observable<? extends Interaction> execution();
 }

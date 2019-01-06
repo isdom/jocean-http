@@ -326,46 +326,6 @@ public class MessageUtil {
 //        }
 //    };
 
-    private static final Func1<Interaction, Observable<String>> _INTERACTION_TO_OBS_STRING = new Func1<Interaction, Observable<String>>() {
-        @Override
-        public Observable<String> call(final Interaction interaction) {
-            return interaction.execute()
-                    .flatMap(new Func1<FullMessage<HttpResponse>, Observable<DisposableWrapper<? extends ByteBuf>>>() {
-                        @Override
-                        public Observable<DisposableWrapper<? extends ByteBuf>> call(final FullMessage<HttpResponse> fullresp) {
-                            return fullresp.body().flatMap(new Func1<MessageBody, Observable<DisposableWrapper<? extends ByteBuf>>>() {
-                                @Override
-                                public Observable<DisposableWrapper<? extends ByteBuf>> call(final MessageBody body) {
-                                    return body.content().compose(AUTOSTEP2DWB);
-                                }});
-                        }})
-                    .doOnUnsubscribe(interaction.initiator().closer())
-                    .toList()
-                    .map(new Func1<List<DisposableWrapper<? extends ByteBuf>>, String>() {
-                        @Override
-                        public String call(final List<DisposableWrapper<? extends ByteBuf>> dwbs) {
-                            final ByteBuf content = Nettys.dwbs2buf(dwbs);
-                            try {
-                                return parseContentAsString(contentAsInputStream(content));
-                            } finally {
-                                content.release();
-                            }
-                        }
-                    });
-        }
-    };
-
-    private static final Transformer<Interaction, String> _AS_STRING = new Transformer<Interaction, String>() {
-        @Override
-        public Observable<String> call(final Observable<Interaction> obsinteraction) {
-            return obsinteraction.flatMap(_INTERACTION_TO_OBS_STRING);
-        }
-    };
-
-    public static Transformer<Interaction, String> responseAsString() {
-        return _AS_STRING;
-    }
-
     private static final Func1<FullMessage<? extends HttpMessage>, Observable<? extends MessageBody>> FULLMSG2BODY =
             new Func1<FullMessage<? extends HttpMessage>, Observable<? extends MessageBody>>() {
         @Override
@@ -591,29 +551,6 @@ public class MessageUtil {
                                     terminable.doOnTerminate(initiator.closer());
                                 }
                                 return defineInteraction(initiator).doOnUnsubscribe(initiator.closer());
-                            }
-                        });
-            }
-
-            @Override
-            public Observable<? extends Interaction> execution() {
-                checkAddr();
-                addQueryParams();
-                return addSSLFeatureIfNeed(_initiatorBuilder).build()
-                        .map(new Func1<HttpInitiator, Interaction>() {
-                            @Override
-                            public Interaction call(final HttpInitiator initiator) {
-                                final Observable<FullMessage<HttpResponse>> interaction = defineInteraction(initiator);
-                                return new Interaction() {
-                                    @Override
-                                    public HttpInitiator initiator() {
-                                        return initiator;
-                                    }
-
-                                    @Override
-                                    public Observable<? extends FullMessage<HttpResponse>> execute() {
-                                        return interaction;
-                                    }};
                             }
                         });
             }
