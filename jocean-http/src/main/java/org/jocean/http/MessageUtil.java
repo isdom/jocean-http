@@ -540,16 +540,13 @@ public class MessageUtil {
             }
 
             @Override
-            public Observable<FullMessage<HttpResponse>> response(final Terminable terminable) {
+            public Observable<FullMessage<HttpResponse>> response() {
                 checkAddr();
                 addQueryParams();
                 return addSSLFeatureIfNeed(_initiatorBuilder).build()
                         .flatMap(new Func1<HttpInitiator, Observable<FullMessage<HttpResponse>>>() {
                             @Override
                             public Observable<FullMessage<HttpResponse>> call(final HttpInitiator initiator) {
-                                if (null != terminable) {
-                                    terminable.doOnTerminate(initiator.closer());
-                                }
                                 return defineInteraction(initiator).doOnUnsubscribe(initiator.closer());
                             }
                         });
