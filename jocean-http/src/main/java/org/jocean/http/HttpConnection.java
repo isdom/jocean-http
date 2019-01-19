@@ -262,14 +262,9 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
     }
 
-    private final COWCompositeSupport<Subscriber<? super Boolean>> _writabilityObserver =
-            new COWCompositeSupport<>();
-
-    private final COWCompositeSupport<Subscriber<? super Object>> _sendingObserver =
-            new COWCompositeSupport<>();
-
-    private final COWCompositeSupport<Subscriber<? super Object>> _sendedObserver =
-            new COWCompositeSupport<>();
+    private final COWCompositeSupport<Subscriber<? super Boolean>> _writabilityObserver = new COWCompositeSupport<>();
+    private final COWCompositeSupport<Subscriber<? super Object>> _sendingObserver = new COWCompositeSupport<>();
+    private final COWCompositeSupport<Subscriber<? super Object>> _sendedObserver = new COWCompositeSupport<>();
 
     private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = new Action1_N<Subscriber<? super Boolean>>() {
         @Override
@@ -299,6 +294,32 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                     subscriber.onNext(obj);
                 } catch (final Exception e) {
                     LOG.warn("exception when invoke onNext({}), detail: {}", subscriber, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }};
+
+    private static final Action1_N<Subscriber<? super Object>> OBJ_ON_COMPLETED = new Action1_N<Subscriber<? super Object>>() {
+        @Override
+        public void call(final Subscriber<? super Object> subscriber, final Object... args) {
+            if (!subscriber.isUnsubscribed()) {
+                try {
+                    subscriber.onCompleted();
+                } catch (final Exception e) {
+                    LOG.warn("exception when invoke onCompleted({}), detail: {}", subscriber, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }};
+
+    // TODO, when to invoke OBJ_ON_ERROR
+    private static final Action1_N<Subscriber<? super Object>> OBJ_ON_ERROR = new Action1_N<Subscriber<? super Object>>() {
+        @Override
+        public void call(final Subscriber<? super Object> subscriber, final Object... args) {
+            final Throwable e = (Throwable)args[0];
+            if (!subscriber.isUnsubscribed()) {
+                try {
+                    subscriber.onError(e);
+                } catch (final Exception e1) {
+                    LOG.warn("exception when invoke onError({}), detail: {}", subscriber, ExceptionUtils.exception2detail(e1));
                 }
             }
         }};
@@ -500,14 +521,14 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                     throws Exception {
                 if (future.isSuccess()) {
                     LOG.debug("send outmsg({}) success for {}", outmsg, HttpConnection.this);
-                    onOutmsgSended(outmsg);
+                    notifySendedOnNext(outmsg);
                 } else {
                     LOG.warn("exception when send outmsg({}) for {}, detail: {}",
                             outmsg, HttpConnection.this, ExceptionUtils.exception2detail(future.cause()));
                     fireClosed(new TransportException("send outmsg error", future.cause()));
                 }
             }};
-        onOutmsgSending(outmsg);
+        notifySendingOnNext(outmsg);
         if (outmsg instanceof DoFlush) {
             this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(whenComplete);
         } else {
@@ -525,12 +546,20 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                 : this._channel.write(ReferenceCountUtil.retain(outmsg));
     }
 
-    private void onOutmsgSending(final Object outmsg) {
+    private void notifySendingOnNext(final Object outmsg) {
         this._sendingObserver.foreachComponent(OBJ_ON_NEXT, outmsg);
     }
 
-    private void onOutmsgSended(final Object outmsg) {
+    private void notifySendingOnCompleted() {
+        this._sendingObserver.foreachComponent(OBJ_ON_COMPLETED);
+    }
+
+    private void notifySendedOnNext(final Object outmsg) {
         this._sendedObserver.foreachComponent(OBJ_ON_NEXT, outmsg);
+    }
+
+    private void notifySendedOnCompleted() {
+        this._sendedObserver.foreachComponent(OBJ_ON_COMPLETED);
     }
 
     protected void fireClosed(final Throwable e) {
@@ -610,16 +639,19 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         return new Subscriber<Object>() {
                 @Override
                 public void onCompleted() {
-                    LOG.debug("outound meet onCompleted for {}", HttpConnection.this);
+                    LOG.debug("outound invoke onCompleted event for {}", HttpConnection.this);
+                    notifySendingOnCompleted();
                     _op.onOutboundCompleted(HttpConnection.this);
                 }
 
                 @Override
                 public void onError(final Throwable e) {
                     if (!(e instanceof CloseException)) {
-                        LOG.warn("outbound meet onError with ({}), try close {}",
+                        LOG.warn("outbound invoke onError event with ({}), try close {}",
                                 ExceptionUtils.exception2detail(e), HttpConnection.this);
                     }
+                    // TODO
+                    // onOutmsgError(e);
                     fireClosed(e);
                 }
 
@@ -715,7 +747,21 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
     protected abstract void beforeSendingOutbound(final Object outmsg);
 
-    protected abstract void onOutboundCompleted();
+    protected void onOutboundCompleted() {
+        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(final ChannelFuture future)
+                    throws Exception {
+                if (future.isSuccess()) {
+                    LOG.debug("all outmsg sended completed for {}", HttpConnection.this);
+                    notifySendedOnCompleted();
+                } else {
+                    //  TODO
+                    // fireClosed(new TransportException("flush response error", future.cause()));
+                }
+            }});
+
+    }
 
     protected abstract void onChannelInactive();
 
@@ -877,7 +923,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
         @Override
         public void onOutboundCompleted(final HttpConnection<?> connection) {
-            LOG.warn("{} has terminated, ignore onOutmsgCompleted event", connection);
+            LOG.warn("{} has terminated, ignore onOutboundCompleted event", connection);
         }
 
         @Override

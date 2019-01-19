@@ -225,6 +225,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade>
 
     @Override
     protected void onOutboundCompleted() {
+        super.onOutboundCompleted();
         // force flush for _isFlushPerWrite = false
         //  reference: https://github.com/netty/netty/commit/789e323b79d642ea2c0a024cb1c839654b7b8fad
         //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3

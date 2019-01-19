@@ -200,6 +200,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
 
     @Override
     protected void onOutboundCompleted() {
+        super.onOutboundCompleted();
         // force flush for _isFlushPerWrite = false
         this._channel.flush();
         this._isRequestCompleted = true;
