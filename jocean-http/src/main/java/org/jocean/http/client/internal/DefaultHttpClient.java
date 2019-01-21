@@ -33,6 +33,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
+import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
@@ -109,21 +110,17 @@ public class DefaultHttpClient implements HttpClient {
         @Override
         public void call(final Channel channel) {
             if (_sendBufSize > 0) {
-                if (LOG.isInfoEnabled()) {
-                    LOG.info("channel({})'s default SO_SNDBUF is {} bytes, and will be reset to {} bytes",
-                            channel,
-                            channel.config().getOption(ChannelOption.SO_SNDBUF),
-                            _sendBufSize);
-                }
+                LOG.debug("channel({})'s default SO_SNDBUF is {} bytes, and will be reset to {} bytes",
+                        channel,
+                        channel.config().getOption(ChannelOption.SO_SNDBUF),
+                        _sendBufSize);
                 channel.config().setOption(ChannelOption.SO_SNDBUF, _sendBufSize);
             }
             if (_recvBufSize > 0) {
-                if (LOG.isInfoEnabled()) {
-                    LOG.info("channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
-                            channel,
-                            channel.config().getOption(ChannelOption.SO_RCVBUF),
-                            _recvBufSize);
-                }
+                LOG.debug("channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
+                        channel,
+                        channel.config().getOption(ChannelOption.SO_RCVBUF),
+                        _recvBufSize);
                 channel.config().setOption(ChannelOption.SO_RCVBUF, _recvBufSize);
             }
         }};
@@ -382,7 +379,7 @@ public class DefaultHttpClient implements HttpClient {
     }
 
     public Observable<HttpInitiator> onInitiator() {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<HttpInitiator>() {
+        return Observable.unsafeCreate(new OnSubscribe<HttpInitiator>() {
             @Override
             public void call(final Subscriber<? super HttpInitiator> subscriber) {
                 addInitiatorSubscriber(subscriber);
@@ -413,8 +410,7 @@ public class DefaultHttpClient implements HttpClient {
 
     static final Feature2Handler _FOR_CHANNEL;
 
-    private final COWCompositeSupport<Subscriber<? super HttpInitiator>> _initiatorObserver =
-            new COWCompositeSupport<>();
+    private final COWCompositeSupport<Subscriber<? super HttpInitiator>> _initiatorObserver = new COWCompositeSupport<>();
 
     static {
         _FOR_INTERACTION = new Feature2Handler();

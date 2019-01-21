@@ -404,7 +404,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     private void doReadMessage() {
-        LOG.info("trigger read message for {}", this);
+        LOG.debug("trigger read message for {}", this);
         this._channel.read();
         this._unreadBegin = 0;
         readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
