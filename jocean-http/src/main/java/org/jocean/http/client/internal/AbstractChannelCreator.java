@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package org.jocean.http.client.internal;
 
@@ -33,7 +33,7 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
             return -1000;
         }
         @Override
-        protected void initChannel(Channel ch) throws Exception {
+        protected void initChannel(final Channel ch) throws Exception {
             /*
             channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
                 @Override
@@ -54,20 +54,20 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
             return "[AbstractChannelCreator' ChannelInitializer]";
         }
     }
-    
+
     public void reset() {
         close();
         this._bootstrap = new Bootstrap()
                 .handler(new Initializer());
         initializeBootstrap(this._bootstrap);
     }
-    
+
     protected AbstractChannelCreator() {
         reset();
     }
-    
+
     protected abstract void initializeBootstrap(final Bootstrap bootstrap);
-    
+
     /* (non-Javadoc)
      * @see java.io.Closeable#close()
      */
@@ -90,7 +90,7 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
             public void call(final Subscriber<? super ChannelFuture> subscriber) {
                 if (!subscriber.isUnsubscribed()) {
                     final ChannelFuture future = _bootstrap.register();
-                    LOG.info("create new channel: {}", future.channel());
+                    LOG.debug("create new channel: {}", future.channel());
                     subscriber.add(Subscriptions.from(future));
                     subscriber.onNext(future);
                     subscriber.onCompleted();
@@ -104,6 +104,6 @@ public abstract class AbstractChannelCreator implements ChannelCreator {
     }
 
     private Bootstrap _bootstrap = null;
-    
+
     private final AtomicInteger _activeChannelCount = new AtomicInteger(0);
 }
