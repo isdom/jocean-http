@@ -22,7 +22,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
     public DefaultChannelPool(final HandlerPrototype onChannelInactive) {
         this._onChannelInactive = onChannelInactive;
     }
-    
+
     @Override
     protected Channel findActiveChannel(final SocketAddress address) {
         final Queue<Channel> channels = getChannels(address);
@@ -41,7 +41,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
                     Nettys.removeHandler(channel.pipeline(), this._onChannelInactive);
                     break;
                 } else {
-                    LOG.info("fetch inactive channel({}) from pool, drop it and fetch next from pool.", channel);
+                    LOG.debug("fetch inactive channel({}) from pool, drop it and fetch next from pool.", channel);
                     channel.close();
                 }
             }
@@ -52,7 +52,7 @@ public class DefaultChannelPool extends AbstractChannelPool {
     protected Queue<Channel> getChannels(final SocketAddress address) {
         return this._channels.get(address);
     }
-    
+
     protected Queue<Channel> getOrCreateChannels(final SocketAddress address) {
         final Queue<Channel> channels = this._channels.get(address);
         if (null == channels) {
@@ -64,10 +64,10 @@ public class DefaultChannelPool extends AbstractChannelPool {
             return channels;
         }
     }
-    
+
     @Override
     public boolean recycleChannel(final Channel channel) {
-        if (channel.isActive() 
+        if (channel.isActive()
             && Nettys.isChannelReady(channel)) {
             final SocketAddress address = channel.remoteAddress();
             if (null!=address) {
@@ -79,19 +79,19 @@ public class DefaultChannelPool extends AbstractChannelPool {
                         public void call() {
                             channels.remove(channel);
                             channel.close();
-                            LOG.info("removeChannel: channel({}) inactive, so remove from pool.", channel);
+                            LOG.debug("removeChannel: channel({}) inactive, so remove from pool.", channel);
                         }});
-                LOG.info("recycleChannel: channel({}) save to queue for ({}), can be reused.", channel, address);
+                LOG.debug("recycleChannel: channel({}) save to queue for ({}), can be reused.", channel, address);
                 return  true;
             }
         }
-        
+
         channel.close();
-        LOG.info("recycleChannel: try recycle channel({}), BUT it has been closed.", channel);
+        LOG.debug("recycleChannel: try recycle channel({}), BUT it has been closed.", channel);
         return false;
     }
 
-    private final ConcurrentMap<SocketAddress, Queue<Channel>> _channels = 
+    private final ConcurrentMap<SocketAddress, Queue<Channel>> _channels =
             new ConcurrentHashMap<>();
     private final HandlerPrototype _onChannelInactive;
 }

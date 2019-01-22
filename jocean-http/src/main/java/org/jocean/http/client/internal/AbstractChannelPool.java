@@ -62,7 +62,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
             final Subscriber<? super Channel> subscriber) {
         if (!subscriber.isUnsubscribed()) {
             if (channel.isActive()) {
-                LOG.info("fetch channel({}) of address ({}) for reuse.", channel, address);
+                LOG.debug("fetch channel({}) of address ({}) for reuse.", channel, address);
                 subscriber.onNext(channel);
                 subscriber.onCompleted();
             } else {
