@@ -44,8 +44,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpTrade extends HttpConnection<HttpTrade>
-    implements HttpTrade, Comparable<DefaultHttpTrade> {
+class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, Comparable<DefaultHttpTrade> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpTrade.class);
