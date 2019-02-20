@@ -42,6 +42,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
+import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.functions.Action0;
 import rx.functions.Action1;
@@ -185,7 +186,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             final SocketAddress localAddress,
             final Func0<Feature[]> featuresBuilder,
             final Feature... features) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<HttpTrade>() {
+        return Observable.unsafeCreate(new OnSubscribe<HttpTrade>() {
             @Override
             public void call(final Subscriber<? super HttpTrade> subscriber) {
                 if (!subscriber.isUnsubscribed()) {

@@ -17,6 +17,11 @@ public class DefaultRpcExecutor implements RpcExecutor {
             }});
     }
 
+    @Override
+    public <RESP> Observable<RESP> execute(final Transformer<RpcRunner, RESP> rpc2resp) {
+        return _runners.compose(rpc2resp);
+    }
+
     public DefaultRpcExecutor(final Observable<RpcRunner> runners) {
         this._runners = runners;
     }
