@@ -12,7 +12,7 @@ import org.jocean.http.Inbound;
 import org.jocean.http.Outbound;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.WriteCtrl;
-import org.jocean.idiom.TerminateAware;
+import org.jocean.idiom.EndAware;
 
 import io.netty.handler.codec.http.HttpRequest;
 import rx.Completable;
@@ -41,7 +41,7 @@ public interface HttpServerBuilder extends Closeable {
             final Feature ... features);
 
     public interface HttpTrade
-        extends Inbound, Outbound, AutoCloseable, TerminateAware<HttpTrade> {
+        extends Inbound, Outbound, AutoCloseable, EndAware<HttpTrade> {
 
         public Completable inboundCompleted();
 

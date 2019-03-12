@@ -29,12 +29,11 @@ import org.jocean.http.TransportException;
 import org.jocean.http.WriteCtrl;
 import org.jocean.http.client.HttpClient.HttpInitiator;
 import org.jocean.http.client.HttpClient.InitiatorBuilder;
-import org.jocean.http.client.internal.DefaultHttpClient;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.DisposableWrapper;
-import org.jocean.idiom.TerminateAware;
+import org.jocean.idiom.EndAware;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1178,8 +1177,8 @@ public class DefaultHttpClientTestCase {
                         // server not send response, and client cancel this interaction
                         subscription.unsubscribe();
 
-                        TerminateAware.Util.awaitTerminated(trade);
-                        TerminateAware.Util.awaitTerminated(initiator);
+                        EndAware.Util.awaitEnded(trade);
+                        EndAware.Util.awaitEnded(initiator);
 
                         assertTrue(!initiator.isActive());
                         subscriber.assertNoTerminalEvent();
@@ -1238,8 +1237,8 @@ public class DefaultHttpClientTestCase {
                         // server not send response, and client cancel this interaction
                         subscription.unsubscribe();
 
-                        TerminateAware.Util.awaitTerminated(trade);
-                        TerminateAware.Util.awaitTerminated(initiator);
+                        EndAware.Util.awaitEnded(trade);
+                        EndAware.Util.awaitEnded(initiator);
 
                         assertTrue(!initiator.isActive());
                         subscriber.assertNoTerminalEvent();
@@ -1300,7 +1299,7 @@ public class DefaultHttpClientTestCase {
                         subscriber.assertError(RuntimeException.class);
                         subscriber.assertNoValues();
 
-                        TerminateAware.Util.awaitTerminated(trade);
+                        EndAware.Util.awaitEnded(trade);
                         assertTrue(!trade.isActive());
                     }
                 },
@@ -1375,7 +1374,7 @@ public class DefaultHttpClientTestCase {
                         subscriber.assertError(RuntimeException.class);
                         subscriber.assertNoValues();
 
-                        TerminateAware.Util.awaitTerminated(trade);
+                        EndAware.Util.awaitEnded(trade);
                         assertTrue(!trade.isActive());
                     }
                 },
@@ -1589,7 +1588,7 @@ public class DefaultHttpClientTestCase {
                         cached.toCompletable().await();
 
                         svrRespContent.release();
-                        TerminateAware.Util.awaitTerminated(trade);
+                        EndAware.Util.awaitEnded(trade);
 
                         final Channel channel = (Channel)initiator.transport();
                         assertTrue(!channel.isActive());
@@ -1658,7 +1657,7 @@ public class DefaultHttpClientTestCase {
                         cached.toCompletable().await();
 
                         svrRespContent.release();
-                        TerminateAware.Util.awaitTerminated(trade);
+                        EndAware.Util.awaitEnded(trade);
 
                         final Channel channel = (Channel)initiator.transport();
                         assertTrue(!channel.isActive());
@@ -1700,7 +1699,7 @@ public class DefaultHttpClientTestCase {
                             final Observable<DisposableWrapper<FullHttpResponse>> getresp) throws Exception {
 
                         final CountDownLatch cdl4initiator = new CountDownLatch(1);
-                        initiator.doOnTerminate(new Action0() {
+                        initiator.doOnEnd(new Action0() {
                             @Override
                             public void call() {
                                 cdl4initiator.countDown();
@@ -1731,7 +1730,7 @@ public class DefaultHttpClientTestCase {
                                 fullrespfromsvr.content().readableBytes() + 1);
                         fullrespfromsvr.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
                         trade.outbound(Observable.just(fullrespfromsvr));
-                        TerminateAware.Util.awaitTerminated(trade);
+                        EndAware.Util.awaitEnded(trade);
 
                         subscriber.awaitTerminalEvent();
                         assertTrue(svrRespContent.release());
@@ -1778,7 +1777,7 @@ public class DefaultHttpClientTestCase {
                             final Observable<DisposableWrapper<FullHttpResponse>> getresp) throws Exception {
 
                         final CountDownLatch cdl4initiator = new CountDownLatch(1);
-                        initiator.doOnTerminate(new Action0() {
+                        initiator.doOnEnd(new Action0() {
                             @Override
                             public void call() {
                                 cdl4initiator.countDown();
@@ -1807,7 +1806,7 @@ public class DefaultHttpClientTestCase {
                                 fullrespfromsvr.content().readableBytes() + 1);
                         fullrespfromsvr.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
                         trade.outbound(Observable.just(fullrespfromsvr));
-                        TerminateAware.Util.awaitTerminated(trade);
+                        EndAware.Util.awaitEnded(trade);
 
                         subscriber.awaitTerminalEvent();
                         assertTrue(svrRespContent.release());

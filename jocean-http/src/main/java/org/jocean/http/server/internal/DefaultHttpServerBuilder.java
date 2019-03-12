@@ -62,8 +62,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
         }
     }
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(DefaultHttpServerBuilder.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultHttpServerBuilder.class);
 
     public void setMbeanSuffix(final String mbeanSuffix) {
         this._mbeanSuffix = mbeanSuffix;
@@ -306,13 +305,13 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
 
     @SafeVarargs
     private final HttpTrade httpTradeOf(final Channel channel,
-        final Action1<HttpTrade> ... onTerminates) {
+        final Action1<HttpTrade> ... onEnds) {
         this._numStartedTrades.incrementAndGet();
         final DefaultHttpTrade trade = new DefaultHttpTrade(channel /*, this._inboundBlockSize*/ );
 
         addToTrades(trade);
-        for (final Action1<HttpTrade> onTerminate : onTerminates) {
-            trade.doOnTerminate(onTerminate);
+        for (final Action1<HttpTrade> onend : onEnds) {
+            trade.doOnEnd(onend);
         }
 
 //        trade.inboundHolder().setMaxBlockSize(this._inboundBlockSize);
@@ -332,7 +331,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                 }
             }});
             */
-        trade.doOnTerminate(new Action1<HttpTrade>() {
+        trade.doOnEnd(new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade t) {
                 updateCurrentInboundMemory(-_lastAddedSize.getAndSet(-1));

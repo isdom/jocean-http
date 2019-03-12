@@ -25,11 +25,11 @@ import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.Beans;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
+import org.jocean.idiom.Endable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.Stepable;
 import org.jocean.idiom.StepableUtil;
-import org.jocean.idiom.Terminable;
 import org.jocean.netty.util.BufsInputStream;
 import org.jocean.netty.util.BufsOutputStream;
 import org.slf4j.Logger;
@@ -84,11 +84,11 @@ public class MessageUtil {
         throw new IllegalStateException("No instances!");
     }
 
-    public static Func0<DisposableWrapper<ByteBuf>> pooledAllocator(final Terminable terminable, final int pageSize) {
+    public static Func0<DisposableWrapper<ByteBuf>> pooledAllocator(final Endable endable, final int pageSize) {
         return new Func0<DisposableWrapper<ByteBuf>>() {
             @Override
             public DisposableWrapper<ByteBuf> call() {
-                return DisposableWrapperUtil.disposeOn(terminable,
+                return DisposableWrapperUtil.disposeOn(endable,
                         RxNettys.wrap4release(PooledByteBufAllocator.DEFAULT.buffer(pageSize, pageSize)));
             }};
     }

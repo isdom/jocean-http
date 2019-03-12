@@ -13,11 +13,11 @@ import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.COWCompositeSupport;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
+import org.jocean.idiom.EndAware;
+import org.jocean.idiom.EndAwareSupport;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.InterfaceSelector;
 import org.jocean.idiom.Stepable;
-import org.jocean.idiom.TerminateAware;
-import org.jocean.idiom.TerminateAwareSupport;
 import org.jocean.idiom.rx.Action1_N;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,24 +46,22 @@ import rx.functions.Action1;
 import rx.functions.ActionN;
 import rx.subscriptions.Subscriptions;
 
-public abstract class HttpConnection<T> implements Inbound, Outbound, AutoCloseable, TerminateAware<T> {
-    private static final Logger LOG =
-            LoggerFactory.getLogger(HttpConnection.class);
+public abstract class HttpConnection<T> implements Inbound, Outbound, AutoCloseable, EndAware<T> {
+    private static final Logger LOG = LoggerFactory.getLogger(HttpConnection.class);
 
     protected final InterfaceSelector _selector = new InterfaceSelector();
 
     protected HttpConnection(final Channel channel) {
 
-        this._terminateAwareSupport =
-                new TerminateAwareSupport<T>(this._selector);
+        this._endSupport = new EndAwareSupport<T>(this._selector);
 
         this._channel = channel;
         this._op = this._selector.build(ConnectionOp.class, WHEN_ACTIVE, WHEN_UNACTIVE);
-        this._traffic = Nettys.applyToChannel(onTerminate(),
+        this._traffic = Nettys.applyToChannel(onEnd(),
                 this._channel,
                 HttpHandlers.TRAFFICCOUNTER);
 
-        Nettys.applyToChannel(onTerminate(),
+        Nettys.applyToChannel(onEnd(),
                 channel,
                 HttpHandlers.ON_EXCEPTION_CAUGHT,
                 new Action1<Throwable>() {
@@ -72,7 +70,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                         fireClosed(cause);
                     }});
 
-        Nettys.applyToChannel(onTerminate(),
+        Nettys.applyToChannel(onEnd(),
                 channel,
                 HttpHandlers.ON_CHANNEL_INACTIVE,
                 new Action0() {
@@ -81,7 +79,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                         onChannelInactive();
                     }});
 
-        Nettys.applyToChannel(onTerminate(),
+        Nettys.applyToChannel(onEnd(),
                 channel,
                 HttpHandlers.ON_CHANNEL_READCOMPLETE,
                 new Action0() {
@@ -90,7 +88,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                         onReadComplete();
                     }});
 
-        Nettys.applyToChannel(onTerminate(),
+        Nettys.applyToChannel(onEnd(),
                 channel,
                 HttpHandlers.ON_CHANNEL_WRITABILITYCHANGED,
                 new Action0() {
@@ -112,7 +110,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
     private final TrafficCounter _traffic;
 
-    protected final TerminateAwareSupport<T> _terminateAwareSupport;
+    protected final EndAwareSupport<T> _endSupport;
 
     @Override
     public void close() {
@@ -135,26 +133,26 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
     @SuppressWarnings("unchecked")
     @Override
-    public Action1<Action0> onTerminate() {
-        return this._terminateAwareSupport.onTerminate((T) this);
+    public Action1<Action0> onEnd() {
+        return this._endSupport.onEnd((T) this);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public Action1<Action1<T>> onTerminateOf() {
-        return this._terminateAwareSupport.onTerminateOf((T) this);
+    public Action1<Action1<T>> onEndOf() {
+        return this._endSupport.onEndOf((T) this);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public Action0 doOnTerminate(final Action0 onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate((T) this, onTerminate);
+    public Action0 doOnEnd(final Action0 onend) {
+        return this._endSupport.doOnEnd((T) this, onend);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public Action0 doOnTerminate(final Action1<T> onTerminate) {
-        return this._terminateAwareSupport.doOnTerminate((T) this, onTerminate);
+    public Action0 doOnEnd(final Action1<T> onend) {
+        return this._endSupport.doOnEnd((T) this, onend);
     }
 
     @Override
@@ -591,7 +589,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }
 
         //  fire all pending subscribers onError with unactived exception
-        this._terminateAwareSupport.fireAllTerminates((T) this);
+        this._endSupport.fireAllActions((T) this);
     }
 
     protected static String errorAsString(final Throwable e) {

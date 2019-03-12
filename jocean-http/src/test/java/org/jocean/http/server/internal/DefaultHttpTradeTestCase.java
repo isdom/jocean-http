@@ -15,7 +15,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.FullMessage;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
-import org.jocean.http.server.internal.DefaultHttpTrade;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.Nettys4Test;
 import org.jocean.http.util.RxNettys;
@@ -83,7 +82,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
 
         final AtomicBoolean onClosed = new AtomicBoolean(false);
-        trade.doOnTerminate(new Action1<HttpTrade>(){
+        trade.doOnEnd(new Action1<HttpTrade>(){
             @Override
             public void call(final HttpTrade trade) {
                 onClosed.set(true);
@@ -97,7 +96,7 @@ public class DefaultHttpTradeTestCase {
         final HttpTrade trade = new DefaultHttpTrade(new EmbeddedChannel());
 
         final AtomicBoolean onClosed = new AtomicBoolean(false);
-        trade.doOnTerminate(new Action1<HttpTrade>(){
+        trade.doOnEnd(new Action1<HttpTrade>(){
             @Override
             public void call(final HttpTrade trade) {
                 onClosed.set(true);
@@ -121,7 +120,7 @@ public class DefaultHttpTradeTestCase {
         assertFalse(trade.isActive());
 
         final AtomicBoolean onClosed = new AtomicBoolean(false);
-        trade.doOnTerminate(new Action1<HttpTrade>(){
+        trade.doOnEnd(new Action1<HttpTrade>(){
             @Override
             public void call(final HttpTrade trade) {
                 onClosed.set(true);

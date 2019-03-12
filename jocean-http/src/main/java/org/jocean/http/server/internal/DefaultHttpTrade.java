@@ -342,7 +342,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
         return new StringBuilder()
                 .append("DefaultHttpTrade [create at:")
                 .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
-                .append(", onTerminateCnt=").append(this._terminateAwareSupport.onTerminateCount())
+                .append(", onEndCnt=").append(this._endSupport.onEndCount())
                 .append(", requestMethod=").append(this._requestMethod)
                 .append(", requestUri=").append(this._requestUri)
                 .append(", isKeepAlive=").append(isKeepAlive())
