@@ -897,7 +897,12 @@ public class MessageUtil {
         }};
 
     public static <T> Transformer<MessageBody, T> body2bean(final ContentDecoder decoder, final Class<T> type) {
-        final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is = new BufsInputStream<>(UNWRAP_DWB, DISPOSE_DWB);
+        return body2bean(decoder, type, DISPOSE_DWB);
+    }
+
+    public static <T> Transformer<MessageBody, T> body2bean(final ContentDecoder decoder, final Class<T> type,
+            final Action1<DisposableWrapper<? extends ByteBuf>> onreaded) {
+        final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is = new BufsInputStream<>(UNWRAP_DWB, onreaded);
         return new Transformer<MessageBody, T>() {
             @Override
             public Observable<T> call(final Observable<MessageBody> bodys) {
