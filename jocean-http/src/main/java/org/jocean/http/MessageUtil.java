@@ -876,13 +876,6 @@ public class MessageUtil {
         }
     }
 
-    public static final Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf> UNWRAP_DWB_AND_SLICE =
-            new Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf>() {
-        @Override
-        public ByteBuf call(final DisposableWrapper<? extends ByteBuf> dwb) {
-            return dwb.unwrap().slice();
-        }};
-
     public static final Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf> UNWRAP_DWB =
             new Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf>() {
         @Override
@@ -903,7 +896,7 @@ public class MessageUtil {
 
     public static <T> Transformer<MessageBody, T> body2bean(final ContentDecoder decoder, final Class<T> type,
             final Action1<DisposableWrapper<? extends ByteBuf>> onreaded) {
-        final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is = new BufsInputStream<>(UNWRAP_DWB_AND_SLICE, onreaded);
+        final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is = new BufsInputStream<>(UNWRAP_DWB, onreaded);
         return new Transformer<MessageBody, T>() {
             @Override
             public Observable<T> call(final Observable<MessageBody> getbody) {
@@ -928,18 +921,26 @@ public class MessageUtil {
         return null != decoder ? decoder : ContentUtil.ASJSON;
     }
 
-    private static Action1<ByteBufSlice> addBufsAndStep(
-            final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is) {
+    private static Action1<ByteBufSlice> addBufsAndStep(final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is) {
         return new Action1<ByteBufSlice>() {
             @Override
             public void call(final ByteBufSlice bbs) {
                 try {
-                    is.appendIterable(bbs.element());
+                    is.appendIterable(duplicate(bbs.element()));
                 } finally {
                     bbs.step();
                 }
             }
         };
+    }
+
+    private static Iterable<DisposableWrapper<? extends ByteBuf>> duplicate(
+            final Iterable<? extends DisposableWrapper<? extends ByteBuf>> element) {
+        final List<DisposableWrapper<? extends ByteBuf>> duplicated = new ArrayList<>();
+        for (final DisposableWrapper<? extends ByteBuf> dwb : element) {
+            duplicated.add(DisposableWrapperUtil.wrap(dwb.unwrap().slice(), dwb));
+        }
+        return duplicated;
     }
 
     private static <T> Transformer<ByteBufSlice, T> bbs2bean(final ContentDecoder decoder,
