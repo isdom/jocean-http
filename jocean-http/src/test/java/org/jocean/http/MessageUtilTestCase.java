@@ -59,7 +59,7 @@ public class MessageUtilTestCase {
 
         final List<ByteBuf> bufs = new ArrayList<>();
 
-        try (final BufsOutputStream<DisposableWrapper<ByteBuf>> out = new BufsOutputStream<>(
+        try (final BufsOutputStream<DisposableWrapper<? extends ByteBuf>> out = new BufsOutputStream<>(
                 MessageUtil.pooledAllocator(null, 8192), dwb->dwb.unwrap(), dwb->bufs.add(dwb.unwrap()) ) ) {
             MessageUtil.serializeToXml(request, out);
             assertTrue(bufs.size() > 0);

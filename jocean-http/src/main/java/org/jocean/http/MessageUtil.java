@@ -84,8 +84,8 @@ public class MessageUtil {
         throw new IllegalStateException("No instances!");
     }
 
-    public static Func0<DisposableWrapper<ByteBuf>> pooledAllocator(final Endable endable, final int pageSize) {
-        return new Func0<DisposableWrapper<ByteBuf>>() {
+    public static Func0<DisposableWrapper<? extends ByteBuf>> pooledAllocator(final Endable endable, final int pageSize) {
+        return new Func0<DisposableWrapper<? extends ByteBuf>>() {
             @Override
             public DisposableWrapper<ByteBuf> call() {
                 return DisposableWrapperUtil.disposeOn(endable,
@@ -780,12 +780,6 @@ public class MessageUtil {
             }});
     }
 
-    final private static Func1<DisposableWrapper<ByteBuf>, ByteBuf> _UNWRAP_DWB = new Func1<DisposableWrapper<ByteBuf>, ByteBuf>() {
-        @Override
-        public ByteBuf call(final DisposableWrapper<ByteBuf> dwb) {
-            return dwb.unwrap();
-        }};
-
     private static Observable<ByteBufSlice> bean2bbs(final Object bean, final Action2<Object, OutputStream> encoder) {
         return Observable.<ByteBufSlice>just(new ByteBufSlice() {
 
@@ -794,7 +788,7 @@ public class MessageUtil {
 
             @Override
             public Iterable<? extends DisposableWrapper<? extends ByteBuf>> element() {
-                return out2dwbs(new BufsOutputStream<>(pooledAllocator(null, 8192), _UNWRAP_DWB),
+                return out2dwbs(new BufsOutputStream<>(pooledAllocator(null, 8192), UNWRAP_DWB),
                         new Action1<OutputStream>() {
                             @Override
                             public void call(final OutputStream out) {
@@ -882,6 +876,13 @@ public class MessageUtil {
         }
     }
 
+    public static final Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf> UNWRAP_DWB_AND_SLICE =
+            new Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf>() {
+        @Override
+        public ByteBuf call(final DisposableWrapper<? extends ByteBuf> dwb) {
+            return dwb.unwrap().slice();
+        }};
+
     public static final Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf> UNWRAP_DWB =
             new Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf>() {
         @Override
@@ -902,11 +903,11 @@ public class MessageUtil {
 
     public static <T> Transformer<MessageBody, T> body2bean(final ContentDecoder decoder, final Class<T> type,
             final Action1<DisposableWrapper<? extends ByteBuf>> onreaded) {
-        final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is = new BufsInputStream<>(UNWRAP_DWB, onreaded);
+        final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is = new BufsInputStream<>(UNWRAP_DWB_AND_SLICE, onreaded);
         return new Transformer<MessageBody, T>() {
             @Override
-            public Observable<T> call(final Observable<MessageBody> bodys) {
-                return bodys.flatMap(new Func1<MessageBody, Observable<T>>() {
+            public Observable<T> call(final Observable<MessageBody> getbody) {
+                return getbody.flatMap(new Func1<MessageBody, Observable<T>>() {
                     @Override
                     public Observable<T> call(final MessageBody body) {
                         final ContentDecoder beanDecoder = null != decoder ? decoder : decoderOf(body.contentType());

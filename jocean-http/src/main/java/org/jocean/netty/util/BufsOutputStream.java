@@ -32,8 +32,7 @@ import rx.functions.Func1;
  */
 public class BufsOutputStream<T> extends OutputStream implements DataOutput {
 
-    private static final Logger LOG
-        = LoggerFactory.getLogger(BufsOutputStream.class);
+    private static final Logger LOG = LoggerFactory.getLogger(BufsOutputStream.class);
 
     private final Func0<T> _allocator;
     private final Func1<T, ByteBuf> _tobuf;
