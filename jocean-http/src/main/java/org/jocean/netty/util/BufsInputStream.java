@@ -11,15 +11,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.util.ReferenceCounted;
 import rx.functions.Action1;
 import rx.functions.Actions;
 import rx.functions.Func1;
 
 public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
 
-    private static final Logger LOG
-        = LoggerFactory.getLogger(BufsInputStream.class);
+    private static final Logger LOG = LoggerFactory.getLogger(BufsInputStream.class);
 
     private final List<T> _bufs = new ArrayList<T>();
     private final Func1<T, ByteBuf> _tobuf;
@@ -50,12 +48,9 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
         }
     }
 
-    /**
-     * To preserve backwards compatibility (which didn't transfer ownership) we support a conditional flag which
-     * indicates if {@link #buffer} should be released when this {@link InputStream} is closed.
-     * However in future releases ownership should always be transferred and callers of this class should call
-     * {@link ReferenceCounted#retain()} if necessary.
-     */
+    public BufsInputStream(final Func1<T, ByteBuf> tobuf) {
+        this(tobuf, null);
+    }
 
     @SuppressWarnings("unchecked")
     public BufsInputStream(final Func1<T, ByteBuf> tobuf, final Action1<T> onreaded) {
