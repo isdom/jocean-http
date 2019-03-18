@@ -9,7 +9,6 @@
         <constructor-arg value="${http.server.work.thread.count:0}"/>
         
         <property name="mbeanSuffix" value="${http.server.mbean:name=hsb}"/>
-        <property name="inboundBlockSize" value="${http.server.inbound.blocksize:0}"/>
         <property name="inboundRecvBufSize" value="${http.server.inbound.recvbuf:32768}"/>
     </bean>
     

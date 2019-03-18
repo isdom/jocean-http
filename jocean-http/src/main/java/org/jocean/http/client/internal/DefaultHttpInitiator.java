@@ -39,8 +39,7 @@ import rx.functions.Func1;
  * @author isdom
  *
  */
-class DefaultHttpInitiator extends HttpConnection<HttpInitiator>
-    implements HttpInitiator, Comparable<DefaultHttpInitiator> {
+class DefaultHttpInitiator extends HttpConnection<HttpInitiator> implements HttpInitiator, Comparable<DefaultHttpInitiator> {
 
     private static final Logger LOG =
             LoggerFactory.getLogger(DefaultHttpInitiator.class);

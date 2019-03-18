@@ -127,14 +127,6 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             }});
     }
 
-    public int getInboundBlockSize() {
-        return this._inboundBlockSize;
-    }
-
-    public void setInboundBlockSize(final int inboundBlockSize) {
-        this._inboundBlockSize = inboundBlockSize;
-    }
-
     public int getInboundRecvBufSize() {
         return this._inboundRecvBufSize;
     }
@@ -304,17 +296,14 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
     }
 
     @SafeVarargs
-    private final HttpTrade httpTradeOf(final Channel channel,
-        final Action1<HttpTrade> ... onEnds) {
+    private final HttpTrade httpTradeOf(final Channel channel, final Action1<HttpTrade> ... onEnds) {
         this._numStartedTrades.incrementAndGet();
-        final DefaultHttpTrade trade = new DefaultHttpTrade(channel /*, this._inboundBlockSize*/ );
+        final DefaultHttpTrade trade = new DefaultHttpTrade(channel);
 
         addToTrades(trade);
         for (final Action1<HttpTrade> onend : onEnds) {
             trade.doOnEnd(onend);
         }
-
-//        trade.inboundHolder().setMaxBlockSize(this._inboundBlockSize);
 
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
 
@@ -414,7 +403,6 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
     private final Feature[] _defaultFeatures;
 
     private int _inboundRecvBufSize = -1;
-    private int _inboundBlockSize = 0;
     private String _mbeanSuffix;
 
     private static final Feature2Handler _APPLY_BUILDER;

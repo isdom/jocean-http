@@ -205,14 +205,12 @@ public class DefaultHttpClient implements HttpClient {
 
                 // enable recycle action
                 initiator.doOnEnd(_RECYCLE_CHANNEL);
-//                    initiator.inbound().messageHolder().setMaxBlockSize(_inboundBlockSize);
-
                 //  set water mark's low/high
-//                if (_lowWaterMark >= 0
-//                    && _highWaterMark >= 0
-//                    && _highWaterMark >= _lowWaterMark) {
-//                    initiator.setWriteBufferWaterMark(_lowWaterMark, _highWaterMark);
-//                }
+                if (_lowWaterMark >= 0
+                    && _highWaterMark >= 0
+                    && _highWaterMark >= _lowWaterMark) {
+                    initiator.writeCtrl().setWriteBufferWaterMark(_lowWaterMark, _highWaterMark);
+                }
 
                 //  apply features per interaction
                 Nettys.applyFeaturesToChannel(
