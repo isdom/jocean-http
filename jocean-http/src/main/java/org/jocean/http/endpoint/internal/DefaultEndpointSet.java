@@ -2,7 +2,9 @@ package org.jocean.http.endpoint.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.jocean.http.Interact;
 import org.jocean.http.TypedSPI;
@@ -23,6 +25,16 @@ public class DefaultEndpointSet implements EndpointSet {
 
     public DefaultEndpointSet(final Collection<Endpoint> endpoints) {
         this._endpoints = endpoints;
+    }
+
+    public String[] types() {
+        final Set<String> types = new HashSet<>();
+
+        for (final Endpoint endpoint : this._endpoints) {
+            types.add(endpoint.type());
+        }
+
+        return types.toArray(EMPTY_STRS);
     }
 
     @Override
