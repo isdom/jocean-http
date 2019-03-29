@@ -17,8 +17,7 @@ import rx.functions.Action1;
 
 public class DefaultEndpointSet implements EndpointSet {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(DefaultEndpointSet.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultEndpointSet.class);
 
     private static final String[] EMPTY_STRS = new String[0];
 
