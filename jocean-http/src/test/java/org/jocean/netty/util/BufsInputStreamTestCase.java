@@ -72,4 +72,29 @@ public class BufsInputStreamTestCase {
 
         assertEquals(-1, is.forEachByte(ByteProcessor.FIND_COMMA));
     }
+
+    /**
+     * Test method for {@link org.jocean.netty.util.ByteProcessors#indexOfBytes}.
+     */
+    @Test
+    public final void testIndexOfBytes1() {
+        final BufsInputStream<ByteBuf> is = new BufsInputStream<>(b -> b, b -> {});
+
+        assertEquals(-1, is.forEachByte(ByteProcessors.indexOfBytes("hello".getBytes(CharsetUtil.UTF_8))));
+    }
+
+    /**
+     * Test method for {@link org.jocean.netty.util.ByteProcessors#indexOfBytes}.
+     */
+    @Test
+    public final void testIndexOfBytes2() {
+        final BufsInputStream<ByteBuf> is = new BufsInputStream<>(b -> b, b -> {});
+
+        is.appendBufs(Arrays.asList(
+                Unpooled.wrappedBuffer("01he".getBytes(CharsetUtil.UTF_8)),
+                Unpooled.wrappedBuffer("llo123".getBytes(CharsetUtil.UTF_8)),
+                Unpooled.wrappedBuffer("456".getBytes(CharsetUtil.UTF_8))
+                ));
+        assertEquals(6, is.forEachByte(ByteProcessors.indexOfBytes("hello".getBytes(CharsetUtil.UTF_8))));
+    }
 }
