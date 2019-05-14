@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.util.ByteProcessor;
 import rx.functions.Action1;
 import rx.functions.Actions;
 import rx.functions.Func1;
@@ -19,8 +20,8 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
 
     private static final Logger LOG = LoggerFactory.getLogger(BufsInputStream.class);
 
-    private final List<T> _bufs = new ArrayList<T>();
-    private final Func1<T, ByteBuf> _tobuf;
+    private final List<T> _holders = new ArrayList<T>();
+    private final Func1<T, ByteBuf> _holder2buf;
     private final Action1<T> _onreaded;
 
     public boolean _opened = true;
@@ -30,11 +31,11 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
         if (!this._opened) {
             throw new IOException("BufsInputStream has closed!");
         }
-        while (!this._bufs.isEmpty()) {
-            final ByteBuf b = this._tobuf.call(this._bufs.get(0));
+        while (!this._holders.isEmpty()) {
+            final ByteBuf b = this._holder2buf.call(this._holders.get(0));
             if (!b.isReadable()) {
                 LOG.debug("{} is not readable, push to onreaded", b);
-                this._onreaded.call(this._bufs.remove(0));
+                this._onreaded.call(this._holders.remove(0));
             } else {
                 return b;
             }
@@ -53,24 +54,24 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
     }
 
     @SuppressWarnings("unchecked")
-    public BufsInputStream(final Func1<T, ByteBuf> tobuf, final Action1<T> onreaded) {
-        this._tobuf = tobuf;
+    public BufsInputStream(final Func1<T, ByteBuf> holder2buf, final Action1<T> onreaded) {
+        this._holder2buf = holder2buf;
         this._onreaded = null != onreaded ? onreaded : (Action1<T>)Actions.empty();
     }
 
-    public void appendBuf(final T buf) {
-        this._bufs.add(buf);
-        LOG.debug("appendBuf: {}", buf);
+    public void appendBuf(final T holder) {
+        this._holders.add(holder);
+        LOG.debug("appendBuf: {}", holder);
     }
 
-    public void appendBufs(final Collection<? extends T> bufs) {
-        this._bufs.addAll(bufs);
-        LOG.debug("appendBufs with count {}", bufs.size());
+    public void appendBufs(final Collection<? extends T> holders) {
+        this._holders.addAll(holders);
+        LOG.debug("appendBufs with count {}", holders.size());
     }
 
-    public void appendIterable(final Iterable<? extends T> bufs) {
+    public void appendIterable(final Iterable<? extends T> holders) {
         int size = 0;
-        for (final Iterator<? extends T> iter = bufs.iterator(); iter.hasNext(); ) {
+        for (final Iterator<? extends T> iter = holders.iterator(); iter.hasNext(); ) {
             appendBuf(iter.next());
             size++;
         }
@@ -89,7 +90,7 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
             // The Closable interface says "If the stream is already closed then invoking this method has no effect."
             if (_opened) {
                 _opened = false;
-                _bufs.clear();
+                _holders.clear();
             }
         }
     }
@@ -97,8 +98,8 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
     @Override
     public int available() throws IOException {
         int available = 0;
-        for (final T buf : this._bufs) {
-            available += this._tobuf.call(buf).readableBytes();
+        for (final T buf : this._holders) {
+            available += this._holder2buf.call(buf).readableBytes();
         }
         return available;
     }
@@ -172,6 +173,30 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
 //        } else {
 //            return skipBytes((int) n);
 //        }
+    }
+
+    /**
+     * Iterates over the readable bytes of this buffer with the specified {@code processor} in ascending order.
+     *
+     * @return {@code -1} if the processor iterated to or beyond the end of the readable bytes.
+     *         The last-visited index If the {@link ByteProcessor#process(byte)} returned {@code false}.
+     */
+    public int forEachByte(final ByteProcessor processor) {
+        int idx = 0;
+        for (final T c :this._holders) {
+            final ByteBuf b = this._holder2buf.call(c);
+            if (b.isReadable()) {
+                final int bIdx = b.forEachByte(processor);
+                if (bIdx == -1) {
+                    idx += b.readableBytes();
+                }
+                else {
+                    return idx + bIdx;
+                }
+            }
+        }
+
+        return -1;
     }
 
     /*

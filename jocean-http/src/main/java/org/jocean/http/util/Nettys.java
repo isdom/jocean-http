@@ -55,8 +55,7 @@ import rx.functions.Actions;
 import rx.functions.Func2;
 
 public class Nettys {
-    private static final Logger LOG =
-            LoggerFactory.getLogger(Nettys.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Nettys.class);
 
     private Nettys() {
         throw new IllegalStateException("No instances!");
