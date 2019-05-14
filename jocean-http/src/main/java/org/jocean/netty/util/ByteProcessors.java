@@ -29,11 +29,15 @@ public class ByteProcessors {
             return true;
         }
 
+        public int matchedCount() {
+            return _currentMatchingIdx;
+        }
+
         private final byte[] _bytesToFind;
         private int _currentMatchingIdx = 0;
     }
 
-    public static ByteProcessor indexOfBytes(final byte[] bytesToFind) {
+    public static IndexOfBytesProcessor indexOfBytes(final byte[] bytesToFind) {
         return new IndexOfBytesProcessor(bytesToFind);
     }
 }
