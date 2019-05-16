@@ -96,7 +96,7 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
     }
 
     @Override
-    public int available() throws IOException {
+    public int available() {
         int available = 0;
         for (final T buf : this._holders) {
             available += this._holder2buf.call(buf).readableBytes();
