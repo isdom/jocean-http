@@ -191,7 +191,7 @@ public class BufsInputStream<T> extends InputStream /*implements DataInput*/ {
                     idx += b.readableBytes();
                 }
                 else {
-                    return idx + bIdx;
+                    return idx + bIdx - b.readerIndex();
                 }
             }
         }
