@@ -26,6 +26,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
@@ -132,7 +133,10 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
                         return new StringBuilder().append("MessageBody [req=").append(req)
                                 .append(",body=(start with ").append(sliceWithReq).append(")]").toString();
                     }
-
+                    @Override
+                    public HttpHeaders headers() {
+                        return req.headers();
+                    }
                     @Override
                     public String contentType() {
                         return req.headers().get(HttpHeaderNames.CONTENT_TYPE);

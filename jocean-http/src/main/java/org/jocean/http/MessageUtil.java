@@ -46,8 +46,10 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.handler.codec.http.DefaultHttpRequest;
+import io.netty.handler.codec.http.EmptyHttpHeaders;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObject;
@@ -765,7 +767,10 @@ public class MessageUtil {
             final String contentType,
             final Action2<Object, OutputStream> encoder) {
         return Observable.just(new MessageBody() {
-
+            @Override
+            public HttpHeaders headers() {
+                return EmptyHttpHeaders.INSTANCE;
+            }
             @Override
             public String contentType() {
                 return contentType;

@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
@@ -86,6 +87,10 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator> implements Http
             @Override
             public Observable<? extends MessageBody> body() {
                 return Observable.just(new MessageBody() {
+                    @Override
+                    public HttpHeaders headers() {
+                        return resp.headers();
+                    }
                     @Override
                     public String toString() {
                         return new StringBuilder().append("MessageBody [resp=").append(resp)

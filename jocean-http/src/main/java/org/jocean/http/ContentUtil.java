@@ -18,6 +18,8 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http.EmptyHttpHeaders;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.util.CharsetUtil;
 import rx.Observable;
 import rx.functions.Action1;
@@ -170,6 +172,10 @@ public class ContentUtil {
             final byte[] bytes = new byte[length];
             is.read(bytes);
             return Observable.just(new MessageBody() {
+                @Override
+                public HttpHeaders headers() {
+                    return EmptyHttpHeaders.INSTANCE;
+                }
                 @Override
                 public String contentType() {
                     return contentType;
