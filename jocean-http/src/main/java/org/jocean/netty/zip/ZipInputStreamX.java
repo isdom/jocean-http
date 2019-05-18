@@ -390,21 +390,21 @@ public class ZipInputStreamX extends InflaterInputStream implements ZipConstants
                     e.setSize(get32(tmpbuf, EXTLEN));
                 }
             }
-        }
-        if (e.getSize() != inf.getBytesWritten()) {
-            throw new ZipException(
-                "invalid entry size (expected " + e.getSize() +
-                " but got " + inf.getBytesWritten() + " bytes)");
-        }
-        if (e.getCompressedSize() != inf.getBytesRead()) {
-            throw new ZipException(
-                "invalid entry compressed size (expected " + e.getCompressedSize() +
-                " but got " + inf.getBytesRead() + " bytes)");
-        }
-        if (e.getCrc() != crc.getValue()) {
-            throw new ZipException(
-                "invalid entry CRC (expected 0x" + Long.toHexString(e.getCrc()) +
-                " but got 0x" + Long.toHexString(crc.getValue()) + ")");
+            if (e.getSize() != inf.getBytesWritten()) {
+                throw new ZipException(
+                    "invalid entry size (expected " + e.getSize() +
+                    " but got " + inf.getBytesWritten() + " bytes)");
+            }
+            if (e.getCompressedSize() != inf.getBytesRead()) {
+                throw new ZipException(
+                    "invalid entry compressed size (expected " + e.getCompressedSize() +
+                    " but got " + inf.getBytesRead() + " bytes)");
+            }
+            if (e.getCrc() != crc.getValue()) {
+                throw new ZipException(
+                    "invalid entry CRC (expected 0x" + Long.toHexString(e.getCrc()) +
+                    " but got 0x" + Long.toHexString(crc.getValue()) + ")");
+            }
         }
     }
 
