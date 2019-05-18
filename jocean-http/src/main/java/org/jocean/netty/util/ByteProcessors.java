@@ -24,13 +24,13 @@ public class ByteProcessors {
         public boolean process(final byte value) {
             if (_bytesToFind[_currentMatchingIdx] == value) {
                 _currentMatchingIdx++;
-                LOG.debug("[{}] == {}", _currentMatchingIdx - 1, value);
+                LOG.trace("[{}] == {}", _currentMatchingIdx - 1, value);
                 if (_currentMatchingIdx >= _bytesToFind.length) {
                     return false;
                 }
             }
             else {
-                LOG.debug("[{}]({}) != {}", _currentMatchingIdx, _bytesToFind[_currentMatchingIdx], value);
+                LOG.trace("[{}]({}) != {}", _currentMatchingIdx, _bytesToFind[_currentMatchingIdx], value);
                 _currentMatchingIdx = 0;
             }
             return true;
