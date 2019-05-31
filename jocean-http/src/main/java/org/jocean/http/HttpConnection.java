@@ -879,7 +879,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         @Override
         public void setWriteBufferWaterMark(final HttpConnection<?> connection, final int low, final int high) {
             connection._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
-            LOG.info("channel({}) setWriteBufferWaterMark with low:{} high:{}", connection._channel, low, high);
+            LOG.trace("channel({}) setWriteBufferWaterMark with low:{} high:{}", connection._channel, low, high);
         }
 
         @Override
