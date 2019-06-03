@@ -285,7 +285,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator> implements Http
     public String toString() {
         return new StringBuilder().append("DefaultHttpInitiator [create at:")
             .append(new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(new Date(this._createTimeMillis)))
-            .append(", onEndCnt=").append(this._endSupport.onEndCount())
+            .append(", onEndCnt=").append(this._haltSupport.onHaltCount())
             .append(", isActive=").append(isActive())
             .append(", transactionStatus=").append(transactionStatusAsString())
             .append(", isKeepAlive=").append(isKeepAlive())

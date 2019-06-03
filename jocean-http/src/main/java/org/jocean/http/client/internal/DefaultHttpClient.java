@@ -203,7 +203,7 @@ public class DefaultHttpClient implements HttpClient {
                 final DefaultHttpInitiator initiator = new DefaultHttpInitiator(channel);
 
                 // enable recycle action
-                initiator.doOnEnd(_RECYCLE_CHANNEL);
+                initiator.doOnHalt(_RECYCLE_CHANNEL);
                 //  set water mark's low/high
                 if (_lowWaterMark >= 0
                     && _highWaterMark >= 0
@@ -213,7 +213,7 @@ public class DefaultHttpClient implements HttpClient {
 
                 //  apply features per interaction
                 Nettys.applyFeaturesToChannel(
-                        initiator.onEnd(),
+                        initiator.onHalt(),
                         channel,
                         _FOR_INTERACTION,
                         features);

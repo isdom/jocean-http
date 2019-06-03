@@ -15,8 +15,8 @@ import org.jocean.http.MessageBody;
 import org.jocean.http.MessageUtil;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.DisposableWrapperUtil;
-import org.jocean.idiom.Endable;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.Haltable;
 import org.jocean.idiom.ProxyBuilder;
 import org.jocean.idiom.ToString;
 import org.jocean.idiom.UnsafeOp;
@@ -348,12 +348,12 @@ public class RxNettys {
     }
 
     public static Observable.Transformer<? super DisposableWrapper<? extends HttpObject>, ? extends DisposableWrapper<FullHttpRequest>> message2fullreq(
-            final Endable terminable) {
-        return message2fullreq(terminable, false);
+            final Haltable haltable) {
+        return message2fullreq(haltable, false);
     }
 
     public static Observable.Transformer<? super DisposableWrapper<? extends HttpObject>, ? extends DisposableWrapper<FullHttpRequest>> message2fullreq(
-            final Endable terminable, final boolean disposemsg) {
+            final Haltable haltable, final boolean disposemsg) {
         return new Observable.Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<FullHttpRequest>>() {
             @Override
             public Observable<DisposableWrapper<FullHttpRequest>> call(
@@ -365,7 +365,7 @@ public class RxNettys {
                                     final List<DisposableWrapper<? extends HttpObject>> dwhs) {
                                 final FullHttpRequest fullreq = Nettys.httpobjs2fullreq(dwhs2hobjs(dwhs));
                                 try {
-                                    return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release(fullreq));
+                                    return DisposableWrapperUtil.disposeOn(haltable, RxNettys.wrap4release(fullreq));
                                 } finally {
                                     if (disposemsg) {
                                         disposeAll(dwhs);
@@ -378,12 +378,12 @@ public class RxNettys {
     }
 
     public static Observable.Transformer<? super DisposableWrapper<? extends HttpObject>, ? extends DisposableWrapper<FullHttpResponse>> message2fullresp(
-            final Endable terminable) {
-        return message2fullresp(terminable, false);
+            final Haltable haltable) {
+        return message2fullresp(haltable, false);
     }
 
     public static Observable.Transformer<FullMessage<?>, ? extends DisposableWrapper<ByteBuf>> fullmessage2dwb(
-            final Endable terminable, final boolean disposemsg) {
+            final Haltable haltable, final boolean disposemsg) {
         return new Observable.Transformer<FullMessage<?>, DisposableWrapper<ByteBuf>>() {
             @Override
             public Observable<DisposableWrapper<ByteBuf>> call(final Observable<FullMessage<?>> fullmsg) {
@@ -399,7 +399,7 @@ public class RxNettys {
                             .map(new Func1<List<ByteBuf>, DisposableWrapper<ByteBuf>>() {
                                 @Override
                                 public DisposableWrapper<ByteBuf> call(final List<ByteBuf> bufs) {
-                                    return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release(Nettys.composite(bufs)));
+                                    return DisposableWrapperUtil.disposeOn(haltable, RxNettys.wrap4release(Nettys.composite(bufs)));
 //                                    try {
 //                                    } finally {
 //                                        if (disposemsg) {
@@ -413,7 +413,7 @@ public class RxNettys {
     }
 
     public static Observable.Transformer<FullMessage<HttpRequest>, ? extends DisposableWrapper<FullHttpRequest>> fullmessage2dwq(
-            final Endable terminable, final boolean disposemsg) {
+            final Haltable haltable, final boolean disposemsg) {
         return new Observable.Transformer<FullMessage<HttpRequest>, DisposableWrapper<FullHttpRequest>>() {
             @Override
             public Observable<DisposableWrapper<FullHttpRequest>> call(final Observable<FullMessage<HttpRequest>> fullmsg) {
@@ -437,7 +437,7 @@ public class RxNettys {
                                             Nettys.composite(bufs));
                                     dfreq.headers().add(req.headers());
                                     //  ? need update Content-Length header field ?
-                                    return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release((FullHttpRequest)dfreq));
+                                    return DisposableWrapperUtil.disposeOn(haltable, RxNettys.wrap4release((FullHttpRequest)dfreq));
 //                                    try {
 //                                    } finally {
 //                                        if (disposemsg) {
@@ -451,7 +451,7 @@ public class RxNettys {
     }
 
     public static Observable.Transformer<? super DisposableWrapper<? extends HttpObject>, ? extends DisposableWrapper<FullHttpResponse>> message2fullresp(
-            final Endable terminable, final boolean disposemsg) {
+            final Haltable haltable, final boolean disposemsg) {
         return new Observable.Transformer<DisposableWrapper<? extends HttpObject>, DisposableWrapper<FullHttpResponse>>() {
             @Override
             public Observable<DisposableWrapper<FullHttpResponse>> call(
@@ -463,7 +463,7 @@ public class RxNettys {
                                     final List<DisposableWrapper<? extends HttpObject>> dwhs) {
                                 final FullHttpResponse fullresp = Nettys.httpobjs2fullresp(dwhs2hobjs(dwhs));
                                 try {
-                                    return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release(fullresp));
+                                    return DisposableWrapperUtil.disposeOn(haltable, RxNettys.wrap4release(fullresp));
                                 } finally {
                                     if (disposemsg) {
                                         disposeAll(dwhs);
@@ -476,7 +476,7 @@ public class RxNettys {
     }
 
     public static Observable.Transformer<? super FullMessage<HttpResponse>, ? extends DisposableWrapper<FullHttpResponse>> fullmsg2fullresp(
-            final Endable terminable, final boolean disposemsg) {
+            final Haltable haltable, final boolean disposemsg) {
         return new Observable.Transformer<FullMessage<HttpResponse>, DisposableWrapper<FullHttpResponse>>() {
             @Override
             public Observable<DisposableWrapper<FullHttpResponse>> call(final Observable<FullMessage<HttpResponse>> fullmsg) {
@@ -497,7 +497,7 @@ public class RxNettys {
                                         content);
                                     defaultfullresp.headers().add(fullresp.message().headers());
                                     try {
-                                        return DisposableWrapperUtil.disposeOn(terminable, RxNettys.<FullHttpResponse>wrap4release(defaultfullresp));
+                                        return DisposableWrapperUtil.disposeOn(haltable, RxNettys.<FullHttpResponse>wrap4release(defaultfullresp));
                                     } finally {
                                         if (disposemsg) {
                                             disposeAll(dwbs);
@@ -746,14 +746,14 @@ public class RxNettys {
     }
 
     public static Observable.Transformer<? super DisposableWrapper<HttpObject>, ? extends DisposableWrapper<HttpObject>> assembleTo(
-            final int maxBufSize, final Endable terminable) {
+            final int maxBufSize, final Haltable haltable) {
         return new Observable.Transformer<DisposableWrapper<HttpObject>, DisposableWrapper<HttpObject>>() {
             @Override
             public Observable<DisposableWrapper<HttpObject>> call(
                     final Observable<DisposableWrapper<HttpObject>> obsdwh) {
                 if (maxBufSize > 0) {
                     final Observable<DisposableWrapper<HttpObject>> shared = obsdwh.share();
-                    return shared.buffer(shared.flatMap(limitBufferSizeTo(maxBufSize))).flatMap(assemble(terminable));
+                    return shared.buffer(shared.flatMap(limitBufferSizeTo(maxBufSize))).flatMap(assemble(haltable));
                 } else {
                     return obsdwh;
                 }
@@ -781,7 +781,7 @@ public class RxNettys {
     }
 
     private static Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>> assemble(
-            final Endable terminable) {
+            final Haltable haltable) {
         return new Func1<List<? extends DisposableWrapper<HttpObject>>, Observable<? extends DisposableWrapper<HttpObject>>>() {
             @Override
             public Observable<? extends DisposableWrapper<HttpObject>> call(
@@ -793,12 +793,12 @@ public class RxNettys {
                         assembled.add(dwh);
                     } else if (dwh.unwrap() instanceof LastHttpContent) {
                         dwbs.add(RxNettys.dwc2dwb(dwh));
-                        add2dwhs(dwbs2dwh(dwbs, true, terminable), assembled);
+                        add2dwhs(dwbs2dwh(dwbs, true, haltable), assembled);
                     } else if (dwh.unwrap() instanceof HttpContent) {
                         dwbs.add(RxNettys.dwc2dwb(dwh));
                     }
                 }
-                add2dwhs(dwbs2dwh(dwbs, false, terminable), assembled);
+                add2dwhs(dwbs2dwh(dwbs, false, haltable), assembled);
                 return Observable.from(assembled);
             }
         };
@@ -807,13 +807,13 @@ public class RxNettys {
     private static DisposableWrapper<HttpObject> dwbs2dwh(
             final Collection<DisposableWrapper<? extends ByteBuf>> dwbs,
             final boolean islast,
-            final Endable terminable) {
+            final Haltable haltable) {
         if (!dwbs.isEmpty()) {
             try {
                 final HttpObject hobj = islast ? new DefaultLastHttpContent(Nettys.dwbs2buf(dwbs))
                         : new DefaultHttpContent(Nettys.dwbs2buf(dwbs));
-                if (null!=terminable) {
-                    return DisposableWrapperUtil.disposeOn(terminable, RxNettys.wrap4release(hobj));
+                if (null!=haltable) {
+                    return DisposableWrapperUtil.disposeOn(haltable, RxNettys.wrap4release(hobj));
                 } else {
                     return RxNettys.wrap4release(hobj);
                 }

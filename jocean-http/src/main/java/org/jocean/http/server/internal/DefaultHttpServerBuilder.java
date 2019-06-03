@@ -296,13 +296,13 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
     }
 
     @SafeVarargs
-    private final HttpTrade httpTradeOf(final Channel channel, final Action1<HttpTrade> ... onEnds) {
+    private final HttpTrade httpTradeOf(final Channel channel, final Action1<HttpTrade> ... onHalts) {
         this._numStartedTrades.incrementAndGet();
         final DefaultHttpTrade trade = new DefaultHttpTrade(channel);
 
         addToTrades(trade);
-        for (final Action1<HttpTrade> onend : onEnds) {
-            trade.doOnEnd(onend);
+        for (final Action1<HttpTrade> onhalt : onHalts) {
+            trade.doOnHalt(onhalt);
         }
 
         final AtomicInteger _lastAddedSize = new AtomicInteger(0);
@@ -320,7 +320,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                 }
             }});
             */
-        trade.doOnEnd(new Action1<HttpTrade>() {
+        trade.doOnHalt(new Action1<HttpTrade>() {
             @Override
             public void call(final HttpTrade t) {
                 updateCurrentInboundMemory(-_lastAddedSize.getAndSet(-1));
