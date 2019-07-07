@@ -66,5 +66,7 @@ public interface HttpServerBuilder extends Closeable {
         // from Inbound
         @Override
         public Intraffic intraffic();
+
+        public long startTimeMillis();
     }
 }

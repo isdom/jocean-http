@@ -53,6 +53,11 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
     private final CompositeSubscription _inboundCompleted = new CompositeSubscription();
 
     @Override
+    public long startTimeMillis() {
+        return this._createTimeMillis;
+    }
+
+    @Override
     public Completable inboundCompleted() {
         return Completable.create(new Completable.OnSubscribe() {
             @Override
