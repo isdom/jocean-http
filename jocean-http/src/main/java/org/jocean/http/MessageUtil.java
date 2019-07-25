@@ -10,6 +10,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -614,7 +615,15 @@ public class MessageUtil {
                 if (obj instanceof HttpRequest) {
                     final HttpRequest request = (HttpRequest)obj;
                     if (nvs.length > 0) {
-                        final QueryStringEncoder encoder = new QueryStringEncoder(request.uri());
+                        final QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
+                        final QueryStringEncoder encoder = new QueryStringEncoder(decoder.rawPath());
+
+                        // add org params
+                        for (final Map.Entry<String, List<String>> entry : decoder.parameters().entrySet()) {
+                            encoder.addParam(entry.getKey(), entry.getValue().get(0));
+                        }
+
+                        // add new params
                         int idx = 0;
                         while (idx+1 < nvs.length) {
                             encoder.addParam(nvs[idx], nvs[idx+1]);
