@@ -7,6 +7,8 @@ import rx.functions.Action1;
 
 public interface Interact {
 
+    public Interact name(final String name);
+
     public Interact method(final HttpMethod method);
 
     public Interact uri(final String uri);

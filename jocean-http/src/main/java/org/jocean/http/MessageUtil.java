@@ -396,6 +396,11 @@ public class MessageUtil {
             }
 
             @Override
+            public Interact name(final String name) {
+                return this;
+            }
+
+            @Override
             public Interact method(final HttpMethod method) {
                 updateObsRequest(MessageUtil.setMethod(method));
                 return this;
