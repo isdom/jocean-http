@@ -608,7 +608,22 @@ public class MessageUtil {
             @Override
             public void call(final Object obj) {
                 if (null != path && !path.isEmpty() && obj instanceof HttpRequest) {
-                    ((HttpRequest)obj).setUri(path);
+                    final HttpRequest request = (HttpRequest)obj;
+                    final QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
+                    final QueryStringDecoder decoder4path = new QueryStringDecoder(path);
+
+                    final QueryStringEncoder encoder = new QueryStringEncoder(decoder4path.rawPath());
+
+                    // add path's params
+                    for (final Map.Entry<String, List<String>> entry : decoder4path.parameters().entrySet()) {
+                        encoder.addParam(entry.getKey(), entry.getValue().get(0));
+                    }
+
+                    // add org params
+                    for (final Map.Entry<String, List<String>> entry : decoder.parameters().entrySet()) {
+                        encoder.addParam(entry.getKey(), entry.getValue().get(0));
+                    }
+                    request.setUri(encoder.toString());
                 }
             }};
     }
