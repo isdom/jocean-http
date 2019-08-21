@@ -25,6 +25,8 @@ public interface Interact {
 
     public Interact onrequest(final Action1<Object> action);
 
+    public Interact onsending(final Action1<Object> action);
+
     public Interact feature(final Feature... features);
 
     public <T> Observable<T> responseAs(final ContentDecoder decoder, final Class<T> type);

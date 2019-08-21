@@ -345,6 +345,9 @@ public class MessageUtil {
         final AtomicBoolean _isSSLEnabled = new AtomicBoolean(false);
         final AtomicReference<Observable<Object>> _obsreqRef = new AtomicReference<>(
                 fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET));
+
+        final AtomicReference<Action1<Object>> _onsendingRef = new AtomicReference<>();
+
         final List<String> _nvs = new ArrayList<>();
         final AtomicReference<URI> _uriRef = new AtomicReference<>();
 
@@ -470,6 +473,31 @@ public class MessageUtil {
             }
 
             @Override
+            public Interact onsending(final Action1<Object> action) {
+                final Action1<Object> prev = _onsendingRef.get();
+                if (null != prev) {
+                    _onsendingRef.set(new Action1<Object>() {
+                        @Override
+                        public void call(final Object obj) {
+                            try {
+                                prev.call(obj);
+                            } catch (final Exception e) {
+                                LOG.warn("exception when invoke prev Action1:{}, detail:{}", prev, ExceptionUtils.exception2detail(e));
+                            }
+                            try {
+                                action.call(obj);
+                            } catch (final Exception e) {
+                                LOG.warn("exception when invoke next Action1:{}, detail:{}", action, ExceptionUtils.exception2detail(e));
+                            }
+                        }});
+                }
+                else {
+                    _onsendingRef.set(action);
+                }
+                return this;
+            }
+
+            @Override
             public Interact feature(final Feature... features) {
                 _initiatorBuilder.feature(features);
                 if (isSSLEnabled(features)) {
@@ -525,6 +553,9 @@ public class MessageUtil {
             }
 
             private Observable<FullMessage<HttpResponse>> defineInteraction(final HttpInitiator initiator) {
+                if (null != _onsendingRef.get()) {
+                    initiator.writeCtrl().sending().subscribe(_onsendingRef.get());
+                }
                 return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator));
             }
 
