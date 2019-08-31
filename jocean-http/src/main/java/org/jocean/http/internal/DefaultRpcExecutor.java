@@ -5,6 +5,7 @@ import org.jocean.http.RpcRunner;
 
 import rx.Observable;
 import rx.Observable.Transformer;
+import rx.functions.Action1;
 import rx.functions.Func1;
 
 public class DefaultRpcExecutor implements RpcExecutor {
@@ -20,6 +21,21 @@ public class DefaultRpcExecutor implements RpcExecutor {
     @Override
     public <RESP> Observable<RESP> execute(final Transformer<RpcRunner, RESP> rpc2resp) {
         return _runners.compose(rpc2resp);
+    }
+
+    @Override
+    public <RESP> Observable<RESP> execute(final Action1<RpcRunner> onrunner,
+            final Observable<Transformer<RpcRunner, RESP>> getrpc2resp) {
+        return getrpc2resp.flatMap(new Func1<Transformer<RpcRunner, RESP>, Observable<RESP>>() {
+            @Override
+            public Observable<RESP> call(final Transformer<RpcRunner, RESP> rpc2resp) {
+                return _runners.doOnNext(onrunner).compose(rpc2resp);
+            }});
+    }
+
+    @Override
+    public <RESP> Observable<RESP> execute(final Action1<RpcRunner> onrunner, final Transformer<RpcRunner, RESP> rpc2resp) {
+        return _runners.doOnNext(onrunner).compose(rpc2resp);
     }
 
     public DefaultRpcExecutor(final Observable<RpcRunner> runners) {
