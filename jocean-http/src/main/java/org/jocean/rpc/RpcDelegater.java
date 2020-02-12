@@ -1,0 +1,174 @@
+/**
+ *
+ */
+package org.jocean.rpc;
+
+import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.net.URI;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.HEAD;
+import javax.ws.rs.OPTIONS;
+import javax.ws.rs.PATCH;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
+import javax.ws.rs.QueryParam;
+
+import org.jocean.http.Interact;
+import org.jocean.http.RpcRunner;
+import org.jocean.rpc.annotation.ConstParams;
+import org.jocean.rpc.annotation.ResponseType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.netty.handler.codec.http.HttpMethod;
+import rx.Observable;
+import rx.Observable.Transformer;
+
+/**
+ * @author isdom
+ *
+ */
+public class RpcDelegater {
+    private static final Logger LOG = LoggerFactory.getLogger(RpcDelegater.class);
+
+    @SuppressWarnings("unchecked")
+    public static <RPC> RPC build(final Class<RPC> rpcType) {
+        return (RPC) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { rpcType },
+                new InvocationHandler() {
+
+                    @Override
+                    public Object invoke(final Object proxy, final Method method, final Object[] args)
+                            throws Throwable {
+                        if (null == args || args.length == 0) {
+                            return delegate(rpcType, method.getReturnType(), "rpc." + method.getName());
+                        } else {
+                            return null;
+                        }
+                    }
+                });
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T, R> T delegate(
+            final Class<?> api,
+            final Class<T> intf,
+            final String apiname) {
+        final Map<String, Object> params = new HashMap<>();
+
+        return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { intf },
+                new InvocationHandler() {
+                    @Override
+                    public Object invoke(final Object proxy, final Method method, final Object[] args)
+                            throws Throwable {
+                        if (null != args && args.length == 1) {
+                            final QueryParam queryParam = method.getAnnotation(QueryParam.class);
+                            if (null != queryParam) {
+                                params.put(queryParam.value(), args[0]);
+                            }
+                            return proxy;
+                        } else if (null == args || args.length == 0) {
+                            addConstParams(api, params);
+                            addConstParams(method, params);
+
+                            return callapi(api, method, apiname, params);
+                        }
+
+                        return null;
+                    }
+                });
+    }
+
+    private static <R> Transformer<RpcRunner, R> callapi(
+            final Class<?> api,
+            final Method method,
+            final String apiname,
+            final Map<String, Object> params) {
+        return (Transformer<RpcRunner, R>) runners -> runners.flatMap(runner -> runner.name(apiname).execute(
+                interact -> {
+                    Interact newInteract = assignUriAndPath(method, interact);
+                    if (null != newInteract) {
+                        interact = newInteract;
+                    } else {
+                        newInteract = assignUriAndPath(api, interact);
+                        if (null != newInteract) {
+                            interact = newInteract;
+                        }
+                    }
+
+                    interact = interact.method(getHttpMethod(method));
+
+                    for (final Map.Entry<String, Object> entry : params.entrySet()) {
+                        if (entry.getKey() != null && entry.getValue() != null) {
+                            interact = interact.paramAsQuery(entry.getKey(), entry.getValue().toString());
+                        }
+                    }
+                    final ResponseType responseType = method.getAnnotation(ResponseType.class);
+                    if (null != responseType) {
+                        return interact.responseAs((Class<R>)responseType.value());
+                    } else {
+                        return Observable.error(new RuntimeException("Unknown Response Type"));
+                    }
+                }));
+    }
+
+    private static HttpMethod getHttpMethod(final Method method) {
+        if (null != method.getAnnotation(GET.class)) {
+            return HttpMethod.GET;
+        } else if (null != method.getAnnotation(POST.class)) {
+            return HttpMethod.POST;
+        } else if (null != method.getAnnotation(PUT.class)) {
+            return HttpMethod.PUT;
+        } else if (null != method.getAnnotation(DELETE.class)) {
+            return HttpMethod.DELETE;
+        } else if (null != method.getAnnotation(HEAD.class)) {
+            return HttpMethod.HEAD;
+        } else if (null != method.getAnnotation(OPTIONS.class)) {
+            return HttpMethod.OPTIONS;
+        } else if (null != method.getAnnotation(PATCH.class)) {
+            return HttpMethod.PATCH;
+        } else {
+            return HttpMethod.GET;
+        }
+    }
+
+    private static void addConstParams(final AnnotatedElement annotatedElement, final Map<String, Object> params) {
+        if (null == annotatedElement) {
+            return;
+        }
+        final ConstParams constParams = annotatedElement.getAnnotation(ConstParams.class);
+        // add const params mark by XXXBuilder.call method
+        if (null != constParams) {
+            final String keyValues[] = constParams.value();
+            for (int i = 0; i < keyValues.length-1; i+=2) {
+                params.put(keyValues[i], keyValues[i+1]);
+            }
+        }
+    }
+
+    private static Interact assignUriAndPath(final AnnotatedElement annotatedElement, final Interact interact) {
+        if (null == annotatedElement) {
+            return null;
+        }
+        final Path path = annotatedElement.getAnnotation(Path.class);
+        if (null != path) {
+            try {
+                final URI uri = new URI(path.value());
+                final String colonWithPort = uri.getPort() > 0 ? ":" + uri.getPort() : "";
+                LOG.info("uri-- {}://{}{}{}", uri.getScheme(), uri.getHost(), colonWithPort, uri.getPath());
+                return interact.uri(uri.getScheme() + "://" + uri.getHost() + colonWithPort).path(uri.getPath());
+            } catch (final Exception e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            return null;
+        }
+    }
+}
