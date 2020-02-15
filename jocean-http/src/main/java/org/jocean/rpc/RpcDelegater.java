@@ -43,12 +43,11 @@ public class RpcDelegater {
     public static <RPC> RPC build(final Class<RPC> rpcType) {
         return (RPC) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { rpcType },
                 new InvocationHandler() {
-
                     @Override
                     public Object invoke(final Object proxy, final Method method, final Object[] args)
                             throws Throwable {
                         if (null == args || args.length == 0) {
-                            return delegate(rpcType, method.getReturnType(), "rpc." + method.getName());
+                            return delegate(rpcType, method.getReturnType(), "rpc." + rpcType.getSimpleName() + "." + method.getName());
                         } else {
                             return null;
                         }
@@ -58,12 +57,12 @@ public class RpcDelegater {
 
     @SuppressWarnings("unchecked")
     public static <T, R> T delegate(
-            final Class<?> api,
-            final Class<T> intf,
-            final String apiname) {
+            final Class<?> apiType,
+            final Class<T> builderType,
+            final String opname) {
         final Map<String, Object> params = new HashMap<>();
 
-        return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { intf },
+        return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
                 new InvocationHandler() {
                     @Override
                     public Object invoke(final Object proxy, final Method method, final Object[] args)
@@ -75,10 +74,10 @@ public class RpcDelegater {
                             }
                             return proxy;
                         } else if (null == args || args.length == 0) {
-                            addConstParams(api, params);
+                            addConstParams(apiType, params);
                             addConstParams(method, params);
 
-                            return callapi(api, method, apiname, params);
+                            return callapi(apiType, method, opname, params);
                         }
 
                         return null;
