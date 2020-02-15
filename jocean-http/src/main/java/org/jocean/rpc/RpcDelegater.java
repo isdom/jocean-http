@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.handler.codec.http.HttpMethod;
 import rx.Observable;
 import rx.Observable.Transformer;
+import rx.functions.Func1;
 
 /**
  * @author isdom
@@ -56,7 +57,7 @@ public class RpcDelegater {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T, R> T delegate(
+    private static <T, R> T delegate(
             final Class<?> apiType,
             final Class<T> builderType,
             final String opname) {
@@ -77,7 +78,8 @@ public class RpcDelegater {
                             addConstParams(apiType, params);
                             addConstParams(method, params);
 
-                            return callapi(apiType, method, opname, params);
+                            return (Transformer<RpcRunner, R>) runners -> runners.flatMap(runner -> runner.name(opname).execute(
+                                    callapi(apiType, method, params)));
                         }
 
                         return null;
@@ -85,13 +87,56 @@ public class RpcDelegater {
                 });
     }
 
-    private static <R> Transformer<RpcRunner, R> callapi(
+    @SuppressWarnings("unchecked")
+    public static <RPC> RPC build2(final Class<RPC> rpcType) {
+        return (RPC) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { rpcType },
+                new InvocationHandler() {
+                    @Override
+                    public Object invoke(final Object proxy, final Method method, final Object[] args)
+                            throws Throwable {
+                        if (null == args || args.length == 0) {
+                            return delegate2(rpcType, method.getReturnType());
+                        } else {
+                            return null;
+                        }
+                    }
+                });
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T, R> T delegate2(
+            final Class<?> apiType,
+            final Class<T> builderType) {
+        final Map<String, Object> params = new HashMap<>();
+
+        return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
+                new InvocationHandler() {
+                    @Override
+                    public Object invoke(final Object proxy, final Method method, final Object[] args)
+                            throws Throwable {
+                        if (null != args && args.length == 1) {
+                            final QueryParam queryParam = method.getAnnotation(QueryParam.class);
+                            if (null != queryParam) {
+                                params.put(queryParam.value(), args[0]);
+                            }
+                            return proxy;
+                        } else if (null == args || args.length == 0) {
+                            addConstParams(apiType, params);
+                            addConstParams(method, params);
+
+                            return callapi(apiType, method, params);
+                        }
+
+                        return null;
+                    }
+                });
+    }
+
+    private static <R> Func1<Interact, Observable<R>> callapi(
             final Class<?> api,
             final Method method,
-            final String apiname,
             final Map<String, Object> params) {
-        return (Transformer<RpcRunner, R>) runners -> runners.flatMap(runner -> runner.name(apiname).execute(
-                interact -> {
+        return (Func1<Interact, Observable<R>>) interact -> {
                     Interact newInteract = assignUriAndPath(method, interact);
                     if (null != newInteract) {
                         interact = newInteract;
@@ -115,7 +160,7 @@ public class RpcDelegater {
                     } else {
                         return Observable.error(new RuntimeException("Unknown Response Type"));
                     }
-                }));
+                };
     }
 
     private static HttpMethod getHttpMethod(final Method method) {
