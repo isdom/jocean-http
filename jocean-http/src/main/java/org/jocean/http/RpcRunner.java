@@ -10,5 +10,5 @@ public interface RpcRunner {
     public RpcRunner name(final String name);
     public RpcRunner oninteract(final Action1<Interact> oninteract);
     public <T> Observable<T> execute(final Func1<Interact, Observable<T>> invoker);
-    public <T> Observable<T> execute(final Transformer<Interact, T> invoker);
+    public <T> Observable<T> submit(final Transformer<Interact, T> invoker);
 }
