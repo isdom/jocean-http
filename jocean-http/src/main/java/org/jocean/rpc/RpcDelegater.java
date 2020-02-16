@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 import io.netty.handler.codec.http.HttpMethod;
 import rx.Observable;
 import rx.Observable.Transformer;
-import rx.functions.Func1;
 
 /**
  * @author isdom
@@ -78,7 +77,7 @@ public class RpcDelegater {
                             addConstParams(apiType, params);
                             addConstParams(method, params);
 
-                            return (Transformer<RpcRunner, R>) runners -> runners.flatMap(runner -> runner.name(opname).execute(
+                            return (Transformer<RpcRunner, R>) runners -> runners.flatMap(runner -> runner.name(opname).submit(
                                     callapi(apiType, method, params)));
                         }
 
@@ -132,11 +131,11 @@ public class RpcDelegater {
                 });
     }
 
-    private static <R> Func1<Interact, Observable<R>> callapi(
+    private static <R> Transformer<Interact, R> callapi(
             final Class<?> api,
             final Method method,
             final Map<String, Object> params) {
-        return (Func1<Interact, Observable<R>>) interact -> {
+        return interacts -> interacts.flatMap(interact -> {
                     Interact newInteract = assignUriAndPath(method, interact);
                     if (null != newInteract) {
                         interact = newInteract;
@@ -160,7 +159,7 @@ public class RpcDelegater {
                     } else {
                         return Observable.error(new RuntimeException("Unknown Response Type"));
                     }
-                };
+                });
     }
 
     private static HttpMethod getHttpMethod(final Method method) {
