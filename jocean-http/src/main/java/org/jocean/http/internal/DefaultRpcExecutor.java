@@ -25,6 +25,11 @@ public class DefaultRpcExecutor implements RpcExecutor {
     }
 
     @Override
+    public <RESP> Observable<RESP> submit(final Transformer<Interact, RESP> inters2resp) {
+        return _runners.flatMap(runner -> runner.execute(inters2resp));
+    }
+
+    @Override
     public <RESP> Observable<RESP> execute(final Transformer<RpcRunner, RpcRunner> runnertransf,
             final Observable<Transformer<RpcRunner, RESP>> getrpc2resp) {
         return getrpc2resp.flatMap(new Func1<Transformer<RpcRunner, RESP>, Observable<RESP>>() {
