@@ -10,6 +10,7 @@ import java.lang.reflect.Proxy;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -22,6 +23,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
 
 import org.jocean.http.Interact;
+import org.jocean.http.MessageBody;
 import org.jocean.http.RpcRunner;
 import org.jocean.rpc.annotation.ConstParams;
 import org.jocean.rpc.annotation.ResponseType;
@@ -78,7 +80,7 @@ public class RpcDelegater {
                             addConstParams(method, params);
 
                             return (Transformer<RpcRunner, R>) runners -> runners.flatMap(runner -> runner.name(opname).submit(
-                                    callapi(apiType, method, params)));
+                                    callapi(apiType, method, params, null)));
                         }
 
                         return null;
@@ -107,6 +109,7 @@ public class RpcDelegater {
             final Class<?> apiType,
             final Class<T> builderType) {
         final Map<String, Object> params = new HashMap<>();
+        final AtomicReference<MessageBody> bodyRef = new AtomicReference<>(null);
 
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
                 new InvocationHandler() {
@@ -117,13 +120,19 @@ public class RpcDelegater {
                             final QueryParam queryParam = method.getAnnotation(QueryParam.class);
                             if (null != queryParam) {
                                 params.put(queryParam.value(), args[0]);
+                            } else {
+                                final Class<?> arg1stType = method.getParameterTypes()[0];
+                                if (MessageBody.class.isAssignableFrom(arg1stType)) {
+                                    // means: API body(final MessageBody body); not care method name
+                                    bodyRef.set((MessageBody)args[0]);
+                                }
                             }
                             return proxy;
                         } else if (null == args || args.length == 0) {
                             addConstParams(apiType, params);
                             addConstParams(method, params);
 
-                            return callapi(apiType, method, params);
+                            return callapi(apiType, method, params, bodyRef.get());
                         }
 
                         return null;
@@ -134,7 +143,8 @@ public class RpcDelegater {
     private static <R> Transformer<Interact, R> callapi(
             final Class<?> api,
             final Method method,
-            final Map<String, Object> params) {
+            final Map<String, Object> params,
+            final MessageBody messageBody) {
         return interacts -> interacts.flatMap(interact -> {
                     Interact newInteract = assignUriAndPath(method, interact);
                     if (null != newInteract) {
@@ -153,6 +163,10 @@ public class RpcDelegater {
                             interact = interact.paramAsQuery(entry.getKey(), entry.getValue().toString());
                         }
                     }
+                    if (null != messageBody) {
+                        interact = interact.body(Observable.just(messageBody));
+                    }
+
                     final ResponseType responseType = method.getAnnotation(ResponseType.class);
                     if (null != responseType) {
                         return interact.responseAs((Class<R>)responseType.value());
