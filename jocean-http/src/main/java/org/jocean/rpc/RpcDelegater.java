@@ -6,7 +6,9 @@ package org.jocean.rpc;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
+import java.lang.reflect.Type;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
@@ -109,7 +111,7 @@ public class RpcDelegater {
             final Class<?> apiType,
             final Class<T> builderType) {
         final Map<String, Object> params = new HashMap<>();
-        final AtomicReference<MessageBody> bodyRef = new AtomicReference<>(null);
+        final AtomicReference<Observable<? extends MessageBody>> getbodyRef = new AtomicReference<>(null);
 
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
                 new InvocationHandler() {
@@ -122,9 +124,23 @@ public class RpcDelegater {
                                 params.put(queryParam.value(), args[0]);
                             } else {
                                 final Class<?> arg1stType = method.getParameterTypes()[0];
+
                                 if (MessageBody.class.isAssignableFrom(arg1stType)) {
                                     // means: API body(final MessageBody body); not care method name
-                                    bodyRef.set((MessageBody)args[0]);
+                                    getbodyRef.set(Observable.just((MessageBody)args[0]));
+                                } else if (arg1stType.equals(Observable.class)) {
+                                    final Type arg1stGenericType = method.getGenericParameterTypes()[0];
+                                    if ( arg1stGenericType instanceof ParameterizedType ) {
+                                        final Type actualGenericType = ((ParameterizedType)arg1stGenericType).getActualTypeArguments()[0];
+                                        if (actualGenericType instanceof Class
+                                            && MessageBody.class.isAssignableFrom((Class<?>)actualGenericType)) {
+                                            // Observable<MessageBody> or Observable<XXXMessageBody>
+                                            getbodyRef.set((Observable<? extends MessageBody>)args[0]);
+                                        }
+                                        // TODO
+//                                        else if (actualGenericType instanceof WildcardType) {
+//                                        }
+                                    }
                                 }
                             }
                             return proxy;
@@ -132,7 +148,7 @@ public class RpcDelegater {
                             addConstParams(apiType, params);
                             addConstParams(method, params);
 
-                            return callapi(apiType, method, params, bodyRef.get());
+                            return callapi(apiType, method, params, getbodyRef.get());
                         }
 
                         return null;
@@ -144,7 +160,7 @@ public class RpcDelegater {
             final Class<?> api,
             final Method method,
             final Map<String, Object> params,
-            final MessageBody messageBody) {
+            final Observable<? extends MessageBody> getbody) {
         return interacts -> interacts.flatMap(interact -> {
                     Interact newInteract = assignUriAndPath(method, interact);
                     if (null != newInteract) {
@@ -163,8 +179,8 @@ public class RpcDelegater {
                             interact = interact.paramAsQuery(entry.getKey(), entry.getValue().toString());
                         }
                     }
-                    if (null != messageBody) {
-                        interact = interact.body(Observable.just(messageBody));
+                    if (null != getbody) {
+                        interact = interact.body(getbody);
                     }
 
                     final ResponseType responseType = method.getAnnotation(ResponseType.class);
