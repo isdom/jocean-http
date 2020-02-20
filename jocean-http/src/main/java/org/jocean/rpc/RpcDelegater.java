@@ -22,11 +22,15 @@ import javax.ws.rs.PATCH;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 
+import org.jocean.http.ContentEncoder;
+import org.jocean.http.ContentUtil;
 import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
 import org.jocean.http.RpcRunner;
+import org.jocean.idiom.Pair;
 import org.jocean.rpc.annotation.ConstParams;
 import org.jocean.rpc.annotation.ResponseType;
 import org.slf4j.Logger;
@@ -42,6 +46,9 @@ import rx.Observable.Transformer;
  */
 public class RpcDelegater {
     private static final Logger LOG = LoggerFactory.getLogger(RpcDelegater.class);
+
+    static final ContentEncoder[] MEDIA_CODECS = new ContentEncoder[]{
+            ContentUtil.TOJSON, ContentUtil.TOXML, ContentUtil.TOTEXT, ContentUtil.TOHTML};
 
     @SuppressWarnings("unchecked")
     public static <RPC> RPC build(final Class<RPC> rpcType) {
@@ -82,7 +89,7 @@ public class RpcDelegater {
                             addConstParams(method, params);
 
                             return (Transformer<RpcRunner, R>) runners -> runners.flatMap(runner -> runner.name(opname).submit(
-                                    callapi(apiType, method, params, null)));
+                                    callapi(apiType, method, params, null, null)));
                         }
 
                         return null;
@@ -112,6 +119,7 @@ public class RpcDelegater {
             final Class<T> builderType) {
         final Map<String, Object> params = new HashMap<>();
         final AtomicReference<Observable<? extends MessageBody>> getbodyRef = new AtomicReference<>(null);
+        final AtomicReference<Pair<Object, ContentEncoder>> contentRef = new AtomicReference<>(null);
 
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
                 new InvocationHandler() {
@@ -120,8 +128,14 @@ public class RpcDelegater {
                             throws Throwable {
                         if (null != args && args.length == 1) {
                             final QueryParam queryParam = method.getAnnotation(QueryParam.class);
+                            final Produces produces = method.getAnnotation(Produces.class);
                             if (null != queryParam) {
                                 params.put(queryParam.value(), args[0]);
+                            } else if (null != produces) {
+                                final ContentEncoder bodyEncoder = ContentUtil.selectCodec(produces.value(), MEDIA_CODECS);
+                                if (null != bodyEncoder) {
+                                    contentRef.set(Pair.of(args[0], bodyEncoder));
+                                }
                             } else {
                                 final Class<?> arg1stType = method.getParameterTypes()[0];
 
@@ -148,7 +162,7 @@ public class RpcDelegater {
                             addConstParams(apiType, params);
                             addConstParams(method, params);
 
-                            return callapi(apiType, method, params, getbodyRef.get());
+                            return callapi(apiType, method, params, getbodyRef.get(), contentRef.get());
                         }
 
                         return null;
@@ -160,7 +174,8 @@ public class RpcDelegater {
             final Class<?> api,
             final Method method,
             final Map<String, Object> params,
-            final Observable<? extends MessageBody> getbody) {
+            final Observable<? extends MessageBody> getbody,
+            final Pair<Object, ContentEncoder> getcontent) {
         return interacts -> interacts.flatMap(interact -> {
                     Interact newInteract = assignUriAndPath(method, interact);
                     if (null != newInteract) {
@@ -181,6 +196,8 @@ public class RpcDelegater {
                     }
                     if (null != getbody) {
                         interact = interact.body(getbody);
+                    } else if ( null != getcontent) {
+                        interact = interact.body(getcontent.getFirst(), getcontent.getSecond());
                     }
 
                     final ResponseType responseType = method.getAnnotation(ResponseType.class);

@@ -28,8 +28,7 @@ import rx.functions.Func2;
 
 public class ContentUtil {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(ContentUtil.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ContentUtil.class);
 
     private ContentUtil() {
         throw new IllegalStateException("No instances!");
