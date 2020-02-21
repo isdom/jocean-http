@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.HEAD;
@@ -25,6 +26,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 
+import org.jocean.http.ContentDecoder;
 import org.jocean.http.ContentEncoder;
 import org.jocean.http.ContentUtil;
 import org.jocean.http.Interact;
@@ -47,8 +49,10 @@ import rx.Observable.Transformer;
 public class RpcDelegater {
     private static final Logger LOG = LoggerFactory.getLogger(RpcDelegater.class);
 
-    static final ContentEncoder[] MEDIA_CODECS = new ContentEncoder[]{
+    static final ContentEncoder[] MIME_ENCODERS = new ContentEncoder[]{
             ContentUtil.TOJSON, ContentUtil.TOXML, ContentUtil.TOTEXT, ContentUtil.TOHTML};
+
+    static final ContentDecoder[] MIME_DECODERS = new ContentDecoder[]{ContentUtil.ASJSON, ContentUtil.ASXML, ContentUtil.ASTEXT};
 
     @SuppressWarnings("unchecked")
     public static <RPC> RPC build(final Class<RPC> rpcType) {
@@ -132,7 +136,7 @@ public class RpcDelegater {
                             if (null != queryParam) {
                                 params.put(queryParam.value(), args[0]);
                             } else if (null != produces) {
-                                final ContentEncoder bodyEncoder = ContentUtil.selectCodec(produces.value(), MEDIA_CODECS);
+                                final ContentEncoder bodyEncoder = ContentUtil.selectCodec(produces.value(), MIME_ENCODERS);
                                 if (null != bodyEncoder) {
                                     contentRef.set(Pair.of(args[0], bodyEncoder));
                                 }
@@ -200,9 +204,19 @@ public class RpcDelegater {
                         interact = interact.body(getcontent.getFirst(), getcontent.getSecond());
                     }
 
+                    ContentDecoder contentDecoder = ContentUtil.ASJSON;
+
+                    final Consumes consumes = method.getAnnotation(Consumes.class);
+                    if (null != consumes) {
+                        final ContentDecoder selected = ContentUtil.selectCodec(consumes.value(), MIME_DECODERS);
+                        if (null != selected) {
+                            contentDecoder = selected;
+                        }
+                    }
+
                     final ResponseType responseType = method.getAnnotation(ResponseType.class);
                     if (null != responseType) {
-                        return interact.responseAs((Class<R>)responseType.value());
+                        return interact.responseAs(contentDecoder, (Class<R>)responseType.value());
                     } else {
                         return Observable.error(new RuntimeException("Unknown Response Type"));
                     }
