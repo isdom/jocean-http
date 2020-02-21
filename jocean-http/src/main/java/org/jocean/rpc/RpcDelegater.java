@@ -204,23 +204,22 @@ public class RpcDelegater {
                         interact = interact.body(getcontent.getFirst(), getcontent.getSecond());
                     }
 
-                    ContentDecoder contentDecoder = ContentUtil.ASJSON;
-
-                    final Consumes consumes = method.getAnnotation(Consumes.class);
-                    if (null != consumes) {
-                        final ContentDecoder selected = ContentUtil.selectCodec(consumes.value(), MIME_DECODERS);
-                        if (null != selected) {
-                            contentDecoder = selected;
-                        }
-                    }
-
                     final ResponseType responseType = method.getAnnotation(ResponseType.class);
                     if (null != responseType) {
-                        return interact.responseAs(contentDecoder, (Class<R>)responseType.value());
+                        return interact.responseAs(getContentDecoder(method), (Class<R>)responseType.value());
                     } else {
                         return Observable.error(new RuntimeException("Unknown Response Type"));
                     }
                 });
+    }
+
+    private static ContentDecoder getContentDecoder(final Method method) {
+        final Consumes consumes = method.getAnnotation(Consumes.class);
+        if (null != consumes) {
+            return ContentUtil.selectCodec(consumes.value(), MIME_DECODERS);
+        } else {
+            return null;
+        }
     }
 
     private static HttpMethod getHttpMethod(final Method method) {
