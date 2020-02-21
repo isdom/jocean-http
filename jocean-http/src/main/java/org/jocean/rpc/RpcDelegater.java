@@ -23,6 +23,7 @@ import javax.ws.rs.PATCH;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 
@@ -75,7 +76,8 @@ public class RpcDelegater {
             final Class<?> apiType,
             final Class<T> builderType,
             final String opname) {
-        final Map<String, Object> params = new HashMap<>();
+        final Map<String, Object> queryParams = new HashMap<>();
+        final Map<String, Object> pathParams = new HashMap<>();
 
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
                 new InvocationHandler() {
@@ -85,15 +87,15 @@ public class RpcDelegater {
                         if (null != args && args.length == 1) {
                             final QueryParam queryParam = method.getAnnotation(QueryParam.class);
                             if (null != queryParam) {
-                                params.put(queryParam.value(), args[0]);
+                                queryParams.put(queryParam.value(), args[0]);
                             }
                             return proxy;
                         } else if (null == args || args.length == 0) {
-                            addConstParams(apiType, params);
-                            addConstParams(method, params);
+                            addConstParams(apiType, queryParams);
+                            addConstParams(method, queryParams);
 
                             return (Transformer<RpcRunner, R>) runners -> runners.flatMap(runner -> runner.name(opname).submit(
-                                    callapi(apiType, method, params, null, null)));
+                                    callapi(apiType, method, queryParams, pathParams, null, null)));
                         }
 
                         return null;
@@ -121,7 +123,8 @@ public class RpcDelegater {
     private static <T, R> T delegate2(
             final Class<?> apiType,
             final Class<T> builderType) {
-        final Map<String, Object> params = new HashMap<>();
+        final Map<String, Object> queryParams = new HashMap<>();
+        final Map<String, Object> pathParams = new HashMap<>();
         final AtomicReference<Observable<? extends MessageBody>> getbodyRef = new AtomicReference<>(null);
         final AtomicReference<Pair<Object, ContentEncoder>> contentRef = new AtomicReference<>(null);
 
@@ -132,9 +135,12 @@ public class RpcDelegater {
                             throws Throwable {
                         if (null != args && args.length == 1) {
                             final QueryParam queryParam = method.getAnnotation(QueryParam.class);
+                            final PathParam pathParam = method.getAnnotation(PathParam.class);
                             final Produces produces = method.getAnnotation(Produces.class);
                             if (null != queryParam) {
-                                params.put(queryParam.value(), args[0]);
+                                queryParams.put(queryParam.value(), args[0]);
+                            } else if (null != pathParam) {
+                                pathParams.put(pathParam.value(), args[0]);
                             } else if (null != produces) {
                                 final ContentEncoder bodyEncoder = ContentUtil.selectCodec(produces.value(), MIME_ENCODERS);
                                 if (null != bodyEncoder) {
@@ -163,10 +169,10 @@ public class RpcDelegater {
                             }
                             return proxy;
                         } else if (null == args || args.length == 0) {
-                            addConstParams(apiType, params);
-                            addConstParams(method, params);
+                            addConstParams(apiType, queryParams);
+                            addConstParams(method, queryParams);
 
-                            return callapi(apiType, method, params, getbodyRef.get(), contentRef.get());
+                            return callapi(apiType, method, queryParams, pathParams, getbodyRef.get(), contentRef.get());
                         }
 
                         return null;
@@ -177,15 +183,16 @@ public class RpcDelegater {
     private static <R> Transformer<Interact, R> callapi(
             final Class<?> api,
             final Method method,
-            final Map<String, Object> params,
+            final Map<String, Object> queryParams,
+            final Map<String, Object> pathParams,
             final Observable<? extends MessageBody> getbody,
             final Pair<Object, ContentEncoder> getcontent) {
         return interacts -> interacts.flatMap(interact -> {
-                    Interact newInteract = assignUriAndPath(method, interact);
+                    Interact newInteract = assignUriAndPath(method, pathParams, interact);
                     if (null != newInteract) {
                         interact = newInteract;
                     } else {
-                        newInteract = assignUriAndPath(api, interact);
+                        newInteract = assignUriAndPath(api, pathParams, interact);
                         if (null != newInteract) {
                             interact = newInteract;
                         }
@@ -193,7 +200,7 @@ public class RpcDelegater {
 
                     interact = interact.method(getHttpMethod(method));
 
-                    for (final Map.Entry<String, Object> entry : params.entrySet()) {
+                    for (final Map.Entry<String, Object> entry : queryParams.entrySet()) {
                         if (entry.getKey() != null && entry.getValue() != null) {
                             interact = interact.paramAsQuery(entry.getKey(), entry.getValue().toString());
                         }
@@ -256,14 +263,23 @@ public class RpcDelegater {
         }
     }
 
-    private static Interact assignUriAndPath(final AnnotatedElement annotatedElement, final Interact interact) {
+    private static Interact assignUriAndPath(final AnnotatedElement annotatedElement,
+            final Map<String, Object> pathParams, final Interact interact) {
         if (null == annotatedElement) {
             return null;
         }
         final Path path = annotatedElement.getAnnotation(Path.class);
         if (null != path) {
             try {
-                final URI uri = new URI(path.value());
+                String uriAndPath = path.value();
+
+                for (final Map.Entry<String, Object> entry : pathParams.entrySet()) {
+                    if (entry.getKey() != null && entry.getValue() != null) {
+                        uriAndPath = uriAndPath.replaceAll("{" + entry.getKey() + "}", entry.getValue().toString());
+                    }
+                }
+
+                final URI uri = new URI(uriAndPath);
                 final String colonWithPort = uri.getPort() > 0 ? ":" + uri.getPort() : "";
                 LOG.info("uri-- {}://{}{}{}", uri.getScheme(), uri.getHost(), colonWithPort, uri.getPath());
                 return interact.uri(uri.getScheme() + "://" + uri.getHost() + colonWithPort).path(uri.getPath());
