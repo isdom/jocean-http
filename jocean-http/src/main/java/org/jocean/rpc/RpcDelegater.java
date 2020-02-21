@@ -275,7 +275,7 @@ public class RpcDelegater {
 
                 for (final Map.Entry<String, Object> entry : pathParams.entrySet()) {
                     if (entry.getKey() != null && entry.getValue() != null) {
-                        uriAndPath = uriAndPath.replaceAll("{" + entry.getKey() + "}", entry.getValue().toString());
+                        uriAndPath = uriAndPath.replace("{" + entry.getKey() + "}", entry.getValue().toString());
                     }
                 }
 
