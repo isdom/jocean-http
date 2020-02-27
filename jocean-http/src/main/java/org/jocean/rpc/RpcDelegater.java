@@ -30,12 +30,12 @@ import javax.ws.rs.QueryParam;
 import org.jocean.http.ContentDecoder;
 import org.jocean.http.ContentEncoder;
 import org.jocean.http.ContentUtil;
+import org.jocean.http.FullMessage;
 import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
 import org.jocean.http.RpcRunner;
 import org.jocean.idiom.Pair;
 import org.jocean.rpc.annotation.ConstParams;
-import org.jocean.rpc.annotation.ResponseType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,8 +94,8 @@ public class RpcDelegater {
                             addConstParams(apiType, queryParams);
                             addConstParams(method, queryParams);
 
-                            return (Transformer<RpcRunner, R>) runners -> runners.flatMap(runner -> runner.name(opname).submit(
-                                    callapi(apiType, method, queryParams, pathParams, null, null)));
+                            return (Transformer<RpcRunner, Object>) runners -> runners.flatMap(runner -> runner.name(opname).submit(
+                                    callapi(apiType, builderType, method, queryParams, pathParams, null, null)));
                         }
 
                         return null;
@@ -172,7 +172,7 @@ public class RpcDelegater {
                             addConstParams(apiType, queryParams);
                             addConstParams(method, queryParams);
 
-                            return callapi(apiType, method, queryParams, pathParams, getbodyRef.get(), contentRef.get());
+                            return callapi(apiType, builderType, method, queryParams, pathParams, getbodyRef.get(), contentRef.get());
                         }
 
                         return null;
@@ -180,8 +180,9 @@ public class RpcDelegater {
                 });
     }
 
-    private static <R> Transformer<Interact, R> callapi(
+    private static Transformer<Interact, ? extends Object> callapi(
             final Class<?> api,
+            final Class<?> builder,
             final Method method,
             final Map<String, Object> queryParams,
             final Map<String, Object> pathParams,
@@ -211,12 +212,36 @@ public class RpcDelegater {
                         interact = interact.body(getcontent.getFirst(), getcontent.getSecond());
                     }
 
-                    final ResponseType responseType = method.getAnnotation(ResponseType.class);
-                    if (null != responseType) {
-                        return interact.responseAs(getContentDecoder(method), (Class<R>)responseType.value());
-                    } else {
-                        return Observable.error(new RuntimeException("Unknown Response Type"));
+                    final Type genericReturnType = method.getGenericReturnType();
+                    if (genericReturnType instanceof ParameterizedType) {
+                        final ParameterizedType parameterizedType = (ParameterizedType)genericReturnType;
+                        final Class<?> rawType = (Class<?>)parameterizedType.getRawType();
+                        if (Transformer.class.isAssignableFrom(rawType)) {
+                            // Transformer<?, ?>
+                            final Type[] typeArguments = parameterizedType.getActualTypeArguments();
+                            if (typeArguments[0] instanceof Class && Interact.class.isAssignableFrom((Class<?>)typeArguments[0]) ) {
+                                //  Transformer<Interact, ?>
+                                final Type responseType = typeArguments[1];
+                                if (responseType instanceof Class) {
+                                    //  Transformer<Interact, R>
+                                    return interact.responseAs(getContentDecoder(method), (Class<?>)responseType);
+                                } else if (responseType instanceof ParameterizedType) {
+                                    if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
+                                        //  Transformer<Interact, FullMessage<MSG>>
+                                        return interact.response();
+                                    }
+                                }
+                            }
+                        }
                     }
+                    LOG.error("unsupport {}.{}.{}'s return type: {}", api.getSimpleName(), builder.getSimpleName(), method.getName(), genericReturnType);
+//                    final ResponseType responseType = method.getAnnotation(ResponseType.class);
+//                    if (null != responseType) {
+//                        return interact.responseAs(getContentDecoder(method), (Class<R>)responseType.value());
+//                    } else {
+//                        interact.response();
+                        return Observable.error(new RuntimeException("Unknown Response Type"));
+//                    }
                 });
     }
 
