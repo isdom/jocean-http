@@ -224,10 +224,12 @@ public class RpcDelegater {
                                 final Type responseType = typeArguments[1];
                                 if (responseType instanceof Class) {
                                     //  Transformer<Interact, R>
+                                    LOG.debug("{}.{}.{}'s response as {}", api.getSimpleName(), builder.getSimpleName(), method.getName(), responseType);
                                     return interact.responseAs(getContentDecoder(method), (Class<?>)responseType);
                                 } else if (responseType instanceof ParameterizedType) {
                                     if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
                                         //  Transformer<Interact, FullMessage<MSG>>
+                                        LOG.debug("{}.{}.{}'s response as FullMessage", api.getSimpleName(), builder.getSimpleName(), method.getName());
                                         return interact.response();
                                     }
                                 }
