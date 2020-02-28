@@ -18,6 +18,7 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.HEAD;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.OPTIONS;
 import javax.ws.rs.PATCH;
 import javax.ws.rs.POST;
@@ -40,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpRequest;
 import rx.Observable;
 import rx.Observable.Transformer;
 
@@ -78,6 +80,7 @@ public class RpcDelegater {
             final String opname) {
         final Map<String, Object> queryParams = new HashMap<>();
         final Map<String, Object> pathParams = new HashMap<>();
+        final Map<String, Object> headerParams = new HashMap<>();
 
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
                 new InvocationHandler() {
@@ -86,8 +89,14 @@ public class RpcDelegater {
                             throws Throwable {
                         if (null != args && args.length == 1) {
                             final QueryParam queryParam = method.getAnnotation(QueryParam.class);
+                            final PathParam pathParam = method.getAnnotation(PathParam.class);
+                            final HeaderParam headerParam = method.getAnnotation(HeaderParam.class);
                             if (null != queryParam) {
                                 queryParams.put(queryParam.value(), args[0]);
+                            } else if (null != pathParam) {
+                                pathParams.put(pathParam.value(), args[0]);
+                            } else if (null != headerParam) {
+                                headerParams.put(headerParam.value(), args[0]);
                             }
                             return proxy;
                         } else if (null == args || args.length == 0) {
@@ -95,7 +104,7 @@ public class RpcDelegater {
                             addConstParams(method, queryParams);
 
                             return (Transformer<RpcRunner, Object>) runners -> runners.flatMap(runner -> runner.name(opname).submit(
-                                    callapi(apiType, builderType, method, queryParams, pathParams, null, null)));
+                                    callapi(apiType, builderType, method, queryParams, pathParams, headerParams, null, null)));
                         }
 
                         return null;
@@ -125,6 +134,7 @@ public class RpcDelegater {
             final Class<T> builderType) {
         final Map<String, Object> queryParams = new HashMap<>();
         final Map<String, Object> pathParams = new HashMap<>();
+        final Map<String, Object> headerParams = new HashMap<>();
         final AtomicReference<Observable<? extends MessageBody>> getbodyRef = new AtomicReference<>(null);
         final AtomicReference<Pair<Object, ContentEncoder>> contentRef = new AtomicReference<>(null);
 
@@ -136,11 +146,14 @@ public class RpcDelegater {
                         if (null != args && args.length == 1) {
                             final QueryParam queryParam = method.getAnnotation(QueryParam.class);
                             final PathParam pathParam = method.getAnnotation(PathParam.class);
+                            final HeaderParam headerParam = method.getAnnotation(HeaderParam.class);
                             final Produces produces = method.getAnnotation(Produces.class);
                             if (null != queryParam) {
                                 queryParams.put(queryParam.value(), args[0]);
                             } else if (null != pathParam) {
                                 pathParams.put(pathParam.value(), args[0]);
+                            } else if (null != headerParam) {
+                                headerParams.put(headerParam.value(), args[0]);
                             } else if (null != produces) {
                                 final ContentEncoder bodyEncoder = ContentUtil.selectCodec(produces.value(), MIME_ENCODERS);
                                 if (null != bodyEncoder) {
@@ -172,7 +185,7 @@ public class RpcDelegater {
                             addConstParams(apiType, queryParams);
                             addConstParams(method, queryParams);
 
-                            return callapi(apiType, builderType, method, queryParams, pathParams, getbodyRef.get(), contentRef.get());
+                            return callapi(apiType, builderType, method, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get());
                         }
 
                         return null;
@@ -186,6 +199,7 @@ public class RpcDelegater {
             final Method method,
             final Map<String, Object> queryParams,
             final Map<String, Object> pathParams,
+            final Map<String, Object> headerParams,
             final Observable<? extends MessageBody> getbody,
             final Pair<Object, ContentEncoder> getcontent) {
         return interacts -> interacts.flatMap(interact -> {
@@ -206,6 +220,20 @@ public class RpcDelegater {
                             interact = interact.paramAsQuery(entry.getKey(), entry.getValue().toString());
                         }
                     }
+
+                    if (!headerParams.isEmpty()) {
+                        // set headers
+                        interact = interact.onrequest(obj -> {
+                            if (obj instanceof HttpRequest) {
+                                for (final Map.Entry<String, Object> entry : headerParams.entrySet()) {
+                                    if (entry.getKey() != null && entry.getValue() != null) {
+                                        ((HttpRequest)obj).headers().set(entry.getKey(), entry.getValue());
+                                    }
+                                }
+                            }
+                        });
+                    }
+
                     if (null != getbody) {
                         interact = interact.body(getbody);
                     } else if ( null != getcontent) {
@@ -308,8 +336,12 @@ public class RpcDelegater {
 
                 final URI uri = new URI(uriAndPath);
                 final String colonWithPort = uri.getPort() > 0 ? ":" + uri.getPort() : "";
-                LOG.info("uri-- {}://{}{}{}", uri.getScheme(), uri.getHost(), colonWithPort, uri.getPath());
-                return interact.uri(uri.getScheme() + "://" + uri.getHost() + colonWithPort).path(uri.getPath());
+                final String questionMarkWithQuery = uri.getQuery() != null && !uri.getQuery().isEmpty()
+                        ? "?" + uri.getQuery()
+                        : "";
+
+                LOG.info("uri-- {}://{}{}{}{}", uri.getScheme(), uri.getHost(), colonWithPort, uri.getPath(), questionMarkWithQuery);
+                return interact.uri(uri.getScheme() + "://" + uri.getHost() + colonWithPort).path(uri.getPath() + questionMarkWithQuery);
             } catch (final Exception e) {
                 throw new RuntimeException(e);
             }
