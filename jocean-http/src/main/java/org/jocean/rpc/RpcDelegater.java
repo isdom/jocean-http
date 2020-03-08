@@ -73,7 +73,7 @@ public class RpcDelegater {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T, R> T delegate(
+    public static <T, R> T delegate(
             final Class<?> apiType,
             final Class<T> builderType) {
         final Map<String, Object> queryParams = new HashMap<>();
