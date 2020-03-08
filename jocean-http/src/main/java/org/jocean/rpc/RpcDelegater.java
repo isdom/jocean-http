@@ -257,7 +257,7 @@ public class RpcDelegater {
     }
 
     private static Interact assignUriAndPath(final AnnotatedElement annotatedElement,
-            final Map<String, Object> pathParams, final Interact interact) {
+            final Map<String, Object> pathParams, Interact interact) {
         if (null == annotatedElement) {
             return null;
         }
@@ -278,8 +278,11 @@ public class RpcDelegater {
                         ? "?" + uri.getQuery()
                         : "";
 
-                LOG.info("uri-- {}://{}{}{}{}", uri.getScheme(), uri.getHost(), colonWithPort, uri.getPath(), questionMarkWithQuery);
-                return interact.uri(uri.getScheme() + "://" + uri.getHost() + colonWithPort).path(uri.getPath() + questionMarkWithQuery);
+                LOG.info("uri -- {}://{}{}{}{}", uri.getScheme(), uri.getHost(), colonWithPort, uri.getPath(), questionMarkWithQuery);
+                if (null != uri.getScheme() && null != uri.getHost()) {
+                    interact = interact.uri(uri.getScheme() + "://" + uri.getHost() + colonWithPort);
+                }
+                return interact.path(uri.getPath() + questionMarkWithQuery);
             } catch (final Exception e) {
                 throw new RuntimeException(e);
             }
