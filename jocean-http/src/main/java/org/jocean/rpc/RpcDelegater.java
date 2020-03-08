@@ -34,7 +34,6 @@ import org.jocean.http.ContentUtil;
 import org.jocean.http.FullMessage;
 import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
-import org.jocean.http.RpcRunner;
 import org.jocean.idiom.Pair;
 import org.jocean.rpc.annotation.ConstParams;
 import org.slf4j.Logger;
@@ -65,7 +64,7 @@ public class RpcDelegater {
                     public Object invoke(final Object proxy, final Method method, final Object[] args)
                             throws Throwable {
                         if (null == args || args.length == 0) {
-                            return delegate(rpcType, method.getReturnType(), "rpc." + rpcType.getSimpleName() + "." + method.getName());
+                            return delegate(rpcType, method.getReturnType());
                         } else {
                             return null;
                         }
@@ -75,61 +74,6 @@ public class RpcDelegater {
 
     @SuppressWarnings("unchecked")
     private static <T, R> T delegate(
-            final Class<?> apiType,
-            final Class<T> builderType,
-            final String opname) {
-        final Map<String, Object> queryParams = new HashMap<>();
-        final Map<String, Object> pathParams = new HashMap<>();
-        final Map<String, Object> headerParams = new HashMap<>();
-
-        return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
-                new InvocationHandler() {
-                    @Override
-                    public Object invoke(final Object proxy, final Method method, final Object[] args)
-                            throws Throwable {
-                        if (null != args && args.length == 1) {
-                            final QueryParam queryParam = method.getAnnotation(QueryParam.class);
-                            final PathParam pathParam = method.getAnnotation(PathParam.class);
-                            final HeaderParam headerParam = method.getAnnotation(HeaderParam.class);
-                            if (null != queryParam) {
-                                queryParams.put(queryParam.value(), args[0]);
-                            } else if (null != pathParam) {
-                                pathParams.put(pathParam.value(), args[0]);
-                            } else if (null != headerParam) {
-                                headerParams.put(headerParam.value(), args[0]);
-                            }
-                            return proxy;
-                        } else if (null == args || args.length == 0) {
-                            addConstParams(apiType, queryParams);
-                            addConstParams(method, queryParams);
-
-                            return (Transformer<RpcRunner, Object>) runners -> runners.flatMap(runner -> runner.name(opname).submit(
-                                    callapi(apiType, builderType, method, queryParams, pathParams, headerParams, null, null)));
-                        }
-
-                        return null;
-                    }
-                });
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <RPC> RPC build2(final Class<RPC> rpcType) {
-        return (RPC) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { rpcType },
-                new InvocationHandler() {
-                    @Override
-                    public Object invoke(final Object proxy, final Method method, final Object[] args)
-                            throws Throwable {
-                        if (null == args || args.length == 0) {
-                            return delegate2(rpcType, method.getReturnType());
-                        } else {
-                            return null;
-                        }
-                    }
-                });
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T, R> T delegate2(
             final Class<?> apiType,
             final Class<T> builderType) {
         final Map<String, Object> queryParams = new HashMap<>();
@@ -265,13 +209,7 @@ public class RpcDelegater {
                         }
                     }
                     LOG.error("unsupport {}.{}.{}'s return type: {}", api.getSimpleName(), builder.getSimpleName(), method.getName(), genericReturnType);
-//                    final ResponseType responseType = method.getAnnotation(ResponseType.class);
-//                    if (null != responseType) {
-//                        return interact.responseAs(getContentDecoder(method), (Class<R>)responseType.value());
-//                    } else {
-//                        interact.response();
-                        return Observable.error(new RuntimeException("Unknown Response Type"));
-//                    }
+                    return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
     }
 
