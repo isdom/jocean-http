@@ -76,65 +76,71 @@ public class RpcDelegater {
     public static <T, R> T delegate(
             final Class<?> apiType,
             final Class<T> builderType) {
+        return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
+                invocationHandler(apiType, builderType));
+    }
+
+    public static InvocationHandler invocationHandler(
+            final Class<?> apiType,
+            final Class<?> builderType) {
         final Map<String, Object> queryParams = new HashMap<>();
         final Map<String, Object> pathParams = new HashMap<>();
         final Map<String, Object> headerParams = new HashMap<>();
         final AtomicReference<Observable<? extends MessageBody>> getbodyRef = new AtomicReference<>(null);
         final AtomicReference<Pair<Object, ContentEncoder>> contentRef = new AtomicReference<>(null);
 
-        return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
-                new InvocationHandler() {
-                    @Override
-                    public Object invoke(final Object proxy, final Method method, final Object[] args)
-                            throws Throwable {
-                        if (null != args && args.length == 1) {
-                            final QueryParam queryParam = method.getAnnotation(QueryParam.class);
-                            final PathParam pathParam = method.getAnnotation(PathParam.class);
-                            final HeaderParam headerParam = method.getAnnotation(HeaderParam.class);
-                            final Produces produces = method.getAnnotation(Produces.class);
-                            if (null != queryParam) {
-                                queryParams.put(queryParam.value(), args[0]);
-                            } else if (null != pathParam) {
-                                pathParams.put(pathParam.value(), args[0]);
-                            } else if (null != headerParam) {
-                                headerParams.put(headerParam.value(), args[0]);
-                            } else if (null != produces) {
-                                final ContentEncoder bodyEncoder = ContentUtil.selectCodec(produces.value(), MIME_ENCODERS);
-                                if (null != bodyEncoder) {
-                                    contentRef.set(Pair.of(args[0], bodyEncoder));
-                                }
-                            } else {
-                                final Class<?> arg1stType = method.getParameterTypes()[0];
+        return new InvocationHandler() {
+            @Override
+            public Object invoke(final Object proxy, final Method method, final Object[] args)
+                    throws Throwable {
+                if (null != args && args.length == 1) {
+                    final QueryParam queryParam = method.getAnnotation(QueryParam.class);
+                    final PathParam pathParam = method.getAnnotation(PathParam.class);
+                    final HeaderParam headerParam = method.getAnnotation(HeaderParam.class);
+                    final Produces produces = method.getAnnotation(Produces.class);
+                    if (null != queryParam) {
+                        queryParams.put(queryParam.value(), args[0]);
+                    } else if (null != pathParam) {
+                        pathParams.put(pathParam.value(), args[0]);
+                    } else if (null != headerParam) {
+                        headerParams.put(headerParam.value(), args[0]);
+                    } else if (null != produces) {
+                        final ContentEncoder bodyEncoder = ContentUtil.selectCodec(produces.value(), MIME_ENCODERS);
+                        if (null != bodyEncoder) {
+                            contentRef.set(Pair.of(args[0], bodyEncoder));
+                        }
+                    } else {
+                        final Class<?> arg1stType = method.getParameterTypes()[0];
 
-                                if (MessageBody.class.isAssignableFrom(arg1stType)) {
-                                    // means: API body(final MessageBody body); not care method name
-                                    getbodyRef.set(Observable.just((MessageBody)args[0]));
-                                } else if (arg1stType.equals(Observable.class)) {
-                                    final Type arg1stGenericType = method.getGenericParameterTypes()[0];
-                                    if ( arg1stGenericType instanceof ParameterizedType ) {
-                                        final Type actualGenericType = ((ParameterizedType)arg1stGenericType).getActualTypeArguments()[0];
-                                        if (actualGenericType instanceof Class
-                                            && MessageBody.class.isAssignableFrom((Class<?>)actualGenericType)) {
-                                            // Observable<MessageBody> or Observable<XXXMessageBody>
-                                            getbodyRef.set((Observable<? extends MessageBody>)args[0]);
-                                        }
-                                        // TODO
+                        if (MessageBody.class.isAssignableFrom(arg1stType)) {
+                            // means: API body(final MessageBody body); not care method name
+                            getbodyRef.set(Observable.just((MessageBody)args[0]));
+                        } else if (arg1stType.equals(Observable.class)) {
+                            final Type arg1stGenericType = method.getGenericParameterTypes()[0];
+                            if ( arg1stGenericType instanceof ParameterizedType ) {
+                                final Type actualGenericType = ((ParameterizedType)arg1stGenericType).getActualTypeArguments()[0];
+                                if (actualGenericType instanceof Class
+                                    && MessageBody.class.isAssignableFrom((Class<?>)actualGenericType)) {
+                                    // Observable<MessageBody> or Observable<XXXMessageBody>
+                                    getbodyRef.set((Observable<? extends MessageBody>)args[0]);
+                                }
+                                // TODO
 //                                        else if (actualGenericType instanceof WildcardType) {
 //                                        }
-                                    }
-                                }
                             }
-                            return proxy;
-                        } else if (null == args || args.length == 0) {
-                            addConstParams(apiType, queryParams);
-                            addConstParams(method, queryParams);
-
-                            return callapi(apiType, builderType, method, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get());
                         }
-
-                        return null;
                     }
-                });
+                    return proxy;
+                } else if (null == args || args.length == 0) {
+                    addConstParams(apiType, queryParams);
+                    addConstParams(method, queryParams);
+
+                    return callapi(apiType, builderType, method, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get());
+                }
+
+                return null;
+            }
+        };
     }
 
     private static Transformer<Interact, ? extends Object> callapi(
