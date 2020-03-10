@@ -6,7 +6,7 @@
     
     <bean id="httpfeatures" class="java.util.concurrent.CopyOnWriteArrayList"/>
 
-    <bean id="interactTransformer" class="org.jocean.http.InteractUtil" 
+    <bean id="interactPipe" class="org.jocean.http.InteractUtil" 
         factory-method="applyFeatures"
         name="${name}">
         <constructor-arg ref="httpfeatures"/>
