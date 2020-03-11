@@ -35,6 +35,7 @@ import org.jocean.http.FullMessage;
 import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
 import org.jocean.idiom.Pair;
+import org.jocean.idiom.ReflectUtils;
 import org.jocean.rpc.annotation.ConstParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +44,7 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import rx.Observable;
 import rx.Observable.Transformer;
+import rx.functions.Func1;
 
 /**
  * @author isdom
@@ -77,12 +79,13 @@ public class RpcDelegater {
             final Class<?> apiType,
             final Class<T> builderType) {
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
-                invocationHandler(apiType, builderType));
+                invocationHandler(apiType, builderType, null));
     }
 
     public static InvocationHandler invocationHandler(
             final Class<?> apiType,
-            final Class<?> builderType) {
+            final Class<?> builderType,
+            final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
         final Map<String, Object> queryParams = new HashMap<>();
         final Map<String, Object> pathParams = new HashMap<>();
         final Map<String, Object> headerParams = new HashMap<>();
@@ -135,7 +138,18 @@ public class RpcDelegater {
                     addConstParams(apiType, queryParams);
                     addConstParams(method, queryParams);
 
-                    return callapi(apiType, builderType, method, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get());
+                    if (isObservableAny(method.getGenericReturnType())) {
+                        // Observable<XXX> call()
+                        final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
+                        return invoker.call(interact2obj(apiType, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
+                    }
+                    else if (isInteract2Any(method.getGenericReturnType())) {
+                        // Transformer<Interact, XXX> call()
+                        final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 1);
+                        return interact2obj(apiType, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get());
+                    }
+                    LOG.error("unsupport {}.{}.{}'s return type: {}", apiType.getSimpleName(), builderType.getSimpleName(),
+                            method.getName(), method.getGenericReturnType());
                 }
 
                 return null;
@@ -143,10 +157,22 @@ public class RpcDelegater {
         };
     }
 
-    private static Transformer<Interact, ? extends Object> callapi(
+    private static boolean isObservableAny(final Type genericType) {
+        final Class<?> rawType = ReflectUtils.getParameterizedRawType(genericType);
+        return null != rawType && Observable.class.isAssignableFrom(rawType);
+    }
+
+    private static boolean isInteract2Any(final Type genericType) {
+        final Class<?> rawType = ReflectUtils.getParameterizedRawType(genericType);
+        return null != rawType && Transformer.class.isAssignableFrom(rawType)
+                && Interact.class.equals(ReflectUtils.getParameterizedTypeArgument(genericType, 0));
+    }
+
+    private static Transformer<Interact, ? extends Object> interact2obj(
             final Class<?> api,
             final Class<?> builder,
             final Method method,
+            final Type responseType,
             final Map<String, Object> queryParams,
             final Map<String, Object> pathParams,
             final Map<String, Object> headerParams,
@@ -190,6 +216,7 @@ public class RpcDelegater {
                         interact = interact.body(getcontent.getFirst(), getcontent.getSecond());
                     }
 
+                    /*
                     final Type genericReturnType = method.getGenericReturnType();
                     if (genericReturnType instanceof ParameterizedType) {
                         final ParameterizedType parameterizedType = (ParameterizedType)genericReturnType;
@@ -200,21 +227,19 @@ public class RpcDelegater {
                             if (typeArguments[0] instanceof Class && Interact.class.isAssignableFrom((Class<?>)typeArguments[0]) ) {
                                 //  Transformer<Interact, ?>
                                 final Type responseType = typeArguments[1];
-                                if (responseType instanceof Class) {
-                                    //  Transformer<Interact, R>
-                                    LOG.debug("{}.{}.{}'s response as {}", api.getSimpleName(), builder.getSimpleName(), method.getName(), responseType);
-                                    return interact.responseAs(getContentDecoder(method), (Class<?>)responseType);
-                                } else if (responseType instanceof ParameterizedType) {
-                                    if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
-                                        //  Transformer<Interact, FullMessage<MSG>>
-                                        LOG.debug("{}.{}.{}'s response as FullMessage", api.getSimpleName(), builder.getSimpleName(), method.getName());
-                                        return interact.response();
-                                    }
-                                }
-                            }
+                    */
+                    if (responseType instanceof Class) {
+                        //  Transformer<Interact, R>
+                        LOG.debug("{}.{}.{}'s response as {}", api.getSimpleName(), builder.getSimpleName(), method.getName(), responseType);
+                        return interact.responseAs(getContentDecoder(method), (Class<?>)responseType);
+                    } else if (responseType instanceof ParameterizedType) {
+                        if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
+                            //  Transformer<Interact, FullMessage<MSG>>
+                            LOG.debug("{}.{}.{}'s response as FullMessage", api.getSimpleName(), builder.getSimpleName(), method.getName());
+                            return interact.response();
                         }
                     }
-                    LOG.error("unsupport {}.{}.{}'s return type: {}", api.getSimpleName(), builder.getSimpleName(), method.getName(), genericReturnType);
+                    LOG.error("unsupport {}.{}.{}'s return type: {}", api.getSimpleName(), builder.getSimpleName(), method.getName(), responseType);
                     return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
     }
