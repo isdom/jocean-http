@@ -157,12 +157,12 @@ public class RpcDelegater {
         };
     }
 
-    private static boolean isObservableAny(final Type genericType) {
+    public static boolean isObservableAny(final Type genericType) {
         final Class<?> rawType = ReflectUtils.getParameterizedRawType(genericType);
         return null != rawType && Observable.class.isAssignableFrom(rawType);
     }
 
-    private static boolean isInteract2Any(final Type genericType) {
+    public static boolean isInteract2Any(final Type genericType) {
         final Class<?> rawType = ReflectUtils.getParameterizedRawType(genericType);
         return null != rawType && Transformer.class.isAssignableFrom(rawType)
                 && Interact.class.equals(ReflectUtils.getParameterizedTypeArgument(genericType, 0));
