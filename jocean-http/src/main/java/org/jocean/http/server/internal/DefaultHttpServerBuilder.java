@@ -244,12 +244,18 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                         subscriber.onError(e);
                     }
 
-                    _register.registerMBean("name=" + localAddress.toString(), new HttpServerInstanceMXBean() {
-                        @Override
-                        public int getAwaitChannelCount() {
-                            return awaitChannels.size();
-                        }
-                    });
+                    try {
+                        _register.registerMBean("name=" + localAddress.toString(), new HttpServerInstanceMXBean() {
+                            @Override
+                            public int getAwaitChannelCount() {
+                                return awaitChannels.size();
+                            }
+                        });
+                    }
+                    catch (final Exception e) {
+                        LOG.warn("exception when register HttpServerInstance({}) MBean, detail: {}",
+                                localAddress, ExceptionUtils.exception2detail(e));
+                    }
                 }
             }})
             ;
