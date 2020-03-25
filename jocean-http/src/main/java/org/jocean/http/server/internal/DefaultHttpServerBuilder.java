@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
@@ -250,10 +251,25 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             final Subscriber<? super HttpTrade> subscriber,
             final List<Channel> awaitChannels) {
         awaitChannels.add(channel);
+
+        // TBD: workround to remove channel from awaitChannels when channel inactive
+        //      and when channel receive normal traffic then disable this action, bcs trade will deal with inactive state
+        final AtomicReference<Action0> terminateRef = new AtomicReference<>();
+        Nettys.applyToChannel(terminateAction -> terminateRef.set(terminateAction),
+                channel,
+                HttpHandlers.ON_CHANNEL_INACTIVE,
+                (Action0)() -> {
+                    LOG.info("Channel({}) inactived, remove from awaitChannels.", channel);
+                    awaitChannels.remove(channel);
+                });
+
         Nettys.applyHandler(channel.pipeline(), HttpHandlers.ON_CHANNEL_READ,
             new Action0() {
                 @Override
                 public void call() {
+                    if (terminateRef.get() != null) {
+                        terminateRef.get().call();
+                    }
                     awaitChannels.remove(channel);
                     if (!subscriber.isUnsubscribed()) {
                         final HttpTrade trade = httpTradeOf(channel,

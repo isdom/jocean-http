@@ -226,13 +226,12 @@ public class Nettys {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T extends ChannelHandler,H extends Enum<H>> T applyToChannel(
+    public static <T extends ChannelHandler> T applyToChannel(
             final Action1<Action0> onTerminate,
             final Channel channel,
             final HandlerPrototype prototype,
             final Object... args) {
-        final ChannelHandler handler =
-            Nettys.applyHandler(channel.pipeline(), prototype, args);
+        final ChannelHandler handler = Nettys.applyHandler(channel.pipeline(), prototype, args);
 
         if (null!=onTerminate) {
             onTerminate.call(Nettys.actionToRemoveHandler(channel, handler));
