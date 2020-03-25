@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
 import org.jocean.http.server.HttpServerBuilder;
+import org.jocean.http.server.mbean.HttpServerInstanceMXBean;
 import org.jocean.http.server.mbean.HttpServerMXBean;
 import org.jocean.http.util.Feature2Handler;
 import org.jocean.http.util.HttpHandlers;
@@ -71,7 +72,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
 
     @Override
     public void setMBeanRegister(final MBeanRegister register) {
-        register.registerMBean(this._mbeanSuffix, new HttpServerMXBean() {
+        this._register = register;
+        this._register.registerMBean(this._mbeanSuffix, new HttpServerMXBean() {
 
             @Override
             public int getAcceptThreadCount() {
@@ -241,6 +243,13 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                     } catch (final Exception e) {
                         subscriber.onError(e);
                     }
+
+                    _register.registerMBean("name=" + localAddress.toString(), new HttpServerInstanceMXBean() {
+                        @Override
+                        public int getAwaitChannelCount() {
+                            return awaitChannels.size();
+                        }
+                    });
                 }
             }})
             ;
@@ -417,6 +426,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
 
     private final BootstrapCreator _creator;
     private final Feature[] _defaultFeatures;
+    private MBeanRegister _register;
 
     private int _inboundRecvBufSize = -1;
     private String _mbeanSuffix;
