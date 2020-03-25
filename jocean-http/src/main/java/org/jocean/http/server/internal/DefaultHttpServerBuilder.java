@@ -245,7 +245,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                     }
 
                     try {
-                        _register.registerMBean("name=" + localAddress.toString(), new HttpServerInstanceMXBean() {
+                        _register.registerMBean("instanceIdx=" + _instanceCount.getAndIncrement(), new HttpServerInstanceMXBean() {
                             @Override
                             public int getAwaitChannelCount() {
                                 return awaitChannels.size();
@@ -260,6 +260,8 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             }})
             ;
     }
+
+    private final AtomicInteger _instanceCount = new AtomicInteger(0);
 
     private void awaitInboundRequest(
             final Channel channel,
