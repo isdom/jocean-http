@@ -17,11 +17,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jocean.http.Feature;
 import org.jocean.http.Feature.FeatureOverChannelHandler;
 import org.jocean.http.server.HttpServerBuilder;
-import org.jocean.http.server.mbean.HttpServerInstanceMXBean;
 import org.jocean.http.server.mbean.HttpServerMXBean;
 import org.jocean.http.util.Feature2Handler;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
+import org.jocean.http.util.Nettys.AwaitChannelsAware;
 import org.jocean.http.util.Nettys.ServerChannelAware;
 import org.jocean.http.util.RxNettys;
 import org.jocean.idiom.ExceptionUtils;
@@ -239,29 +239,19 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                             if (null != serverChannelAware) {
                                 serverChannelAware.setServerChannel((ServerChannel)future.channel());
                             }
+                            final AwaitChannelsAware awaitChannelsAware = awaitChannelsAwareOf(features);
+                            if (null != awaitChannelsAware) {
+                                awaitChannelsAware.setAwaitChannels(awaitChannels);
+                            }
+
                         }
                     } catch (final Exception e) {
                         subscriber.onError(e);
-                    }
-
-                    try {
-                        _register.registerMBean("instanceIdx=" + _instanceCount.getAndIncrement(), new HttpServerInstanceMXBean() {
-                            @Override
-                            public int getAwaitChannelCount() {
-                                return awaitChannels.size();
-                            }
-                        });
-                    }
-                    catch (final Exception e) {
-                        LOG.warn("exception when register HttpServerInstance({}) MBean, detail: {}",
-                                localAddress, ExceptionUtils.exception2detail(e));
                     }
                 }
             }})
             ;
     }
-
-    private final AtomicInteger _instanceCount = new AtomicInteger(0);
 
     private void awaitInboundRequest(
             final Channel channel,
@@ -424,12 +414,12 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
         return null != featuresBuilder ? featuresBuilder.call() : null;
     }
 
-    private static ServerChannelAware serverChannelAwareOf(
-            final Feature[] applyFeatures) {
-        final ServerChannelAware serverChannelAware =
-                InterfaceUtils.compositeIncludeType(ServerChannelAware.class,
-                    (Object[])applyFeatures);
-        return serverChannelAware;
+    private static ServerChannelAware serverChannelAwareOf(final Feature[] applyFeatures) {
+        return InterfaceUtils.compositeIncludeType(ServerChannelAware.class, (Object[])applyFeatures);
+    }
+
+    private static AwaitChannelsAware awaitChannelsAwareOf(final Feature[] applyFeatures) {
+        return InterfaceUtils.compositeIncludeType(AwaitChannelsAware.class, (Object[])applyFeatures);
     }
 
     private final BootstrapCreator _creator;

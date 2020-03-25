@@ -69,6 +69,10 @@ public class Nettys {
         public void setServerChannel(final ServerChannel serverChannel);
     }
 
+    public interface AwaitChannelsAware {
+        public void setAwaitChannels(final List<Channel> awaitChannels);
+    }
+
     public static ChannelPool unpoolChannels() {
         return new AbstractChannelPool() {
             @Override
