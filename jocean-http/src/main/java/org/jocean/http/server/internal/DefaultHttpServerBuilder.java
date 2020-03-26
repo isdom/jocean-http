@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -46,6 +47,7 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
+import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
@@ -259,6 +261,12 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             final List<Channel> awaitChannels) {
         awaitChannels.add(channel);
 
+        final Subscription timout4channel = Observable.timer(30, TimeUnit.SECONDS).subscribe( any -> {
+            awaitChannels.remove(channel);
+            channel.close();
+            LOG.info("Channel({}) no any inbound for 30s, remove from awaitChannels and close it.", channel);
+        });
+
         // TBD: workround to remove channel from awaitChannels when channel inactive
         //      and when channel receive normal traffic then disable this action, bcs trade will deal with inactive state
         final AtomicReference<Action0> terminateRef = new AtomicReference<>();
@@ -266,6 +274,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                 channel,
                 HttpHandlers.ON_CHANNEL_INACTIVE,
                 (Action0)() -> {
+                    timout4channel.unsubscribe();
                     LOG.info("Channel({}) inactived, remove from awaitChannels.", channel);
                     awaitChannels.remove(channel);
                 });
@@ -274,6 +283,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             new Action0() {
                 @Override
                 public void call() {
+                    timout4channel.unsubscribe();
                     if (terminateRef.get() != null) {
                         terminateRef.get().call();
                     }
