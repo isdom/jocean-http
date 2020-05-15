@@ -37,6 +37,7 @@ import org.jocean.http.MessageBody;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.rpc.annotation.ConstParams;
+import org.jocean.rpc.annotation.OnResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,6 +45,7 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import rx.Observable;
 import rx.Observable.Transformer;
+import rx.functions.Action1;
 import rx.functions.Func1;
 
 /**
@@ -239,7 +241,13 @@ public class RpcDelegater {
                     if (responseType instanceof Class) {
                         //  Transformer<Interact, R>
                         LOG.debug("{}.{}.{}'s response as {}", api.getSimpleName(), builder.getSimpleName(), callMethod.getName(), responseType);
-                        return interact.responseAs(getContentDecoder(callMethod), (Class<?>)responseType);
+                        Action1<Object> onresp = null;
+                        final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
+                        if (null != onResponse) {
+                            onresp = onNextOf(onResponse.value(), (Class<?>)responseType);
+                        }
+                        final Observable<? extends Object> getresponse = interact.responseAs(getContentDecoder(callMethod), (Class<?>)responseType);
+                        return null != onresp ? getresponse.doOnNext(onresp) : getresponse;
                     } else if (responseType instanceof ParameterizedType) {
                         if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
                             //  Transformer<Interact, FullMessage<MSG>>
@@ -250,6 +258,24 @@ public class RpcDelegater {
                     LOG.error("unsupport {}.{}.{}'s return type: {}", api.getSimpleName(), builder.getSimpleName(), callMethod.getName(), responseType);
                     return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
+    }
+
+    private static Action1<Object> onNextOf(final String[] vars, final Class<?> type) {
+        final AtomicReference<Action1<Object>> onNextRef = new AtomicReference<>(null);
+        for (final String var : vars) {
+            final Action1<Object> suff = ReflectUtils.getStaticFieldValue(var);
+            LOG.debug("get Action1<Object> {} by {}", suff, var);
+            if (null != onNextRef.get()) {
+                final Action1<Object> prev = (Action1<Object>) onNextRef.get();
+                onNextRef.set(obj -> {
+                    prev.call(obj);
+                    suff.call(obj);
+                });
+            } else {
+                onNextRef.set(suff);
+            }
+        }
+        return onNextRef.get();
     }
 
     private static ContentDecoder getContentDecoder(final Method method) {
