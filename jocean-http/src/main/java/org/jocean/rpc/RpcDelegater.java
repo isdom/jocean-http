@@ -252,7 +252,13 @@ public class RpcDelegater {
                         if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
                             //  Transformer<Interact, FullMessage<MSG>>
                             LOG.debug("{}.{}.{}'s response as FullMessage", api.getSimpleName(), builder.getSimpleName(), callMethod.getName());
-                            return interact.response();
+                            Action1<Object> onresp = null;
+                            final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
+                            if (null != onResponse) {
+                                onresp = onNextOf(onResponse.value(), (Class<?>)responseType);
+                            }
+                            final Observable<? extends Object> getresponse = interact.response();
+                            return null != onresp ? getresponse.doOnNext(onresp) : getresponse;
                         }
                     }
                     LOG.error("unsupport {}.{}.{}'s return type: {}", api.getSimpleName(), builder.getSimpleName(), callMethod.getName(), responseType);
