@@ -34,6 +34,7 @@ import org.jocean.http.ContentUtil;
 import org.jocean.http.FullMessage;
 import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
+import org.jocean.idiom.Haltable;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.rpc.annotation.ConstParams;
@@ -46,7 +47,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import rx.Observable;
 import rx.Observable.Transformer;
 import rx.functions.Action1;
-import rx.functions.Func1;
+import rx.functions.Func2;
 
 /**
  * @author isdom
@@ -89,7 +90,7 @@ public class RpcDelegater {
             final Class<?> apiType,
             final Method   apiMethod,
             final Class<?> builderType,
-            final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
+            final Func2<Haltable, Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
         final Map<String, Object> queryParams = new HashMap<>();
         final Map<String, Object> pathParams = new HashMap<>();
         final Map<String, Object> headerParams = new HashMap<>();
@@ -145,7 +146,7 @@ public class RpcDelegater {
                     if (isObservableAny(method.getGenericReturnType())) {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
-                        return invoker.call(interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
+                        return invoker.call(null, interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
                     }
                     else if (isInteract2Any(method.getGenericReturnType())) {
                         // Transformer<Interact, XXX> call()
