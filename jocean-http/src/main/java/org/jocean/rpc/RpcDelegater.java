@@ -96,6 +96,7 @@ public class RpcDelegater {
         final Map<String, Object> headerParams = new HashMap<>();
         final AtomicReference<Observable<? extends MessageBody>> getbodyRef = new AtomicReference<>(null);
         final AtomicReference<Pair<Object, ContentEncoder>> contentRef = new AtomicReference<>(null);
+        final AtomicReference<Haltable> haltableRef = new AtomicReference<>(null);
 
         return new InvocationHandler() {
             @Override
@@ -120,7 +121,9 @@ public class RpcDelegater {
                     } else {
                         final Class<?> arg1stType = method.getParameterTypes()[0];
 
-                        if (MessageBody.class.isAssignableFrom(arg1stType)) {
+                        if (Haltable.class.isAssignableFrom(arg1stType)) {
+                            haltableRef.set((Haltable)args[0]);
+                        } else if (MessageBody.class.isAssignableFrom(arg1stType)) {
                             // means: API body(final MessageBody body); not care method name
                             getbodyRef.set(Observable.just((MessageBody)args[0]));
                         } else if (arg1stType.equals(Observable.class)) {
@@ -133,8 +136,8 @@ public class RpcDelegater {
                                     getbodyRef.set((Observable<? extends MessageBody>)args[0]);
                                 }
                                 // TODO
-//                                        else if (actualGenericType instanceof WildcardType) {
-//                                        }
+//                                else if (arg1stGenericType instanceof WildcardType) {
+//                                }
                             }
                         }
                     }
@@ -146,7 +149,7 @@ public class RpcDelegater {
                     if (isObservableAny(method.getGenericReturnType())) {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
-                        return invoker.call(null, interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
+                        return invoker.call(haltableRef.get(), interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
                     }
                     else if (isInteract2Any(method.getGenericReturnType())) {
                         // Transformer<Interact, XXX> call()
