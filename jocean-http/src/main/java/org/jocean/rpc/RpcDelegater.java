@@ -170,7 +170,7 @@ public class RpcDelegater {
 
     private static void dumpStace(final Class<?> apiType, final Method apiMethod, final StackTraceElement[] stms) {
         for (int i=0; i < stms.length; i++) {
-            LOG.debug("{}.{} CallStack: [{}]: {}.{}({}:{})", apiType.getSimpleName(), apiMethod.getName(), i,
+            LOG.debug("{}.{} CallStack: [{}]: {}'s {}({}:{})", apiType.getSimpleName(), apiMethod.getName(), i,
                     stms[i].getClassName(), stms[i].getMethodName(), stms[i].getFileName(), stms[i].getLineNumber());
         }
     }
