@@ -149,6 +149,9 @@ public class RpcDelegater {
                     if (isObservableAny(method.getGenericReturnType())) {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
+
+                        dumpStace(apiType, apiMethod, Thread.currentThread().getStackTrace());
+
                         return invoker.call(haltableRef.get(), interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
                     }
                     else if (isInteract2Any(method.getGenericReturnType())) {
@@ -163,6 +166,13 @@ public class RpcDelegater {
                 return null;
             }
         };
+    }
+
+    private static void dumpStace(final Class<?> apiType, final Method apiMethod, final StackTraceElement[] stms) {
+        for (int i=0; i < stms.length; i++) {
+            LOG.debug("{}.{} CallStack: [{}]: {}.{}({}:{})", apiType.getSimpleName(), apiMethod.getName(), i,
+                    stms[i].getClassName(), stms[i].getMethodName(), stms[i].getFileName(), stms[i].getLineNumber());
+        }
     }
 
     public static boolean isObservableAny(final Type genericType) {
