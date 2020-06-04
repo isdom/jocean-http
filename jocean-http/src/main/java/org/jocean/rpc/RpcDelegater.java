@@ -150,7 +150,7 @@ public class RpcDelegater {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
 
-                        dumpStace(apiType, apiMethod, Thread.currentThread().getStackTrace());
+                        dumpCallStace(apiType, apiMethod, Thread.currentThread().getStackTrace());
 
                         return invoker.call(haltableRef.get(), interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
                     }
@@ -168,10 +168,15 @@ public class RpcDelegater {
         };
     }
 
-    private static void dumpStace(final Class<?> apiType, final Method apiMethod, final StackTraceElement[] stms) {
+    private static void dumpCallStace(final Class<?> apiType, final Method apiMethod, final StackTraceElement[] stms) {
         for (int i=0; i < stms.length; i++) {
+            String rawMethodName = stms[i].getMethodName().replaceAll("lambda$", "");
+            final int p = rawMethodName.indexOf('$');
+            if (p > 0) {
+                rawMethodName = rawMethodName.substring(0, p);
+            }
             LOG.debug("{}.{} CallStack: [{}]: {}'s {}({}:{})", apiType.getSimpleName(), apiMethod.getName(), i,
-                    stms[i].getClassName(), stms[i].getMethodName(), stms[i].getFileName(), stms[i].getLineNumber());
+                    stms[i].getClassName(), rawMethodName, stms[i].getFileName(), stms[i].getLineNumber());
         }
     }
 
