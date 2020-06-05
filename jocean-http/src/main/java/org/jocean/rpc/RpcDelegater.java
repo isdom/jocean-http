@@ -170,10 +170,14 @@ public class RpcDelegater {
 
     private static void dumpCallStace(final Class<?> apiType, final Method apiMethod, final StackTraceElement[] stms) {
         for (int i=0; i < stms.length; i++) {
-            String rawMethodName = stms[i].getMethodName().replaceAll("lambda$", "");
-            final int p = rawMethodName.indexOf('$');
-            if (p > 0) {
-                rawMethodName = rawMethodName.substring(0, p);
+            String rawMethodName = stms[i].getMethodName();
+            final int lambdaIdx = rawMethodName.indexOf("lambda$");
+            if (lambdaIdx >= 0) {
+                rawMethodName = rawMethodName.substring(7);
+            }
+            final int suffixIdx = rawMethodName.indexOf('$');
+            if (suffixIdx > 0) {
+                rawMethodName = rawMethodName.substring(0, suffixIdx);
             }
             LOG.debug("{}.{} CallStack: [{}]: {}'s {}({}:{})", apiType.getSimpleName(), apiMethod.getName(), i,
                     stms[i].getClassName(), rawMethodName, stms[i].getFileName(), stms[i].getLineNumber());
