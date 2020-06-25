@@ -34,11 +34,13 @@ import org.jocean.http.ContentUtil;
 import org.jocean.http.FullMessage;
 import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Haltable;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.rpc.annotation.ConstParams;
 import org.jocean.rpc.annotation.OnResponse;
+import org.jocean.rpc.annotation.RpcScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,7 +98,7 @@ public class RpcDelegater {
         final Map<String, Object> headerParams = new HashMap<>();
         final AtomicReference<Observable<? extends MessageBody>> getbodyRef = new AtomicReference<>(null);
         final AtomicReference<Pair<Object, ContentEncoder>> contentRef = new AtomicReference<>(null);
-        final AtomicReference<Haltable> haltableRef = new AtomicReference<>(null);
+//        final AtomicReference<Haltable> haltableRef = new AtomicReference<>(null);
 
         return new InvocationHandler() {
             @Override
@@ -121,9 +123,10 @@ public class RpcDelegater {
                     } else {
                         final Class<?> arg1stType = method.getParameterTypes()[0];
 
-                        if (Haltable.class.isAssignableFrom(arg1stType)) {
-                            haltableRef.set((Haltable)args[0]);
-                        } else if (MessageBody.class.isAssignableFrom(arg1stType)) {
+//                        if (Haltable.class.isAssignableFrom(arg1stType)) {
+//                            haltableRef.set((Haltable)args[0]);
+//                        } else
+                        if (MessageBody.class.isAssignableFrom(arg1stType)) {
                             // means: API body(final MessageBody body); not care method name
                             getbodyRef.set(Observable.just((MessageBody)args[0]));
                         } else if (arg1stType.equals(Observable.class)) {
@@ -150,9 +153,9 @@ public class RpcDelegater {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
 
-                        dumpCallStace(apiType, apiMethod, Thread.currentThread().getStackTrace());
+                        final Haltable haltable = searchHaltable(apiType, apiMethod, Thread.currentThread().getStackTrace());
 
-                        return invoker.call(haltableRef.get(), interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
+                        return invoker.call(haltable, interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
                     }
                     else if (isInteract2Any(method.getGenericReturnType())) {
                         // Transformer<Interact, XXX> call()
@@ -168,7 +171,7 @@ public class RpcDelegater {
         };
     }
 
-    private static void dumpCallStace(final Class<?> apiType, final Method apiMethod, final StackTraceElement[] stms) {
+    private static Haltable searchHaltable(final Class<?> apiType, final Method apiMethod, final StackTraceElement[] stms) {
         for (int i=0; i < stms.length; i++) {
             String rawMethodName = stms[i].getMethodName();
             final int lambdaIdx = rawMethodName.indexOf("lambda$");
@@ -179,9 +182,29 @@ public class RpcDelegater {
             if (suffixIdx > 0) {
                 rawMethodName = rawMethodName.substring(0, suffixIdx);
             }
+            final String className = stms[i].getClassName();
+            try {
+                final Method method = ReflectUtils.getMethodNamed( Class.forName(className), rawMethodName);
+                if (null != method) {
+                    LOG.debug("found method for {}.{}: {}", className, rawMethodName, method);
+                    final RpcScope rpcScope = method.getAnnotation(RpcScope.class);
+                    if (rpcScope != null) {
+                        LOG.debug("found RpcScope for {},it's value is {}", method, rpcScope.value());
+                        final Haltable haltable = ReflectUtils.getStaticFieldValue(rpcScope.value());
+                        if (null != haltable) {
+                            LOG.debug("found Haltable for {}: {}", method, haltable);
+                            return haltable;
+                        }
+                    }
+                }
+            } catch (final Exception e) {
+                LOG.warn("exception when get check RpcScope for {}.{}, detail: {}", className, rawMethodName,
+                        ExceptionUtils.exception2detail(e));
+            }
             LOG.debug("{}.{} CallStack: [{}]: {}'s {}({}:{})", apiType.getSimpleName(), apiMethod.getName(), i,
-                    stms[i].getClassName(), rawMethodName, stms[i].getFileName(), stms[i].getLineNumber());
+                    className, rawMethodName, stms[i].getFileName(), stms[i].getLineNumber());
         }
+        return null;
     }
 
     public static boolean isObservableAny(final Type genericType) {
