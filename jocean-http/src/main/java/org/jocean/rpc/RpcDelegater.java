@@ -183,6 +183,9 @@ public class RpcDelegater {
                 rawMethodName = rawMethodName.substring(0, suffixIdx);
             }
             final String className = stms[i].getClassName();
+            if (className.startsWith("sun.")) {
+                continue;
+            }
             try {
                 final Method method = ReflectUtils.getMethodNamed( Class.forName(className), rawMethodName);
                 if (null != method) {
