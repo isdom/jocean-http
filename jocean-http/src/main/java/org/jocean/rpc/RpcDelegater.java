@@ -36,6 +36,7 @@ import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Haltable;
+import org.jocean.idiom.HaltableFactory;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.rpc.annotation.ConstParams;
@@ -193,10 +194,19 @@ public class RpcDelegater {
                     final RpcScope rpcScope = method.getAnnotation(RpcScope.class);
                     if (rpcScope != null) {
                         LOG.debug("found RpcScope for {},it's value is {}", method, rpcScope.value());
-                        final Haltable haltable = ReflectUtils.getStaticFieldValue(rpcScope.value());
-                        if (null != haltable) {
-                            LOG.debug("found Haltable for {}: {}", method, haltable);
-                            return haltable;
+                        final Object haltableOrFactory = ReflectUtils.getStaticFieldValue(rpcScope.value());
+                        if (null != haltableOrFactory) {
+                            if (haltableOrFactory instanceof Haltable) {
+                                final Haltable haltable = (Haltable)haltableOrFactory;
+                                LOG.debug("found Haltable for {}: {}", method, haltable);
+                                return haltable;
+                            } else if (haltableOrFactory instanceof HaltableFactory) {
+                                final Haltable haltable = ((HaltableFactory)haltableOrFactory).build();
+                                LOG.debug("found Haltable for {}: {}", method, haltable);
+                                return haltable;
+                            } else {
+                                LOG.warn("unknow RpcScope object {}, ignore", haltableOrFactory);
+                            }
                         }
                     }
                 }
