@@ -36,7 +36,8 @@ import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Haltable;
-import org.jocean.idiom.HaltableFactory;
+import org.jocean.idiom.HaltableBuilder;
+import org.jocean.idiom.HaltableRelyBuilder;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.rpc.annotation.ConstParams;
@@ -194,18 +195,22 @@ public class RpcDelegater {
                     final RpcScope rpcScope = method.getAnnotation(RpcScope.class);
                     if (rpcScope != null) {
                         LOG.debug("found RpcScope for {},it's value is {}", method, rpcScope.value());
-                        final Object haltableOrFactory = ReflectUtils.getStaticFieldValue(rpcScope.value());
-                        if (null != haltableOrFactory) {
-                            if (haltableOrFactory instanceof Haltable) {
-                                final Haltable haltable = (Haltable)haltableOrFactory;
+                        final Object haltableOrBuilder = ReflectUtils.getStaticFieldValue(rpcScope.value());
+                        if (null != haltableOrBuilder) {
+                            if (haltableOrBuilder instanceof Haltable) {
+                                final Haltable haltable = (Haltable)haltableOrBuilder;
                                 LOG.debug("found Haltable for {}: {}", method, haltable);
                                 return haltable;
-                            } else if (haltableOrFactory instanceof HaltableFactory) {
-                                final Haltable haltable = ((HaltableFactory)haltableOrFactory).build();
+                            } else if (haltableOrBuilder instanceof HaltableBuilder) {
+                                final Haltable haltable = ((HaltableBuilder)haltableOrBuilder).build();
+                                LOG.debug("found Haltable for {}: {}", method, haltable);
+                                return haltable;
+                            } else if (haltableOrBuilder instanceof HaltableRelyBuilder) {
+                                final Haltable haltable = ((HaltableRelyBuilder)haltableOrBuilder).build(null);
                                 LOG.debug("found Haltable for {}: {}", method, haltable);
                                 return haltable;
                             } else {
-                                LOG.warn("unknow RpcScope object {}, ignore", haltableOrFactory);
+                                LOG.warn("unknow RpcScope object {}, ignore", haltableOrBuilder);
                             }
                         }
                     }
