@@ -87,13 +87,14 @@ public class RpcDelegater {
             final Method    apiMethod,
             final Class<T>  builderType) {
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
-                invocationHandler(apiType, apiMethod, builderType, null));
+                invocationHandler(apiType, apiMethod, builderType, null, null));
     }
 
     public static InvocationHandler invocationHandler(
             final Class<?> apiType,
             final Method   apiMethod,
             final Class<?> builderType,
+            final Haltable  orgHaltable,
             final Func2<Haltable, Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
         final Map<String, Object> queryParams = new HashMap<>();
         final Map<String, Object> pathParams = new HashMap<>();
@@ -155,9 +156,9 @@ public class RpcDelegater {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
 
-                        final Haltable haltable = searchHaltable(apiType, apiMethod, Thread.currentThread().getStackTrace());
+                        final Haltable newHaltable = searchHaltable(apiType, apiMethod, orgHaltable, Thread.currentThread().getStackTrace());
 
-                        return invoker.call(haltable, interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
+                        return invoker.call(newHaltable, interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
                     }
                     else if (isInteract2Any(method.getGenericReturnType())) {
                         // Transformer<Interact, XXX> call()
@@ -173,7 +174,10 @@ public class RpcDelegater {
         };
     }
 
-    private static Haltable searchHaltable(final Class<?> apiType, final Method apiMethod, final StackTraceElement[] stms) {
+    private static Haltable searchHaltable(final Class<?> apiType,
+            final Method apiMethod,
+            final Haltable orgHaltable,
+            final StackTraceElement[] stms) {
         for (int i=0; i < stms.length; i++) {
             String rawMethodName = stms[i].getMethodName();
             final int lambdaIdx = rawMethodName.indexOf("lambda$");
@@ -206,7 +210,7 @@ public class RpcDelegater {
                                 LOG.debug("found Haltable for {}: {}", method, haltable);
                                 return haltable;
                             } else if (haltableOrBuilder instanceof HaltableRelyBuilder) {
-                                final Haltable haltable = ((HaltableRelyBuilder)haltableOrBuilder).build(null);
+                                final Haltable haltable = ((HaltableRelyBuilder)haltableOrBuilder).build(orgHaltable);
                                 LOG.debug("found Haltable for {}: {}", method, haltable);
                                 return haltable;
                             } else {
