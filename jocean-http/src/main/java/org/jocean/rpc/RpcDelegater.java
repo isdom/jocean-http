@@ -101,7 +101,6 @@ public class RpcDelegater {
         final Map<String, Object> headerParams = new HashMap<>();
         final AtomicReference<Observable<? extends MessageBody>> getbodyRef = new AtomicReference<>(null);
         final AtomicReference<Pair<Object, ContentEncoder>> contentRef = new AtomicReference<>(null);
-//        final AtomicReference<Haltable> haltableRef = new AtomicReference<>(null);
 
         return new InvocationHandler() {
             @Override
@@ -126,9 +125,6 @@ public class RpcDelegater {
                     } else {
                         final Class<?> arg1stType = method.getParameterTypes()[0];
 
-//                        if (Haltable.class.isAssignableFrom(arg1stType)) {
-//                            haltableRef.set((Haltable)args[0]);
-//                        } else
                         if (MessageBody.class.isAssignableFrom(arg1stType)) {
                             // means: API body(final MessageBody body); not care method name
                             getbodyRef.set(Observable.just((MessageBody)args[0]));
