@@ -51,7 +51,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import rx.Observable;
 import rx.Observable.Transformer;
 import rx.functions.Action1;
-import rx.functions.Func2;
+import rx.functions.Func1;
 
 /**
  * @author isdom
@@ -87,15 +87,14 @@ public class RpcDelegater {
             final Method    apiMethod,
             final Class<T>  builderType) {
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
-                invocationHandler(apiType, apiMethod, builderType, null, null));
+                invocationHandler(apiType, apiMethod, builderType, null));
     }
 
     public static InvocationHandler invocationHandler(
             final Class<?> apiType,
             final Method   apiMethod,
             final Class<?> builderType,
-            final Haltable  orgHaltable,
-            final Func2<Haltable, Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
+            final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
         final Map<String, Object> queryParams = new HashMap<>();
         final Map<String, Object> pathParams = new HashMap<>();
         final Map<String, Object> headerParams = new HashMap<>();
@@ -152,9 +151,7 @@ public class RpcDelegater {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
 
-                        final Haltable newHaltable = searchHaltable(apiType, apiMethod, orgHaltable, Thread.currentThread().getStackTrace());
-
-                        return invoker.call(newHaltable, interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
+                        return invoker.call(interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
                     }
                     else if (isInteract2Any(method.getGenericReturnType())) {
                         // Transformer<Interact, XXX> call()
