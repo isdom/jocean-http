@@ -10,6 +10,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -40,6 +41,9 @@ import org.jocean.rpc.annotation.ConstParams;
 import org.jocean.rpc.annotation.OnResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.annotation.JSONField;
 
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
@@ -93,6 +97,7 @@ public class RpcDelegater {
         final Map<String, Object> queryParams = new HashMap<>();
         final Map<String, Object> pathParams = new HashMap<>();
         final Map<String, Object> headerParams = new HashMap<>();
+        final JSONObject jsonFields = new JSONObject();
         final AtomicReference<Observable<? extends MessageBody>> getbodyRef = new AtomicReference<>(null);
         final AtomicReference<Pair<Object, ContentEncoder>> contentRef = new AtomicReference<>(null);
 
@@ -102,6 +107,7 @@ public class RpcDelegater {
                     throws Throwable {
                 if (null != args && args.length == 1) {
                     final QueryParam queryParam = method.getAnnotation(QueryParam.class);
+                    final JSONField jsonField = method.getAnnotation(JSONField.class);
                     final PathParam pathParam = method.getAnnotation(PathParam.class);
                     final HeaderParam headerParam = method.getAnnotation(HeaderParam.class);
                     final Produces produces = method.getAnnotation(Produces.class);
@@ -111,6 +117,8 @@ public class RpcDelegater {
                         pathParams.put(pathParam.value(), args[0]);
                     } else if (null != headerParam) {
                         headerParams.put(headerParam.value(), args[0]);
+                    } else if (null != jsonField && !jsonField.name().isEmpty()) {
+                        jsonFields.put(jsonField.name(), args[0]);
                     } else if (null != produces) {
                         final ContentEncoder bodyEncoder = ContentUtil.selectCodec(produces.value(), MIME_ENCODERS);
                         if (null != bodyEncoder) {
@@ -142,6 +150,10 @@ public class RpcDelegater {
                     addConstParams(apiType, queryParams);
                     addConstParams(method, queryParams);
 
+                    if (!jsonFields.isEmpty()) {
+                        LOG.debug("generate JSON Object for fields: {}", Arrays.toString(jsonFields.keySet().toArray(new String[0])));
+                        contentRef.set(Pair.of(jsonFields, ContentUtil.TOJSON));
+                    }
                     if (isObservableAny(method.getGenericReturnType())) {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
