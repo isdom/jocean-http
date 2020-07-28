@@ -152,6 +152,10 @@ public class RpcDelegater {
 
                     if (!jsonFields.isEmpty()) {
                         LOG.debug("generate JSON Object for fields: {}", Arrays.toString(jsonFields.keySet().toArray(new String[0])));
+                        if (contentRef.get() != null) {
+                            LOG.warn("body assign {} will be override by JSONFields {}", contentRef.get().getFirst(),
+                                    Arrays.toString(jsonFields.keySet().toArray(new String[0])));
+                        }
                         contentRef.set(Pair.of(jsonFields, ContentUtil.TOJSON));
                     }
                     if (isObservableAny(method.getGenericReturnType())) {
