@@ -65,6 +65,7 @@ public class RpcDelegater {
     static final ContentDecoder[] MIME_DECODERS = new ContentDecoder[]{ContentUtil.ASJSON, ContentUtil.ASXML, ContentUtil.ASTEXT};
 
     @SuppressWarnings("unchecked")
+    @Deprecated
     public static <RPC> RPC build(final Class<RPC> rpcType) {
         return (RPC) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { rpcType },
                 new InvocationHandler() {
@@ -81,6 +82,7 @@ public class RpcDelegater {
     }
 
     @SuppressWarnings("unchecked")
+    @Deprecated
     public static <T, R> T delegate(
             final Class<?>  apiType,
             final Method    apiMethod,
