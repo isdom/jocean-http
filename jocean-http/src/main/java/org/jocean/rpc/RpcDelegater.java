@@ -206,9 +206,6 @@ public class RpcDelegater {
 
     private static Transformer<Interact, ? extends Object> interact2obj(
             final InvocationContext ictx,
-//            final Class<?> api,
-//            final Method apiMethod,
-//            final Class<?> builder,
             final Method callMethod,
             final Type responseType
             ) {
