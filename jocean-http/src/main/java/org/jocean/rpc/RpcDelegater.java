@@ -91,47 +91,54 @@ public class RpcDelegater {
                 invocationHandler(apiType, apiMethod, builderType, null));
     }
 
+    static public class InvocationContext {
+        final Map<String, Object> queryParams = new HashMap<>();
+        final Map<String, Object> pathParams = new HashMap<>();
+        final Map<String, Object> headerParams = new HashMap<>();
+        final JSONObject jsonFields = new JSONObject();
+        Observable<? extends MessageBody> body = null;
+        Pair<Object, ContentEncoder> content = null;
+    }
+
     public static InvocationHandler invocationHandler(
             final Class<?> apiType,
             final Method   apiMethod,
             final Class<?> builderType,
             final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
-        final Map<String, Object> queryParams = new HashMap<>();
-        final Map<String, Object> pathParams = new HashMap<>();
-        final Map<String, Object> headerParams = new HashMap<>();
-        final JSONObject jsonFields = new JSONObject();
-        final AtomicReference<Observable<? extends MessageBody>> getbodyRef = new AtomicReference<>(null);
-        final AtomicReference<Pair<Object, ContentEncoder>> contentRef = new AtomicReference<>(null);
+        final InvocationContext ictx = new InvocationContext();
 
         return new InvocationHandler() {
             @Override
             public Object invoke(final Object proxy, final Method method, final Object[] args)
                     throws Throwable {
-                if (null != args && args.length == 1) {
+                if (null != args && args.length == 1
+                        && Object.class.isAssignableFrom(method.getReturnType())) {
+                    // return ? extends Object with one param
+                    //  XXXBuilder item1(final String value)
                     final QueryParam queryParam = method.getAnnotation(QueryParam.class);
                     final JSONField jsonField = method.getAnnotation(JSONField.class);
                     final PathParam pathParam = method.getAnnotation(PathParam.class);
                     final HeaderParam headerParam = method.getAnnotation(HeaderParam.class);
                     final Produces produces = method.getAnnotation(Produces.class);
                     if (null != queryParam) {
-                        queryParams.put(queryParam.value(), args[0]);
+                        ictx.queryParams.put(queryParam.value(), args[0]);
                     } else if (null != pathParam) {
-                        pathParams.put(pathParam.value(), args[0]);
+                        ictx.pathParams.put(pathParam.value(), args[0]);
                     } else if (null != headerParam) {
-                        headerParams.put(headerParam.value(), args[0]);
+                        ictx.headerParams.put(headerParam.value(), args[0]);
                     } else if (null != jsonField && !jsonField.name().isEmpty()) {
-                        jsonFields.put(jsonField.name(), args[0]);
+                        ictx.jsonFields.put(jsonField.name(), args[0]);
                     } else if (null != produces) {
                         final ContentEncoder bodyEncoder = ContentUtil.selectCodec(produces.value(), MIME_ENCODERS);
                         if (null != bodyEncoder) {
-                            contentRef.set(Pair.of(args[0], bodyEncoder));
+                            ictx.content = Pair.of(args[0], bodyEncoder);
                         }
                     } else {
                         final Class<?> arg1stType = method.getParameterTypes()[0];
 
                         if (MessageBody.class.isAssignableFrom(arg1stType)) {
                             // means: API body(final MessageBody body); not care method name
-                            getbodyRef.set(Observable.just((MessageBody)args[0]));
+                            ictx.body = Observable.just((MessageBody)args[0]);
                         } else if (arg1stType.equals(Observable.class)) {
                             final Type arg1stGenericType = method.getGenericParameterTypes()[0];
                             if ( arg1stGenericType instanceof ParameterizedType ) {
@@ -139,7 +146,7 @@ public class RpcDelegater {
                                 if (actualGenericType instanceof Class
                                     && MessageBody.class.isAssignableFrom((Class<?>)actualGenericType)) {
                                     // Observable<MessageBody> or Observable<XXXMessageBody>
-                                    getbodyRef.set((Observable<? extends MessageBody>)args[0]);
+                                    ictx.body = (Observable<? extends MessageBody>)args[0];
                                 }
                                 // TODO
 //                                else if (arg1stGenericType instanceof WildcardType) {
@@ -149,30 +156,30 @@ public class RpcDelegater {
                     }
                     return proxy;
                 } else if (null == args || args.length == 0) {
-                    addConstParams(apiType, queryParams);
-                    addConstParams(method, queryParams);
+                    addConstParams(apiType, ictx.queryParams);
+                    addConstParams(method, ictx.queryParams);
 
-                    if (!jsonFields.isEmpty()) {
-                        LOG.debug("generate JSON Object for fields: {}", Arrays.toString(jsonFields.keySet().toArray(new String[0])));
-                        if (contentRef.get() != null) {
-                            LOG.warn("body assign {} will be override by JSONFields {}", contentRef.get().getFirst(),
-                                    Arrays.toString(jsonFields.keySet().toArray(new String[0])));
+                    if (!ictx.jsonFields.isEmpty()) {
+                        LOG.debug("generate JSON Object for fields: {}", Arrays.toString(ictx.jsonFields.keySet().toArray(new String[0])));
+                        if (ictx.content != null) {
+                            LOG.warn("body assign {} will be override by JSONFields {}", ictx.content.getFirst(),
+                                    Arrays.toString(ictx.jsonFields.keySet().toArray(new String[0])));
                         }
-                        contentRef.set(Pair.of(jsonFields, ContentUtil.TOJSON));
+                        ictx.content = Pair.of(ictx.jsonFields, ContentUtil.TOJSON);
                     }
                     if (isObservableAny(method.getGenericReturnType())) {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
 
-                        return invoker.call(interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get()));
+                        return invoker.call(interact2obj(apiType, apiMethod, builderType, method, responseType, ictx));
                     }
                     else if (isInteract2Any(method.getGenericReturnType())) {
                         // Transformer<Interact, XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 1);
-                        return interact2obj(apiType, apiMethod, builderType, method, responseType, queryParams, pathParams, headerParams, getbodyRef.get(), contentRef.get());
+                        return interact2obj(apiType, apiMethod, builderType, method, responseType, ictx);
                     }
                     LOG.error("unsupport {}.{}.{}'s return type: {}", apiType.getSimpleName(), builderType.getSimpleName(),
-                            method.getName(), method.getGenericReturnType());
+                            method.getName(), method.getReturnType());
                 }
 
                 return null;
@@ -197,21 +204,18 @@ public class RpcDelegater {
             final Class<?> builder,
             final Method callMethod,
             final Type responseType,
-            final Map<String, Object> queryParams,
-            final Map<String, Object> pathParams,
-            final Map<String, Object> headerParams,
-            final Observable<? extends MessageBody> getbody,
-            final Pair<Object, ContentEncoder> getcontent) {
+            final InvocationContext ictx
+            ) {
         return interacts -> interacts.flatMap(interact -> {
-                    Interact newInteract = assignUriAndPath(apiMethod, pathParams, interact);
+                    Interact newInteract = assignUriAndPath(apiMethod, ictx.pathParams, interact);
                     if (null != newInteract) {
                         interact = newInteract;
                     } else {
-                        newInteract = assignUriAndPath(callMethod, pathParams, interact);
+                        newInteract = assignUriAndPath(callMethod, ictx.pathParams, interact);
                         if (null != newInteract) {
                             interact = newInteract;
                         } else {
-                            newInteract = assignUriAndPath(api, pathParams, interact);
+                            newInteract = assignUriAndPath(api, ictx.pathParams, interact);
                             if (null != newInteract) {
                                 interact = newInteract;
                             }
@@ -220,17 +224,17 @@ public class RpcDelegater {
 
                     interact = interact.method(getHttpMethod(callMethod));
 
-                    for (final Map.Entry<String, Object> entry : queryParams.entrySet()) {
+                    for (final Map.Entry<String, Object> entry : ictx.queryParams.entrySet()) {
                         if (entry.getKey() != null && entry.getValue() != null) {
                             interact = interact.paramAsQuery(entry.getKey(), entry.getValue().toString());
                         }
                     }
 
-                    if (!headerParams.isEmpty()) {
+                    if (!ictx.headerParams.isEmpty()) {
                         // set headers
                         interact = interact.onrequest(obj -> {
                             if (obj instanceof HttpRequest) {
-                                for (final Map.Entry<String, Object> entry : headerParams.entrySet()) {
+                                for (final Map.Entry<String, Object> entry : ictx.headerParams.entrySet()) {
                                     if (entry.getKey() != null && entry.getValue() != null) {
                                         ((HttpRequest)obj).headers().set(entry.getKey(), entry.getValue());
                                     }
@@ -239,10 +243,10 @@ public class RpcDelegater {
                         });
                     }
 
-                    if (null != getbody) {
-                        interact = interact.body(getbody);
-                    } else if ( null != getcontent) {
-                        interact = interact.body(getcontent.getFirst(), getcontent.getSecond());
+                    if (null != ictx.body) {
+                        interact = interact.body(ictx.body);
+                    } else if ( null != ictx.content) {
+                        interact = interact.body(ictx.content.getFirst(), ictx.content.getSecond());
                     }
 
                     /*
