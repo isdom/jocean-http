@@ -88,10 +88,20 @@ public class RpcDelegater {
             final Method    apiMethod,
             final Class<T>  builderType) {
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
-                invocationHandler(apiType, apiMethod, builderType, null));
+                invocationHandler(new InvocationContext(apiType, apiMethod, builderType), null));
     }
 
     static public class InvocationContext {
+        public InvocationContext(final Class<?> apiType, final Method apiMethod, final Class<?> builderType) {
+            this.apiType = apiType;
+            this.apiMethod = apiMethod;
+            this.builderType = builderType;
+        }
+
+        final Class<?> apiType;
+        final Method   apiMethod;
+        final Class<?> builderType;
+
         final Map<String, Object> queryParams = new HashMap<>();
         final Map<String, Object> pathParams = new HashMap<>();
         final Map<String, Object> headerParams = new HashMap<>();
@@ -101,12 +111,8 @@ public class RpcDelegater {
     }
 
     public static InvocationHandler invocationHandler(
-            final Class<?> apiType,
-            final Method   apiMethod,
-            final Class<?> builderType,
+            final InvocationContext ictx,
             final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
-        final InvocationContext ictx = new InvocationContext();
-
         return new InvocationHandler() {
             @Override
             public Object invoke(final Object proxy, final Method method, final Object[] args)
@@ -156,7 +162,7 @@ public class RpcDelegater {
                     }
                     return proxy;
                 } else if (null == args || args.length == 0) {
-                    addConstParams(apiType, ictx.queryParams);
+                    addConstParams(ictx.apiType, ictx.queryParams);
                     addConstParams(method, ictx.queryParams);
 
                     if (!ictx.jsonFields.isEmpty()) {
@@ -171,14 +177,14 @@ public class RpcDelegater {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
 
-                        return invoker.call(interact2obj(apiType, apiMethod, builderType, method, responseType, ictx));
+                        return invoker.call(interact2obj(ictx, method, responseType));
                     }
                     else if (isInteract2Any(method.getGenericReturnType())) {
                         // Transformer<Interact, XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 1);
-                        return interact2obj(apiType, apiMethod, builderType, method, responseType, ictx);
+                        return interact2obj(ictx, method, responseType);
                     }
-                    LOG.error("unsupport {}.{}.{}'s return type: {}", apiType.getSimpleName(), builderType.getSimpleName(),
+                    LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.apiType.getSimpleName(), ictx.builderType.getSimpleName(),
                             method.getName(), method.getReturnType());
                 }
 
@@ -199,15 +205,15 @@ public class RpcDelegater {
     }
 
     private static Transformer<Interact, ? extends Object> interact2obj(
-            final Class<?> api,
-            final Method apiMethod,
-            final Class<?> builder,
+            final InvocationContext ictx,
+//            final Class<?> api,
+//            final Method apiMethod,
+//            final Class<?> builder,
             final Method callMethod,
-            final Type responseType,
-            final InvocationContext ictx
+            final Type responseType
             ) {
         return interacts -> interacts.flatMap(interact -> {
-                    Interact newInteract = assignUriAndPath(apiMethod, ictx.pathParams, interact);
+                    Interact newInteract = assignUriAndPath(ictx.apiMethod, ictx.pathParams, interact);
                     if (null != newInteract) {
                         interact = newInteract;
                     } else {
@@ -215,7 +221,7 @@ public class RpcDelegater {
                         if (null != newInteract) {
                             interact = newInteract;
                         } else {
-                            newInteract = assignUriAndPath(api, ictx.pathParams, interact);
+                            newInteract = assignUriAndPath(ictx.apiType, ictx.pathParams, interact);
                             if (null != newInteract) {
                                 interact = newInteract;
                             }
@@ -263,7 +269,7 @@ public class RpcDelegater {
                     */
                     if (responseType instanceof Class) {
                         //  Transformer<Interact, R>
-                        LOG.debug("{}.{}.{}'s response as {}", api.getSimpleName(), builder.getSimpleName(), callMethod.getName(), responseType);
+                        LOG.debug("{}.{}.{}'s response as {}", ictx.apiType.getSimpleName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
                         Action1<Object> onresp = null;
                         final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
                         if (null != onResponse) {
@@ -274,7 +280,7 @@ public class RpcDelegater {
                     } else if (responseType instanceof ParameterizedType) {
                         if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
                             //  Transformer<Interact, FullMessage<MSG>>
-                            LOG.debug("{}.{}.{}'s response as FullMessage", api.getSimpleName(), builder.getSimpleName(), callMethod.getName());
+                            LOG.debug("{}.{}.{}'s response as FullMessage", ictx.apiType.getSimpleName(), ictx.builderType.getSimpleName(), callMethod.getName());
                             Action1<Object> onresp = null;
                             final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
                             if (null != onResponse) {
@@ -284,7 +290,7 @@ public class RpcDelegater {
                             return null != onresp ? getresponse.doOnNext(onresp) : getresponse;
                         }
                     }
-                    LOG.error("unsupport {}.{}.{}'s return type: {}", api.getSimpleName(), builder.getSimpleName(), callMethod.getName(), responseType);
+                    LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.apiType.getSimpleName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
                     return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
     }
