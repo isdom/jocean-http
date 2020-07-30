@@ -88,7 +88,7 @@ public class RpcDelegater {
             final Method    apiMethod,
             final Class<T>  builderType) {
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
-                invocationHandler(new InvocationContext(apiType, apiMethod, builderType), null));
+                rpcStubHandler(new InvocationContext(apiType, apiMethod, builderType), null));
     }
 
     static public class InvocationContext {
@@ -108,9 +108,13 @@ public class RpcDelegater {
         final JSONObject jsonFields = new JSONObject();
         Observable<? extends MessageBody> body = null;
         Pair<Object, ContentEncoder> content = null;
+
+        String apiTypeSimpleName() {
+            return null != apiType ? apiType.getSimpleName() : "(null)";
+        }
     }
 
-    public static InvocationHandler invocationHandler(
+    public static InvocationHandler rpcStubHandler(
             final InvocationContext ictx,
             final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
         return new InvocationHandler() {
@@ -184,7 +188,7 @@ public class RpcDelegater {
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 1);
                         return interact2obj(ictx, method, responseType);
                     }
-                    LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.apiType.getSimpleName(), ictx.builderType.getSimpleName(),
+                    LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.apiTypeSimpleName(), ictx.builderType.getSimpleName(),
                             method.getName(), method.getReturnType());
                 }
 
@@ -266,7 +270,7 @@ public class RpcDelegater {
                     */
                     if (responseType instanceof Class) {
                         //  Transformer<Interact, R>
-                        LOG.debug("{}.{}.{}'s response as {}", ictx.apiType.getSimpleName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
+                        LOG.debug("{}.{}.{}'s response as {}", ictx.apiTypeSimpleName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
                         Action1<Object> onresp = null;
                         final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
                         if (null != onResponse) {
@@ -277,7 +281,7 @@ public class RpcDelegater {
                     } else if (responseType instanceof ParameterizedType) {
                         if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
                             //  Transformer<Interact, FullMessage<MSG>>
-                            LOG.debug("{}.{}.{}'s response as FullMessage", ictx.apiType.getSimpleName(), ictx.builderType.getSimpleName(), callMethod.getName());
+                            LOG.debug("{}.{}.{}'s response as FullMessage", ictx.apiTypeSimpleName(), ictx.builderType.getSimpleName(), callMethod.getName());
                             Action1<Object> onresp = null;
                             final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
                             if (null != onResponse) {
@@ -287,7 +291,7 @@ public class RpcDelegater {
                             return null != onresp ? getresponse.doOnNext(onresp) : getresponse;
                         }
                     }
-                    LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.apiType.getSimpleName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
+                    LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.apiTypeSimpleName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
                     return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
     }
