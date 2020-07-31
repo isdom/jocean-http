@@ -88,7 +88,7 @@ public class RpcDelegater {
             final Method    apiMethod,
             final Class<T>  builderType) {
         return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
-                rpcStubHandler(new InvocationContext(apiType, apiMethod, builderType), null));
+                rpcBuilderHandler(new InvocationContext(apiType, apiMethod, builderType), null));
     }
 
     static public class InvocationContext {
@@ -114,7 +114,7 @@ public class RpcDelegater {
         }
     }
 
-    public static InvocationHandler rpcStubHandler(
+    public static InvocationHandler rpcBuilderHandler(
             final InvocationContext ictx,
             final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
         return new InvocationHandler() {
