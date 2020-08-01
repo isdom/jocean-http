@@ -114,6 +114,15 @@ public class RpcDelegater {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    public static <BUILDER> BUILDER proxyBuilder(
+            final InvocationContext ictx,
+            final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
+        return (BUILDER)Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                new Class<?>[] { ictx.builderType },
+                rpcBuilderHandler(ictx, invoker) );
+    }
+
     public static InvocationHandler rpcBuilderHandler(
             final InvocationContext ictx,
             final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
