@@ -98,6 +98,8 @@ public class RpcDelegater {
             this.builderType = builderType;
         }
 
+        public AnnotatedElement[] constParamCarriers;
+
         final Class<?> apiType;
         final Method   apiMethod;
         final Class<?> builderType;
@@ -119,8 +121,7 @@ public class RpcDelegater {
             final InvocationContext ictx,
             final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
         return (BUILDER)Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
-                new Class<?>[] { ictx.builderType },
-                rpcBuilderHandler(ictx, invoker) );
+                new Class<?>[] { ictx.builderType }, rpcBuilderHandler(ictx, invoker) );
     }
 
     public static InvocationHandler rpcBuilderHandler(
@@ -130,8 +131,7 @@ public class RpcDelegater {
             @Override
             public Object invoke(final Object proxy, final Method method, final Object[] args)
                     throws Throwable {
-                if (null != args && args.length == 1
-                        && Object.class.isAssignableFrom(method.getReturnType())) {
+                if (null != args && args.length == 1 && Object.class.isAssignableFrom(method.getReturnType())) {
                     // return ? extends Object with one param
                     //  XXXBuilder item1(final String value)
                     final QueryParam queryParam = method.getAnnotation(QueryParam.class);
@@ -175,7 +175,11 @@ public class RpcDelegater {
                     }
                     return proxy;
                 } else if (null == args || args.length == 0) {
-                    addConstParams(ictx.apiType, ictx.queryParams);
+                    if (null != ictx.constParamCarriers) {
+                        for (final AnnotatedElement annotatedElement : ictx.constParamCarriers) {
+                            addConstParams(annotatedElement, ictx.queryParams);
+                        }
+                    }
                     addConstParams(method, ictx.queryParams);
 
                     if (!ictx.jsonFields.isEmpty()) {
