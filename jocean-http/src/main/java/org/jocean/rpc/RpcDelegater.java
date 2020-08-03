@@ -99,6 +99,7 @@ public class RpcDelegater {
         }
 
         public AnnotatedElement[] constParamCarriers;
+        public AnnotatedElement[] pathCarriers;
 
         final Class<?> apiType;
         final Method   apiMethod;
@@ -227,18 +228,20 @@ public class RpcDelegater {
             final Type responseType
             ) {
         return interacts -> interacts.flatMap(interact -> {
-                    Interact newInteract = assignUriAndPath(ictx.apiMethod, ictx.pathParams, interact);
-                    if (null != newInteract) {
-                        interact = newInteract;
-                    } else {
+                    Interact newInteract = null;
+                    if (null != ictx.pathCarriers) {
+                        for (final AnnotatedElement annotatedElement : ictx.pathCarriers) {
+                            newInteract = assignUriAndPath(annotatedElement, ictx.pathParams, interact);
+                            if (null != newInteract) {
+                                interact = newInteract;
+                                break;
+                            }
+                        }
+                    }
+                    if (null == newInteract) {
                         newInteract = assignUriAndPath(callMethod, ictx.pathParams, interact);
                         if (null != newInteract) {
                             interact = newInteract;
-                        } else {
-                            newInteract = assignUriAndPath(ictx.apiType, ictx.pathParams, interact);
-                            if (null != newInteract) {
-                                interact = newInteract;
-                            }
                         }
                     }
 
