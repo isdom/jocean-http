@@ -64,37 +64,9 @@ public class RpcDelegater {
 
     static final ContentDecoder[] MIME_DECODERS = new ContentDecoder[]{ContentUtil.ASJSON, ContentUtil.ASXML, ContentUtil.ASTEXT};
 
-    @SuppressWarnings("unchecked")
-    @Deprecated
-    public static <RPC> RPC build(final Class<RPC> rpcType) {
-        return (RPC) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { rpcType },
-                new InvocationHandler() {
-                    @Override
-                    public Object invoke(final Object proxy, final Method method, final Object[] args)
-                            throws Throwable {
-                        if (null == args || args.length == 0) {
-                            return delegate(rpcType, method, method.getReturnType());
-                        } else {
-                            return null;
-                        }
-                    }
-                });
-    }
-
-    @SuppressWarnings("unchecked")
-    @Deprecated
-    public static <T, R> T delegate(
-            final Class<?>  apiType,
-            final Method    apiMethod,
-            final Class<T>  builderType) {
-        return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class<?>[] { builderType },
-                rpcBuilderHandler(new InvocationContext(apiType, apiMethod, builderType), null));
-    }
-
     static public class InvocationContext {
-        public InvocationContext(final Class<?> apiType, final Method apiMethod, final Class<?> builderType) {
+        public InvocationContext(final Class<?> apiType, final Class<?> builderType) {
             this.apiType = apiType;
-            this.apiMethod = apiMethod;
             this.builderType = builderType;
         }
 
@@ -102,7 +74,6 @@ public class RpcDelegater {
         public AnnotatedElement[] pathCarriers;
 
         final Class<?> apiType;
-        final Method   apiMethod;
         final Class<?> builderType;
 
         final Map<String, Object> queryParams = new HashMap<>();
