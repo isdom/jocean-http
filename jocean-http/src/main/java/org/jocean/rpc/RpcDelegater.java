@@ -149,10 +149,10 @@ public class RpcDelegater {
                 } else if (null == args || args.length == 0) {
                     if (null != ictx.constParamCarriers) {
                         for (final AnnotatedElement annotatedElement : ictx.constParamCarriers) {
-                            addConstParams(annotatedElement, ictx.queryParams);
+                            addConstParams(method, annotatedElement, ictx.queryParams);
                         }
                     }
-                    addConstParams(method, ictx.queryParams);
+                    addConstParams(method, method, ictx.queryParams);
 
                     if (!ictx.jsonFields.isEmpty()) {
                         LOG.debug("generate JSON Object for fields: {}", Arrays.toString(ictx.jsonFields.keySet().toArray(new String[0])));
@@ -202,7 +202,7 @@ public class RpcDelegater {
                     Interact newInteract = null;
                     if (null != ictx.pathCarriers) {
                         for (final AnnotatedElement annotatedElement : ictx.pathCarriers) {
-                            newInteract = assignUriAndPath(annotatedElement, ictx.pathParams, interact);
+                            newInteract = assignUriAndPath(callMethod, annotatedElement, ictx.pathParams, interact);
                             if (null != newInteract) {
                                 interact = newInteract;
                                 break;
@@ -210,7 +210,7 @@ public class RpcDelegater {
                         }
                     }
                     if (null == newInteract) {
-                        newInteract = assignUriAndPath(callMethod, ictx.pathParams, interact);
+                        newInteract = assignUriAndPath(callMethod, callMethod, ictx.pathParams, interact);
                         if (null != newInteract) {
                             interact = newInteract;
                         }
@@ -330,7 +330,10 @@ public class RpcDelegater {
         }
     }
 
-    private static void addConstParams(final AnnotatedElement annotatedElement, final Map<String, Object> params) {
+    private static void addConstParams(
+            final Method callMethod,
+            final AnnotatedElement annotatedElement,
+            final Map<String, Object> params) {
         if (null == annotatedElement) {
             return;
         }
@@ -338,13 +341,20 @@ public class RpcDelegater {
         // add const params mark by XXXBuilder.call method
         if (null != constParams) {
             final String keyValues[] = constParams.value();
+            LOG.debug("prepare rpc[{}.{}], found @ConstParams by {}, const params detail: {} ",
+                    callMethod.getDeclaringClass().getSimpleName(),
+                    callMethod.getName(),
+                    annotatedElement,
+                    Arrays.toString(keyValues));
             for (int i = 0; i < keyValues.length-1; i+=2) {
                 params.put(keyValues[i], keyValues[i+1]);
             }
         }
     }
 
-    private static Interact assignUriAndPath(final AnnotatedElement annotatedElement,
+    private static Interact assignUriAndPath(
+            final Method callMethod,
+            final AnnotatedElement annotatedElement,
             final Map<String, Object> pathParams,
             Interact interact) {
         if (null == annotatedElement) {
@@ -352,6 +362,11 @@ public class RpcDelegater {
         }
         final Path path = annotatedElement.getAnnotation(Path.class);
         if (null != path) {
+            LOG.debug("prepare rpc[{}.{}], found @Path by {}, path detail: {} ",
+                    callMethod.getDeclaringClass().getSimpleName(),
+                    callMethod.getName(),
+                    annotatedElement,
+                    path.value());
             try {
                 String uriAndPath = path.value();
 
