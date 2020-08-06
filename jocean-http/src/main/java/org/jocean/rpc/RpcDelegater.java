@@ -64,6 +64,51 @@ public class RpcDelegater {
 
     static final ContentDecoder[] MIME_DECODERS = new ContentDecoder[]{ContentUtil.ASJSON, ContentUtil.ASXML, ContentUtil.ASTEXT};
 
+    public interface Builder<BUILDER> {
+        Builder<BUILDER> constParamCarriers(final AnnotatedElement[] carriers);
+        Builder<BUILDER> pathCarriers(final AnnotatedElement[] carriers);
+        Builder<BUILDER> owner(final Class<?> owner);
+        Builder<BUILDER> invoker(Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker);
+        BUILDER build();
+    }
+
+    static public <BUILDER> Builder<BUILDER> rpc(final Class<BUILDER> builderType) {
+        final InvocationContext ictx = new InvocationContext(builderType);
+        final AtomicReference<Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>>> invokerRef = new AtomicReference<>();
+        return new Builder<BUILDER>() {
+
+            @Override
+            public Builder<BUILDER> constParamCarriers(final AnnotatedElement[] carriers) {
+                ictx.constParamCarriers = carriers;
+                return this;
+            }
+
+            @Override
+            public Builder<BUILDER> pathCarriers(final AnnotatedElement[] carriers) {
+                ictx.pathCarriers = carriers;
+                return this;
+            }
+
+            @Override
+            public Builder<BUILDER> owner(final Class<?> owner) {
+                ictx.builderOwner = owner;
+                return this;
+            }
+
+            @Override
+            public Builder<BUILDER> invoker(
+                    final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
+                invokerRef.set(invoker);
+                return this;
+            }
+
+            @Override
+            public BUILDER build() {
+                return proxyBuilder(ictx, invokerRef.get());
+            }};
+
+    }
+
     static public class InvocationContext {
         public InvocationContext(final Class<?> builderType) {
             this.builderType = builderType;
