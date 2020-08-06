@@ -65,8 +65,8 @@ public class RpcDelegater {
     static final ContentDecoder[] MIME_DECODERS = new ContentDecoder[]{ContentUtil.ASJSON, ContentUtil.ASXML, ContentUtil.ASTEXT};
 
     public interface Builder<BUILDER> {
-        Builder<BUILDER> constParamCarriers(final AnnotatedElement[] carriers);
-        Builder<BUILDER> pathCarriers(final AnnotatedElement[] carriers);
+        Builder<BUILDER> constParamCarriers(final AnnotatedElement... carriers);
+        Builder<BUILDER> pathCarriers(final AnnotatedElement... carriers);
         Builder<BUILDER> owner(final Class<?> owner);
         Builder<BUILDER> invoker(Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker);
         BUILDER build();
@@ -78,13 +78,13 @@ public class RpcDelegater {
         return new Builder<BUILDER>() {
 
             @Override
-            public Builder<BUILDER> constParamCarriers(final AnnotatedElement[] carriers) {
+            public Builder<BUILDER> constParamCarriers(final AnnotatedElement... carriers) {
                 ictx.constParamCarriers = carriers;
                 return this;
             }
 
             @Override
-            public Builder<BUILDER> pathCarriers(final AnnotatedElement[] carriers) {
+            public Builder<BUILDER> pathCarriers(final AnnotatedElement... carriers) {
                 ictx.pathCarriers = carriers;
                 return this;
             }
