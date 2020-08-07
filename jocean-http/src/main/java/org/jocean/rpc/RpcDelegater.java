@@ -73,7 +73,7 @@ public class RpcDelegater {
     }
 
     static public <BUILDER> Builder<BUILDER> rpc(final Class<BUILDER> builderType) {
-        final InvocationContext ictx = new InvocationContext(builderType);
+        final Context ictx = new Context(builderType);
         final AtomicReference<Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>>> invokerRef = new AtomicReference<>();
         return new Builder<BUILDER>() {
 
@@ -109,8 +109,8 @@ public class RpcDelegater {
 
     }
 
-    static public class InvocationContext {
-        public InvocationContext(final Class<?> builderType) {
+    static private class Context {
+        public Context(final Class<?> builderType) {
             this.builderType = builderType;
         }
 
@@ -134,15 +134,15 @@ public class RpcDelegater {
     }
 
     @SuppressWarnings("unchecked")
-    public static <BUILDER> BUILDER proxyBuilder(
-            final InvocationContext ictx,
+    private static <BUILDER> BUILDER proxyBuilder(
+            final Context ictx,
             final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
         return (BUILDER)Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
                 new Class<?>[] { ictx.builderType }, rpcBuilderHandler(ictx, invoker) );
     }
 
     public static InvocationHandler rpcBuilderHandler(
-            final InvocationContext ictx,
+            final Context ictx,
             final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
         return new InvocationHandler() {
             @Override
@@ -239,7 +239,7 @@ public class RpcDelegater {
     }
 
     private static Transformer<Interact, ? extends Object> interact2obj(
-            final InvocationContext ictx,
+            final Context ictx,
             final Method callMethod,
             final Type responseType
             ) {
