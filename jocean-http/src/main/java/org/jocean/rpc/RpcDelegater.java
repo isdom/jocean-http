@@ -74,7 +74,7 @@ public class RpcDelegater {
 
     static public <BUILDER> Builder<BUILDER> rpc(final Class<BUILDER> builderType) {
         final Context ictx = new Context(builderType);
-        final AtomicReference<Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>>> invokerRef = new AtomicReference<>();
+
         return new Builder<BUILDER>() {
 
             @Override
@@ -98,26 +98,27 @@ public class RpcDelegater {
             @Override
             public Builder<BUILDER> invoker(
                     final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
-                invokerRef.set(invoker);
+                ictx.invoker = invoker;
                 return this;
             }
 
             @Override
             public BUILDER build() {
-                return proxyBuilder(ictx, invokerRef.get());
+                return proxyBuilder(ictx);
             }};
 
     }
 
     static private class Context {
-        public Context(final Class<?> builderType) {
+        Context(final Class<?> builderType) {
             this.builderType = builderType;
         }
 
-        public AnnotatedElement[] constParamCarriers;
-        public AnnotatedElement[] pathCarriers;
+        AnnotatedElement[] constParamCarriers;
+        AnnotatedElement[] pathCarriers;
 
-        public Class<?> builderOwner;
+        Class<?> builderOwner;
+        Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker;
 
         final Class<?> builderType;
 
@@ -134,16 +135,12 @@ public class RpcDelegater {
     }
 
     @SuppressWarnings("unchecked")
-    private static <BUILDER> BUILDER proxyBuilder(
-            final Context ictx,
-            final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
+    private static <BUILDER> BUILDER proxyBuilder(final Context ictx) {
         return (BUILDER)Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
-                new Class<?>[] { ictx.builderType }, rpcBuilderHandler(ictx, invoker) );
+                new Class<?>[] { ictx.builderType }, rpcBuilderHandler(ictx) );
     }
 
-    public static InvocationHandler rpcBuilderHandler(
-            final Context ictx,
-            final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
+    public static InvocationHandler rpcBuilderHandler(final Context ictx) {
         return new InvocationHandler() {
             @Override
             public Object invoke(final Object proxy, final Method method, final Object[] args)
@@ -211,7 +208,7 @@ public class RpcDelegater {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
 
-                        return invoker.call(interact2obj(ictx, method, responseType));
+                        return ictx.invoker.call(interact2obj(ictx, method, responseType));
                     }
                     else if (isInteract2Any(method.getGenericReturnType())) {
                         // Transformer<Interact, XXX> call()
