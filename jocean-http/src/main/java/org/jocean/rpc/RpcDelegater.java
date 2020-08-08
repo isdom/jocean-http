@@ -140,7 +140,7 @@ public class RpcDelegater {
                 new Class<?>[] { ictx.builderType }, rpcBuilderHandler(ictx) );
     }
 
-    public static InvocationHandler rpcBuilderHandler(final Context ictx) {
+    private static InvocationHandler rpcBuilderHandler(final Context ictx) {
         return new InvocationHandler() {
             @Override
             public Object invoke(final Object proxy, final Method method, final Object[] args)
