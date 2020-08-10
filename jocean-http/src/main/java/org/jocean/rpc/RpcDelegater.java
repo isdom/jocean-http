@@ -188,7 +188,9 @@ public class RpcDelegater {
                         }
                     }
                     return proxy;
-                } else if (null == args || args.length == 0) {
+                } else if ( (null == args || args.length == 0)
+                        && ( isObservableAny(method.getGenericReturnType())
+                            || isInteract2Any(method.getGenericReturnType()) ) ) {
                     if (null != ictx.constParamCarriers) {
                         for (final AnnotatedElement annotatedElement : ictx.constParamCarriers) {
                             addConstParams(method, annotatedElement, ictx.queryParams);
@@ -215,6 +217,9 @@ public class RpcDelegater {
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 1);
                         return interact2obj(ictx, method, responseType);
                     }
+                    LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(),
+                            method.getName(), method.getReturnType());
+                } else {
                     LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(),
                             method.getName(), method.getReturnType());
                 }
