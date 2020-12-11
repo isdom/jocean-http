@@ -221,7 +221,7 @@ public class RpcDelegater {
                             method.getName(), method.getReturnType());
                 } else if (method.getName().equals("toString") && method.getReturnType().equals(String.class)) {
                     // invoke toString()
-                    return ictx.builderType.getSimpleName() + "(" + proxy.toString() + ")";
+                    return ictx.builderType.getSimpleName() + "@" + Integer.toHexString(Proxy.getInvocationHandler(proxy).hashCode());
                 } else {
                     LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(),
                             method.getName(), method.getReturnType());
