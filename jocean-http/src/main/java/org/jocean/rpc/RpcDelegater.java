@@ -49,7 +49,6 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import rx.Observable;
 import rx.Observable.Transformer;
-import rx.functions.Action1;
 import rx.functions.Func1;
 
 /**
@@ -308,24 +307,24 @@ public class RpcDelegater {
                     if (responseType instanceof Class) {
                         //  Transformer<Interact, R>
                         LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
-                        Action1<Object> onresp = null;
+                        Transformer<Object, Object> onresp = null;
                         final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
                         if (null != onResponse) {
-                            onresp = onNextOf(onResponse.value(), (Class<?>)responseType);
+                            onresp = transformerOf(onResponse.value());
                         }
                         final Observable<? extends Object> getresponse = interact.responseAs(getContentDecoder(callMethod), (Class<?>)responseType);
-                        return null != onresp ? getresponse.doOnNext(onresp) : getresponse;
+                        return null != onresp ? getresponse.compose(onresp) : getresponse;
                     } else if (responseType instanceof ParameterizedType) {
                         if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
                             //  Transformer<Interact, FullMessage<MSG>>
                             LOG.debug("{}.{}.{}'s response as FullMessage", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName());
-                            Action1<Object> onresp = null;
+                            Transformer<Object, Object> onresp = null;
                             final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
                             if (null != onResponse) {
-                                onresp = onNextOf(onResponse.value(), (Class<?>)responseType);
+                                onresp = transformerOf(onResponse.value());
                             }
                             final Observable<? extends Object> getresponse = interact.response();
-                            return null != onresp ? getresponse.doOnNext(onresp) : getresponse;
+                            return null != onresp ? getresponse.compose(onresp) : getresponse;
                         }
                     }
                     LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
@@ -333,22 +332,19 @@ public class RpcDelegater {
                 });
     }
 
-    private static Action1<Object> onNextOf(final String[] vars, final Class<?> type) {
-        final AtomicReference<Action1<Object>> onNextRef = new AtomicReference<>(null);
+    private static Transformer<Object, Object> transformerOf(final String[] vars) {
+        final AtomicReference<Transformer<Object, Object>> transformerRef = new AtomicReference<>(null);
         for (final String var : vars) {
-            final Action1<Object> suff = ReflectUtils.getStaticFieldValue(var);
-            LOG.debug("get Action1<Object> {} by {}", suff, var);
-            if (null != onNextRef.get()) {
-                final Action1<Object> prev = (Action1<Object>) onNextRef.get();
-                onNextRef.set(obj -> {
-                    prev.call(obj);
-                    suff.call(obj);
-                });
+            final Transformer<Object, Object> suff = ReflectUtils.getStaticFieldValue(var);
+            LOG.debug("get Transformer<Object, Object> {} by {}", suff, var);
+            if (null != transformerRef.get()) {
+                final Transformer<Object, Object> prev = (Transformer<Object, Object>) transformerRef.get();
+                transformerRef.set(objs -> objs.compose(prev).compose(suff));
             } else {
-                onNextRef.set(suff);
+                transformerRef.set(suff);
             }
         }
-        return onNextRef.get();
+        return transformerRef.get();
     }
 
     private static ContentDecoder getContentDecoder(final Method method) {
