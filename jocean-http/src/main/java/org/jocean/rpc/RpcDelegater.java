@@ -41,6 +41,7 @@ import org.jocean.idiom.ReflectUtils;
 import org.jocean.rpc.annotation.ConstParams;
 import org.jocean.rpc.annotation.OnHttpResponse;
 import org.jocean.rpc.annotation.OnResponse;
+import org.jocean.rpc.annotation.ToResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -311,12 +312,23 @@ public class RpcDelegater {
                         if (null != onResponse) {
                             onresp = transformerOf(onResponse.value());
                         }
-                        final Observable<? extends Object> getresponse =
-                                // interact.responseAs(getContentDecoder(callMethod), (Class<?>)responseType);
-                                gethttpresponse.flatMap(MessageUtil.fullmsg2body())
-                                .compose(MessageUtil.body2bean(getContentDecoder(callMethod), (Class<?>)responseType));
+                        Observable<? extends Object> getresponse = null;
 
-                        return null != onresp ? getresponse.compose(onresp) : getresponse;
+                        final ToResponse toResponse = callMethod.getAnnotation(ToResponse.class);
+                        if (null != toResponse) {
+                            final Transformer<FullMessage<HttpResponse>, Object> toresp = ReflectUtils.getStaticFieldValue(toResponse.value());
+                            if (null != toresp) {
+                                getresponse = gethttpresponse.compose(toresp);
+                            }
+                        } else {
+                            getresponse = gethttpresponse.flatMap(MessageUtil.fullmsg2body())
+                                    .compose(MessageUtil.body2bean(getContentDecoder(callMethod), (Class<?>)responseType));
+                                    // interact.responseAs(getContentDecoder(callMethod), (Class<?>)responseType);
+                        }
+
+                        if (null != getresponse) {
+                            return null != onresp ? getresponse.compose(onresp) : getresponse;
+                        }
                     } else if (responseType instanceof ParameterizedType) {
                         if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
                             //  Observable<FullMessage<MSG>>
