@@ -35,9 +35,11 @@ import org.jocean.http.ContentUtil;
 import org.jocean.http.FullMessage;
 import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
+import org.jocean.http.MessageUtil;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.rpc.annotation.ConstParams;
+import org.jocean.rpc.annotation.OnHttpResponse;
 import org.jocean.rpc.annotation.OnResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +49,7 @@ import com.alibaba.fastjson.annotation.JSONField;
 
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
 import rx.Observable;
 import rx.Observable.Transformer;
 import rx.functions.Func1;
@@ -292,18 +295,43 @@ public class RpcDelegater {
                         interact = interact.body(ictx.content.getFirst(), ictx.content.getSecond());
                     }
 
+                    Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> onhttpresp = null;
+                    final OnHttpResponse onHttpResponse = callMethod.getAnnotation(OnHttpResponse.class);
+                    if (null != onHttpResponse) {
+                        onhttpresp = transformerOf(onHttpResponse.value());
+                    }
+
+                    final Observable<FullMessage<HttpResponse>> gethttpresponse = null != onhttpresp ? interact.response().compose(onhttpresp) : interact.response();
+
+                    if (responseType instanceof Class) {
+                        //  Observable<R>
+                        LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
+                        Transformer<Object, Object> onresp = null;
+                        final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
+                        if (null != onResponse) {
+                            onresp = transformerOf(onResponse.value());
+                        }
+                        final Observable<? extends Object> getresponse =
+                                // interact.responseAs(getContentDecoder(callMethod), (Class<?>)responseType);
+                                gethttpresponse.flatMap(MessageUtil.fullmsg2body())
+                                .compose(MessageUtil.body2bean(getContentDecoder(callMethod), (Class<?>)responseType));
+
+                        return null != onresp ? getresponse.compose(onresp) : getresponse;
+                    } else if (responseType instanceof ParameterizedType) {
+                        if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
+                            //  Observable<FullMessage<MSG>>
+                            LOG.debug("{}.{}.{}'s response as FullMessage", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName());
+//                            Transformer<Object, Object> onresp = null;
+//                            final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
+//                            if (null != onResponse) {
+//                                onresp = transformerOf(onResponse.value());
+//                            }
+//                            final Observable<? extends Object> getresponse = interact.response();
+//                            return null != onresp ? getresponse.compose(onresp) : getresponse;
+                            return gethttpresponse;
+                        }
+                    }
                     /*
-                    final Type genericReturnType = method.getGenericReturnType();
-                    if (genericReturnType instanceof ParameterizedType) {
-                        final ParameterizedType parameterizedType = (ParameterizedType)genericReturnType;
-                        final Class<?> rawType = (Class<?>)parameterizedType.getRawType();
-                        if (Transformer.class.isAssignableFrom(rawType)) {
-                            // Transformer<?, ?>
-                            final Type[] typeArguments = parameterizedType.getActualTypeArguments();
-                            if (typeArguments[0] instanceof Class && Interact.class.isAssignableFrom((Class<?>)typeArguments[0]) ) {
-                                //  Transformer<Interact, ?>
-                                final Type responseType = typeArguments[1];
-                    */
                     if (responseType instanceof Class) {
                         //  Transformer<Interact, R>
                         LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
@@ -327,12 +355,14 @@ public class RpcDelegater {
                             return null != onresp ? getresponse.compose(onresp) : getresponse;
                         }
                     }
+                    */
                     LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
                     return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
     }
 
-    private static Transformer<Object, Object> transformerOf(final String[] vars) {
+    @SuppressWarnings("unchecked")
+    private static <T> Transformer<T, T> transformerOf(final String[] vars) {
         final AtomicReference<Transformer<Object, Object>> transformerRef = new AtomicReference<>(null);
         for (final String var : vars) {
             final Transformer<Object, Object> suff = ReflectUtils.getStaticFieldValue(var);
@@ -344,7 +374,7 @@ public class RpcDelegater {
                 transformerRef.set(suff);
             }
         }
-        return transformerRef.get();
+        return (Transformer<T, T>) transformerRef.get();
     }
 
     private static ContentDecoder getContentDecoder(final Method method) {
