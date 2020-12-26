@@ -36,6 +36,7 @@ import org.jocean.http.FullMessage;
 import org.jocean.http.Interact;
 import org.jocean.http.MessageBody;
 import org.jocean.http.MessageUtil;
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.rpc.annotation.ConstParams;
@@ -316,7 +317,25 @@ public class RpcDelegater {
 
                         final ToResponse toResponse = callMethod.getAnnotation(ToResponse.class);
                         if (null != toResponse) {
-                            final Transformer<FullMessage<HttpResponse>, Object> toresp = ReflectUtils.getStaticFieldValue(toResponse.value());
+                            Transformer<FullMessage<HttpResponse>, Object> toresp = null;
+                            if (toResponse.value().endsWith("()")) {
+                                final Method torespmethod = ReflectUtils.getStaticMethod(toResponse.value().substring(0, toResponse.value().length() - 2));
+                                if (null != torespmethod) {
+                                    try {
+                                        toresp = (Transformer<FullMessage<HttpResponse>, Object>) torespmethod.invoke(null);
+                                    } catch (final Exception e) {
+                                        return Observable.error(new RuntimeException(e));
+                                    }
+                                    if (toresp instanceof ParamAware) {
+                                        processParamAware(QueryParam.class, ictx.queryParams, ((ParamAware)toresp));
+                                        processParamAware(PathParam.class, ictx.pathParams, ((ParamAware)toresp));
+                                        processParamAware(HeaderParam.class, ictx.headerParams, ((ParamAware)toresp));
+                                        processParamAware(JSONField.class, ictx.jsonFields, ((ParamAware)toresp));
+                                    }
+                                }
+                            } else {
+                                toresp = ReflectUtils.getStaticFieldValue(toResponse.value());
+                            }
                             if (null != toresp) {
                                 getresponse = gethttpresponse.compose(toresp);
                             }
@@ -371,6 +390,19 @@ public class RpcDelegater {
                     LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
                     return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
+    }
+
+    private static void processParamAware(final Class<?> paramType, final Map<String, Object> params, final ParamAware paramAware) {
+        for (final Map.Entry<String, Object> entry : params.entrySet()) {
+            if (entry.getKey() != null && entry.getValue() != null) {
+                try {
+                    paramAware.setParam(paramType, entry.getKey(), entry.getValue());
+                } catch (final Exception e) {
+                    LOG.warn("exception when invoke {}.setParam, detail: {}", paramAware, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }
+
     }
 
     @SuppressWarnings("unchecked")
