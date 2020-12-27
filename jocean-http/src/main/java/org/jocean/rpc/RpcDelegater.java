@@ -41,7 +41,9 @@ import org.jocean.idiom.Pair;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.rpc.annotation.ConstParams;
 import org.jocean.rpc.annotation.OnHttpResponse;
+import org.jocean.rpc.annotation.OnInteract;
 import org.jocean.rpc.annotation.OnResponse;
+import org.jocean.rpc.annotation.RpcResource;
 import org.jocean.rpc.annotation.ToResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -126,6 +128,7 @@ public class RpcDelegater {
 
         final Class<?> builderType;
 
+        final Map<String, Object> rpcResources = new HashMap<>();
         final Map<String, Object> queryParams = new HashMap<>();
         final Map<String, Object> pathParams = new HashMap<>();
         final Map<String, Object> headerParams = new HashMap<>();
@@ -152,12 +155,15 @@ public class RpcDelegater {
                 if (null != args && args.length == 1 && Object.class.isAssignableFrom(method.getReturnType())) {
                     // return ? extends Object with one param
                     //  XXXBuilder item1(final String value)
+                    final RpcResource rpcResource = method.getAnnotation(RpcResource.class);
                     final QueryParam queryParam = method.getAnnotation(QueryParam.class);
                     final JSONField jsonField = method.getAnnotation(JSONField.class);
                     final PathParam pathParam = method.getAnnotation(PathParam.class);
                     final HeaderParam headerParam = method.getAnnotation(HeaderParam.class);
                     final Produces produces = method.getAnnotation(Produces.class);
-                    if (null != queryParam) {
+                    if (null != rpcResource) {
+                        ictx.rpcResources.put(rpcResource.value(), args[0]);
+                    } else if (null != queryParam) {
                         ictx.queryParams.put(queryParam.value(), args[0]);
                     } else if (null != pathParam) {
                         ictx.pathParams.put(pathParam.value(), args[0]);
@@ -247,12 +253,32 @@ public class RpcDelegater {
                 && Interact.class.equals(ReflectUtils.getParameterizedTypeArgument(genericType, 0));
     }
 
+    private static <T> Transformer<T, T> transformerOf2(final String[] vars, final Func1<String, Transformer<T, T>> s2t) {
+        final AtomicReference<Transformer<T, T>> transformerRef = new AtomicReference<>(null);
+        for (final String var : vars) {
+            final Transformer<T, T> suff = s2t.call(var);
+            LOG.debug("transformerOf: get Transformer<Object, Object> {} by {}", suff, var);
+            if (null != transformerRef.get()) {
+                final Transformer<T, T> prev = transformerRef.get();
+                transformerRef.set(objs -> objs.compose(prev).compose(suff));
+            } else {
+                transformerRef.set(suff);
+            }
+        }
+        return transformerRef.get();
+    }
+
     private static Transformer<Interact, ? extends Object> interact2obj(
             final Context ictx,
             final Method callMethod,
             final Type responseType
             ) {
-        return interacts -> interacts.flatMap(interact -> {
+        return interacts -> {
+            final Transformer<Interact, Interact> i2i = transformer4interact(ictx, callMethod.getAnnotation(OnInteract.class));
+            if (null != i2i) {
+                interacts = interacts.compose(i2i);
+            }
+            return interacts.flatMap(interact -> {
                     Interact newInteract = null;
                     if (null != ictx.pathCarriers) {
                         for (final AnnotatedElement annotatedElement : ictx.pathCarriers) {
@@ -390,6 +416,14 @@ public class RpcDelegater {
                     LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
                     return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
+        };
+    }
+
+    private static Transformer<Interact, Interact> transformer4interact(final Context ictx, final OnInteract onInteract) {
+        if (null != onInteract) {
+            return transformerOf2(onInteract.value(), s -> (Transformer<Interact, Interact>) ictx.rpcResources.get(s));
+        }
+        return null;
     }
 
     private static void processParamAware(final Class<?> paramType, final Map<String, Object> params, final ParamAware paramAware) {
