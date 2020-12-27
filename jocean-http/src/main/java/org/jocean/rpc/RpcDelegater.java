@@ -40,6 +40,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Pair;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.rpc.annotation.ConstParams;
+import org.jocean.rpc.annotation.OnBuild;
 import org.jocean.rpc.annotation.OnHttpResponse;
 import org.jocean.rpc.annotation.OnInteract;
 import org.jocean.rpc.annotation.OnResponse;
@@ -56,6 +57,7 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import rx.Observable;
 import rx.Observable.Transformer;
+import rx.functions.Action2;
 import rx.functions.Func1;
 
 /**
@@ -155,13 +157,20 @@ public class RpcDelegater {
                 if (null != args && args.length == 1 && Object.class.isAssignableFrom(method.getReturnType())) {
                     // return ? extends Object with one param
                     //  XXXBuilder item1(final String value)
+                    final OnBuild onBuild = method.getAnnotation(OnBuild.class);
                     final RpcResource rpcResource = method.getAnnotation(RpcResource.class);
                     final QueryParam queryParam = method.getAnnotation(QueryParam.class);
                     final JSONField jsonField = method.getAnnotation(JSONField.class);
                     final PathParam pathParam = method.getAnnotation(PathParam.class);
                     final HeaderParam headerParam = method.getAnnotation(HeaderParam.class);
                     final Produces produces = method.getAnnotation(Produces.class);
-                    if (null != rpcResource) {
+
+                    if (null != onBuild) {
+                        final Action2<Object, Object> applier = ReflectUtils.getStaticFieldValue(onBuild.value());
+                        if (null != applier) {
+                            applier.call(proxy, args[0]);
+                        }
+                    } else if (null != rpcResource) {
                         ictx.rpcResources.put(rpcResource.value(), args[0]);
                     } else if (null != queryParam) {
                         ictx.queryParams.put(queryParam.value(), args[0]);
