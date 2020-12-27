@@ -168,7 +168,7 @@ public class RpcDelegater {
                     if (null != onBuild) {
                         final Action2<Object, Object> applier = ReflectUtils.getStaticFieldValue(onBuild.value());
                         if (null != applier) {
-                            LOG.debug("invoke Builder applier:{} by {}", applier, args[0]);
+                            LOG.debug("invoke Builder applier:{} by {}/{}", applier, proxy, args[0]);
                             try {
                                 applier.call(proxy, args[0]);
                             } catch (final Exception e) {
