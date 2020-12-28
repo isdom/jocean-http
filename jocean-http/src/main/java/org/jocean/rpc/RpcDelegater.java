@@ -327,38 +327,11 @@ public class RpcDelegater {
                     if (responseType instanceof Class) {
                         //  Observable<R>
                         LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
-                        Transformer<Object, Object> onresp = null;
-                        final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
-                        if (null != onResponse) {
-                            onresp = transformerOf(onResponse.value(),
-                                    s -> (Transformer<Object, Object>)ReflectUtils.getStaticFieldValue(s));
-                        }
                         Observable<? extends Object> getresponse = null;
 
-                        final ToResponse toResponse = callMethod.getAnnotation(ToResponse.class);
-                        if (null != toResponse) {
-                            Transformer<FullMessage<HttpResponse>, Object> toresp = null;
-                            if (toResponse.value().endsWith("()")) {
-                                final Method torespmethod = ReflectUtils.getStaticMethod(toResponse.value().substring(0, toResponse.value().length() - 2));
-                                if (null != torespmethod) {
-                                    try {
-                                        toresp = (Transformer<FullMessage<HttpResponse>, Object>) torespmethod.invoke(null);
-                                    } catch (final Exception e) {
-                                        return Observable.error(new RuntimeException(e));
-                                    }
-                                    if (toresp instanceof ParamAware) {
-                                        processParamAware(QueryParam.class, ictx.queryParams, ((ParamAware)toresp));
-                                        processParamAware(PathParam.class, ictx.pathParams, ((ParamAware)toresp));
-                                        processParamAware(HeaderParam.class, ictx.headerParams, ((ParamAware)toresp));
-                                        processParamAware(JSONField.class, ictx.jsonFields, ((ParamAware)toresp));
-                                    }
-                                }
-                            } else {
-                                toresp = ReflectUtils.getStaticFieldValue(toResponse.value());
-                            }
-                            if (null != toresp) {
-                                getresponse = gethttpresponse.compose(toresp);
-                            }
+                        final Transformer<FullMessage<HttpResponse>, Object> toresp = handleToResponse(ictx, callMethod.getAnnotation(ToResponse.class));
+                        if (null != toresp) {
+                            getresponse = gethttpresponse.compose(toresp);
                         } else {
                             getresponse = gethttpresponse.flatMap(MessageUtil.fullmsg2body())
                                     .compose(MessageUtil.body2bean(getContentDecoder(callMethod), (Class<?>)responseType));
@@ -366,6 +339,7 @@ public class RpcDelegater {
                         }
 
                         if (null != getresponse) {
+                            final Transformer<Object, Object> onresp = handleOnResponse(callMethod.getAnnotation(OnResponse.class));
                             return null != onresp ? getresponse.compose(onresp) : getresponse;
                         }
                     } else if (responseType instanceof ParameterizedType) {
@@ -410,6 +384,43 @@ public class RpcDelegater {
                     LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
                     return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
+    }
+
+    private static Transformer<FullMessage<HttpResponse>, Object> handleToResponse(final Context ictx,
+            final ToResponse toResponse) {
+        if (null == toResponse) {
+            return null;
+        }
+        if (toResponse.value().endsWith("()")) {
+            final Method torespmethod = ReflectUtils.getStaticMethod(toResponse.value().substring(0, toResponse.value().length() - 2));
+            if (null != torespmethod) {
+                try {
+                    final Transformer<FullMessage<HttpResponse>, Object> toresp = (Transformer<FullMessage<HttpResponse>, Object>) torespmethod.invoke(null);
+                    if (toresp instanceof ParamAware) {
+                        processParamAware(QueryParam.class, ictx.queryParams, ((ParamAware)toresp));
+                        processParamAware(PathParam.class, ictx.pathParams, ((ParamAware)toresp));
+                        processParamAware(HeaderParam.class, ictx.headerParams, ((ParamAware)toresp));
+                        processParamAware(JSONField.class, ictx.jsonFields, ((ParamAware)toresp));
+                    }
+                    return toresp;
+                } catch (final Exception e) {
+                    LOG.warn("exception when invoke torespmethod:{}, detail: {}", torespmethod, ExceptionUtils.exception2detail(e));
+                    return null;
+                }
+            } else {
+                return null;
+            }
+        } else {
+            return ReflectUtils.getStaticFieldValue(toResponse.value());
+        }
+    }
+
+    private static Transformer<Object, Object> handleOnResponse(final OnResponse onResponse) {
+        if (null != onResponse) {
+            return transformerOf(onResponse.value(),
+                    s -> (Transformer<Object, Object>)ReflectUtils.getStaticFieldValue(s));
+        }
+        return null;
     }
 
     private static Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> handleOnHttpResponse(
