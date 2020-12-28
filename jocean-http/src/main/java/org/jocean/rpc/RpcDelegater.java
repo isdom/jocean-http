@@ -274,62 +274,18 @@ public class RpcDelegater {
             ) {
         return interacts -> handleOnInteract(ictx, callMethod.getAnnotation(OnInteract.class), interacts)
                 .flatMap(interact -> {
-                    Interact newInteract = null;
-                    if (null != ictx.pathCarriers) {
-                        for (final AnnotatedElement annotatedElement : ictx.pathCarriers) {
-                            newInteract = assignUriAndPath(callMethod, annotatedElement, ictx.pathParams, interact);
-                            if (null != newInteract) {
-                                interact = newInteract;
-                                break;
-                            }
-                        }
-                    }
-                    if (null == newInteract) {
-                        newInteract = assignUriAndPath(callMethod, callMethod, ictx.pathParams, interact);
-                        if (null != newInteract) {
-                            interact = newInteract;
-                        }
-                    }
-
-                    interact = interact.method(getHttpMethod(callMethod));
-
-                    for (final Map.Entry<String, Object> entry : ictx.queryParams.entrySet()) {
-                        if (entry.getKey() != null && entry.getValue() != null) {
-                            interact = interact.paramAsQuery(entry.getKey(), entry.getValue().toString());
-                        }
-                    }
-
-                    if (!ictx.headerParams.isEmpty()) {
-                        // set headers
-                        interact = interact.onrequest(obj -> {
-                            if (obj instanceof HttpRequest) {
-                                for (final Map.Entry<String, Object> entry : ictx.headerParams.entrySet()) {
-                                    if (entry.getKey() != null && entry.getValue() != null) {
-                                        ((HttpRequest)obj).headers().set(entry.getKey(), entry.getValue());
-                                    }
-                                }
-                            }
-                        });
-                    }
-
-                    if (null != ictx.body) {
-                        interact = interact.body(ictx.body);
-                    } else if ( null != ictx.content) {
-                        interact = interact.body(ictx.content.getFirst(), ictx.content.getSecond());
-                    }
-
-                    final Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> onhttpresp =
-                            handleOnHttpResponse(callMethod.getAnnotation(OnHttpResponse.class));
-
                     final Observable<FullMessage<HttpResponse>> gethttpresponse =
-                            null != onhttpresp ? interact.response().compose(onhttpresp) : interact.response();
+                            genHttpResponse(setupInteract(interact, ictx, callMethod), callMethod.getAnnotation(OnHttpResponse.class));
 
                     if (responseType instanceof Class) {
                         //  Observable<R>
-                        LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
-                        Observable<? extends Object> getresponse = null;
+                        LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(),
+                                ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
 
-                        final Transformer<FullMessage<HttpResponse>, Object> toresp = handleToResponse(ictx, callMethod.getAnnotation(ToResponse.class));
+                        final Transformer<FullMessage<HttpResponse>, Object> toresp =
+                                handleToResponse(ictx, callMethod.getAnnotation(ToResponse.class));
+
+                        Observable<? extends Object> getresponse = null;
                         if (null != toresp) {
                             getresponse = gethttpresponse.compose(toresp);
                         } else {
@@ -345,14 +301,8 @@ public class RpcDelegater {
                     } else if (responseType instanceof ParameterizedType) {
                         if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
                             //  Observable<FullMessage<MSG>>
-                            LOG.debug("{}.{}.{}'s response as FullMessage", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName());
-//                            Transformer<Object, Object> onresp = null;
-//                            final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
-//                            if (null != onResponse) {
-//                                onresp = transformerOf(onResponse.value());
-//                            }
-//                            final Observable<? extends Object> getresponse = interact.response();
-//                            return null != onresp ? getresponse.compose(onresp) : getresponse;
+                            LOG.debug("{}.{}.{}'s response as FullMessage", ictx.builderOwnerName(),
+                                    ictx.builderType.getSimpleName(), callMethod.getName());
                             return gethttpresponse;
                         }
                     }
@@ -384,6 +334,61 @@ public class RpcDelegater {
                     LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
                     return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
+    }
+
+    private static Interact setupInteract(Interact interact, final Context ictx, final Method callMethod) {
+        {
+            Interact newInteract = null;
+            if (null != ictx.pathCarriers) {
+                for (final AnnotatedElement annotatedElement : ictx.pathCarriers) {
+                    newInteract = assignUriAndPath(callMethod, annotatedElement, ictx.pathParams, interact);
+                    if (null != newInteract) {
+                        interact = newInteract;
+                        break;
+                    }
+                }
+            }
+            if (null == newInteract) {
+                newInteract = assignUriAndPath(callMethod, callMethod, ictx.pathParams, interact);
+                if (null != newInteract) {
+                    interact = newInteract;
+                }
+            }
+        }
+
+        interact = interact.method(getHttpMethod(callMethod));
+
+        for (final Map.Entry<String, Object> entry : ictx.queryParams.entrySet()) {
+            if (entry.getKey() != null && entry.getValue() != null) {
+                interact = interact.paramAsQuery(entry.getKey(), entry.getValue().toString());
+            }
+        }
+
+        if (!ictx.headerParams.isEmpty()) {
+            // set headers
+            interact = interact.onrequest(obj -> {
+                if (obj instanceof HttpRequest) {
+                    for (final Map.Entry<String, Object> entry : ictx.headerParams.entrySet()) {
+                        if (entry.getKey() != null && entry.getValue() != null) {
+                            ((HttpRequest)obj).headers().set(entry.getKey(), entry.getValue());
+                        }
+                    }
+                }
+            });
+        }
+
+        if (null != ictx.body) {
+            interact = interact.body(ictx.body);
+        } else if ( null != ictx.content) {
+            interact = interact.body(ictx.content.getFirst(), ictx.content.getSecond());
+        }
+        return interact;
+    }
+
+    private static Observable<FullMessage<HttpResponse>> genHttpResponse(final Interact interact, final OnHttpResponse onHttpResponse) {
+        final Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> onhttpresp = handleOnHttpResponse(onHttpResponse);
+
+        return null != onhttpresp ? interact.response().compose(onhttpresp) : interact.response();
     }
 
     private static Transformer<FullMessage<HttpResponse>, Object> handleToResponse(final Context ictx,
