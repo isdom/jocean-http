@@ -267,32 +267,13 @@ public class RpcDelegater {
                 && Interact.class.equals(ReflectUtils.getParameterizedTypeArgument(genericType, 0));
     }
 
-    private static <T> Transformer<T, T> transformerOf2(final String[] vars, final Func1<String, Transformer<T, T>> s2t) {
-        final AtomicReference<Transformer<T, T>> transformerRef = new AtomicReference<>(null);
-        for (final String var : vars) {
-            final Transformer<T, T> suff = s2t.call(var);
-            LOG.debug("transformerOf: get Transformer<Object, Object> {} by {}", suff, var);
-            if (null != transformerRef.get()) {
-                final Transformer<T, T> prev = transformerRef.get();
-                transformerRef.set(objs -> objs.compose(prev).compose(suff));
-            } else {
-                transformerRef.set(suff);
-            }
-        }
-        return transformerRef.get();
-    }
-
     private static Transformer<Interact, ? extends Object> interact2obj(
             final Context ictx,
             final Method callMethod,
             final Type responseType
             ) {
-        return interacts -> {
-            final Transformer<Interact, Interact> i2i = transformer4interact(ictx, callMethod.getAnnotation(OnInteract.class));
-            if (null != i2i) {
-                interacts = interacts.compose(i2i);
-            }
-            return interacts.flatMap(interact -> {
+        return interacts -> handleOnInteract(ictx, callMethod.getAnnotation(OnInteract.class), interacts)
+                .flatMap(interact -> {
                     Interact newInteract = null;
                     if (null != ictx.pathCarriers) {
                         for (final AnnotatedElement annotatedElement : ictx.pathCarriers) {
@@ -340,7 +321,8 @@ public class RpcDelegater {
                     Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> onhttpresp = null;
                     final OnHttpResponse onHttpResponse = callMethod.getAnnotation(OnHttpResponse.class);
                     if (null != onHttpResponse) {
-                        onhttpresp = transformerOf(onHttpResponse.value());
+                        onhttpresp = transformerOf(onHttpResponse.value(),
+                                s -> (Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>>)ReflectUtils.getStaticFieldValue(s));
                     }
 
                     final Observable<FullMessage<HttpResponse>> gethttpresponse = null != onhttpresp ? interact.response().compose(onhttpresp) : interact.response();
@@ -351,7 +333,8 @@ public class RpcDelegater {
                         Transformer<Object, Object> onresp = null;
                         final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
                         if (null != onResponse) {
-                            onresp = transformerOf(onResponse.value());
+                            onresp = transformerOf(onResponse.value(),
+                                    s -> (Transformer<Object, Object>)ReflectUtils.getStaticFieldValue(s));
                         }
                         Observable<? extends Object> getresponse = null;
 
@@ -430,12 +413,20 @@ public class RpcDelegater {
                     LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
                     return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
-        };
+    }
+
+    private static Observable<Interact> handleOnInteract(final Context ictx, final OnInteract onInteract,
+            Observable<Interact> interacts) {
+        final Transformer<Interact, Interact> i2i = transformer4interact(ictx, onInteract);
+        if (null != i2i) {
+            interacts = interacts.compose(i2i);
+        }
+        return interacts;
     }
 
     private static Transformer<Interact, Interact> transformer4interact(final Context ictx, final OnInteract onInteract) {
         if (null != onInteract) {
-            return transformerOf2(onInteract.value(), s -> (Transformer<Interact, Interact>) ictx.rpcResources.get(s));
+            return transformerOf(onInteract.value(), s -> (Transformer<Interact, Interact>) ictx.rpcResources.get(s));
         }
         return null;
     }
@@ -453,20 +444,19 @@ public class RpcDelegater {
 
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> Transformer<T, T> transformerOf(final String[] vars) {
-        final AtomicReference<Transformer<Object, Object>> transformerRef = new AtomicReference<>(null);
+    private static <T> Transformer<T, T> transformerOf(final String[] vars, final Func1<String, Transformer<T, T>> s2t) {
+        final AtomicReference<Transformer<T, T>> transformerRef = new AtomicReference<>(null);
         for (final String var : vars) {
-            final Transformer<Object, Object> suff = ReflectUtils.getStaticFieldValue(var);
-            LOG.debug("get Transformer<Object, Object> {} by {}", suff, var);
+            final Transformer<T, T> suff = s2t.call(var);
+            LOG.debug("transformerOf: get Transformer<T, T> {} by {}", suff, var);
             if (null != transformerRef.get()) {
-                final Transformer<Object, Object> prev = (Transformer<Object, Object>) transformerRef.get();
+                final Transformer<T, T> prev = transformerRef.get();
                 transformerRef.set(objs -> objs.compose(prev).compose(suff));
             } else {
                 transformerRef.set(suff);
             }
         }
-        return (Transformer<T, T>) transformerRef.get();
+        return transformerRef.get();
     }
 
     private static ContentDecoder getContentDecoder(final Method method) {
