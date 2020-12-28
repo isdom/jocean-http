@@ -318,14 +318,11 @@ public class RpcDelegater {
                         interact = interact.body(ictx.content.getFirst(), ictx.content.getSecond());
                     }
 
-                    Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> onhttpresp = null;
-                    final OnHttpResponse onHttpResponse = callMethod.getAnnotation(OnHttpResponse.class);
-                    if (null != onHttpResponse) {
-                        onhttpresp = transformerOf(onHttpResponse.value(),
-                                s -> (Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>>)ReflectUtils.getStaticFieldValue(s));
-                    }
+                    final Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> onhttpresp =
+                            handleOnHttpResponse(callMethod.getAnnotation(OnHttpResponse.class));
 
-                    final Observable<FullMessage<HttpResponse>> gethttpresponse = null != onhttpresp ? interact.response().compose(onhttpresp) : interact.response();
+                    final Observable<FullMessage<HttpResponse>> gethttpresponse =
+                            null != onhttpresp ? interact.response().compose(onhttpresp) : interact.response();
 
                     if (responseType instanceof Class) {
                         //  Observable<R>
@@ -413,6 +410,15 @@ public class RpcDelegater {
                     LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
                     return Observable.error(new RuntimeException("Unknown Response Type"));
                 });
+    }
+
+    private static Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> handleOnHttpResponse(
+            final OnHttpResponse onHttpResponse) {
+        if (null != onHttpResponse) {
+            return transformerOf(onHttpResponse.value(),
+                    s -> (Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>>)ReflectUtils.getStaticFieldValue(s));
+        }
+        return null;
     }
 
     private static Observable<Interact> handleOnInteract(final Context ictx, final OnInteract onInteract,
