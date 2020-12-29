@@ -275,33 +275,21 @@ public class RpcDelegater {
         return interacts -> handleOnInteract(ictx, callMethod.getAnnotation(OnInteract.class), interacts)
                 .flatMap(interact -> {
                     final Observable<FullMessage<HttpResponse>> gethttpresponse =
-                            genHttpResponse(setupInteract(interact, ictx, callMethod), callMethod.getAnnotation(OnHttpResponse.class));
+                            genHttpResponse(setupInteract(interact, ictx, callMethod).response(), callMethod.getAnnotation(OnHttpResponse.class));
 
                     if (responseType instanceof Class) {
                         //  Observable<R>
                         LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(),
                                 ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
 
-                        final Transformer<FullMessage<HttpResponse>, Object> toresp =
-                                handleToResponse(ictx, callMethod.getAnnotation(ToResponse.class));
-
-                        Observable<? extends Object> getresponse = null;
-                        if (null != toresp) {
-                            getresponse = gethttpresponse.compose(toresp);
-                        } else {
-                            getresponse = gethttpresponse.flatMap(MessageUtil.fullmsg2body())
-                                    .compose(MessageUtil.body2bean(getContentDecoder(callMethod), (Class<?>)responseType));
-                                    // interact.responseAs(getContentDecoder(callMethod), (Class<?>)responseType);
-                        }
-
-                        if (null != getresponse) {
-                            final Transformer<Object, Object> onresp = handleOnResponse(callMethod.getAnnotation(OnResponse.class));
-                            return null != onresp ? getresponse.compose(onresp) : getresponse;
-                        }
+                        return gethttpresponse.compose(
+                                genToResponse(ictx, callMethod.getAnnotation(ToResponse.class), callMethod, (Class<?>)responseType))
+                                .compose(handleOnResponse(callMethod.getAnnotation(OnResponse.class)))
+                                ;
                     } else if (responseType instanceof ParameterizedType) {
                         if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
                             //  Observable<FullMessage<MSG>>
-                            LOG.debug("{}.{}.{}'s response as FullMessage", ictx.builderOwnerName(),
+                            LOG.debug("{}.{}.{}'s response as FullMessage<HttpResponse>", ictx.builderOwnerName(),
                                     ictx.builderType.getSimpleName(), callMethod.getName());
                             return gethttpresponse;
                         }
@@ -385,35 +373,34 @@ public class RpcDelegater {
         return interact;
     }
 
-    private static Observable<FullMessage<HttpResponse>> genHttpResponse(final Interact interact, final OnHttpResponse onHttpResponse) {
-        final Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> onhttpresp = handleOnHttpResponse(onHttpResponse);
-
-        return null != onhttpresp ? interact.response().compose(onhttpresp) : interact.response();
+    private static Observable<FullMessage<HttpResponse>> genHttpResponse(final Observable<FullMessage<HttpResponse>> fullresponse, final OnHttpResponse onHttpResponse) {
+        return fullresponse.compose(handleOnHttpResponse(onHttpResponse));
     }
 
-    private static Transformer<FullMessage<HttpResponse>, Object> handleToResponse(final Context ictx,
-            final ToResponse toResponse) {
+    private static Transformer<FullMessage<HttpResponse>, Object> genToResponse(final Context ictx,
+            final ToResponse toResponse, final Method callMethod, final Class<?> responseType) {
         if (null == toResponse) {
-            return null;
+            return fullhttpresps -> fullhttpresps.flatMap(MessageUtil.fullmsg2body())
+                    .compose(MessageUtil.body2bean(getContentDecoder(callMethod), responseType));
+                    // interact.responseAs(getContentDecoder(callMethod), (Class<?>)responseType);
         }
         if (toResponse.value().endsWith("()")) {
-            final Method torespmethod = ReflectUtils.getStaticMethod(toResponse.value().substring(0, toResponse.value().length() - 2));
-            if (null != torespmethod) {
-                try {
-                    final Transformer<FullMessage<HttpResponse>, Object> toresp = (Transformer<FullMessage<HttpResponse>, Object>) torespmethod.invoke(null);
-                    if (toresp instanceof ParamAware) {
-                        processParamAware(QueryParam.class, ictx.queryParams, ((ParamAware)toresp));
-                        processParamAware(PathParam.class, ictx.pathParams, ((ParamAware)toresp));
-                        processParamAware(HeaderParam.class, ictx.headerParams, ((ParamAware)toresp));
-                        processParamAware(JSONField.class, ictx.jsonFields, ((ParamAware)toresp));
-                    }
-                    return toresp;
-                } catch (final Exception e) {
-                    LOG.warn("exception when invoke torespmethod:{}, detail: {}", torespmethod, ExceptionUtils.exception2detail(e));
-                    return null;
+            try {
+                final Method torespmethod = ReflectUtils.getStaticMethod(toResponse.value().substring(0, toResponse.value().length() - 2));
+                final Transformer<FullMessage<HttpResponse>, Object> toresp = (Transformer<FullMessage<HttpResponse>, Object>) torespmethod.invoke(null);
+                if (null == toresp) {
+                    throw new NullPointerException("invoke " + toResponse.value() + " and return null");
                 }
-            } else {
-                return null;
+                if (toresp instanceof ParamAware) {
+                    processParamAware(QueryParam.class, ictx.queryParams, ((ParamAware)toresp));
+                    processParamAware(PathParam.class, ictx.pathParams, ((ParamAware)toresp));
+                    processParamAware(HeaderParam.class, ictx.headerParams, ((ParamAware)toresp));
+                    processParamAware(JSONField.class, ictx.jsonFields, ((ParamAware)toresp));
+                }
+                return toresp;
+            } catch (final Exception e) {
+                LOG.warn("exception when invoke torespmethod:{}, detail: {}", toResponse.value(), ExceptionUtils.exception2detail(e));
+                return fullhttpresps -> Observable.error(e);
             }
         } else {
             return ReflectUtils.getStaticFieldValue(toResponse.value());
@@ -425,7 +412,7 @@ public class RpcDelegater {
             return transformerOf(onResponse.value(),
                     s -> (Transformer<Object, Object>)ReflectUtils.getStaticFieldValue(s));
         }
-        return null;
+        return objs -> objs;
     }
 
     private static Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> handleOnHttpResponse(
@@ -434,23 +421,19 @@ public class RpcDelegater {
             return transformerOf(onHttpResponse.value(),
                     s -> (Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>>)ReflectUtils.getStaticFieldValue(s));
         }
-        return null;
+        return fms -> fms;
     }
 
     private static Observable<Interact> handleOnInteract(final Context ictx, final OnInteract onInteract,
-            Observable<Interact> interacts) {
-        final Transformer<Interact, Interact> i2i = transformer4interact(ictx, onInteract);
-        if (null != i2i) {
-            interacts = interacts.compose(i2i);
-        }
-        return interacts;
+            final Observable<Interact> interacts) {
+        return interacts.compose(transformer4interact(ictx, onInteract));
     }
 
     private static Transformer<Interact, Interact> transformer4interact(final Context ictx, final OnInteract onInteract) {
         if (null != onInteract) {
             return transformerOf(onInteract.value(), s -> (Transformer<Interact, Interact>) ictx.rpcResources.get(s));
         }
-        return null;
+        return interacts -> interacts;
     }
 
     private static void processParamAware(final Class<?> paramType, final Map<String, Object> params, final ParamAware paramAware) {
@@ -478,7 +461,7 @@ public class RpcDelegater {
                 transformerRef.set(suff);
             }
         }
-        return transformerRef.get();
+        return null != transformerRef.get() ? transformerRef.get() : any -> any;
     }
 
     private static ContentDecoder getContentDecoder(final Method method) {
