@@ -426,13 +426,22 @@ public class RpcDelegater {
     private static <T> Transformer<T, T> transformerOf(final String[] vars, final Func1<String, Transformer<T, T>> s2t) {
         final AtomicReference<Transformer<T, T>> transformerRef = new AtomicReference<>(null);
         for (final String var : vars) {
-            final Transformer<T, T> suff = s2t.call(var);
-            LOG.debug("transformerOf: get Transformer<T, T> {} by {}", suff, var);
-            if (null != transformerRef.get()) {
-                final Transformer<T, T> prev = transformerRef.get();
-                transformerRef.set(objs -> objs.compose(prev).compose(suff));
-            } else {
-                transformerRef.set(suff);
+            try {
+                final Transformer<T, T> suff = s2t.call(var);
+                if (null == suff) {
+                    LOG.warn("transformerOf: get transformer by {} is null", var);
+                    return any -> Observable.error(new NullPointerException("missing transformer named:" + var));
+                }
+                LOG.debug("transformerOf: get Transformer<T, T> {} by {}", suff, var);
+                if (null != transformerRef.get()) {
+                    final Transformer<T, T> prev = transformerRef.get();
+                    transformerRef.set(objs -> objs.compose(prev).compose(suff));
+                } else {
+                    transformerRef.set(suff);
+                }
+            } catch (final Exception e) {
+                LOG.warn("exception when invoke transformerOf, detail: {}", ExceptionUtils.exception2detail(e));
+                return any -> Observable.error(e);
             }
         }
         return null != transformerRef.get() ? transformerRef.get() : any -> any;
