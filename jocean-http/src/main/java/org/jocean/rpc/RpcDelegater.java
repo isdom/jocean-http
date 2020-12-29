@@ -272,56 +272,35 @@ public class RpcDelegater {
             final Method callMethod,
             final Type responseType
             ) {
-        return interacts -> handleOnInteract(ictx, callMethod.getAnnotation(OnInteract.class), interacts)
-                .flatMap(interact -> {
-                    final Observable<FullMessage<HttpResponse>> gethttpresponse =
-                            genHttpResponse(setupInteract(interact, ictx, callMethod).response(), callMethod.getAnnotation(OnHttpResponse.class));
+        return interacts -> interacts.compose(handleOnInteract(ictx, callMethod.getAnnotation(OnInteract.class)))
+                .flatMap(interact ->
+                    setupInteract(interact, ictx, callMethod)
+                    .response()
+                    .compose(handleOnHttpResponse(callMethod.getAnnotation(OnHttpResponse.class)))
+                    .compose(toFinalResponse(ictx, callMethod, responseType))
+                );
+    }
 
-                    if (responseType instanceof Class) {
-                        //  Observable<R>
-                        LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(),
-                                ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
+    private static Transformer<FullMessage<HttpResponse>, Object> toFinalResponse(final Context ictx, final Method callMethod, final Type responseType) {
+        if (responseType instanceof Class) {
+            //  Observable<R>
+            LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(),
+                    ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
 
-                        return gethttpresponse.compose(
-                                genToResponse(ictx, callMethod.getAnnotation(ToResponse.class), callMethod, (Class<?>)responseType))
-                                .compose(handleOnResponse(callMethod.getAnnotation(OnResponse.class)))
-                                ;
-                    } else if (responseType instanceof ParameterizedType) {
-                        if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
-                            //  Observable<FullMessage<MSG>>
-                            LOG.debug("{}.{}.{}'s response as FullMessage<HttpResponse>", ictx.builderOwnerName(),
-                                    ictx.builderType.getSimpleName(), callMethod.getName());
-                            return gethttpresponse;
-                        }
-                    }
-                    /*
-                    if (responseType instanceof Class) {
-                        //  Transformer<Interact, R>
-                        LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
-                        Transformer<Object, Object> onresp = null;
-                        final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
-                        if (null != onResponse) {
-                            onresp = transformerOf(onResponse.value());
-                        }
-                        final Observable<? extends Object> getresponse = interact.responseAs(getContentDecoder(callMethod), (Class<?>)responseType);
-                        return null != onresp ? getresponse.compose(onresp) : getresponse;
-                    } else if (responseType instanceof ParameterizedType) {
-                        if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
-                            //  Transformer<Interact, FullMessage<MSG>>
-                            LOG.debug("{}.{}.{}'s response as FullMessage", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName());
-                            Transformer<Object, Object> onresp = null;
-                            final OnResponse onResponse = callMethod.getAnnotation(OnResponse.class);
-                            if (null != onResponse) {
-                                onresp = transformerOf(onResponse.value());
-                            }
-                            final Observable<? extends Object> getresponse = interact.response();
-                            return null != onresp ? getresponse.compose(onresp) : getresponse;
-                        }
-                    }
-                    */
-                    LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
-                    return Observable.error(new RuntimeException("Unknown Response Type"));
-                });
+            return fmrs -> fmrs.compose(
+                    genToResponse(ictx, callMethod.getAnnotation(ToResponse.class), callMethod, (Class<?>)responseType))
+                    .compose(handleOnResponse(callMethod.getAnnotation(OnResponse.class)))
+                    ;
+        } else if (responseType instanceof ParameterizedType) {
+            if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
+                //  Observable<FullMessage<MSG>>
+                LOG.debug("{}.{}.{}'s response as FullMessage<HttpResponse>", ictx.builderOwnerName(),
+                        ictx.builderType.getSimpleName(), callMethod.getName());
+                return fmrs -> fmrs.<Object>map(resp -> resp);
+            }
+        }
+        LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
+        return fmrs -> Observable.error(new RuntimeException("Unknown Response Type"));
     }
 
     private static Interact setupInteract(Interact interact, final Context ictx, final Method callMethod) {
@@ -373,10 +352,6 @@ public class RpcDelegater {
         return interact;
     }
 
-    private static Observable<FullMessage<HttpResponse>> genHttpResponse(final Observable<FullMessage<HttpResponse>> fullresponse, final OnHttpResponse onHttpResponse) {
-        return fullresponse.compose(handleOnHttpResponse(onHttpResponse));
-    }
-
     private static Transformer<FullMessage<HttpResponse>, Object> genToResponse(final Context ictx,
             final ToResponse toResponse, final Method callMethod, final Class<?> responseType) {
         if (null == toResponse) {
@@ -387,6 +362,7 @@ public class RpcDelegater {
         if (toResponse.value().endsWith("()")) {
             try {
                 final Method torespmethod = ReflectUtils.getStaticMethod(toResponse.value().substring(0, toResponse.value().length() - 2));
+                @SuppressWarnings("unchecked")
                 final Transformer<FullMessage<HttpResponse>, Object> toresp = (Transformer<FullMessage<HttpResponse>, Object>) torespmethod.invoke(null);
                 if (null == toresp) {
                     throw new NullPointerException("invoke " + toResponse.value() + " and return null");
@@ -407,6 +383,7 @@ public class RpcDelegater {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static Transformer<Object, Object> handleOnResponse(final OnResponse onResponse) {
         if (null != onResponse) {
             return transformerOf(onResponse.value(),
@@ -415,21 +392,18 @@ public class RpcDelegater {
         return objs -> objs;
     }
 
+    @SuppressWarnings("unchecked")
     private static Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> handleOnHttpResponse(
             final OnHttpResponse onHttpResponse) {
         if (null != onHttpResponse) {
             return transformerOf(onHttpResponse.value(),
                     s -> (Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>>)ReflectUtils.getStaticFieldValue(s));
         }
-        return fms -> fms;
+        return fmrs -> fmrs;
     }
 
-    private static Observable<Interact> handleOnInteract(final Context ictx, final OnInteract onInteract,
-            final Observable<Interact> interacts) {
-        return interacts.compose(transformer4interact(ictx, onInteract));
-    }
-
-    private static Transformer<Interact, Interact> transformer4interact(final Context ictx, final OnInteract onInteract) {
+    @SuppressWarnings("unchecked")
+    private static Transformer<Interact, Interact> handleOnInteract(final Context ictx, final OnInteract onInteract) {
         if (null != onInteract) {
             return transformerOf(onInteract.value(), s -> (Transformer<Interact, Interact>) ictx.rpcResources.get(s));
         }
