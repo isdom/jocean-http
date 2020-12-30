@@ -567,6 +567,7 @@ public class MessageUtil {
                         .flatMap(new Func1<HttpInitiator, Observable<T>>() {
                             @Override
                             public Observable<T> call(final HttpInitiator initiator) {
+                                checkAndFixContentLength(initiator);
                                 return defineInteraction(initiator).flatMap(fullmsg2body())
                                         .compose(body2bean(decoder, type)).doOnUnsubscribe(initiator.closer());
                             }
@@ -586,11 +587,24 @@ public class MessageUtil {
                         .flatMap(new Func1<HttpInitiator, Observable<FullMessage<HttpResponse>>>() {
                             @Override
                             public Observable<FullMessage<HttpResponse>> call(final HttpInitiator initiator) {
+                                checkAndFixContentLength(initiator);
                                 return defineInteraction(initiator).doOnUnsubscribe(initiator.closer());
                             }
                         });
             }
+
         };
+    }
+
+    private static void checkAndFixContentLength(final HttpInitiator initiator) {
+        initiator.writeCtrl().sending().subscribe(obj -> {
+            if (obj instanceof HttpRequest) {
+                final HttpRequest req = (HttpRequest)obj;
+                if (!HttpUtil.isContentLengthSet(req) && !HttpUtil.isTransferEncodingChunked(req)) {
+                    HttpUtil.setContentLength(req, 0);
+                }
+            }
+        });
     }
 
     public static SocketAddress uri2addr(final URI uri) {
