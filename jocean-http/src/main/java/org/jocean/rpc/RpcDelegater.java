@@ -43,6 +43,7 @@ import org.jocean.rpc.annotation.ConstParams;
 import org.jocean.rpc.annotation.OnBuild;
 import org.jocean.rpc.annotation.OnHttpResponse;
 import org.jocean.rpc.annotation.OnInteract;
+import org.jocean.rpc.annotation.OnParam;
 import org.jocean.rpc.annotation.OnResponse;
 import org.jocean.rpc.annotation.RpcResource;
 import org.jocean.rpc.annotation.ToResponse;
@@ -164,6 +165,7 @@ public class RpcDelegater {
                     final PathParam pathParam = method.getAnnotation(PathParam.class);
                     final HeaderParam headerParam = method.getAnnotation(HeaderParam.class);
                     final Produces produces = method.getAnnotation(Produces.class);
+                    final OnParam onParam = method.getAnnotation(OnParam.class);
 
                     if (null != onBuild) {
                         final Action2<Object, Object> applier = ReflectUtils.getStaticFieldValue(onBuild.value());
@@ -176,15 +178,15 @@ public class RpcDelegater {
                             }
                         }
                     } else if (null != rpcResource) {
-                        ictx.rpcResources.put(rpcResource.value(), args[0]);
+                        ictx.rpcResources.put(rpcResource.value(), handleOnParam(onParam, args[0]));
                     } else if (null != queryParam) {
-                        ictx.queryParams.put(queryParam.value(), args[0]);
+                        ictx.queryParams.put(queryParam.value(), handleOnParam(onParam, args[0]));
                     } else if (null != pathParam) {
-                        ictx.pathParams.put(pathParam.value(), args[0]);
+                        ictx.pathParams.put(pathParam.value(), handleOnParam(onParam, args[0]));
                     } else if (null != headerParam) {
-                        ictx.headerParams.put(headerParam.value(), args[0]);
+                        ictx.headerParams.put(headerParam.value(), handleOnParam(onParam, args[0]));
                     } else if (null != jsonField && !jsonField.name().isEmpty()) {
-                        ictx.jsonFields.put(jsonField.name(), args[0]);
+                        ictx.jsonFields.put(jsonField.name(), handleOnParam(onParam, args[0]));
                     } else if (null != produces) {
                         final ContentEncoder bodyEncoder = ContentUtil.selectCodec(produces.value(), MIME_ENCODERS);
                         if (null != bodyEncoder) {
@@ -254,6 +256,19 @@ public class RpcDelegater {
                 return null;
             }
         };
+    }
+
+    private static Object handleOnParam(final OnParam onParam, final Object arg0) {
+        if (null == onParam) {
+            return arg0;
+        }
+        try {
+            final Method transf = ReflectUtils.getStaticMethodByName(onParam.value());
+            return transf.invoke(null, arg0);
+        } catch (final Exception e) {
+            LOG.warn("exception when handleOnParam for {}, detail: {}", onParam.value(), ExceptionUtils.exception2detail(e));
+            return arg0;
+        }
     }
 
     public static boolean isObservableAny(final Type genericType) {
