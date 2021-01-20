@@ -263,7 +263,7 @@ public class RpcDelegater {
             return arg0;
         }
         try {
-            final Method transf = ReflectUtils.getStaticMethodByName(onParam.value());
+            final Method transf = ReflectUtils.getMethodByFullname(onParam.value());
             return transf.invoke(null, arg0);
         } catch (final Exception e) {
             LOG.warn("exception when handleOnParam for {}, detail: {}", onParam.value(), ExceptionUtils.exception2detail(e));
