@@ -4,8 +4,11 @@
 package org.jocean.http.server.internal;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.http.ByteBufSlice;
@@ -17,6 +20,7 @@ import org.jocean.http.MessageBody;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.idiom.DisposableWrapper;
+import org.jocean.idiom.Pair;
 import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +41,7 @@ import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action0;
 import rx.functions.Action1;
+import rx.functions.Action2;
 import rx.functions.Func1;
 import rx.subscriptions.CompositeSubscription;
 import rx.subscriptions.Subscriptions;
@@ -47,8 +52,7 @@ import rx.subscriptions.Subscriptions;
  */
 class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, Comparable<DefaultHttpTrade> {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(DefaultHttpTrade.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultHttpTrade.class);
 
     private final CompositeSubscription _inboundCompleted = new CompositeSubscription();
 
@@ -360,4 +364,21 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
                 .append(", channel=").append(_channel)
                 .append("]").toString();
     }
+
+    @Override
+    public void log(final Map<String, ?> fields) {
+        _logs.add(Pair.of(System.currentTimeMillis() * 1000, fields));
+    }
+
+    @Override
+    public void visitlogs(final Action2<Long, Map<String, ?>> logvisitor) {
+        for (final Pair<Long, Map<String, ?>> log : _logs) {
+            try {
+                logvisitor.call(log.first, log.second);
+            } catch (final Exception e)
+            {}
+        }
+    }
+
+    private final List<Pair<Long, Map<String, ?>>> _logs = new ArrayList<>();
 }

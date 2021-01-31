@@ -5,6 +5,7 @@ package org.jocean.http.server;
 
 import java.io.Closeable;
 import java.net.SocketAddress;
+import java.util.Map;
 
 import org.jocean.http.Feature;
 import org.jocean.http.FullMessage;
@@ -18,7 +19,9 @@ import io.netty.handler.codec.http.HttpRequest;
 import rx.Completable;
 import rx.Observable;
 import rx.Subscription;
+import rx.annotations.Experimental;
 import rx.functions.Action0;
+import rx.functions.Action2;
 import rx.functions.Func0;
 
 /**
@@ -68,5 +71,11 @@ public interface HttpServerBuilder extends Closeable {
         public Intraffic intraffic();
 
         public long startTimeMillis();
+
+        @Experimental
+        public void log(final Map<String, ?> fields);
+
+        @Experimental
+        public void visitlogs(final Action2<Long, Map<String, ?>> logvisitor);
     }
 }
