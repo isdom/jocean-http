@@ -77,5 +77,8 @@ public interface HttpServerBuilder extends Closeable {
 
         @Experimental
         public void visitlogs(final Action2<Long, Map<String, ?>> logvisitor);
+
+        @Experimental
+        public int inboundContentSize();
     }
 }

@@ -381,4 +381,9 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
     }
 
     private final List<Pair<Long, Map<String, ?>>> _logs = new ArrayList<>();
+
+    @Override
+    public int inboundContentSize() {
+        return this._contentSize.get();
+    }
 }

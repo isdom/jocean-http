@@ -2,6 +2,7 @@ package org.jocean.http;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.atomic.AtomicReference;
@@ -30,6 +31,8 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
+import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.LastHttpContent;
@@ -111,6 +114,8 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     private final TrafficCounter _traffic;
 
     protected final HaltAwareSupport<T> _haltSupport;
+
+    protected final AtomicInteger _contentSize = new AtomicInteger();
 
     @Override
     public void close() {
@@ -462,6 +467,14 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         onInboundMessage(inmsg);
 
         newOrFetchInmsgs().add(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
+
+        if (inmsg instanceof HttpMessage) {
+            _contentSize.set(0);
+        }
+
+        if (inmsg instanceof HttpContent) {
+            _contentSize.addAndGet(((HttpContent)inmsg).content().readableBytes());
+        }
 
         if (inmsg instanceof HttpResponse) {
             this._currentStatus = ((HttpResponse)inmsg).status().code();
