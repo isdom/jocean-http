@@ -116,6 +116,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     protected final HaltAwareSupport<T> _haltSupport;
 
     protected final AtomicInteger _contentSize = new AtomicInteger();
+    protected final StringBuilder _readTracing = new StringBuilder();
 
     @Override
     public void close() {
@@ -328,6 +329,8 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         }};
 
     private void onReadComplete() {
+        _readTracing.append("|RC|");
+
         @SuppressWarnings("unchecked")
         final Subscriber<? super HttpSlice> subscriber = inboundSubscriberUpdater.get(this);
 
@@ -341,9 +344,11 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                 //  此时应继续调用 channel.read(), 来继续获取对端发送来的 加密数据
                 LOG.debug("!NO! inmsg received, continue read for {}", this);
                 readMessage();
+                _readTracing.append("AR|");
             } else {
                 LOG.debug("inmsg received, stop read and wait for {}", this);
                 this._unreadBegin = System.currentTimeMillis();
+                _readTracing.append("ON|");
                 subscriber.onNext(currentSlice(true));
             }
         } else {
@@ -464,26 +469,32 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
     private void processInmsg(final Subscriber<? super HttpSlice> subscriber, final HttpObject inmsg) {
 
-        onInboundMessage(inmsg);
-
-        newOrFetchInmsgs().add(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
-
         if (inmsg instanceof HttpMessage) {
             _contentSize.set(0);
+            _readTracing.setLength(0);
         }
 
         if (inmsg instanceof HttpContent) {
-            _contentSize.addAndGet(((HttpContent)inmsg).content().readableBytes());
+            final int readableBytes = ((HttpContent)inmsg).content().readableBytes();
+            _contentSize.addAndGet(readableBytes);
+            _readTracing.append("R:");
+            _readTracing.append(readableBytes);
         }
+
+        onInboundMessage(inmsg);
+
+        newOrFetchInmsgs().add(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
 
         if (inmsg instanceof HttpResponse) {
             this._currentStatus = ((HttpResponse)inmsg).status().code();
         }
 
         if (inmsg instanceof LastHttpContent) {
+            _readTracing.append("|LC|");
             // -1 == _currentStatus means never meet HttpResponse
             if (-1 == this._currentStatus || this._currentStatus >= 200) {
                 LOG.debug("recv LastHttpContent({}), try to unholdInboundAndUninstallHandler and onInboundCompleted", inmsg);
+                _readTracing.append("OC0|");
                 /*
                  * netty 参考代码:
                  *   https://github.com/netty/netty/blob/netty-4.0.26.Final /codec/src/main/java/io/netty/handler/codec/ByteToMessageDecoder.java#L274
@@ -495,6 +506,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                  * 因此，无需在channelInactive处，针对该情况做特殊处理
                  */
                 if (unholdInboundAndUninstallHandler(subscriber)) {
+                    _readTracing.append("OC1|");
                     if (!subscriber.isUnsubscribed()) {
                         subscriber.onNext(currentSlice(false));
                     }
@@ -502,10 +514,12 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                     onInboundCompleted();
 
                     if (!subscriber.isUnsubscribed()) {
+                        _readTracing.append("OCD|");
                         subscriber.onCompleted();
                     }
                 }
             } else {
+                _readTracing.append("SKP|");
                 LOG.info("recv LastHttpContent({}) for current status {}, skip and continue recv next response", inmsg, this._currentStatus);
             }
         }

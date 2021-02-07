@@ -80,5 +80,8 @@ public interface HttpServerBuilder extends Closeable {
 
         @Experimental
         public int inboundContentSize();
+
+        @Experimental
+        public String inboundTracing();
     }
 }

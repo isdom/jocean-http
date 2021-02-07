@@ -386,4 +386,9 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
     public int inboundContentSize() {
         return this._contentSize.get();
     }
+
+    @Override
+    public String inboundTracing() {
+        return this._readTracing.toString();
+    }
 }
