@@ -40,9 +40,7 @@ import rx.CompletableSubscriber;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action0;
-import rx.functions.Action1;
 import rx.functions.Action2;
-import rx.functions.Func1;
 import rx.subscriptions.CompositeSubscription;
 import rx.subscriptions.Subscriptions;
 
@@ -97,9 +95,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
 
         final Observable<? extends HttpSlice> rawInbound = rawInbound().share();
 
-        this._inbound = rawInbound.flatMap(new Func1<HttpSlice, Observable<FullMessage<HttpRequest>>>() {
-            @Override
-            public Observable<FullMessage<HttpRequest>> call(final HttpSlice slice) {
+        this._inbound = rawInbound.flatMap(slice -> {
                 final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
                 if (iter.hasNext()) {
                     final HttpObject hobj = iter.next().unwrap();
@@ -114,8 +110,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
                     }
                 }
                 return Observable.empty();
-            }
-        }).cache();
+            }).cache();
 
         this._inbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
     }
@@ -159,36 +154,18 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
                     @Override
                     public Observable<? extends ByteBufSlice> content() {
                         return Observable.just(sliceWithReq).concatWith(rawInbound)
-                        .doOnNext(new Action1<HttpSlice>() {
-                            @Override
-                            public void call(final HttpSlice slice) {
-                                LOG.debug("{}'s content onNext: {}", req, slice);
-                            }
-                        })
-                        .takeUntil(new Func1<HttpSlice, Boolean>() {
-                            @Override
-                            public Boolean call(final HttpSlice slice) {
+                        .doOnNext(slice -> LOG.debug("{}'s content onNext: {}", req, slice))
+                        .takeUntil(slice -> {
                                 final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
                                 HttpObject last = null;
                                 while (iter.hasNext()) {
                                     last = iter.next().unwrap();
                                 }
                                 return null != last && last instanceof LastHttpContent;
-                            }
-                        })
-                        .doOnNext(new Action1<HttpSlice>() {
-                            @Override
-                            public void call(final HttpSlice hs) {
-                                LOG.debug("{}'s content onNext's hs: {}", req, hs);
-                            }
-                        })
+                            })
+                        .doOnNext(hs -> LOG.debug("{}'s content onNext's hs: {}", req, hs))
                         .map(HttpSliceUtil.hs2bbs())
-                        .doOnNext(new Action1<ByteBufSlice>() {
-                            @Override
-                            public void call(final ByteBufSlice bbs) {
-                                LOG.debug("{}'s content onNext's bbs: {}", req, bbs);
-                            }
-                        })
+                        .doOnNext(bbs -> LOG.debug("{}'s content onNext's bbs: {}", req, bbs))
                         ;
                     }});
             }};

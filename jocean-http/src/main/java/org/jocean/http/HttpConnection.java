@@ -508,6 +508,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
                 if (unholdInboundAndUninstallHandler(subscriber)) {
                     _readTracing.append("OC1|");
                     if (!subscriber.isUnsubscribed()) {
+                        _readTracing.append("OC2|");
                         subscriber.onNext(currentSlice(false));
                     }
 
