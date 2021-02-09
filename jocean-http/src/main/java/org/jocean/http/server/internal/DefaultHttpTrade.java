@@ -36,10 +36,8 @@ import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import rx.Completable;
-import rx.CompletableSubscriber;
 import rx.Observable;
 import rx.Subscription;
-import rx.functions.Action0;
 import rx.functions.Action2;
 import rx.subscriptions.CompositeSubscription;
 import rx.subscriptions.Subscriptions;
@@ -61,15 +59,8 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
 
     @Override
     public Completable inboundCompleted() {
-        return Completable.create(new Completable.OnSubscribe() {
-            @Override
-            public void call(final CompletableSubscriber subscriber) {
-                _inboundCompleted.add(Subscriptions.create(new Action0() {
-                    @Override
-                    public void call() {
-                        subscriber.onCompleted();
-                    }}));
-            }});
+        return Completable.create(subscriber ->
+                _inboundCompleted.add(Subscriptions.create(()->subscriber.onCompleted())));
     }
 
     @Override
