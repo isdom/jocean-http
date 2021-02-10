@@ -357,12 +357,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     private HttpSlice currentSlice(final boolean needStep) {
-        final Subscription runOnce = needStep ? Subscriptions.create(new Action0() {
-            @Override
-            public void call() {
-                readMessage();
-            }
-        }) : Subscriptions.unsubscribed();
+        final Subscription runOnce = needStep ? Subscriptions.create(()->readMessage()) : Subscriptions.unsubscribed();
 
         final List<DisposableWrapper<HttpObject>> inmsgs = this._inmsgsRef.getAndSet(null);
 
@@ -416,6 +411,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         this._channel.read();
         this._unreadBegin = 0;
         readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
+        _readTracing.append("|RM|");
     }
 
     private boolean holdInboundAndInstallHandler(final Subscriber<? super HttpSlice> subscriber) {
