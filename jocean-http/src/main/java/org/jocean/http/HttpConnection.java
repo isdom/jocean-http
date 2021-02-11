@@ -67,38 +67,22 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         Nettys.applyToChannel(onHalt(),
                 channel,
                 HttpHandlers.ON_EXCEPTION_CAUGHT,
-                new Action1<Throwable>() {
-                    @Override
-                    public void call(final Throwable cause) {
-                        fireClosed(cause);
-                    }});
+                (Action1<Throwable>)cause -> fireClosed(cause));
 
         Nettys.applyToChannel(onHalt(),
                 channel,
                 HttpHandlers.ON_CHANNEL_INACTIVE,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        onChannelInactive();
-                    }});
+                (Action0)() -> onChannelInactive());
 
         Nettys.applyToChannel(onHalt(),
                 channel,
                 HttpHandlers.ON_CHANNEL_READCOMPLETE,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        onReadComplete();
-                    }});
+                (Action0)() -> onReadComplete());
 
         Nettys.applyToChannel(onHalt(),
                 channel,
                 HttpHandlers.ON_CHANNEL_WRITABILITYCHANGED,
-                new Action0() {
-                    @Override
-                    public void call() {
-                        onWritabilityChanged();
-                    }});
+                (Action0)() -> onWritabilityChanged());
 
         if (!this._channel.isActive()) {
             fireClosed(new TransportException("channelInactive of " + channel));
