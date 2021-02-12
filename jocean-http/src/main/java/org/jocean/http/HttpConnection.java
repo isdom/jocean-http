@@ -184,35 +184,21 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
 
             @Override
             public Observable<Boolean> writability() {
-                return Observable.unsafeCreate(new Observable.OnSubscribe<Boolean>() {
-                    @Override
-                    public void call(final Subscriber<? super Boolean> subscriber) {
+                return Observable.unsafeCreate(subscriber -> {
                         if (!subscriber.isUnsubscribed()) {
-                            _op.runAtEventLoop(HttpConnection.this, new Runnable() {
-                                @Override
-                                public void run() {
-                                    addWritabilitySubscriber(subscriber);
-                                }});
+                            _op.runAtEventLoop(HttpConnection.this, ()-> addWritabilitySubscriber(subscriber));
                         }
-                    }});
+                });
             }
 
             @Override
             public Observable<Object> sending() {
-                return Observable.unsafeCreate(new OnSubscribe<Object>() {
-                    @Override
-                    public void call(final Subscriber<? super Object> subscriber) {
-                        addSendingSubscriber(subscriber);
-                    }});
+                return Observable.unsafeCreate(subscriber -> addSendingSubscriber(subscriber));
             }
 
             @Override
             public Observable<Object> sended() {
-                return Observable.unsafeCreate(new OnSubscribe<Object>() {
-                    @Override
-                    public void call(final Subscriber<? super Object> subscriber) {
-                        addSendedSubscriber(subscriber);
-                    }});
+                return Observable.unsafeCreate(subscriber -> addSendedSubscriber(subscriber));
             }};
     }
 
