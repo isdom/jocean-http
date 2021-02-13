@@ -217,22 +217,14 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     private void addSendingSubscriber(final Subscriber<? super Object> subscriber) {
         if (!subscriber.isUnsubscribed()) {
             this._sendingObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _sendingObserver.removeComponent(subscriber);
-                }}));
+            subscriber.add(Subscriptions.create(() -> _sendingObserver.removeComponent(subscriber)));
         }
     }
 
     private void addSendedSubscriber(final Subscriber<? super Object> subscriber) {
         if (!subscriber.isUnsubscribed()) {
             this._sendedObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _sendedObserver.removeComponent(subscriber);
-                }}));
+            subscriber.add(Subscriptions.create(() -> _sendedObserver.removeComponent(subscriber)));
         }
     }
 
