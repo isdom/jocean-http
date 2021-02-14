@@ -40,7 +40,6 @@ import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Future;
 import rx.Completable;
 import rx.Observable;
-import rx.Observable.OnSubscribe;
 import rx.Observer;
 import rx.Subscriber;
 import rx.Subscription;
@@ -356,16 +355,13 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     protected Observable<HttpSlice> rawInbound() {
-        return Observable.unsafeCreate(new OnSubscribe<HttpSlice>() {
-            @Override
-            public void call(final Subscriber<? super HttpSlice> subscriber) {
+        return Observable.unsafeCreate(subscriber -> {
                 if (!subscriber.isUnsubscribed()) {
                     if (!_op.attachInbound(HttpConnection.this, subscriber)) {
                         subscriber.onError(new RuntimeException("transaction in progress"));
                     }
-                }
-            }
-        });
+                }}
+        );
     }
 
     private void doReadMessage() {
@@ -603,15 +599,13 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
             outboundSubscriptionUpdater.set(this, subscription);
             //  TODO:
             //  when outbound unsubscribe early, how to do (close HttpConnection instance ?)
-            outboundSubscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
+            outboundSubscriber.add(Subscriptions.create(() -> {
                     if (outboundSubscriptionUpdater.compareAndSet(HttpConnection.this, subscription, null)) {
                         LOG.debug("reset _outboundSubscription to null");
                     } else {
                         LOG.debug("_outboundSubscription has changed, MAYBE force replace to next outbound, ignore reset");
                     }
-                }}));
+                }));
             return subscription;
         } else {
             LOG.warn("outbound message has setted for {}, ignore this outbound({})", this, outbound);
@@ -687,20 +681,13 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
     }
 
     private void flushThenStep(final Stepable<?> stepable) {
-        _op.flush(HttpConnection.this).subscribe(new Action0() {
-            @Override
-            public void call() {
-                stepable.step();
-            }
-        }, new Action1<Throwable>() {
-            @Override
-            public void call(final Throwable e) {
+        _op.flush(HttpConnection.this).subscribe(() -> stepable.step(),  e -> {
                 if (!(e instanceof CloseException)) {
                     LOG.warn("outbound unit({})'s flush meet onError with ({}), try close {}",
                             stepable, ExceptionUtils.exception2detail(e), HttpConnection.this);
                 }
                 fireClosed(e);
-            }});
+            });
     }
 
     private Subscription buildPlaceholderSubscription() {
