@@ -205,11 +205,7 @@ public abstract class HttpConnection<T> implements Inbound, Outbound, AutoClosea
         if (!subscriber.isUnsubscribed()) {
             subscriber.onNext(this._op.isWritable(this));
             this._writabilityObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _writabilityObserver.removeComponent(subscriber);
-                }}));
+            subscriber.add(Subscriptions.create(() -> _writabilityObserver.removeComponent(subscriber)));
         }
     }
 
