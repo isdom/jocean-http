@@ -280,9 +280,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                 });
 
         Nettys.applyHandler(channel.pipeline(), HttpHandlers.ON_CHANNEL_READ,
-            new Action0() {
-                @Override
-                public void call() {
+            (Action0)() -> {
                     timout4channel.unsubscribe();
                     if (terminateRef.get() != null) {
                         terminateRef.get().call();
@@ -291,12 +289,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                     if (!subscriber.isUnsubscribed()) {
                         final HttpTrade trade = httpTradeOf(channel,
                                 doRecycleChannel(channel, subscriber, awaitChannels),
-                                new Action1<HttpTrade>() {
-                                    @Override
-                                    public void call(final HttpTrade t) {
-                                        _numCompletedTrades.incrementAndGet();
-                                    }}
-                                );
+                                t -> _numCompletedTrades.incrementAndGet());
                         if (trade.isActive()) {
                             subscriber.onNext(trade);
                         } else {
@@ -307,7 +300,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                                 subscriber, channel);
                         channel.close();
                     }
-                }});
+                });
         channel.read();
     }
 
@@ -353,11 +346,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                 }
             }});
             */
-        trade.doOnHalt(new Action1<HttpTrade>() {
-            @Override
-            public void call(final HttpTrade t) {
-                updateCurrentInboundMemory(-_lastAddedSize.getAndSet(-1));
-            }});
+        trade.doOnHalt( t -> updateCurrentInboundMemory(-_lastAddedSize.getAndSet(-1)));
         return trade;
     }
 
@@ -365,9 +354,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
             final Channel channel,
             final Subscriber<? super HttpTrade> subscriber,
             final List<Channel> awaitChannels) {
-        return new Action1<HttpTrade>() {
-            @Override
-            public void call(final HttpTrade trade) {
+        return trade -> {
                 removeFromTrades(trade);
                 final DefaultHttpTrade defaultHttpTrade = (DefaultHttpTrade)trade;
                 if (channel.isActive()
@@ -378,7 +365,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                 } else {
                     channel.close();
                 }
-            }};
+            };
     }
 
     public DefaultHttpServerBuilder() {
