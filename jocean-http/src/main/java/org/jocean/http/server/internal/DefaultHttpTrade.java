@@ -10,10 +10,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jocean.http.ByteBufSlice;
 import org.jocean.http.FullMessage;
-import org.jocean.http.HttpConnection;
 import org.jocean.http.HttpSlice;
 import org.jocean.http.HttpSliceUtil;
 import org.jocean.http.MessageBody;
@@ -21,7 +21,6 @@ import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.idiom.DisposableWrapper;
 import org.jocean.idiom.Pair;
-import org.jocean.idiom.rx.RxSubscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +33,6 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpUtil;
-import io.netty.handler.codec.http.LastHttpContent;
 import rx.Completable;
 import rx.Observable;
 import rx.Subscription;
@@ -46,7 +44,7 @@ import rx.subscriptions.Subscriptions;
  * @author isdom
  *
  */
-class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, Comparable<DefaultHttpTrade> {
+class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTrade, Comparable<DefaultHttpTrade> {
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultHttpTrade.class);
 
@@ -65,7 +63,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
 
     @Override
     public Observable<FullMessage<HttpRequest>> inbound() {
-        return this._inbound;
+        return this._inboundRef.get();
     }
 
     @Override
@@ -84,6 +82,21 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
             throw new RuntimeException("Can't create trade out of channel(" + channel +")'s eventLoop.");
         }
 
+        _inboundRef.set(Observable.error(new RuntimeException("not ready")));
+        received().first().subscribe(slice -> {
+            final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
+            if (iter.hasNext()) {
+                final HttpObject hobj = iter.next().unwrap();
+                if (hobj instanceof HttpRequest) {
+                    // TODO, wrap request as pure http request while income FullHttpRequest
+                    // or when sending
+                    final HttpRequest req = (HttpRequest)hobj;
+                    _inboundRef.set(Observable.just(fullRequest(req, slice)));
+                }
+            }
+        });
+
+        /*
         final Observable<? extends HttpSlice> rawInbound = rawInbound().share();
 
         this._inbound = rawInbound.flatMap(slice -> {
@@ -104,12 +117,12 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
             }).cache();
 
         this._inbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
+        */
     }
 
     private FullMessage<HttpRequest> fullRequest(
             final HttpRequest req,
-            final HttpSlice sliceWithReq,
-            final Observable<? extends HttpSlice> rawInbound) {
+            final HttpSlice sliceWithReq) {
         return new FullMessage<HttpRequest>() {
             @Override
             public String toString() {
@@ -144,16 +157,8 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
 
                     @Override
                     public Observable<? extends ByteBufSlice> content() {
-                        return Observable.just(sliceWithReq).concatWith(rawInbound)
+                        return Observable.just(sliceWithReq).concatWith(received())
                         .doOnNext(slice -> LOG.debug("{}'s content onNext: {}", req, slice))
-                        .takeUntil(slice -> {
-                                final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
-                                HttpObject last = null;
-                                while (iter.hasNext()) {
-                                    last = iter.next().unwrap();
-                                }
-                                return null != last && last instanceof LastHttpContent;
-                            })
                         .doOnNext(hs -> LOG.debug("{}'s content onNext's hs: {}", req, hs))
                         .map(HttpSliceUtil.hs2bbs())
                         .doOnNext(bbs -> LOG.debug("{}'s content onNext's bbs: {}", req, bbs))
@@ -273,7 +278,7 @@ class DefaultHttpTrade extends HttpConnection<HttpTrade> implements HttpTrade, C
     private static final int STATUS_RECV_END = 2;
     private static final int STATUS_SEND = 3;
 
-    private final Observable<FullMessage<HttpRequest>> _inbound;
+    private final AtomicReference<Observable<FullMessage<HttpRequest>>> _inboundRef = new AtomicReference<>();
 
     private volatile boolean _isKeepAlive = false;
 

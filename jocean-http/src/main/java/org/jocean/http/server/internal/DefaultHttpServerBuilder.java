@@ -287,14 +287,16 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                     }
                     awaitChannels.remove(channel);
                     if (!subscriber.isUnsubscribed()) {
-                        final HttpTrade trade = httpTradeOf(channel,
+                        final DefaultHttpTrade trade = httpTradeOf(channel,
                                 doRecycleChannel(channel, subscriber, awaitChannels),
                                 t -> _numCompletedTrades.incrementAndGet());
-                        if (trade.isActive()) {
-                            subscriber.onNext(trade);
-                        } else {
-                            LOG.info("HttpTrade({}) has unactived, so ignore.", trade);
-                        }
+                        trade.received().first().subscribe(any -> {
+                            if (trade.isActive()) {
+                                subscriber.onNext(trade);
+                            } else {
+                                LOG.info("HttpTrade({}) has unactived, so ignore.", trade);
+                            }
+                        });
                     } else {
                         LOG.warn("HttpTrade Subscriber {} has unsubscribed, so close channel({})",
                                 subscriber, channel);
@@ -322,7 +324,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
     }
 
     @SafeVarargs
-    private final HttpTrade httpTradeOf(final Channel channel, final Action1<HttpTrade> ... onHalts) {
+    private final DefaultHttpTrade httpTradeOf(final Channel channel, final Action1<HttpTrade> ... onHalts) {
         this._numStartedTrades.incrementAndGet();
         final DefaultHttpTrade trade = new DefaultHttpTrade(channel);
 
