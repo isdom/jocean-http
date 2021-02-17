@@ -390,6 +390,8 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
 
         final List<DisposableWrapper<HttpObject>> inmsgs = this._inmsgsRef.getAndSet(null);
 
+        LOG.debug("build HttpSlice ({} element) with need step {}", inmsgs.size(), needStep);
+
         return new HttpSlice() {
             @Override
             public String toString() {
