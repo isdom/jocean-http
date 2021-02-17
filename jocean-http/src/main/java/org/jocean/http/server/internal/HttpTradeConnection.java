@@ -244,10 +244,15 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         if (!subscriber.isUnsubscribed()) {
             if (this._receivedCompleted) {
                 // 已经结束了
+                LOG.debug("addReceivedSubscriber: call {}'s onCompleted()", subscriber);
                 subscriber.onCompleted();
             } else {
+                LOG.debug("addReceivedSubscriber: addComponent {}", subscriber);
                 this._receivedObserver.addComponent(subscriber);
-                subscriber.add(Subscriptions.create(() -> _receivedObserver.removeComponent(subscriber)));
+                subscriber.add(Subscriptions.create(() -> {
+                    LOG.debug("addReceivedSubscriber: removeComponent {}", subscriber);
+                    _receivedObserver.removeComponent(subscriber);
+                }));
             }
         }
     }
@@ -362,6 +367,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             final HttpSlice httpSlice = (HttpSlice)args[0];
             if (!subscriber.isUnsubscribed()) {
                 try {
+                    LOG.debug("RECEIVED_ON_NEXT: call {}'s onNext", subscriber);
                     subscriber.onNext(httpSlice);
                 } catch (final Exception e) {
                     LOG.warn("exception when invoke HttpSlice's onNext({}), detail: {}",
@@ -376,6 +382,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         public void call(final Subscriber<? super HttpSlice> subscriber, final Object... args) {
             if (!subscriber.isUnsubscribed()) {
                 try {
+                    LOG.debug("RECEIVED_ON_COMPLETED: call {}'s onCompleted", subscriber);
                     subscriber.onCompleted();
                 } catch (final Exception e) {
                     LOG.warn("exception when invoke HttpSlice's onCompleted({}), detail: {}",
