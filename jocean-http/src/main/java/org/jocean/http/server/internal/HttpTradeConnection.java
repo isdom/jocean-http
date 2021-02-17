@@ -16,7 +16,6 @@ import org.jocean.http.Outbound;
 import org.jocean.http.TrafficCounter;
 import org.jocean.http.TransportException;
 import org.jocean.http.WriteCtrl;
-import org.jocean.http.Inbound.Intraffic;
 import org.jocean.http.util.HttpHandlers;
 import org.jocean.http.util.Nettys;
 import org.jocean.http.util.RxNettys;
@@ -435,10 +434,10 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
 
     private void doReadMessage() {
         LOG.debug("trigger read message for {}", this);
+        _readTracing.append("|RM|");
         this._channel.read();
         this._unreadBegin = 0;
         readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
-        _readTracing.append("|RM|");
     }
 
     private boolean holdInboundAndInstallHandler(final Subscriber<? super HttpSlice> subscriber) {
