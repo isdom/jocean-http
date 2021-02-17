@@ -247,8 +247,8 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                 LOG.debug("addReceivedSubscriber: call {}'s onCompleted()", subscriber);
                 subscriber.onCompleted();
             } else {
-                LOG.debug("addReceivedSubscriber: addComponent {}", subscriber);
                 this._receivedObserver.addComponent(subscriber);
+                LOG.debug("addReceivedSubscriber: addComponent {}", subscriber);
                 subscriber.add(Subscriptions.create(() -> {
                     LOG.debug("addReceivedSubscriber: removeComponent {}", subscriber);
                     _receivedObserver.removeComponent(subscriber);
