@@ -95,29 +95,6 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
                 }
             }
         });
-
-        /*
-        final Observable<? extends HttpSlice> rawInbound = rawInbound().share();
-
-        this._inbound = rawInbound.flatMap(slice -> {
-                final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
-                if (iter.hasNext()) {
-                    final HttpObject hobj = iter.next().unwrap();
-                    if (hobj instanceof HttpRequest) {
-                        // TODO, wrap request as pure http request while income FullHttpRequest
-                        // or when sending
-                        final HttpRequest req = (HttpRequest)hobj;
-//                        private static HttpRequest requestOf(final HttpRequest req) {
-//                            return new ProxyBuilder<>(HttpRequest.class, req).buildProxy();
-//                        }
-                        return Observable.<FullMessage<HttpRequest>>just(fullRequest(req, slice, rawInbound));
-                    }
-                }
-                return Observable.empty();
-            }).cache();
-
-        this._inbound.subscribe(RxSubscribers.ignoreNext(), RxSubscribers.ignoreError());
-        */
     }
 
     private FullMessage<HttpRequest> fullRequest(
