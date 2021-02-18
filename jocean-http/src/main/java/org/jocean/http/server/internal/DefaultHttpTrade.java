@@ -157,12 +157,12 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
 
                     @Override
                     public Observable<? extends ByteBufSlice> content() {
-                        return Observable.just(sliceWithReq).concatWith(received())
-                        .doOnNext(slice -> LOG.debug("{}'s content onNext: {}", req, slice))
-                        .doOnNext(hs -> LOG.debug("{}'s content onNext's hs: {}", req, hs))
-                        .map(HttpSliceUtil.hs2bbs())
-                        .doOnNext(bbs -> LOG.debug("{}'s content onNext's bbs: {}", req, bbs))
-                        ;
+                        return Observable.merge(Observable.just(sliceWithReq), received())
+                            .doOnNext(slice -> LOG.debug("{}'s content onNext: {}", req, slice))
+                            .doOnNext(hs -> LOG.debug("{}'s content onNext's hs: {}", req, hs))
+                            .map(HttpSliceUtil.hs2bbs())
+                            .doOnNext(bbs -> LOG.debug("{}'s content onNext's bbs: {}", req, bbs))
+                            ;
                     }});
             }};
     }
