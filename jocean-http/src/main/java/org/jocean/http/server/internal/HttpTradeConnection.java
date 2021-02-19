@@ -95,7 +95,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             fireClosed(new TransportException("channelInactive of " + channel));
         } else {
             // added 2021-02-17
-            final ChannelHandler handler = buildInboundHandler(null);
+            final ChannelHandler handler = buildInboundHandler();
             Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
             setInboundHandler(handler);
         }
@@ -323,47 +323,30 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     private void onReadComplete() {
         _readTracing.append("|RC|");
 
-        /*
-        @SuppressWarnings("unchecked")
-        final Subscriber<? super HttpSlice> subscriber = inboundSubscriberUpdater.get(this);
-
-        if (null != subscriber && !subscriber.isUnsubscribed()) {
-            //  如 _inmsgsRef 已经被赋值有 List<?> 实例，则已经解码出有效 inmsg
-            if (null == this._inmsgsRef.get()) {
-                // TODO, check if inbound onCompleted
-
-                //  SSL enabled 连接:
-                //  收到 READ COMPLETE 事件时，可能会由于当前接收到的数据不够，还未能解出有效的 inmsg ，
-                //  此时应继续调用 channel.read(), 来继续获取对端发送来的 加密数据
-                LOG.debug("!NO! inmsg received, continue read for {}", this);
-                readMessage();
-                _readTracing.append("AR|");
-            } else {
-                LOG.debug("inmsg received, stop read and wait for {}", this);
-                this._unreadBegin = System.currentTimeMillis();
-                _readTracing.append("ON|");
-                subscriber.onNext(currentSlice(true));
-            }
-        } else {
-            LOG.debug("onReadComplete without valid inbound subscriber, do nothing for {}", this);
-        }
-        */
-
         if (null != this._inmsgsRef.get()) {
+            //  如 _inmsgsRef 已经被赋值有 List<?> 实例，则已经解码出有效 inmsg
+            this._unreadBegin = System.currentTimeMillis();
             _readTracing.append("ON|");
             this._receivedObserver.foreachComponent(RECEIVED_ON_NEXT, currentSlice(!this._receivedCompleted));
-        }
 
-        if (this._receivedCompleted) {
-            _readTracing.append("OC|");
-            this._receivedObserver.foreachComponent(RECEIVED_ON_COMPLETED);
-            onInboundCompleted();
+            if (this._receivedCompleted) {
+                _readTracing.append("OC|");
+                this._receivedObserver.foreachComponent(RECEIVED_ON_COMPLETED);
+                onInboundCompleted();
+            }
+        }
+        else {
+            //  SSL enabled 连接:
+            //  收到 READ COMPLETE 事件时，可能会由于当前接收到的数据不够，还未能解出有效的 inmsg ，
+            //  此时应继续调用 channel.read(), 来继续获取对端发送来的 加密数据
+            LOG.debug("!NO! inmsg received, continue read for {}", this);
+            _readTracing.append("NR|");
+            readMessage();
         }
     }
 
-    private static final Action1_N<Subscriber<? super HttpSlice>> RECEIVED_ON_NEXT = new Action1_N<Subscriber<? super HttpSlice>>() {
-        @Override
-        public void call(final Subscriber<? super HttpSlice> subscriber, final Object... args) {
+    private static final Action1_N<Subscriber<? super HttpSlice>> RECEIVED_ON_NEXT = (Action1_N<Subscriber<? super HttpSlice>>)
+        (subscriber, args) -> {
             final HttpSlice httpSlice = (HttpSlice)args[0];
             if (!subscriber.isUnsubscribed()) {
                 try {
@@ -375,11 +358,10 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                         ExceptionUtils.exception2detail(e));
                 }
             }
-        }};
+        };
 
-    private static final Action1_N<Subscriber<? super HttpSlice>> RECEIVED_ON_COMPLETED = new Action1_N<Subscriber<? super HttpSlice>>() {
-        @Override
-        public void call(final Subscriber<? super HttpSlice> subscriber, final Object... args) {
+    private static final Action1_N<Subscriber<? super HttpSlice>> RECEIVED_ON_COMPLETED = (Action1_N<Subscriber<? super HttpSlice>>)
+        (subscriber, args) -> {
             if (!subscriber.isUnsubscribed()) {
                 try {
                     LOG.debug("RECEIVED_ON_COMPLETED: call {}'s onCompleted", subscriber);
@@ -390,7 +372,20 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                         ExceptionUtils.exception2detail(e));
                 }
             }
-        }};
+        };
+
+    private static final Action1_N<Subscriber<? super HttpSlice>> RECEIVED_ON_ERROR = (Action1_N<Subscriber<? super HttpSlice>>)
+        (subscriber, args) -> {
+            final Throwable e = (Throwable)args[0];
+            if (!subscriber.isUnsubscribed()) {
+                try {
+                    LOG.debug("RECEIVED_ON_ERROR: call {}'s onError", subscriber);
+                    subscriber.onError(e);
+                } catch (final Exception e1) {
+                    LOG.warn("exception when invoke HttpSlice's onError({}), detail: {}", subscriber, ExceptionUtils.exception2detail(e1));
+                }
+            }
+        };
 
     private HttpSlice currentSlice(final boolean needStep) {
         final Subscription runOnce = needStep ? Subscriptions.create(()->readMessage()) : Subscriptions.unsubscribed();
@@ -431,15 +426,15 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         _op.readMessage(this);
     }
 
-    protected Observable<HttpSlice> rawInbound() {
-        return Observable.unsafeCreate(subscriber -> {
-                if (!subscriber.isUnsubscribed()) {
-                    if (!_op.attachInbound(HttpTradeConnection.this, subscriber)) {
-                        subscriber.onError(new RuntimeException("transaction in progress"));
-                    }
-                }}
-        );
-    }
+//    protected Observable<HttpSlice> rawInbound() {
+//        return Observable.unsafeCreate(subscriber -> {
+//                if (!subscriber.isUnsubscribed()) {
+//                    if (!_op.attachInbound(HttpTradeConnection.this, subscriber)) {
+//                        subscriber.onError(new RuntimeException("transaction in progress"));
+//                    }
+//                }}
+//        );
+//    }
 
     private void doReadMessage() {
         LOG.debug("trigger read message for {}", this);
@@ -449,56 +444,48 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
     }
 
-    private boolean holdInboundAndInstallHandler(final Subscriber<? super HttpSlice> subscriber) {
-        if (holdInboundSubscriber(subscriber)) {
-            final ChannelHandler handler = buildInboundHandler(subscriber);
-            Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
-            setInboundHandler(handler);
-            return true;
-        } else {
-            return false;
-        }
-    }
+//    private boolean holdInboundAndInstallHandler(final Subscriber<? super HttpSlice> subscriber) {
+//        if (holdInboundSubscriber(subscriber)) {
+//            final ChannelHandler handler = buildInboundHandler();
+//            Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
+//            setInboundHandler(handler);
+//            return true;
+//        } else {
+//            return false;
+//        }
+//    }
+//
+//    private boolean unholdInboundAndUninstallHandler(final Subscriber<?> subscriber) {
+//        if (unholdInboundSubscriber(subscriber)) {
+//            removeInboundHandler();
+//            return true;
+//        } else {
+//            return false;
+//        }
+//    }
 
-    private boolean unholdInboundAndUninstallHandler(final Subscriber<?> subscriber) {
-        if (unholdInboundSubscriber(subscriber)) {
-            removeInboundHandler();
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
-        return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
-    }
-
-    private boolean unholdInboundSubscriber(final Subscriber<?> subscriber) {
-        return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
-    }
+//    private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
+//        return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
+//    }
+//
+//    private boolean unholdInboundSubscriber(final Subscriber<?> subscriber) {
+//        return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
+//    }
 
     private void invokeInboundOnError(final Throwable error) {
-        final Subscriber<?> inboundSubscriber = inboundSubscriberUpdater.getAndSet(this, null);
-        if (null != inboundSubscriber && !inboundSubscriber.isUnsubscribed()) {
-            try {
-                inboundSubscriber.onError(error);
-            } catch (final Exception e) {
-                LOG.warn("exception when invoke {}.onError, detail: {}",
-                    inboundSubscriber, ExceptionUtils.exception2detail(e));
-            }
-        }
+        this._receivedObserver.foreachComponent(RECEIVED_ON_ERROR, error);
     }
 
-    private SimpleChannelInboundHandler<HttpObject> buildInboundHandler(final Subscriber<? super HttpSlice> subscriber) {
+    private SimpleChannelInboundHandler<HttpObject> buildInboundHandler() {
         return new SimpleChannelInboundHandler<HttpObject>(false) {
             @Override
             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject inmsg) throws Exception {
                 LOG.debug("channelRead0 income msg({}) for {}", inmsg, HttpTradeConnection.this);
-                _op.onInmsgRecvd(HttpTradeConnection.this, subscriber, inmsg);
+                _op.onInmsgRecvd(HttpTradeConnection.this, inmsg);
             }};
     }
 
-    private void processInmsg(/*final Subscriber<? super HttpSlice> subscriber, */final HttpObject inmsg) {
+    private void processInmsg(final HttpObject inmsg) {
 
         if (inmsg instanceof HttpMessage) {
             _contentSize.set(0);
@@ -835,12 +822,12 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
 
     private final AtomicReference<List<DisposableWrapper<HttpObject>>> _inmsgsRef = new AtomicReference<>();
 
-    @SuppressWarnings("rawtypes")
-    private static final AtomicReferenceFieldUpdater<HttpTradeConnection, Subscriber> inboundSubscriberUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(HttpTradeConnection.class, Subscriber.class, "_inboundSubscriber");
+//    @SuppressWarnings("rawtypes")
+//    private static final AtomicReferenceFieldUpdater<HttpTradeConnection, Subscriber> inboundSubscriberUpdater =
+//            AtomicReferenceFieldUpdater.newUpdater(HttpTradeConnection.class, Subscriber.class, "_inboundSubscriber");
 
-    @SuppressWarnings("unused")
-    private volatile Subscriber<?> _inboundSubscriber;
+//    @SuppressWarnings("unused")
+//    private volatile Subscriber<?> _inboundSubscriber;
 
     @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<HttpTradeConnection, ChannelHandler> inboundHandlerUpdater =
@@ -878,9 +865,9 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     }
 
     protected interface ConnectionOp {
-        public boolean attachInbound(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber);
+//        public boolean attachInbound(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber);
 
-        public void onInmsgRecvd(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber, final HttpObject msg);
+        public void onInmsgRecvd(final HttpTradeConnection<?> connection, final HttpObject msg);
 
         public Subscription setOutbound(final HttpTradeConnection<?> connection, final Observable<? extends Object> outbound);
 
@@ -900,14 +887,14 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     }
 
     private static final ConnectionOp WHEN_ACTIVE = new ConnectionOp() {
-        @Override
-        public boolean attachInbound(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber) {
-            return connection.holdInboundAndInstallHandler(subscriber);
-        }
+//        @Override
+//        public boolean attachInbound(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber) {
+//            return connection.holdInboundAndInstallHandler(subscriber);
+//        }
 
         @Override
-        public void onInmsgRecvd(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber, final HttpObject inmsg) {
-            connection.processInmsg(/*subscriber, */inmsg);
+        public void onInmsgRecvd(final HttpTradeConnection<?> connection, final HttpObject inmsg) {
+            connection.processInmsg(inmsg);
         }
 
         @Override
@@ -953,16 +940,16 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     };
 
     private static final ConnectionOp WHEN_UNACTIVE = new ConnectionOp() {
-        @Override
-        public boolean attachInbound(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber) {
-            if (!subscriber.isUnsubscribed()) {
-                subscriber.onError(new RuntimeException(connection + " has terminated."));
-            }
-            return false;
-        }
+//        @Override
+//        public boolean attachInbound(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber) {
+//            if (!subscriber.isUnsubscribed()) {
+//                subscriber.onError(new RuntimeException(connection + " has terminated."));
+//            }
+//            return false;
+//        }
 
         @Override
-        public void onInmsgRecvd(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber, final HttpObject inmsg) {
+        public void onInmsgRecvd(final HttpTradeConnection<?> connection, final HttpObject inmsg) {
             ReferenceCountUtil.release(inmsg);
             LOG.warn("{} has terminated, onInmsgRecvd and just release msg({}).", connection, inmsg);
         }
