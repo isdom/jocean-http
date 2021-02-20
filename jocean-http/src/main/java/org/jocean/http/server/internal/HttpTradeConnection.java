@@ -426,16 +426,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         _op.readMessage(this);
     }
 
-//    protected Observable<HttpSlice> rawInbound() {
-//        return Observable.unsafeCreate(subscriber -> {
-//                if (!subscriber.isUnsubscribed()) {
-//                    if (!_op.attachInbound(HttpTradeConnection.this, subscriber)) {
-//                        subscriber.onError(new RuntimeException("transaction in progress"));
-//                    }
-//                }}
-//        );
-//    }
-
     private void doReadMessage() {
         LOG.debug("trigger read message for {}", this);
         _readTracing.append("|RM|");
@@ -443,34 +433,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         this._unreadBegin = 0;
         readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
     }
-
-//    private boolean holdInboundAndInstallHandler(final Subscriber<? super HttpSlice> subscriber) {
-//        if (holdInboundSubscriber(subscriber)) {
-//            final ChannelHandler handler = buildInboundHandler();
-//            Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
-//            setInboundHandler(handler);
-//            return true;
-//        } else {
-//            return false;
-//        }
-//    }
-//
-//    private boolean unholdInboundAndUninstallHandler(final Subscriber<?> subscriber) {
-//        if (unholdInboundSubscriber(subscriber)) {
-//            removeInboundHandler();
-//            return true;
-//        } else {
-//            return false;
-//        }
-//    }
-
-//    private boolean holdInboundSubscriber(final Subscriber<?> subscriber) {
-//        return inboundSubscriberUpdater.compareAndSet(this, null, subscriber);
-//    }
-//
-//    private boolean unholdInboundSubscriber(final Subscriber<?> subscriber) {
-//        return inboundSubscriberUpdater.compareAndSet(this, subscriber, null);
-//    }
 
     private void invokeInboundOnError(final Throwable error) {
         this._receivedObserver.foreachComponent(RECEIVED_ON_ERROR, error);
@@ -822,13 +784,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
 
     private final AtomicReference<List<DisposableWrapper<HttpObject>>> _inmsgsRef = new AtomicReference<>();
 
-//    @SuppressWarnings("rawtypes")
-//    private static final AtomicReferenceFieldUpdater<HttpTradeConnection, Subscriber> inboundSubscriberUpdater =
-//            AtomicReferenceFieldUpdater.newUpdater(HttpTradeConnection.class, Subscriber.class, "_inboundSubscriber");
-
-//    @SuppressWarnings("unused")
-//    private volatile Subscriber<?> _inboundSubscriber;
-
     @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<HttpTradeConnection, ChannelHandler> inboundHandlerUpdater =
             AtomicReferenceFieldUpdater.newUpdater(HttpTradeConnection.class, ChannelHandler.class, "_inboundHandler");
@@ -865,8 +820,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     }
 
     protected interface ConnectionOp {
-//        public boolean attachInbound(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber);
-
         public void onInmsgRecvd(final HttpTradeConnection<?> connection, final HttpObject msg);
 
         public Subscription setOutbound(final HttpTradeConnection<?> connection, final Observable<? extends Object> outbound);
@@ -887,11 +840,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     }
 
     private static final ConnectionOp WHEN_ACTIVE = new ConnectionOp() {
-//        @Override
-//        public boolean attachInbound(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber) {
-//            return connection.holdInboundAndInstallHandler(subscriber);
-//        }
-
         @Override
         public void onInmsgRecvd(final HttpTradeConnection<?> connection, final HttpObject inmsg) {
             connection.processInmsg(inmsg);
@@ -940,14 +888,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     };
 
     private static final ConnectionOp WHEN_UNACTIVE = new ConnectionOp() {
-//        @Override
-//        public boolean attachInbound(final HttpTradeConnection<?> connection, final Subscriber<? super HttpSlice> subscriber) {
-//            if (!subscriber.isUnsubscribed()) {
-//                subscriber.onError(new RuntimeException(connection + " has terminated."));
-//            }
-//            return false;
-//        }
-
         @Override
         public void onInmsgRecvd(final HttpTradeConnection<?> connection, final HttpObject inmsg) {
             ReferenceCountUtil.release(inmsg);
