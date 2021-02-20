@@ -98,9 +98,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                     channel,
                     HttpHandlers.ON_MESSAGE,
                     buildInboundHandler());
-//            final ChannelHandler handler = buildInboundHandler();
-//            Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
-//            setInboundHandler(handler);
         }
     }
 
@@ -489,27 +486,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                  * ，此情况下，即会自动产生一个LastHttpContent .EMPTY_LAST_CONTENT实例
                  * 因此，无需在channelInactive处，针对该情况做特殊处理
                  */
-                /*
-                _readTracing.append("OC0|");
-
-                if (unholdInboundAndUninstallHandler(subscriber)) {
-                    _readTracing.append("OC1|");
-                    if (!subscriber.isUnsubscribed()) {
-                        _readTracing.append("OC2|");
-                        subscriber.onNext(currentSlice(false));
-                    }
-
-                    onInboundCompleted();
-
-                    if (!subscriber.isUnsubscribed()) {
-                        _readTracing.append("OCD|");
-                        subscriber.onCompleted();
-                    }
-                }
-                */
                 this._receivedCompleted = true;
-//                removeInboundHandler();
-
             } else {
                 _readTracing.append("SKP|");
                 LOG.info("recv LastHttpContent({}) for current status {}, skip and continue recv next response", inmsg, this._currentStatus);
@@ -594,8 +571,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     private void doClosed(final Throwable e) {
         LOG.debug("closing {}, cause by {}", toString(), errorAsString(e));
 
-//        removeInboundHandler();
-
         // notify inbound Subscriber by error
         invokeInboundOnError(e);
 
@@ -614,17 +589,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     protected static String errorAsString(final Throwable e) {
         return e != null ? (e instanceof CloseException) ? "close()" : ExceptionUtils.exception2detail(e) : "no error";
     }
-
-//    private void setInboundHandler(final ChannelHandler handler) {
-//        inboundHandlerUpdater.set(this, handler);
-//    }
-//
-//    private void removeInboundHandler() {
-//        final ChannelHandler handler = inboundHandlerUpdater.getAndSet(this, null);
-//        if (null != handler) {
-//            Nettys.actionToRemoveHandler(this._channel, handler).call();
-//        }
-//    }
 
     private Subscription doSetOutbound(final Observable<? extends Object> outbound) {
         LOG.debug("doSetOutbound with outbound:{} for {}", outbound, this);
@@ -785,13 +749,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     private volatile long _readBegin = 0;
 
     private final AtomicReference<List<DisposableWrapper<HttpObject>>> _inmsgsRef = new AtomicReference<>();
-
-//    @SuppressWarnings("rawtypes")
-//    private static final AtomicReferenceFieldUpdater<HttpTradeConnection, ChannelHandler> inboundHandlerUpdater =
-//            AtomicReferenceFieldUpdater.newUpdater(HttpTradeConnection.class, ChannelHandler.class, "_inboundHandler");
-
-//    @SuppressWarnings("unused")
-//    private volatile ChannelHandler _inboundHandler;
 
     @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<HttpTradeConnection, Subscription> outboundSubscriptionUpdater =
