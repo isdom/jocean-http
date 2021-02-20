@@ -35,7 +35,6 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.WriteBufferWaterMark;
@@ -95,9 +94,13 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             fireClosed(new TransportException("channelInactive of " + channel));
         } else {
             // added 2021-02-17
-            final ChannelHandler handler = buildInboundHandler();
-            Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
-            setInboundHandler(handler);
+            Nettys.applyToChannel(onHalt(),
+                    channel,
+                    HttpHandlers.ON_MESSAGE,
+                    buildInboundHandler());
+//            final ChannelHandler handler = buildInboundHandler();
+//            Nettys.applyHandler(this._channel.pipeline(), HttpHandlers.ON_MESSAGE, handler);
+//            setInboundHandler(handler);
         }
     }
 
@@ -505,7 +508,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                 }
                 */
                 this._receivedCompleted = true;
-                removeInboundHandler();
+//                removeInboundHandler();
 
             } else {
                 _readTracing.append("SKP|");
@@ -591,7 +594,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     private void doClosed(final Throwable e) {
         LOG.debug("closing {}, cause by {}", toString(), errorAsString(e));
 
-        removeInboundHandler();
+//        removeInboundHandler();
 
         // notify inbound Subscriber by error
         invokeInboundOnError(e);
@@ -612,16 +615,16 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         return e != null ? (e instanceof CloseException) ? "close()" : ExceptionUtils.exception2detail(e) : "no error";
     }
 
-    private void setInboundHandler(final ChannelHandler handler) {
-        inboundHandlerUpdater.set(this, handler);
-    }
-
-    private void removeInboundHandler() {
-        final ChannelHandler handler = inboundHandlerUpdater.getAndSet(this, null);
-        if (null != handler) {
-            Nettys.actionToRemoveHandler(this._channel, handler).call();
-        }
-    }
+//    private void setInboundHandler(final ChannelHandler handler) {
+//        inboundHandlerUpdater.set(this, handler);
+//    }
+//
+//    private void removeInboundHandler() {
+//        final ChannelHandler handler = inboundHandlerUpdater.getAndSet(this, null);
+//        if (null != handler) {
+//            Nettys.actionToRemoveHandler(this._channel, handler).call();
+//        }
+//    }
 
     private Subscription doSetOutbound(final Observable<? extends Object> outbound) {
         LOG.debug("doSetOutbound with outbound:{} for {}", outbound, this);
@@ -776,20 +779,19 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     private volatile long _unreadBegin = 0;
 
     @SuppressWarnings("rawtypes")
-    private static final AtomicLongFieldUpdater<HttpTradeConnection> readBeginUpdater =
-            AtomicLongFieldUpdater.newUpdater(HttpTradeConnection.class, "_readBegin");
+    private static final AtomicLongFieldUpdater<HttpTradeConnection> readBeginUpdater = AtomicLongFieldUpdater.newUpdater(HttpTradeConnection.class, "_readBegin");
 
     @SuppressWarnings("unused")
     private volatile long _readBegin = 0;
 
     private final AtomicReference<List<DisposableWrapper<HttpObject>>> _inmsgsRef = new AtomicReference<>();
 
-    @SuppressWarnings("rawtypes")
-    private static final AtomicReferenceFieldUpdater<HttpTradeConnection, ChannelHandler> inboundHandlerUpdater =
-            AtomicReferenceFieldUpdater.newUpdater(HttpTradeConnection.class, ChannelHandler.class, "_inboundHandler");
+//    @SuppressWarnings("rawtypes")
+//    private static final AtomicReferenceFieldUpdater<HttpTradeConnection, ChannelHandler> inboundHandlerUpdater =
+//            AtomicReferenceFieldUpdater.newUpdater(HttpTradeConnection.class, ChannelHandler.class, "_inboundHandler");
 
-    @SuppressWarnings("unused")
-    private volatile ChannelHandler _inboundHandler;
+//    @SuppressWarnings("unused")
+//    private volatile ChannelHandler _inboundHandler;
 
     @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<HttpTradeConnection, Subscription> outboundSubscriptionUpdater =
