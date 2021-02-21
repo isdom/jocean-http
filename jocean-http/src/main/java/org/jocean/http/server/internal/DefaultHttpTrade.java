@@ -24,9 +24,7 @@ import org.jocean.idiom.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpObject;
@@ -94,6 +92,12 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
                 }
             }
         });
+
+        writeCtrl().sended().subscribe(any -> {}, e -> {}, () -> {
+                endofTransaction();
+                // close normally
+                close();
+            });
     }
 
     private FullMessage<HttpRequest> fullRequest(
@@ -181,33 +185,6 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
 
         // set in transacting flag
         startSending();
-    }
-
-    @Override
-    protected void onOutboundCompleted() {
-        super.onOutboundCompleted();
-        // force flush for _isFlushPerWrite = false
-        //  reference: https://github.com/netty/netty/commit/789e323b79d642ea2c0a024cb1c839654b7b8fad
-        //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
-        //  Detail:
-        //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
-        //
-        //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
-        //
-        // See https://github.com/netty/netty/issues/2983 for more information.
-        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(closeWhenComplete());
-    }
-
-    private ChannelFutureListener closeWhenComplete() {
-        return future -> {
-                if (future.isSuccess()) {
-                    endofTransaction();
-                    // close normally
-                    close();
-                } else {
-                    fireClosed(new TransportException("flush response error", future.cause()));
-                }
-            };
     }
 
     private void startRecving() {

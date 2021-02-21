@@ -620,7 +620,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                 public void onCompleted() {
                     LOG.debug("outound invoke onCompleted event for {}", HttpTradeConnection.this);
                     notifySendingOnCompleted();
-                    _op.onOutboundCompleted(HttpTradeConnection.this);
+                    onOutboundCompleted();
                 }
 
                 @Override
@@ -638,6 +638,27 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                 public void onNext(final Object obj) {
                     handleOutobj(obj);
                 }};
+    }
+
+    private void onOutboundCompleted() {
+        // force flush for _isFlushPerWrite = false
+        //  reference: https://github.com/netty/netty/commit/789e323b79d642ea2c0a024cb1c839654b7b8fad
+        //  reference: https://github.com/netty/netty/commit/5112cec5fafcec8724b2225507da33bbb9bc47f3
+        //  Detail:
+        //  Bypass the encoder in case of an empty buffer, so that the following idiom works:
+        //
+        //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+        //
+        // See https://github.com/netty/netty/issues/2983 for more information.
+        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(future -> {
+                if (future.isSuccess()) {
+                    LOG.debug("all outmsg sended completed for {}", HttpTradeConnection.this);
+                    notifySendedOnCompleted();
+                } else {
+                    //  TODO
+                    // fireClosed(new TransportException("flush response error", future.cause()));
+                }
+            });
     }
 
     private void handleOutobj(final Object obj) {
@@ -719,18 +740,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
 
     protected abstract void beforeSendingOutbound(final Object outmsg);
 
-    protected void onOutboundCompleted() {
-        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(future -> {
-                if (future.isSuccess()) {
-                    LOG.debug("all outmsg sended completed for {}", HttpTradeConnection.this);
-                    notifySendedOnCompleted();
-                } else {
-                    //  TODO
-                    // fireClosed(new TransportException("flush response error", future.cause()));
-                }
-            });
-    }
-
     protected abstract void onChannelInactive();
 
     private volatile int _currentStatus = -1;
@@ -783,8 +792,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
 
         public Completable flush(final HttpTradeConnection<?> connection);
 
-        public void onOutboundCompleted(final HttpTradeConnection<?> connection);
-
         public void readMessage(final HttpTradeConnection<?> connection);
 
         public void setWriteBufferWaterMark(final HttpTradeConnection<?> connection, final int low, final int high);
@@ -813,11 +820,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         @Override
         public Completable flush(final HttpTradeConnection<?> connection) {
             return connection.doFlush();
-        }
-
-        @Override
-        public void onOutboundCompleted(final HttpTradeConnection<?> connection) {
-            connection.onOutboundCompleted();
         }
 
         @Override
@@ -858,11 +860,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         @Override
         public void sendOutmsg(final HttpTradeConnection<?> connection, final Object outmsg) {
             LOG.warn("{} has terminated, ignore send outmsg({})", connection, outmsg);
-        }
-
-        @Override
-        public void onOutboundCompleted(final HttpTradeConnection<?> connection) {
-            LOG.warn("{} has terminated, ignore onOutboundCompleted event", connection);
         }
 
         @Override
