@@ -79,6 +79,7 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
         received().subscribe(any -> {}, e -> {}, () -> endofRecving());
 
         received().first().subscribe(slice -> {
+            startRecving();
             final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
             if (iter.hasNext()) {
                 final HttpObject hobj = iter.next().unwrap();
@@ -86,6 +87,7 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
                     // TODO, wrap request as pure http request while income FullHttpRequest
                     // or when sending
                     final HttpRequest req = (HttpRequest)hobj;
+                    onHttpRequest(req);
                     _inboundRef.set(Observable.just(fullRequest(req, slice)));
                 }
             }
@@ -152,16 +154,6 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
             LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
             // close normally
             close();
-        }
-    }
-
-    @Override
-    protected void onInboundMessage(final HttpObject inmsg) {
-        LOG.debug("{} read msg({}).", this, inmsg);
-
-        startRecving();
-        if (inmsg instanceof HttpRequest) {
-            onHttpRequest((HttpRequest)inmsg);
         }
     }
 

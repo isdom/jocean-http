@@ -461,8 +461,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             _readTracing.append(readableBytes);
         }
 
-        onInboundMessage(inmsg);
-
         newOrFetchInmsgs().add(DisposableWrapperUtil.disposeOn(this, RxNettys.wrap4release(inmsg)));
 
         if (inmsg instanceof HttpResponse) {
@@ -732,8 +730,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     protected Subscription setOutbound(final Observable<? extends Object> message) {
         return this._op.setOutbound(this, message);
     }
-
-    protected abstract void onInboundMessage(final HttpObject inmsg);
 
     protected abstract void beforeSendingOutbound(final Object outmsg);
 
