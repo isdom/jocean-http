@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -200,10 +199,7 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
     }
 
     private ChannelFutureListener closeWhenComplete() {
-        return new ChannelFutureListener() {
-            @Override
-            public void operationComplete(final ChannelFuture future)
-                    throws Exception {
+        return future -> {
                 if (future.isSuccess()) {
                     endofTransaction();
                     // close normally
@@ -211,7 +207,7 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
                 } else {
                     fireClosed(new TransportException("flush response error", future.cause()));
                 }
-            }};
+            };
     }
 
     private void startRecving() {

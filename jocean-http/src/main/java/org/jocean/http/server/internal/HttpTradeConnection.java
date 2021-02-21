@@ -720,10 +720,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     protected abstract void beforeSendingOutbound(final Object outmsg);
 
     protected void onOutboundCompleted() {
-        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(final ChannelFuture future)
-                    throws Exception {
+        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(future -> {
                 if (future.isSuccess()) {
                     LOG.debug("all outmsg sended completed for {}", HttpTradeConnection.this);
                     notifySendedOnCompleted();
@@ -731,8 +728,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                     //  TODO
                     // fireClosed(new TransportException("flush response error", future.cause()));
                 }
-            }});
-
+            });
     }
 
     protected abstract void onChannelInactive();
