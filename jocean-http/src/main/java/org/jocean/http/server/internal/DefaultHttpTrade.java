@@ -34,8 +34,6 @@ import rx.Completable;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action2;
-import rx.subscriptions.CompositeSubscription;
-import rx.subscriptions.Subscriptions;
 
 /**
  * @author isdom
@@ -45,8 +43,6 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultHttpTrade.class);
 
-    private final CompositeSubscription _inboundCompleted = new CompositeSubscription();
-
     @Override
     public long startTimeMillis() {
         return this._createTimeMillis;
@@ -54,8 +50,7 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
 
     @Override
     public Completable inboundCompleted() {
-        return Completable.create(subscriber ->
-                _inboundCompleted.add(Subscriptions.create(()->subscriber.onCompleted())));
+        return received().toCompletable();
     }
 
     @Override
@@ -80,6 +75,9 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
         }
 
         _inboundRef.set(Observable.error(new RuntimeException("not ready")));
+
+        received().subscribe(any -> {}, e -> {}, () -> endofRecving());
+
         received().first().subscribe(slice -> {
             final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
             if (iter.hasNext()) {
@@ -171,12 +169,6 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
         this._requestMethod = req.method().name();
         this._requestUri = req.uri();
         this._isKeepAlive = HttpUtil.isKeepAlive(req);
-    }
-
-    @Override
-    protected void onInboundCompleted() {
-        endofRecving();
-        this._inboundCompleted.unsubscribe();
     }
 
     @Override

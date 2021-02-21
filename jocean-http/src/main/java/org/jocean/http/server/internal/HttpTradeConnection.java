@@ -332,7 +332,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             if (this._receivedCompleted) {
                 _readTracing.append("OC|");
                 this._receivedObserver.foreachComponent(RECEIVED_ON_COMPLETED);
-                onInboundCompleted();
             }
         }
         else {
@@ -735,8 +734,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     }
 
     protected abstract void onInboundMessage(final HttpObject inmsg);
-
-    protected abstract void onInboundCompleted();
 
     protected abstract void beforeSendingOutbound(final Object outmsg);
 
