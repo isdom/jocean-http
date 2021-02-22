@@ -442,7 +442,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             @Override
             protected void channelRead0(final ChannelHandlerContext ctx, final HttpObject inmsg) throws Exception {
                 LOG.debug("channelRead0 income msg({}) for {}", inmsg, HttpTradeConnection.this);
-                _op.onInmsgRecvd(HttpTradeConnection.this, inmsg);
+                processInmsg(inmsg);
             }};
     }
 
@@ -531,7 +531,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         while (outmsg instanceof DisposableWrapper) {
             outmsg = ((DisposableWrapper<?>)outmsg).unwrap();
         }
-        beforeSendingOutbound(outmsg);
+
         return this._isFlushPerWrite
                 ? this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
                 : this._channel.write(ReferenceCountUtil.retain(outmsg));
@@ -587,11 +587,19 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         return e != null ? (e instanceof CloseException) ? "close()" : ExceptionUtils.exception2detail(e) : "no error";
     }
 
+    private static final Subscription PLACEHOLDER = new Subscription() {
+        @Override
+        public void unsubscribe() {
+        }
+        @Override
+        public boolean isUnsubscribed() {
+            return true;
+        }};
+
     private Subscription doSetOutbound(final Observable<? extends Object> outbound) {
         LOG.debug("doSetOutbound with outbound:{} for {}", outbound, this);
-        final Subscription placeholder = buildPlaceholderSubscription();
 
-        if (outboundSubscriptionUpdater.compareAndSet(this, null, placeholder)) {
+        if (outboundSubscriptionUpdater.compareAndSet(this, null, PLACEHOLDER)) {
             final Subscriber<Object> outboundSubscriber = buildOutboundSubscriber();
             final Subscription subscription = outbound.subscribe(outboundSubscriber);
             outboundSubscriptionUpdater.set(this, subscription);
@@ -709,17 +717,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             });
     }
 
-    private Subscription buildPlaceholderSubscription() {
-        return new Subscription() {
-            @Override
-            public void unsubscribe() {
-            }
-            @Override
-            public boolean isUnsubscribed() {
-                return true;
-            }};
-    }
-
     private void unsubscribeOutbound() {
         final Subscription subscription = outboundSubscriptionUpdater.getAndSet(this, null);
         if (null != subscription && !subscription.isUnsubscribed()) {
@@ -730,8 +727,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     protected Subscription setOutbound(final Observable<? extends Object> message) {
         return this._op.setOutbound(this, message);
     }
-
-    protected abstract void beforeSendingOutbound(final Object outmsg);
 
     protected abstract void onChannelInactive();
 
@@ -777,8 +772,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     }
 
     protected interface ConnectionOp {
-        public void onInmsgRecvd(final HttpTradeConnection<?> connection, final HttpObject msg);
-
         public Subscription setOutbound(final HttpTradeConnection<?> connection, final Observable<? extends Object> outbound);
 
         public void sendOutmsg(final HttpTradeConnection<?> connection, final Object msg);
@@ -795,11 +788,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     }
 
     private static final ConnectionOp WHEN_ACTIVE = new ConnectionOp() {
-        @Override
-        public void onInmsgRecvd(final HttpTradeConnection<?> connection, final HttpObject inmsg) {
-            connection.processInmsg(inmsg);
-        }
-
         @Override
         public Subscription setOutbound(final HttpTradeConnection<?> connection, final Observable<? extends Object> outbound) {
             return connection.doSetOutbound(outbound);
@@ -838,12 +826,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     };
 
     private static final ConnectionOp WHEN_UNACTIVE = new ConnectionOp() {
-        @Override
-        public void onInmsgRecvd(final HttpTradeConnection<?> connection, final HttpObject inmsg) {
-            ReferenceCountUtil.release(inmsg);
-            LOG.warn("{} has terminated, onInmsgRecvd and just release msg({}).", connection, inmsg);
-        }
-
         @Override
         public Subscription setOutbound(final HttpTradeConnection<?> connection, final Observable<? extends Object> outbound) {
             LOG.warn("{} has terminated, ignore setOutbound({})", connection, outbound);
