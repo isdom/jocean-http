@@ -44,7 +44,6 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
-import io.netty.util.concurrent.Future;
 import rx.Completable;
 import rx.Observable;
 import rx.Observer;
@@ -64,10 +63,10 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
 
         this._haltSupport = new HaltAwareSupport<T>(this._selector);
 
-        this._channel = channel;
-        this._op = this._selector.build(ConnectionOp.class, WHEN_ACTIVE, WHEN_UNACTIVE);
+        this._channelRef.set(channel);
+//        this._op = this._selector.build(ConnectionOp.class, WHEN_ACTIVE, WHEN_UNACTIVE);
         this._traffic = Nettys.applyToChannel(onHalt(),
-                this._channel,
+                channel,
                 HttpHandlers.TRAFFICCOUNTER);
 
         Nettys.applyToChannel(onHalt(),
@@ -90,7 +89,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                 HttpHandlers.ON_CHANNEL_WRITABILITYCHANGED,
                 (Action0)() -> onWritabilityChanged());
 
-        if (!this._channel.isActive()) {
+        if (!channel.isActive()) {
             fireClosed(new TransportException("channelInactive of " + channel));
         } else {
             // added 2021-02-17
@@ -101,9 +100,9 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         }
     }
 
-    private final ConnectionOp _op;
+//    private final ConnectionOp _op;
 
-    protected final Channel _channel;
+    protected final AtomicReference<Channel> _channelRef = new AtomicReference<>(null);
 
     private volatile boolean _isFlushPerWrite = false;
 
@@ -130,7 +129,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
 
 //    @Override
     public Object transport() {
-        return this._channel;
+        return this._channelRef.get();
     }
 
     @SuppressWarnings("unchecked")
@@ -191,16 +190,15 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
 
             @Override
             public void setWriteBufferWaterMark(final int low, final int high) {
-                _op.setWriteBufferWaterMark(HttpTradeConnection.this, low, high);
+                final Channel channel = _channelRef.get();
+                if (null != channel) {
+                    channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
+                }
             }
 
             @Override
             public Observable<Boolean> writability() {
-                return Observable.unsafeCreate(subscriber -> {
-                        if (!subscriber.isUnsubscribed()) {
-                            _op.runAtEventLoop(HttpTradeConnection.this, ()-> addWritabilitySubscriber(subscriber));
-                        }
-                });
+                return Observable.unsafeCreate(subscriber -> runAtEventLoop(() -> addWritabilitySubscriber(subscriber)));
             }
 
             @Override
@@ -218,12 +216,26 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         return Observable.unsafeCreate(subscriber -> addReceivedSubscriber(subscriber));
     }
 
+    void runAtEventLoop(final Runnable task) {
+        final Channel channel = _channelRef.get();
+        if (null != channel) {
+            channel.eventLoop().submit(task);
+        } else {
+            // TODO;
+        }
+    }
+
     private void addWritabilitySubscriber(final Subscriber<? super Boolean> subscriber) {
         if (!subscriber.isUnsubscribed()) {
-            subscriber.onNext(this._op.isWritable(this));
+            subscriber.onNext(isChannelWritable());
             this._writabilityObserver.addComponent(subscriber);
             subscriber.add(Subscriptions.create(() -> _writabilityObserver.removeComponent(subscriber)));
         }
+    }
+
+    private boolean isChannelWritable() {
+        final Channel channel = _channelRef.get();
+        return null != channel ? channel.isWritable() : false;
     }
 
     private void addSendingSubscriber(final Subscriber<? super Object> subscriber) {
@@ -278,7 +290,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         }};
 
     private void onWritabilityChanged() {
-        this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, this._op.isWritable(this));
+        this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, isChannelWritable());
     }
 
     private static final Action1_N<Subscriber<? super Object>> OBJ_ON_NEXT = new Action1_N<Subscriber<? super Object>>() {
@@ -340,7 +352,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             //  此时应继续调用 channel.read(), 来继续获取对端发送来的 加密数据
             LOG.debug("!NO! inmsg received, continue read for {}", this);
             _readTracing.append("NR|");
-            readMessage();
+            doReadMessage();
         }
     }
 
@@ -387,7 +399,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         };
 
     private HttpSlice currentSlice(final boolean needStep) {
-        final Subscription runOnce = needStep ? Subscriptions.create(()->readMessage()) : Subscriptions.unsubscribed();
+        final Subscription runOnce = needStep ? Subscriptions.create(()->doReadMessage()) : Subscriptions.unsubscribed();
 
         final List<DisposableWrapper<HttpObject>> inmsgs = this._inmsgsRef.getAndSet(null);
 
@@ -421,16 +433,19 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         return this._selector.isActive();
     }
 
-    protected void readMessage() {
-        _op.readMessage(this);
-    }
+//    protected void readMessage() {
+//        _op.readMessage(this);
+//    }
 
-    private void doReadMessage() {
-        LOG.debug("trigger read message for {}", this);
-        _readTracing.append("|RM|");
-        this._channel.read();
-        this._unreadBegin = 0;
-        readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
+    protected void doReadMessage() {
+        final Channel channel = this._channelRef.get();
+        if (null != channel) {
+            LOG.debug("trigger read message for {}", this);
+            _readTracing.append("|RM|");
+            channel.read();
+            this._unreadBegin = 0;
+            readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
+        }
     }
 
     private void invokeInboundOnError(final Throwable error) {
@@ -502,39 +517,47 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     }
 
     private Completable doFlush() {
-        return RxNettys.future2Completable(this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER), false);
-    }
-
-    private void doSendOutmsg(final Object outmsg) {
-        final ChannelFutureListener whenComplete = new ChannelFutureListener() {
-            @Override
-            public void operationComplete(final ChannelFuture future)
-                    throws Exception {
-                if (future.isSuccess()) {
-                    LOG.debug("send outmsg({}) success for {}", outmsg, HttpTradeConnection.this);
-                    notifySendedOnNext(outmsg);
-                } else {
-                    LOG.warn("exception when send outmsg({}) for {}, detail: {}",
-                            outmsg, HttpTradeConnection.this, ExceptionUtils.exception2detail(future.cause()));
-                    fireClosed(new TransportException("send outmsg error", future.cause()));
-                }
-            }};
-        notifySendingOnNext(outmsg);
-        if (outmsg instanceof DoFlush) {
-            this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(whenComplete);
+        final Channel channel = this._channelRef.get();
+        if (null != channel) {
+            return RxNettys.future2Completable(channel.writeAndFlush(Unpooled.EMPTY_BUFFER), false);
         } else {
-            writeOutmsgToChannel(outmsg).addListener(whenComplete);
+            return Completable.complete();
         }
     }
 
-    private ChannelFuture writeOutmsgToChannel(Object outmsg) {
+    private void doSendOutmsg(final Object outmsg) {
+        final Channel channel = this._channelRef.get();
+        if (null != channel) {
+            final ChannelFutureListener whenComplete = new ChannelFutureListener() {
+                @Override
+                public void operationComplete(final ChannelFuture future)
+                        throws Exception {
+                    if (future.isSuccess()) {
+                        LOG.debug("send outmsg({}) success for {}", outmsg, HttpTradeConnection.this);
+                        notifySendedOnNext(outmsg);
+                    } else {
+                        LOG.warn("exception when send outmsg({}) for {}, detail: {}",
+                                outmsg, HttpTradeConnection.this, ExceptionUtils.exception2detail(future.cause()));
+                        fireClosed(new TransportException("send outmsg error", future.cause()));
+                    }
+                }};
+            notifySendingOnNext(outmsg);
+            if (outmsg instanceof DoFlush) {
+                channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(whenComplete);
+            } else {
+                writeOutmsgToChannel(channel, outmsg).addListener(whenComplete);
+            }
+        }
+    }
+
+    private ChannelFuture writeOutmsgToChannel(final Channel channel, Object outmsg) {
         while (outmsg instanceof DisposableWrapper) {
             outmsg = ((DisposableWrapper<?>)outmsg).unwrap();
         }
 
         return this._isFlushPerWrite
-                ? this._channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
-                : this._channel.write(ReferenceCountUtil.retain(outmsg));
+                ? channel.writeAndFlush(ReferenceCountUtil.retain(outmsg))
+                : channel.write(ReferenceCountUtil.retain(outmsg));
     }
 
     private void notifySendingOnNext(final Object outmsg) {
@@ -566,6 +589,8 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
 
     @SuppressWarnings("unchecked")
     private void doClosed(final Throwable e) {
+        this._channelRef.set(null);
+
         LOG.debug("closing {}, cause by {}", toString(), errorAsString(e));
 
         // notify inbound Subscriber by error
@@ -596,7 +621,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             return true;
         }};
 
-    private Subscription doSetOutbound(final Observable<? extends Object> outbound) {
+    protected Subscription doSetOutbound(final Observable<? extends Object> outbound) {
         LOG.debug("doSetOutbound with outbound:{} for {}", outbound, this);
 
         if (outboundSubscriptionUpdater.compareAndSet(this, null, PLACEHOLDER)) {
@@ -655,15 +680,18 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         //     ch.write(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         //
         // See https://github.com/netty/netty/issues/2983 for more information.
-        this._channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(future -> {
-                if (future.isSuccess()) {
-                    LOG.debug("all outmsg sended completed for {}", HttpTradeConnection.this);
-                    notifySendedOnCompleted();
-                } else {
-                    //  TODO
-                    // fireClosed(new TransportException("flush response error", future.cause()));
-                }
-            });
+        final Channel channel = this._channelRef.get();
+        if (null != channel) {
+            channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(future -> {
+                    if (future.isSuccess()) {
+                        LOG.debug("all outmsg sended completed for {}", HttpTradeConnection.this);
+                        notifySendedOnCompleted();
+                    } else {
+                        //  TODO
+                        // fireClosed(new TransportException("flush response error", future.cause()));
+                    }
+                });
+        }
     }
 
     private void handleOutobj(final Object obj) {
@@ -672,7 +700,8 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             handleStepable((Stepable<?>)obj);
         } else {
             LOG.debug("handle ({}) as sending msg for {}", obj, HttpTradeConnection.this);
-            _op.sendOutmsg(HttpTradeConnection.this, obj);
+            this.doSendOutmsg(obj);
+//            _op.sendOutmsg(HttpTradeConnection.this, obj);
         }
     }
 
@@ -708,7 +737,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     }
 
     private void flushThenStep(final Stepable<?> stepable) {
-        _op.flush(HttpTradeConnection.this).subscribe(() -> stepable.step(),  e -> {
+        doFlush().subscribe(() -> stepable.step(),  e -> {
                 if (!(e instanceof CloseException)) {
                     LOG.warn("outbound unit({})'s flush meet onError with ({}), try close {}",
                             stepable, ExceptionUtils.exception2detail(e), HttpTradeConnection.this);
@@ -724,9 +753,9 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         }
     }
 
-    protected Subscription setOutbound(final Observable<? extends Object> message) {
-        return this._op.setOutbound(this, message);
-    }
+//    protected Subscription setOutbound(final Observable<? extends Object> message) {
+////        return this._op.setOutbound(this, message);
+//    }
 
     protected abstract void onChannelInactive();
 
@@ -771,98 +800,103 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         transactionUpdater.compareAndSet(this, oldStatus, newStatus);
     }
 
+    /*
     protected interface ConnectionOp {
-        public Subscription setOutbound(final HttpTradeConnection<?> connection, final Observable<? extends Object> outbound);
+//        public Subscription setOutbound(final HttpTradeConnection<?> connection, final Observable<? extends Object> outbound);
 
-        public void sendOutmsg(final HttpTradeConnection<?> connection, final Object msg);
+//        public void sendOutmsg(final HttpTradeConnection<?> connection, final Object msg);
 
-        public Completable flush(final HttpTradeConnection<?> connection);
+//        public Completable flush(final HttpTradeConnection<?> connection);
 
-        public void readMessage(final HttpTradeConnection<?> connection);
+//        public void readMessage(final HttpTradeConnection<?> connection);
 
-        public void setWriteBufferWaterMark(final HttpTradeConnection<?> connection, final int low, final int high);
+//        public void setWriteBufferWaterMark(final HttpTradeConnection<?> connection, final int low, final int high);
 
-        public boolean isWritable(final HttpTradeConnection<?> connection);
+//        public boolean isWritable(final HttpTradeConnection<?> connection);
 
-        public Future<?> runAtEventLoop(final HttpTradeConnection<?> connection, final Runnable task);
+//        public Future<?> runAtEventLoop(final HttpTradeConnection<?> connection, final Runnable task);
     }
 
     private static final ConnectionOp WHEN_ACTIVE = new ConnectionOp() {
-        @Override
-        public Subscription setOutbound(final HttpTradeConnection<?> connection, final Observable<? extends Object> outbound) {
-            return connection.doSetOutbound(outbound);
-        }
+//        @Override
+//        public Subscription setOutbound(final HttpTradeConnection<?> connection, final Observable<? extends Object> outbound) {
+//            return connection.doSetOutbound(outbound);
+//        }
 
-        @Override
-        public void sendOutmsg(final HttpTradeConnection<?> connection, final Object msg) {
-            connection.doSendOutmsg(msg);
-        }
+//        @Override
+//        public void sendOutmsg(final HttpTradeConnection<?> connection, final Object msg) {
+//            connection.doSendOutmsg(msg);
+//        }
 
-        @Override
-        public Completable flush(final HttpTradeConnection<?> connection) {
-            return connection.doFlush();
-        }
+//        @Override
+//        public Completable flush(final HttpTradeConnection<?> connection) {
+//            return connection.doFlush();
+//        }
 
-        @Override
-        public void readMessage(final HttpTradeConnection<?> connection) {
-            connection.doReadMessage();
-        }
+//        @Override
+//        public void readMessage(final HttpTradeConnection<?> connection) {
+//            connection.doReadMessage();
+//        }
 
-        @Override
-        public void setWriteBufferWaterMark(final HttpTradeConnection<?> connection, final int low, final int high) {
-            connection._channel.config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
-            LOG.trace("channel({}) setWriteBufferWaterMark with low:{} high:{}", connection._channel, low, high);
-        }
+//        @Override
+//        public void setWriteBufferWaterMark(final HttpTradeConnection<?> connection, final int low, final int high) {
+//            // TODO
+//            connection._channelRef.get().config().setWriteBufferWaterMark(new WriteBufferWaterMark(low, high));
+//            LOG.trace("channel({}) setWriteBufferWaterMark with low:{} high:{}", connection._channelRef.get(), low, high);
+//        }
 
-        @Override
-        public boolean isWritable(final HttpTradeConnection<?> connection) {
-            return connection._channel.isWritable();
-        }
+//        @Override
+//        public boolean isWritable(final HttpTradeConnection<?> connection) {
+//            // TODO
+//            return connection._channelRef.get().isWritable();
+//        }
 
-        @Override
-        public Future<?> runAtEventLoop(final HttpTradeConnection<?> connection, final Runnable task) {
-            return connection._channel.eventLoop().submit(task);
-        }
+//        @Override
+//        public Future<?> runAtEventLoop(final HttpTradeConnection<?> connection, final Runnable task) {
+//            // TODO
+//            return connection._channelRef.get().eventLoop().submit(task);
+//        }
     };
 
     private static final ConnectionOp WHEN_UNACTIVE = new ConnectionOp() {
-        @Override
-        public Subscription setOutbound(final HttpTradeConnection<?> connection, final Observable<? extends Object> outbound) {
-            LOG.warn("{} has terminated, ignore setOutbound({})", connection, outbound);
-            return null;
-        }
+//        @Override
+//        public Subscription setOutbound(final HttpTradeConnection<?> connection, final Observable<? extends Object> outbound) {
+//            LOG.warn("{} has terminated, ignore setOutbound({})", connection, outbound);
+//            return null;
+//        }
 
-        @Override
-        public void sendOutmsg(final HttpTradeConnection<?> connection, final Object outmsg) {
-            LOG.warn("{} has terminated, ignore send outmsg({})", connection, outmsg);
-        }
+//        @Override
+//        public void sendOutmsg(final HttpTradeConnection<?> connection, final Object outmsg) {
+//            LOG.warn("{} has terminated, ignore send outmsg({})", connection, outmsg);
+//        }
 
-        @Override
-        public Completable flush(final HttpTradeConnection<?> connection) {
-            LOG.warn("{} has terminated, ignore flush event", connection);
-            return Completable.error(new RuntimeException(connection + " has terminated"));
-        }
+//        @Override
+//        public Completable flush(final HttpTradeConnection<?> connection) {
+//            LOG.warn("{} has terminated, ignore flush event", connection);
+//            return Completable.error(new RuntimeException(connection + " has terminated"));
+//        }
 
-        @Override
-        public void readMessage(final HttpTradeConnection<?> connection) {
-            LOG.warn("{} has terminated, ignore read message action", connection);
-        }
+//        @Override
+//        public void readMessage(final HttpTradeConnection<?> connection) {
+//            LOG.warn("{} has terminated, ignore read message action", connection);
+//        }
 
-        @Override
-        public void setWriteBufferWaterMark(final HttpTradeConnection<?> connection, final int low, final int high) {
-            LOG.warn("{} has terminated, ignore setWriteBufferWaterMark({}/{})", connection, low, high);
-        }
+//        @Override
+//        public void setWriteBufferWaterMark(final HttpTradeConnection<?> connection, final int low, final int high) {
+//            LOG.warn("{} has terminated, ignore setWriteBufferWaterMark({}/{})", connection, low, high);
+//        }
 
-        @Override
-        public boolean isWritable(final HttpTradeConnection<?> connection) {
-            LOG.warn("{} has terminated, ignore call isWritable", connection);
-            return false;
-        }
+//        @Override
+//        public boolean isWritable(final HttpTradeConnection<?> connection) {
+//            LOG.warn("{} has terminated, ignore call isWritable", connection);
+//            return false;
+//        }
 
-        @Override
-        public Future<?> runAtEventLoop(final HttpTradeConnection<?> connection, final Runnable task) {
-            LOG.warn("{} has terminated, ignore runAtEventLoop with ({})", connection, task);
-            return null;
-        }
+//        @Override
+//        public Future<?> runAtEventLoop(final HttpTradeConnection<?> connection, final Runnable task) {
+//            LOG.warn("{} has terminated, ignore runAtEventLoop with ({})", connection, task);
+//            return null;
+//        }
     };
+    */
 }

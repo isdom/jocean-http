@@ -60,7 +60,7 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
 
     @Override
     public Subscription outbound(final Observable<? extends Object> message) {
-        return setOutbound(message);
+        return this.doSetOutbound(message);
     }
 
     boolean isKeepAlive() {
@@ -152,7 +152,8 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
     @Override
     protected void onChannelInactive() {
         if (inTransacting()) {
-            fireClosed(new TransportException("channelInactive of " + this._channel));
+            // TODO
+            fireClosed(new TransportException("channelInactive of " + this._channelRef.get()));
         } else {
             LOG.debug("channel inactive after transaction finished, MAYBE Connection: close");
             // close normally
@@ -262,7 +263,7 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
                 .append(", isKeepAlive=").append(isKeepAlive())
                 .append(", transactionStatus=").append(transactionStatusAsString())
                 .append(", isActive=").append(isActive())
-                .append(", channel=").append(_channel)
+                .append(", channel=").append(_channelRef.get())
                 .append("]").toString();
     }
 
