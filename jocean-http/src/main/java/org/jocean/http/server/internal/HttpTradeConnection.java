@@ -64,7 +64,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         this._haltSupport = new HaltAwareSupport<T>(this._selector);
 
         this._channelRef.set(channel);
-//        this._op = this._selector.build(ConnectionOp.class, WHEN_ACTIVE, WHEN_UNACTIVE);
+
         this._traffic = Nettys.applyToChannel(onHalt(),
                 channel,
                 HttpHandlers.TRAFFICCOUNTER);
@@ -100,8 +100,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         }
     }
 
-//    private final ConnectionOp _op;
-
     protected final AtomicReference<Channel> _channelRef = new AtomicReference<>(null);
 
     private volatile boolean _isFlushPerWrite = false;
@@ -120,11 +118,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
 
 //    @Override
     public Action0 closer() {
-        return new Action0() {
-            @Override
-            public void call() {
-                close();
-            }};
+        return () -> close();
     }
 
 //    @Override
@@ -176,6 +170,10 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             }};
     }
 
+    Observable<HttpSlice> received() {
+        return Observable.unsafeCreate(subscriber -> addReceivedSubscriber(subscriber));
+    }
+
     @Override
     public WriteCtrl writeCtrl() {
         return buildWriteCtrl();
@@ -210,10 +208,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             public Observable<Object> sended() {
                 return Observable.unsafeCreate(subscriber -> addSendedSubscriber(subscriber));
             }};
-    }
-
-    Observable<HttpSlice> received() {
-        return Observable.unsafeCreate(subscriber -> addReceivedSubscriber(subscriber));
     }
 
     void runAtEventLoop(final Runnable task) {
@@ -274,9 +268,8 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     private final COWCompositeSupport<Subscriber<? super Object>> _sendedObserver = new COWCompositeSupport<>();
     private final COWCompositeSupport<Subscriber<? super HttpSlice>> _receivedObserver = new COWCompositeSupport<>();
 
-    private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = new Action1_N<Subscriber<? super Boolean>>() {
-        @Override
-        public void call(final Subscriber<? super Boolean> subscriber, final Object... args) {
+    private static final Action1_N<Subscriber<? super Boolean>> ON_WRITABILITY_CHGED = (Action1_N<Subscriber<? super Boolean>>)
+        (subscriber, args) -> {
             final Boolean isWritable = (Boolean)args[0];
             if (!subscriber.isUnsubscribed()) {
                 try {
@@ -287,15 +280,14 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                         ExceptionUtils.exception2detail(e));
                 }
             }
-        }};
+        };
 
     private void onWritabilityChanged() {
         this._writabilityObserver.foreachComponent(ON_WRITABILITY_CHGED, isChannelWritable());
     }
 
-    private static final Action1_N<Subscriber<? super Object>> OBJ_ON_NEXT = new Action1_N<Subscriber<? super Object>>() {
-        @Override
-        public void call(final Subscriber<? super Object> subscriber, final Object... args) {
+    private static final Action1_N<Subscriber<? super Object>> OBJ_ON_NEXT = (Action1_N<Subscriber<? super Object>>)
+        (subscriber, args) -> {
             final Object obj = args[0];
             if (!subscriber.isUnsubscribed()) {
                 try {
@@ -304,11 +296,10 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                     LOG.warn("exception when invoke onNext({}), detail: {}", subscriber, ExceptionUtils.exception2detail(e));
                 }
             }
-        }};
+        };
 
-    private static final Action1_N<Subscriber<? super Object>> OBJ_ON_COMPLETED = new Action1_N<Subscriber<? super Object>>() {
-        @Override
-        public void call(final Subscriber<? super Object> subscriber, final Object... args) {
+    private static final Action1_N<Subscriber<? super Object>> OBJ_ON_COMPLETED = (Action1_N<Subscriber<? super Object>>)
+        (subscriber, args) -> {
             if (!subscriber.isUnsubscribed()) {
                 try {
                     subscriber.onCompleted();
@@ -316,12 +307,11 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                     LOG.warn("exception when invoke onCompleted({}), detail: {}", subscriber, ExceptionUtils.exception2detail(e));
                 }
             }
-        }};
+        };
 
     // TODO, when to invoke OBJ_ON_ERROR
-    private static final Action1_N<Subscriber<? super Object>> OBJ_ON_ERROR = new Action1_N<Subscriber<? super Object>>() {
-        @Override
-        public void call(final Subscriber<? super Object> subscriber, final Object... args) {
+    private static final Action1_N<Subscriber<? super Object>> OBJ_ON_ERROR = (Action1_N<Subscriber<? super Object>>)
+        (subscriber, args) -> {
             final Throwable e = (Throwable)args[0];
             if (!subscriber.isUnsubscribed()) {
                 try {
@@ -330,7 +320,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
                     LOG.warn("exception when invoke onError({}), detail: {}", subscriber, ExceptionUtils.exception2detail(e1));
                 }
             }
-        }};
+        };
 
     private void onReadComplete() {
         _readTracing.append("|RC|");
@@ -433,11 +423,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         return this._selector.isActive();
     }
 
-//    protected void readMessage() {
-//        _op.readMessage(this);
-//    }
-
-    protected void doReadMessage() {
+    private void doReadMessage() {
         final Channel channel = this._channelRef.get();
         if (null != channel) {
             LOG.debug("trigger read message for {}", this);
@@ -446,10 +432,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             this._unreadBegin = 0;
             readBeginUpdater.compareAndSet(this, 0, System.currentTimeMillis());
         }
-    }
-
-    private void invokeInboundOnError(final Throwable error) {
-        this._receivedObserver.foreachComponent(RECEIVED_ON_ERROR, error);
     }
 
     private SimpleChannelInboundHandler<HttpObject> buildInboundHandler() {
@@ -594,7 +576,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         LOG.debug("closing {}, cause by {}", toString(), errorAsString(e));
 
         // notify inbound Subscriber by error
-        invokeInboundOnError(e);
+        this._receivedObserver.foreachComponent(RECEIVED_ON_ERROR, e);
 
         unsubscribeOutbound();
 
