@@ -594,38 +594,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         return e != null ? (e instanceof CloseException) ? "close()" : ExceptionUtils.exception2detail(e) : "no error";
     }
 
-    private static final Subscription PLACEHOLDER = new Subscription() {
-        @Override
-        public void unsubscribe() {
-        }
-        @Override
-        public boolean isUnsubscribed() {
-            return true;
-        }};
-
-    protected Subscription doSetOutbound(final Observable<? extends Object> outbound) {
-        LOG.debug("doSetOutbound with outbound:{} for {}", outbound, this);
-
-        if (outboundSubscriptionUpdater.compareAndSet(this, null, PLACEHOLDER)) {
-            final Subscriber<Object> outboundSubscriber = buildOutboundSubscriber();
-            final Subscription subscription = outbound.subscribe(outboundSubscriber);
-            outboundSubscriptionUpdater.set(this, subscription);
-            //  TODO:
-            //  when outbound unsubscribe early, how to do (close HttpConnection instance ?)
-            outboundSubscriber.add(Subscriptions.create(() -> {
-                    if (outboundSubscriptionUpdater.compareAndSet(HttpTradeConnection.this, subscription, null)) {
-                        LOG.debug("reset _outboundSubscription to null");
-                    } else {
-                        LOG.debug("_outboundSubscription has changed, MAYBE force replace to next outbound, ignore reset");
-                    }
-                }));
-            return subscription;
-        } else {
-            LOG.warn("outbound message has setted for {}, ignore this outbound({})", this, outbound);
-            return null;
-        }
-    }
-
     private Subscriber<Object> buildOutboundSubscriber() {
         return new Subscriber<Object>() {
                 @Override
@@ -728,16 +696,44 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
             });
     }
 
+    private static final Subscription PLACEHOLDER = new Subscription() {
+        @Override
+        public void unsubscribe() {
+        }
+        @Override
+        public boolean isUnsubscribed() {
+            return true;
+        }};
+
+    protected Subscription doSetOutbound(final Observable<? extends Object> outbound) {
+        LOG.debug("doSetOutbound with outbound:{} for {}", outbound, this);
+
+        if (outboundSubscriptionUpdater.compareAndSet(this, null, PLACEHOLDER)) {
+            final Subscriber<Object> outboundSubscriber = buildOutboundSubscriber();
+            final Subscription subscription = outbound.subscribe(outboundSubscriber);
+            outboundSubscriptionUpdater.set(this, subscription);
+            //  TODO:
+            //  when outbound unsubscribe early, how to do (close HttpConnection instance ?)
+            outboundSubscriber.add(Subscriptions.create(() -> {
+                    if (outboundSubscriptionUpdater.compareAndSet(HttpTradeConnection.this, subscription, null)) {
+                        LOG.debug("reset _outboundSubscription to null");
+                    } else {
+                        LOG.debug("_outboundSubscription has changed, MAYBE force replace to next outbound, ignore reset");
+                    }
+                }));
+            return subscription;
+        } else {
+            LOG.warn("outbound message has setted for {}, ignore this outbound({})", this, outbound);
+            return null;
+        }
+    }
+
     private void unsubscribeOutbound() {
         final Subscription subscription = outboundSubscriptionUpdater.getAndSet(this, null);
         if (null != subscription && !subscription.isUnsubscribed()) {
             subscription.unsubscribe();
         }
     }
-
-//    protected Subscription setOutbound(final Observable<? extends Object> message) {
-////        return this._op.setOutbound(this, message);
-//    }
 
     protected abstract void onChannelInactive();
 
