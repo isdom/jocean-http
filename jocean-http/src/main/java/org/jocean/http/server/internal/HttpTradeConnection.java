@@ -46,7 +46,6 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import rx.Completable;
 import rx.Observable;
-import rx.Observer;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.functions.Action0;
@@ -651,7 +650,6 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         } else {
             LOG.debug("handle ({}) as sending msg for {}", obj, HttpTradeConnection.this);
             this.doSendOutmsg(obj);
-//            _op.sendOutmsg(HttpTradeConnection.this, obj);
         }
     }
 
@@ -665,25 +663,15 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
     }
 
     private void sendElementAndFetchNext(final Stepable<?> stepable, final Observable<?> element) {
-        element.subscribe(new Observer<Object>() {
-            @Override
-            public void onCompleted() {
-                flushThenStep(stepable);
-            }
-
-            @Override
-            public void onError(final Throwable e) {
-                if (!(e instanceof CloseException)) {
-                    LOG.warn("outbound unit({})'s element invoke onError with ({}), try close {}",
-                            stepable, ExceptionUtils.exception2detail(e), HttpTradeConnection.this);
-                }
-                fireClosed(e);
-            }
-
-            @Override
-            public void onNext(final Object obj) {
-                handleOutobj(obj);
-            }});
+        element.subscribe(obj -> handleOutobj(obj),
+                e -> {
+                    if (!(e instanceof CloseException)) {
+                        LOG.warn("outbound unit({})'s element invoke onError with ({}), try close {}",
+                                stepable, ExceptionUtils.exception2detail(e), HttpTradeConnection.this);
+                    }
+                    fireClosed(e);
+                },
+                () -> flushThenStep(stepable));
     }
 
     private void flushThenStep(final Stepable<?> stepable) {
