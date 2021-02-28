@@ -17,6 +17,7 @@ import org.jocean.http.FullMessage;
 import org.jocean.http.HttpSlice;
 import org.jocean.http.HttpSliceUtil;
 import org.jocean.http.MessageBody;
+import org.jocean.http.MessageUtil;
 import org.jocean.http.TransportException;
 import org.jocean.http.server.HttpServerBuilder.HttpTrade;
 import org.jocean.idiom.DisposableWrapper;
@@ -34,7 +35,6 @@ import rx.Completable;
 import rx.Observable;
 import rx.Subscription;
 import rx.functions.Action2;
-import rx.functions.Func1;
 
 /**
  * @author isdom
@@ -104,43 +104,11 @@ class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTra
             });
     }
 
-    public static Func1<DefaultHttpTrade, Observable<DefaultHttpTrade>> toInboundCompleted() {
-        return dht -> dht.inbound().flatMap(fhr -> fhr.body().flatMap(body -> {
-            final Observable<? extends ByteBufSlice> cachedContent =
-                    body.content().doOnNext(bbs -> bbs.step()).cache();
-            return cachedContent.last().<MessageBody>map(any -> new MessageBody() {
-                @Override
-                public HttpHeaders headers() {
-                    return body.headers();
-                }                            @Override
-                public String contentType() {
-                    return body.contentType();
-                }
-                @Override
-                public int contentLength() {
-                    return body.contentLength();
-                }
-                @Override
-                public Observable<? extends ByteBufSlice> content() {
-                    return cachedContent;
-                }});
-        }).map(body -> {
-             dht._inboundRef.set(Observable.<FullMessage<HttpRequest>>just(new FullMessage<HttpRequest>() {
-                 @Override
-                 public String toString() {
-                     return fhr.toString();
-                 }
-                @Override
-                public HttpRequest message() {
-                    return fhr.message();
-                }
-
-                @Override
-                public Observable<? extends MessageBody> body() {
-                    return Observable.just(body);
-                }}));
-            return dht;
-        }));
+    public Observable<DefaultHttpTrade> waitInboundCompleted() {
+        return inbound().flatMap(MessageUtil.waitFullMessageCompleted()).map(fhr -> {
+            _inboundRef.set(Observable.just(fhr));
+            return this;
+        });
     }
 
     private FullMessage<HttpRequest> fullRequest(

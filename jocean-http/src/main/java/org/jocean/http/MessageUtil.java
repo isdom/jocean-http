@@ -1037,4 +1037,45 @@ public class MessageUtil {
                 });
             }};
     }
+
+    public static <M extends HttpMessage> Func1<FullMessage<M>, Observable<FullMessage<M>>> waitFullMessageCompleted() {
+        return fhr -> fhr.body().flatMap(body -> {
+            final Observable<? extends ByteBufSlice> cachedContent = body.content().doOnNext(bbs -> bbs.step()).cache();
+            return cachedContent.flatMap(any -> Observable.empty(), e -> Observable.error(e),
+                    () -> Observable.<MessageBody>just(new MessageBody() {
+                        @Override
+                        public HttpHeaders headers() {
+                            return body.headers();
+                        }
+
+                        @Override
+                        public String contentType() {
+                            return body.contentType();
+                        }
+
+                        @Override
+                        public int contentLength() {
+                            return body.contentLength();
+                        }
+
+                        @Override
+                        public Observable<? extends ByteBufSlice> content() {
+                            return cachedContent;
+                        }
+                    }));
+        }).map(body -> new FullMessage<M>() {
+            @Override
+            public String toString() {
+                return fhr.toString();
+            }
+            @Override
+            public M message() {
+                return fhr.message();
+            }
+            @Override
+            public Observable<? extends MessageBody> body() {
+                return Observable.just(body);
+            }
+        });
+    }
 }
