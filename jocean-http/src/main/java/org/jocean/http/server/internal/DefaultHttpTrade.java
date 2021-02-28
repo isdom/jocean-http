@@ -40,7 +40,7 @@ import rx.functions.Action2;
  * @author isdom
  *
  */
-class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTrade, Comparable<DefaultHttpTrade> {
+public class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements HttpTrade, Comparable<DefaultHttpTrade> {
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultHttpTrade.class);
 
