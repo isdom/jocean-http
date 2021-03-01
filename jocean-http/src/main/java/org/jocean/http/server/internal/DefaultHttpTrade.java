@@ -104,8 +104,8 @@ public class DefaultHttpTrade extends HttpTradeConnection<HttpTrade> implements 
             });
     }
 
-    public Observable<DefaultHttpTrade> waitInboundCompleted() {
-        return inbound().compose(MessageUtil.waitFullMessageCompleted()).map(fhr -> {
+    public Observable<DefaultHttpTrade> cacheFullInbound() {
+        return inbound().compose(MessageUtil.cacheFullMessage()).map(fhr -> {
             _inboundRef.set(Observable.just(fhr));
             return this;
         });

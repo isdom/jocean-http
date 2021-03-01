@@ -1038,7 +1038,7 @@ public class MessageUtil {
             }};
     }
 
-    public static <M extends HttpMessage> Transformer<FullMessage<M>, FullMessage<M>> waitFullMessageCompleted() {
+    public static <M extends HttpMessage> Transformer<FullMessage<M>, FullMessage<M>> cacheFullMessage() {
         return fhms -> fhms.flatMap(fhm -> fhm.body().flatMap(body -> {
             final Observable<? extends ByteBufSlice> cachedContent = body.content().doOnNext(bbs -> bbs.step()).cache();
             return cachedContent.flatMap(any -> Observable.empty(), e -> Observable.error(e),
