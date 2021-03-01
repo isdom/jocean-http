@@ -1038,8 +1038,8 @@ public class MessageUtil {
             }};
     }
 
-    public static <M extends HttpMessage> Func1<FullMessage<M>, Observable<FullMessage<M>>> waitFullMessageCompleted() {
-        return fhr -> fhr.body().flatMap(body -> {
+    public static <M extends HttpMessage> Transformer<FullMessage<M>, FullMessage<M>> waitFullMessageCompleted() {
+        return fhms -> fhms.flatMap(fhm -> fhm.body().flatMap(body -> {
             final Observable<? extends ByteBufSlice> cachedContent = body.content().doOnNext(bbs -> bbs.step()).cache();
             return cachedContent.flatMap(any -> Observable.empty(), e -> Observable.error(e),
                     () -> Observable.<MessageBody>just(new MessageBody() {
@@ -1063,19 +1063,19 @@ public class MessageUtil {
                             return cachedContent;
                         }
                     }));
-        }).map(body -> new FullMessage<M>() {
+        }).<FullMessage<M>>map(body -> new FullMessage<M>() {
             @Override
             public String toString() {
-                return fhr.toString();
+                return fhm.toString();
             }
             @Override
             public M message() {
-                return fhr.message();
+                return fhm.message();
             }
             @Override
             public Observable<? extends MessageBody> body() {
                 return Observable.just(body);
             }
-        });
+        }));
     }
 }
