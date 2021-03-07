@@ -127,6 +127,17 @@ public class ContentUtil {
             return _ASXML;
         }};
 
+    public static final ContentDecoder ASTEXTXML = new ContentDecoder() {
+        @Override
+        public String contentType() {
+            return MediaType.TEXT_XML;
+        }
+        @Override
+        public Func2<InputStream, Class<?>, Object> decoder() {
+            return _ASXML;
+        }};
+
+
     private final static Func2<InputStream, Class<?>, Object> _ASTEXT = new Func2<InputStream, Class<?>, Object>() {
         @Override
         public Object call(final InputStream is, final Class<?> type) {
@@ -159,11 +170,14 @@ public class ContentUtil {
             ContentUtil.TOJSON,
             ContentUtil.TOXML,
             ContentUtil.TOTEXT,
-            ContentUtil.TOHTML};
+            ContentUtil.TOHTML
+            };
 
     public static final ContentDecoder[] DEFAULT_DECODERS = new ContentDecoder[]{
             ContentUtil.ASJSON,
-            ContentUtil.ASXML};
+            ContentUtil.ASXML,
+            ContentUtil.ASTEXTXML
+            };
 
     public static Observable<? extends MessageBody> tobody(final String contentType, final File file) {
         try (final InputStream is = new FileInputStream(file)) {

@@ -80,8 +80,7 @@ public class MessageUtil {
     public static final Transformer<ByteBufSlice, DisposableWrapper<? extends ByteBuf>> AUTOSTEP2DWB =
             StepableUtil.<ByteBufSlice, DisposableWrapper<? extends ByteBuf>>autostep2element2();
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(MessageUtil.class);
+    private static final Logger LOG = LoggerFactory.getLogger(MessageUtil.class);
 
     private MessageUtil() {
         throw new IllegalStateException("No instances!");
