@@ -13,6 +13,7 @@ import java.net.URI;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.ws.rs.Consumes;
@@ -46,6 +47,8 @@ import org.jocean.rpc.annotation.OnInteract;
 import org.jocean.rpc.annotation.OnParam;
 import org.jocean.rpc.annotation.OnResponse;
 import org.jocean.rpc.annotation.RpcResource;
+import org.jocean.rpc.annotation.RpcRetry;
+import org.jocean.rpc.annotation.RpcTimeout;
 import org.jocean.rpc.annotation.ToResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -291,9 +294,31 @@ public class RpcDelegater {
                 .flatMap(interact ->
                     setupInteract(interact, ictx, callMethod)
                     .response()
+                    .compose(handleTimeout(callMethod.getAnnotation(RpcTimeout.class)))
+                    .compose(handleRetry(callMethod.getAnnotation(RpcRetry.class)))
                     .compose(handleOnHttpResponse(callMethod.getAnnotation(OnHttpResponse.class)))
                     .compose(toFinalResponse(ictx, callMethod, responseType))
                 );
+    }
+
+    private static Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> handleTimeout(final RpcTimeout rpcTimeout) {
+        return fmrs -> {
+            if (null == rpcTimeout) {
+                return fmrs;
+            } else {
+                return fmrs.timeout(rpcTimeout.value(), TimeUnit.MILLISECONDS);
+            }
+        };
+    }
+
+    private static Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> handleRetry(final RpcRetry rpcRetry) {
+        return fmrs -> {
+            if (null == rpcRetry) {
+                return fmrs;
+            } else {
+                return fmrs.retry(rpcRetry.value());
+            }
+        };
     }
 
     private static Transformer<FullMessage<HttpResponse>, Object> toFinalResponse(final Context ictx, final Method callMethod, final Type responseType) {
