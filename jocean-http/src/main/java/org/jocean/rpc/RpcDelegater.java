@@ -304,7 +304,8 @@ public class RpcDelegater {
     private static Transformer<FullMessage<HttpResponse>, FullMessage<HttpResponse>> handleTimeout(final RpcTimeout rpcTimeout) {
         return fmrs -> {
             if (null == rpcTimeout) {
-                return fmrs;
+                // 默认 30s 超时
+                return fmrs.timeout(30 * 1000, TimeUnit.MILLISECONDS);
             } else {
                 return fmrs.timeout(rpcTimeout.value(), TimeUnit.MILLISECONDS);
             }
