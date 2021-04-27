@@ -97,6 +97,16 @@ public class ContentUtil {
             return _TOTEXT;
         }};
 
+    public static final ContentEncoder TOFORM_URLENCODED = new ContentEncoder() {
+        @Override
+        public String contentType() {
+            return MediaType.APPLICATION_FORM_URLENCODED;
+        }
+        @Override
+        public Action2<Object, OutputStream> encoder() {
+            return _TOTEXT;
+        }};
+
     private final static Func2<InputStream, Class<?>, Object> _ASJSON = new Func2<InputStream, Class<?>, Object>() {
         @Override
         public Object call(final InputStream is, final Class<?> type) {
