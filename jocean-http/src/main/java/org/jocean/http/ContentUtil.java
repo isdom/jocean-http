@@ -180,7 +180,8 @@ public class ContentUtil {
             ContentUtil.TOJSON,
             ContentUtil.TOXML,
             ContentUtil.TOTEXT,
-            ContentUtil.TOHTML
+            ContentUtil.TOHTML,
+            ContentUtil.TOFORM_URLENCODED
             };
 
     public static final ContentDecoder[] DEFAULT_DECODERS = new ContentDecoder[]{
