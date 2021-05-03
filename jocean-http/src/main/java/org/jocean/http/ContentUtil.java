@@ -52,8 +52,17 @@ public class ContentUtil {
             try {
                 os.write(bean.toString().getBytes(CharsetUtil.UTF_8));
             } catch (final IOException e) {
-                LOG.warn("exception when serialize {} to text, detail: {}",
-                        bean, ExceptionUtils.exception2detail(e));
+                LOG.warn("exception when serialize {} to text, detail: {}", bean, ExceptionUtils.exception2detail(e));
+            }
+        }};
+    private final static Action2<Object, OutputStream> _TOKV = new Action2<Object, OutputStream>() {
+        @Override
+        public void call(final Object bean, final OutputStream os) {
+            try {
+                // TBD: parse bean's properties
+                os.write(bean.toString().getBytes(CharsetUtil.UTF_8));
+            } catch (final IOException e) {
+                LOG.warn("exception when serialize {} to kv, detail: {}", bean, ExceptionUtils.exception2detail(e));
             }
         }};
     public static final ContentEncoder TOXML = new ContentEncoder() {
