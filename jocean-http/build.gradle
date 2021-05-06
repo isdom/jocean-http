@@ -31,5 +31,5 @@ dependencies {
     testCompile "com.google.guava:guava:${guavaVersion}"
     testCompile 'org.apache.httpcomponents:httpclient:4.5.6'
     testCompile 'org.apache.httpcomponents:httpmime:4.5.6'
-    testCompile 'org.jmock:jmock:2.11.0'
+    testCompile 'org.jmock:jmock:2.12.0'
 }
