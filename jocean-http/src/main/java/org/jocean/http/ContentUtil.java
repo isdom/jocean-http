@@ -34,37 +34,27 @@ public class ContentUtil {
         throw new IllegalStateException("No instances!");
     }
 
-    private final static Action2<Object, OutputStream> _TOXML = new Action2<Object, OutputStream>() {
-        @Override
-        public void call(final Object bean, final OutputStream os) {
-            MessageUtil.serializeToXml(bean, os);
-        }};
+    private final static Action2<Object, OutputStream> _TOXML = (bean, os) -> MessageUtil.serializeToXml(bean, os);
 
-    private final static Action2<Object, OutputStream> _TOJSON = new Action2<Object, OutputStream>() {
-        @Override
-        public void call(final Object bean, final OutputStream os) {
-            MessageUtil.serializeToJson(bean, os);
-        }};
+    private final static Action2<Object, OutputStream> _TOJSON = (bean, os) -> MessageUtil.serializeToJson(bean, os);
 
-    private final static Action2<Object, OutputStream> _TOTEXT = new Action2<Object, OutputStream>() {
-        @Override
-        public void call(final Object bean, final OutputStream os) {
+    private final static Action2<Object, OutputStream> _TOTEXT = (bean, os) -> {
             try {
                 os.write(bean.toString().getBytes(CharsetUtil.UTF_8));
             } catch (final IOException e) {
                 LOG.warn("exception when serialize {} to text, detail: {}", bean, ExceptionUtils.exception2detail(e));
             }
-        }};
-    private final static Action2<Object, OutputStream> _TOKV = new Action2<Object, OutputStream>() {
-        @Override
-        public void call(final Object bean, final OutputStream os) {
+        };
+
+    private final static Action2<Object, OutputStream> _TOKV = (bean, os) -> {
             try {
                 // TBD: parse bean's properties
                 os.write(bean.toString().getBytes(CharsetUtil.UTF_8));
             } catch (final IOException e) {
                 LOG.warn("exception when serialize {} to kv, detail: {}", bean, ExceptionUtils.exception2detail(e));
             }
-        }};
+        };
+
     public static final ContentEncoder TOXML = new ContentEncoder() {
         @Override
         public String contentType() {
