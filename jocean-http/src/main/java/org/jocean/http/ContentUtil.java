@@ -106,11 +106,8 @@ public class ContentUtil {
             return _TOTEXT;
         }};
 
-    private final static Func2<InputStream, Class<?>, Object> _ASJSON = new Func2<InputStream, Class<?>, Object>() {
-        @Override
-        public Object call(final InputStream is, final Class<?> type) {
-            return MessageUtil.unserializeAsJson(is, type);
-        }};
+    private final static Func2<InputStream, Class<?>, Object> _ASJSON = (is, type) -> MessageUtil.unserializeAsJson(is, type);
+
     public static final ContentDecoder ASJSON = new ContentDecoder() {
         @Override
         public String contentType() {
@@ -121,11 +118,8 @@ public class ContentUtil {
             return _ASJSON;
         }};
 
-    private final static Func2<InputStream, Class<?>, Object> _ASXML = new Func2<InputStream, Class<?>, Object>() {
-        @Override
-        public Object call(final InputStream is, final Class<?> type) {
-            return MessageUtil.unserializeAsXml(is, type);
-        }};
+    private final static Func2<InputStream, Class<?>, Object> _ASXML = (is, type) -> MessageUtil.unserializeAsXml(is, type);
+
     public static final ContentDecoder ASXML = new ContentDecoder() {
         @Override
         public String contentType() {
@@ -147,11 +141,8 @@ public class ContentUtil {
         }};
 
 
-    private final static Func2<InputStream, Class<?>, Object> _ASTEXT = new Func2<InputStream, Class<?>, Object>() {
-        @Override
-        public Object call(final InputStream is, final Class<?> type) {
-            return MessageUtil.parseContentAsString(is);
-        }};
+    private final static Func2<InputStream, Class<?>, Object> _ASTEXT = (is, type) -> MessageUtil.parseContentAsString(is);
+
     public static final ContentDecoder ASTEXT = new ContentDecoder() {
         @Override
         public String contentType() {
