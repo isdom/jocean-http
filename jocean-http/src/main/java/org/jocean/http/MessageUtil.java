@@ -87,12 +87,8 @@ public class MessageUtil {
     }
 
     public static Func0<DisposableWrapper<? extends ByteBuf>> pooledAllocator(final Haltable haltable, final int pageSize) {
-        return new Func0<DisposableWrapper<? extends ByteBuf>>() {
-            @Override
-            public DisposableWrapper<ByteBuf> call() {
-                return DisposableWrapperUtil.disposeOn(haltable,
+        return () -> DisposableWrapperUtil.disposeOn(haltable,
                         RxNettys.wrap4release(PooledByteBufAllocator.DEFAULT.buffer(pageSize, pageSize)));
-            }};
     }
 
     public static Action1<HttpRequest> injectQueryParams(final Object bean) {
