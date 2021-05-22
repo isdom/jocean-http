@@ -92,11 +92,7 @@ public class MessageUtil {
     }
 
     public static Action1<HttpRequest> injectQueryParams(final Object bean) {
-        return new Action1<HttpRequest>() {
-            @Override
-            public void call(final HttpRequest request) {
-                request2QueryParams(request, bean);
-            }};
+        return request -> request2QueryParams(request, bean);
     }
 
     public static void request2QueryParams(final HttpRequest request, final Object bean) {
