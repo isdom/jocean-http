@@ -124,11 +124,7 @@ public class MessageUtil {
     }
 
     public static Action1<HttpRequest> injectHeaderParams(final Object bean) {
-        return new Action1<HttpRequest>() {
-            @Override
-            public void call(final HttpRequest request) {
-                request2HeaderParams(request, bean);
-            }};
+        return request -> request2HeaderParams(request, bean);
     }
 
     public static void request2HeaderParams(final HttpRequest request, final Object bean) {
