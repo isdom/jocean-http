@@ -308,12 +308,7 @@ public class MessageUtil {
 //        }
 //    };
 
-    private static final Func1<FullMessage<? extends HttpMessage>, Observable<? extends MessageBody>> FULLMSG2BODY =
-            new Func1<FullMessage<? extends HttpMessage>, Observable<? extends MessageBody>>() {
-        @Override
-        public Observable<? extends MessageBody> call(final FullMessage<? extends HttpMessage> fullmsg) {
-            return fullmsg.body();
-        }};
+    private static final Func1<FullMessage<? extends HttpMessage>, Observable<? extends MessageBody>> FULLMSG2BODY = fullmsg -> fullmsg.body();
 
     public static Func1<FullMessage<? extends HttpMessage>, Observable<? extends MessageBody>> fullmsg2body() {
         return FULLMSG2BODY;
@@ -455,9 +450,7 @@ public class MessageUtil {
             public Interact onsending(final Action1<Object> action) {
                 final Action1<Object> prev = _onsendingRef.get();
                 if (null != prev) {
-                    _onsendingRef.set(new Action1<Object>() {
-                        @Override
-                        public void call(final Object obj) {
+                    _onsendingRef.set(obj -> {
                             try {
                                 prev.call(obj);
                             } catch (final Exception e) {
@@ -468,7 +461,7 @@ public class MessageUtil {
                             } catch (final Exception e) {
                                 LOG.warn("exception when invoke next Action1:{}, detail:{}", action, ExceptionUtils.exception2detail(e));
                             }
-                        }});
+                        });
                 }
                 else {
                     _onsendingRef.set(action);
@@ -495,11 +488,9 @@ public class MessageUtil {
             }
 
             private Observable<? extends Object> hookDisposeBody(final Observable<Object> obsreq, final HttpInitiator initiator) {
-                return obsreq.map(new Func1<Object, Object>() {
-                    @SuppressWarnings("unchecked")
-                    @Override
-                    public Object call(final Object obj) {
+                return obsreq.map( obj -> {
                         if (obj instanceof Stepable) {
+                            @SuppressWarnings("unchecked")
                             final Stepable<Object> org = (Stepable<Object>)obj;
                             return new Stepable<Object>() {
                                 @Override
@@ -527,7 +518,7 @@ public class MessageUtil {
                             // neither Stepable nor DisposableWrapper
                             return obj;
                         }
-                    }});
+                    });
 
             }
 
@@ -543,14 +534,11 @@ public class MessageUtil {
                 checkAddr();
                 addQueryParams();
                 return addSSLFeatureIfNeed(_initiatorBuilder).build()
-                        .flatMap(new Func1<HttpInitiator, Observable<T>>() {
-                            @Override
-                            public Observable<T> call(final HttpInitiator initiator) {
+                        .flatMap( initiator -> {
                                 checkAndFixContentLength(initiator);
                                 return defineInteraction(initiator).flatMap(fullmsg2body())
                                         .compose(body2bean(decoder, type)).doOnUnsubscribe(initiator.closer());
-                            }
-                        });
+                            });
             }
 
             @Override
@@ -563,13 +551,10 @@ public class MessageUtil {
                 checkAddr();
                 addQueryParams();
                 return addSSLFeatureIfNeed(_initiatorBuilder).build()
-                        .flatMap(new Func1<HttpInitiator, Observable<FullMessage<HttpResponse>>>() {
-                            @Override
-                            public Observable<FullMessage<HttpResponse>> call(final HttpInitiator initiator) {
+                        .flatMap( initiator -> {
                                 checkAndFixContentLength(initiator);
                                 return defineInteraction(initiator).doOnUnsubscribe(initiator.closer());
-                            }
-                        });
+                            });
             }
 
         };
@@ -594,43 +579,35 @@ public class MessageUtil {
     public static Func0<SocketAddress> bean2addr(final Object bean) {
         final Path path = bean.getClass().getAnnotation(Path.class);
         if (null!=path) {
-            return new Func0<SocketAddress>() {
-                @Override
-                public SocketAddress call() {
+            return () -> {
                     try {
                         return uri2addr(new URI(path.value()));
                     } catch (final Exception e) {
                         throw new RuntimeException(e);
                     }
-                }};
+                };
         }
         throw new RuntimeException("bean class ("+ bean.getClass() +") without @Path annotation");
     }
 
     public static Action1<Object> setMethod(final HttpMethod method) {
-        return new Action1<Object>() {
-            @Override
-            public void call(final Object obj) {
+        return obj -> {
                 if (obj instanceof HttpRequest) {
                     ((HttpRequest)obj).setMethod(method);
                 }
-            }};
+            };
     }
 
     public static Action1<Object> setHost(final URI uri) {
-        return new Action1<Object>() {
-            @Override
-            public void call(final Object obj) {
+        return obj -> {
                 if (null != uri && null != uri.getHost() && obj instanceof HttpRequest) {
                     ((HttpRequest)obj).headers().set(HttpHeaderNames.HOST, uri.getHost());
                 }
-            }};
+            };
     }
 
     public static Action1<Object> setPath(final String path) {
-        return new Action1<Object>() {
-            @Override
-            public void call(final Object obj) {
+        return obj -> {
                 if (null != path && !path.isEmpty() && obj instanceof HttpRequest) {
                     final HttpRequest request = (HttpRequest)obj;
                     final QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
@@ -649,13 +626,11 @@ public class MessageUtil {
                     }
                     request.setUri(encoder.toString());
                 }
-            }};
+            };
     }
 
     public static Action1<Object> addQueryParam(final String... nvs) {
-        return new Action1<Object>() {
-            @Override
-            public void call(final Object obj) {
+        return obj -> {
                 if (obj instanceof HttpRequest) {
                     final HttpRequest request = (HttpRequest)obj;
                     if (nvs.length > 0) {
@@ -676,13 +651,11 @@ public class MessageUtil {
                         request.setUri(encoder.toString());
                     }
                 }
-            }};
+            };
     }
 
     public static Action1<Object> toRequest(final Object... beans) {
-        return new Action1<Object>() {
-            @Override
-            public void call(final Object obj) {
+        return obj -> {
                 if (obj instanceof HttpRequest) {
                     final HttpRequest request = (HttpRequest)obj;
                     for (final Object bean : beans) {
@@ -691,7 +664,7 @@ public class MessageUtil {
                         addHeaderParams(request, bean);
                     }
                 }
-            }};
+            };
     }
 
     static void setUriToRequest(final HttpRequest request, final Object bean) {
@@ -754,12 +727,7 @@ public class MessageUtil {
 
     // TODO: support multipart/...
     public static Transformer<Object, Object> addBody(final Observable<? extends MessageBody> body) {
-        return new Transformer<Object, Object>() {
-            @Override
-            public Observable<Object> call(final Observable<Object> msg) {
-                return msg.concatMap(new Func1<Object, Observable<Object>>() {
-                    @Override
-                    public Observable<Object> call(final Object obj) {
+        return msg -> msg.concatMap( obj -> {
                         if (obj instanceof HttpMessage) {
                             final HttpMessage httpmsg = (HttpMessage)obj;
                             return body.flatMap(new Func1<MessageBody, Observable<Object>>() {
@@ -777,18 +745,11 @@ public class MessageUtil {
                         } else {
                             return Observable.just(obj);
                         }
-                    }});
-            }
-        };
+                    });
     }
 
     private static Transformer<Object, Object> addBodyWithContentLength(final Observable<? extends MessageBody> obsbody) {
-        return new Transformer<Object, Object>() {
-            @Override
-            public Observable<Object> call(final Observable<Object> msg) {
-                return msg.concatMap(new Func1<Object, Observable<Object>>() {
-                    @Override
-                    public Observable<Object> call(final Object obj) {
+        return msg -> msg.concatMap( obj -> {
                         if (obj instanceof HttpMessage) {
                             final HttpMessage httpmsg = (HttpMessage)obj;
                             return obsbody.flatMap(new Func1<MessageBody, Observable<Object>>() {
@@ -810,9 +771,7 @@ public class MessageUtil {
                         } else {
                             return Observable.just(obj);
                         }
-                    }});
-            }
-        };
+                    });
     }
 
     public static Observable<? extends MessageBody> toBody(
@@ -902,9 +861,7 @@ public class MessageUtil {
             final Observable<? extends ByteBufSlice> content, final Func2<InputStream, Class<T>, T> func,
             final Class<T> type) {
         return content.compose(AUTOSTEP2DWB)
-                .map(DisposableWrapperUtil.<ByteBuf>unwrap()).toList().map(new Func1<List<ByteBuf>, T>() {
-            @Override
-            public T call(final List<ByteBuf> bufs) {
+                .map(DisposableWrapperUtil.<ByteBuf>unwrap()).toList().map( bufs -> {
                 final ByteBuf buf = Nettys.composite(bufs);
                 try {
                     return func.call(contentAsInputStream(buf), type);
@@ -912,16 +869,12 @@ public class MessageUtil {
                     ReferenceCountUtil.release(buf);
                 }
             }
-        });
+        );
     }
 
     public static <T> Iterable<T> out2dwbs(final BufsOutputStream<T> bufout, final Action1<OutputStream> fillout) {
         final List<T> bufs = new ArrayList<>();
-        bufout.setOutput(new Action1<T>() {
-            @Override
-            public void call(final T buf) {
-                bufs.add(buf);
-            }});
+        bufout.setOutput(buf -> bufs.add(buf));
 
         try {
             fillout.call(bufout);
@@ -934,19 +887,9 @@ public class MessageUtil {
         }
     }
 
-    public static final Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf> UNWRAP_DWB =
-            new Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf>() {
-        @Override
-        public ByteBuf call(final DisposableWrapper<? extends ByteBuf> dwb) {
-            return dwb.unwrap();
-        }};
+    public static final Func1<DisposableWrapper<? extends ByteBuf>, ByteBuf> UNWRAP_DWB = dwb -> dwb.unwrap();
 
-    public static final Action1<DisposableWrapper<? extends ByteBuf>> DISPOSE_DWB =
-            new Action1<DisposableWrapper<? extends ByteBuf>>() {
-        @Override
-        public void call(final DisposableWrapper<? extends ByteBuf> dwb) {
-            dwb.dispose();
-        }};
+    public static final Action1<DisposableWrapper<? extends ByteBuf>> DISPOSE_DWB = dwb -> dwb.dispose();
 
     public static <T> Transformer<MessageBody, T> body2bean(final ContentDecoder decoder, final Class<T> type) {
         return body2bean(decoder, type, DISPOSE_DWB);
@@ -955,18 +898,10 @@ public class MessageUtil {
     public static <T> Transformer<MessageBody, T> body2bean(final ContentDecoder decoder, final Class<T> type,
             final Action1<DisposableWrapper<? extends ByteBuf>> onreaded) {
         final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is = new BufsInputStream<>(UNWRAP_DWB, onreaded);
-        return new Transformer<MessageBody, T>() {
-            @Override
-            public Observable<T> call(final Observable<MessageBody> getbody) {
-                return getbody.flatMap(new Func1<MessageBody, Observable<T>>() {
-                    @Override
-                    public Observable<T> call(final MessageBody body) {
+        return getbody -> getbody.flatMap(body -> {
                         final ContentDecoder beanDecoder = null != decoder ? decoder : decoderOf(body.contentType());
                         return body.content().doOnNext(addBufsAndStep(is)).compose(bbs2bean(beanDecoder, is, type));
-                    }
-                });
-            }
-        };
+                    });
     }
 
     public static ContentEncoder encoderOf(final String... mimeTypes) {
@@ -980,16 +915,13 @@ public class MessageUtil {
     }
 
     private static Action1<ByteBufSlice> addBufsAndStep(final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is) {
-        return new Action1<ByteBufSlice>() {
-            @Override
-            public void call(final ByteBufSlice bbs) {
+        return bbs -> {
                 try {
                     is.appendIterable(duplicate(bbs.element()));
                 } finally {
                     bbs.step();
                 }
-            }
-        };
+            };
     }
 
     private static Iterable<DisposableWrapper<? extends ByteBuf>> duplicate(
@@ -1003,18 +935,10 @@ public class MessageUtil {
 
     private static <T> Transformer<ByteBufSlice, T> bbs2bean(final ContentDecoder decoder,
             final BufsInputStream<DisposableWrapper<? extends ByteBuf>> is, final Class<T> type) {
-        return new Transformer<ByteBufSlice, T>() {
-            @Override
-            public Observable<T> call(final Observable<ByteBufSlice> bbses) {
-                return bbses.last().map(new Func1<ByteBufSlice, T>() {
-                    @SuppressWarnings("unchecked")
-                    @Override
-                    public T call(final ByteBufSlice any) {
+        return bbses -> bbses.last().map(any -> {
                         is.markEOS();
                         return (T) decoder.decoder().call(is, type);
-                    }
-                });
-            }};
+                    });
     }
 
     public static <M extends HttpMessage> Transformer<FullMessage<M>, FullMessage<M>> cacheFullMessage() {
