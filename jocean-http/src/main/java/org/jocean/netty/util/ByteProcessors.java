@@ -32,6 +32,13 @@ public class ByteProcessors {
             else {
                 LOG.trace("[{}]({}) != {}", _currentMatchingIdx, _bytesToFind[_currentMatchingIdx], value);
                 _currentMatchingIdx = 0;
+                if (_bytesToFind[_currentMatchingIdx] == value) {
+                    _currentMatchingIdx++;
+                    LOG.trace("[{}] == {}", _currentMatchingIdx - 1, value);
+                    if (_currentMatchingIdx >= _bytesToFind.length) {
+                        return false;
+                    }
+                }
             }
             return true;
         }
