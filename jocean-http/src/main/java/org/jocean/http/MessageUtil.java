@@ -806,12 +806,7 @@ public class MessageUtil {
             @Override
             public Iterable<? extends DisposableWrapper<? extends ByteBuf>> element() {
                 return out2dwbs(new BufsOutputStream<>(pooledAllocator(null, 8192), UNWRAP_DWB),
-                        new Action1<OutputStream>() {
-                            @Override
-                            public void call(final OutputStream out) {
-                                encoder.call(bean, out);
-                            }
-                        });
+                        out -> encoder.call(bean, out));
             }});
     }
 
