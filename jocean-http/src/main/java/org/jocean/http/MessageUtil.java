@@ -835,21 +835,11 @@ public class MessageUtil {
     }
 
     public static <T> Observable<? extends T> decodeJsonAs(final MessageBody body, final Class<T> type) {
-        return decodeContentAs(body.content(), new Func2<InputStream, Class<T>, T>() {
-            @Override
-            public T call(final InputStream is, final Class<T> clazz) {
-                return unserializeAsJson(is, clazz);
-            }
-        }, type);
+        return decodeContentAs(body.content(), (is, clazz) -> unserializeAsJson(is, clazz), type);
     }
 
     public static <T> Observable<? extends T> decodeXmlAs(final MessageBody body, final Class<T> type) {
-        return decodeContentAs(body.content(), new Func2<InputStream, Class<T>, T>() {
-            @Override
-            public T call(final InputStream is, final Class<T> clazz) {
-                return unserializeAsXml(is, clazz);
-            }
-        }, type);
+        return decodeContentAs(body.content(), (is, clazz) -> unserializeAsXml(is, clazz), type);
     }
 
     public static <T> Observable<? extends T> decodeContentAs(
