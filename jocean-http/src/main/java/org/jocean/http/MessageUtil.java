@@ -388,12 +388,7 @@ public class MessageUtil {
                 try {
                     final URI uri = new URI(uriAsString);
                     _uriRef.set(uri);
-                    _initiatorBuilder.remoteAddress(new Func0<SocketAddress>() {
-                        @Override
-                        public SocketAddress call() {
-                            return uri2addr(uri);
-                        }
-                    });
+                    _initiatorBuilder.remoteAddress(() -> uri2addr(uri));
                     updateObsRequest(MessageUtil.setHost(uri));
                 } catch (final URISyntaxException e) {
                     throw new RuntimeException(e);
@@ -730,18 +725,16 @@ public class MessageUtil {
         return msg -> msg.concatMap( obj -> {
                         if (obj instanceof HttpMessage) {
                             final HttpMessage httpmsg = (HttpMessage)obj;
-                            return body.flatMap(new Func1<MessageBody, Observable<Object>>() {
-                                @Override
-                                public Observable<Object> call(final MessageBody body) {
-                                    httpmsg.headers().set(HttpHeaderNames.CONTENT_TYPE, body.contentType());
+                            return body.flatMap(body2 -> {
+                                    httpmsg.headers().set(HttpHeaderNames.CONTENT_TYPE, body2.contentType());
                                     // set content-length
-                                    if (body.contentLength() > 0) {
-                                        httpmsg.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.contentLength());
+                                    if (body2.contentLength() > 0) {
+                                        httpmsg.headers().set(HttpHeaderNames.CONTENT_LENGTH, body2.contentLength());
                                     } else {
                                         HttpUtil.setTransferEncodingChunked(httpmsg, true);
                                     }
-                                    return Observable.concat(Observable.just(httpmsg), body.content());
-                                }});
+                                    return Observable.concat(Observable.just(httpmsg), body2.content());
+                                });
                         } else {
                             return Observable.just(obj);
                         }
