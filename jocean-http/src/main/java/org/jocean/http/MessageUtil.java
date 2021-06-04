@@ -748,9 +748,7 @@ public class MessageUtil {
                             return obsbody.flatMap(new Func1<MessageBody, Observable<Object>>() {
                                 @Override
                                 public Observable<Object> call(final MessageBody body) {
-                                    return body.content().compose(AUTOSTEP2DWB).toList().flatMap(new Func1<List<DisposableWrapper<? extends ByteBuf>>, Observable<Object>>() {
-                                        @Override
-                                        public Observable<Object> call(final List<DisposableWrapper<? extends ByteBuf>> dwbs) {
+                                    return body.content().compose(AUTOSTEP2DWB).toList().flatMap(dwbs -> {
                                             int length = 0;
                                             for (final DisposableWrapper<? extends ByteBuf> dwb : dwbs) {
                                                 length +=dwb.unwrap().readableBytes();
@@ -759,7 +757,7 @@ public class MessageUtil {
                                             // set content-length
                                             httpmsg.headers().set(HttpHeaderNames.CONTENT_LENGTH, length);
                                             return Observable.concat(Observable.just(httpmsg), Observable.from(dwbs));
-                                        }});
+                                        });
                                 }});
                         } else {
                             return Observable.just(obj);
