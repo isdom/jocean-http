@@ -745,9 +745,7 @@ public class MessageUtil {
         return msg -> msg.concatMap( obj -> {
                         if (obj instanceof HttpMessage) {
                             final HttpMessage httpmsg = (HttpMessage)obj;
-                            return obsbody.flatMap(new Func1<MessageBody, Observable<Object>>() {
-                                @Override
-                                public Observable<Object> call(final MessageBody body) {
+                            return obsbody.flatMap(body -> {
                                     return body.content().compose(AUTOSTEP2DWB).toList().flatMap(dwbs -> {
                                             int length = 0;
                                             for (final DisposableWrapper<? extends ByteBuf> dwb : dwbs) {
@@ -758,7 +756,7 @@ public class MessageUtil {
                                             httpmsg.headers().set(HttpHeaderNames.CONTENT_LENGTH, length);
                                             return Observable.concat(Observable.just(httpmsg), Observable.from(dwbs));
                                         });
-                                }});
+                                });
                         } else {
                             return Observable.just(obj);
                         }
