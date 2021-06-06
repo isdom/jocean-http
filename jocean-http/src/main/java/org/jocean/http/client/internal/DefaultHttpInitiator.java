@@ -32,9 +32,6 @@ import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.LastHttpContent;
 import rx.Observable;
-import rx.functions.Action0;
-import rx.functions.Func0;
-import rx.functions.Func1;
 
 /**
  * @author isdom
@@ -46,17 +43,12 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator> implements Http
             LoggerFactory.getLogger(DefaultHttpInitiator.class);
 
     private Observable<FullMessage<HttpResponse>> doInteraction(final Observable<? extends Object> request) {
-        final Observable<? extends HttpSlice> rawInbound = rawInbound().doOnSubscribe(new Action0() {
-            @Override
-            public void call() {
+        final Observable<? extends HttpSlice> rawInbound = rawInbound().doOnSubscribe(() -> {
                 readMessage();
                 setOutbound(request);
-            }
-        }).compose(RxObservables.<HttpSlice>ensureSubscribeAtmostOnce()).share();
+            }).compose(RxObservables.<HttpSlice>ensureSubscribeAtmostOnce()).share();
 
-        return rawInbound.flatMap(new Func1<HttpSlice, Observable<FullMessage<HttpResponse>>>() {
-            @Override
-            public Observable<FullMessage<HttpResponse>> call(final HttpSlice slice) {
+        return rawInbound.flatMap(slice -> {
                 final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
                 if (iter.hasNext()) {
                     final HttpObject hobj = iter.next().unwrap();
@@ -66,8 +58,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator> implements Http
                     }
                 }
                 return Observable.empty();
-            }
-        });
+            });
     }
 
     private FullMessage<HttpResponse> fullResponse(
@@ -116,9 +107,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator> implements Http
 //                                LOG.debug("{}'s content onNext: {}", resp, slice);
 //                            }
 //                        })
-                        .takeUntil(new Func1<HttpSlice, Boolean>() {
-                            @Override
-                            public Boolean call(final HttpSlice slice) {
+                        .takeUntil(slice -> {
                                 final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator();
                                 HttpObject last = null;
                                 while (iter.hasNext()) {
@@ -126,8 +115,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator> implements Http
                                 }
                                 return null != last && last instanceof LastHttpContent;
 //                                LOG.debug("{}'s content onNext's last: {}", resp, last);
-                            }
-                        })
+                            })
 //                        .doOnNext(new Action1<HttpSlice>() {
 //                            @Override
 //                            public void call(final HttpSlice hs) {
@@ -148,11 +136,7 @@ class DefaultHttpInitiator extends HttpConnection<HttpInitiator> implements Http
 
     @Override
     public Observable<FullMessage<HttpResponse>> defineInteraction(final Observable<? extends Object> request) {
-        return Observable.defer(new Func0<Observable<FullMessage<HttpResponse>>>() {
-            @Override
-            public Observable<FullMessage<HttpResponse>> call() {
-                return doInteraction(request);
-            }});
+        return Observable.defer(() -> doInteraction(request));
     }
 
     Channel channel() {
