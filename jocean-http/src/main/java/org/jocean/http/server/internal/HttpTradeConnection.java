@@ -561,12 +561,7 @@ public abstract class HttpTradeConnection<T> implements Inbound, Outbound, AutoC
         this._selector.destroyAndSubmit(FIRE_CLOSED, this, e);
     }
 
-    private static final ActionN FIRE_CLOSED = new ActionN() {
-        @Override
-        public void call(final Object... args) {
-            ((HttpTradeConnection<?>)args[0]).doClosed((Throwable)args[1]);
-        }
-    };
+    private static final ActionN FIRE_CLOSED = args -> ((HttpTradeConnection<?>)args[0]).doClosed((Throwable)args[1]);
 
     @SuppressWarnings("unchecked")
     private void doClosed(final Throwable e) {
