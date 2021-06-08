@@ -224,9 +224,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                     try {
                         future.sync();
                         subscriber.add(RxNettys.subscriptionForCloseChannel(future.channel()));
-                        subscriber.add(Subscriptions.create(new Action0() {
-                            @Override
-                            public void call() {
+                        subscriber.add(Subscriptions.create(() -> {
                                 while (!awaitChannels.isEmpty()) {
                                     try {
                                         awaitChannels.remove(0).close();
@@ -235,7 +233,7 @@ public class DefaultHttpServerBuilder implements HttpServerBuilder, MBeanRegiste
                                                 ExceptionUtils.exception2detail(e));
                                     }
                                 }
-                            }}));
+                            }));
                         if (null != features) {
                             final ServerChannelAware serverChannelAware = serverChannelAwareOf(features);
                             if (null != serverChannelAware) {
