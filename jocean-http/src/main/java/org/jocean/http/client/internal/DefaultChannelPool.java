@@ -74,13 +74,11 @@ public class DefaultChannelPool extends AbstractChannelPool {
                 final Queue<Channel> channels = getOrCreateChannels(address);
                 channels.add(channel);
                 Nettys.applyHandler(channel.pipeline(), _onChannelInactive,
-                    new Action0() {
-                        @Override
-                        public void call() {
+                    (Action0)() -> {
                             channels.remove(channel);
                             channel.close();
                             LOG.debug("removeChannel: channel({}) inactive, so remove from pool.", channel);
-                        }});
+                        });
                 LOG.debug("recycleChannel: channel({}) save to queue for ({}), can be reused.", channel, address);
                 return  true;
             }
