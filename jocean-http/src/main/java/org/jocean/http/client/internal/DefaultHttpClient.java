@@ -35,7 +35,6 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import rx.Observable;
 import rx.Observable.OnSubscribe;
 import rx.Subscriber;
-import rx.functions.Action0;
 import rx.functions.Action1;
 import rx.functions.Func0;
 import rx.functions.Func1;
@@ -87,49 +86,6 @@ public class DefaultHttpClient implements HttpClient {
     public void setSendBufSize(final int sendBufSize) {
         this._sendBufSize = sendBufSize;
     }
-
-    private final Action1<HttpInitiator> _RECYCLE_CHANNEL = new Action1<HttpInitiator>() {
-        @Override
-        public void call(final HttpInitiator initiator) {
-            final DefaultHttpInitiator defaultInitiator = (DefaultHttpInitiator)initiator;
-            final Channel channel = defaultInitiator.channel();
-            if (!defaultInitiator.inTransacting()
-                && defaultInitiator.isKeepAlive()) {
-                if (_channelPool.recycleChannel(channel)) {
-                    // recycle success
-                    // perform read for recv FIN SIG and to change state to close
-                    channel.read();
-                }
-            } else {
-                channel.close();
-            }
-        }};
-
-    private final Action1<Channel> _SET_SEND_RECV_BUF_SIZE = new Action1<Channel>() {
-        @Override
-        public void call(final Channel channel) {
-            if (_sendBufSize > 0) {
-                LOG.debug("channel({})'s default SO_SNDBUF is {} bytes, and will be reset to {} bytes",
-                        channel,
-                        channel.config().getOption(ChannelOption.SO_SNDBUF),
-                        _sendBufSize);
-                channel.config().setOption(ChannelOption.SO_SNDBUF, _sendBufSize);
-            }
-            if (_recvBufSize > 0) {
-                LOG.debug("channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
-                        channel,
-                        channel.config().getOption(ChannelOption.SO_RCVBUF),
-                        _recvBufSize);
-                channel.config().setOption(ChannelOption.SO_RCVBUF, _recvBufSize);
-            }
-        }};
-
-    private static final Action1<Channel> _DISABLE_AUTOREAD = new Action1<Channel>() {
-        @Override
-        public void call(final Channel channel) {
-            // disable autoRead
-            channel.config().setAutoRead(false);
-        }};
 
     @Override
     public InitiatorBuilder initiator() {
@@ -367,6 +323,20 @@ public class DefaultHttpClient implements HttpClient {
         this._channelCreator = channelCreator;
         this._channelPool = channelPool;
         this._defaultFeatures = (null != defaultFeatures) ? defaultFeatures : Feature.EMPTY_FEATURES;
+        this._RECYCLE_CHANNEL = initiator -> {
+            final DefaultHttpInitiator defaultInitiator = (DefaultHttpInitiator)initiator;
+            final Channel channel = defaultInitiator.channel();
+            if (!defaultInitiator.inTransacting()
+                && defaultInitiator.isKeepAlive()) {
+                if (_channelPool.recycleChannel(channel)) {
+                    // recycle success
+                    // perform read for recv FIN SIG and to change state to close
+                    channel.read();
+                }
+            } else {
+                channel.close();
+            }
+        };
     }
 
     @Override
@@ -386,11 +356,7 @@ public class DefaultHttpClient implements HttpClient {
     private void addInitiatorSubscriber(final Subscriber<? super HttpInitiator> subscriber) {
         if (!subscriber.isUnsubscribed()) {
             this._initiatorObserver.addComponent(subscriber);
-            subscriber.add(Subscriptions.create(new Action0() {
-                @Override
-                public void call() {
-                    _initiatorObserver.removeComponent(subscriber);
-                }}));
+            subscriber.add(Subscriptions.create(() -> _initiatorObserver.removeComponent(subscriber)));
         }
     }
 
@@ -408,6 +374,27 @@ public class DefaultHttpClient implements HttpClient {
     static final Feature2Handler _FOR_CHANNEL;
 
     private final COWCompositeSupport<Subscriber<? super HttpInitiator>> _initiatorObserver = new COWCompositeSupport<>();
+
+    private final Action1<HttpInitiator> _RECYCLE_CHANNEL;
+
+    private final Action1<Channel> _SET_SEND_RECV_BUF_SIZE = channel -> {
+            if (_sendBufSize > 0) {
+                LOG.debug("channel({})'s default SO_SNDBUF is {} bytes, and will be reset to {} bytes",
+                        channel,
+                        channel.config().getOption(ChannelOption.SO_SNDBUF),
+                        _sendBufSize);
+                channel.config().setOption(ChannelOption.SO_SNDBUF, _sendBufSize);
+            }
+            if (_recvBufSize > 0) {
+                LOG.debug("channel({})'s default SO_RCVBUF is {} bytes, and will be reset to {} bytes",
+                        channel,
+                        channel.config().getOption(ChannelOption.SO_RCVBUF),
+                        _recvBufSize);
+                channel.config().setOption(ChannelOption.SO_RCVBUF, _recvBufSize);
+            }
+        };
+
+    private static final Action1<Channel> _DISABLE_AUTOREAD = channel -> channel.config().setAutoRead(false);
 
     static {
         _FOR_INTERACTION = new Feature2Handler();
