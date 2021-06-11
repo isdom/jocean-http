@@ -13,25 +13,16 @@ import rx.functions.Func0;
 
 public abstract class AbstractChannelPool implements ChannelPool {
 
-    private static final Logger LOG =
-            LoggerFactory.getLogger(AbstractChannelPool.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractChannelPool.class);
 
     @Override
     public Observable<Channel> retainChannel(final SocketAddress address) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<Channel>() {
-            @Override
-            public void call(final Subscriber<? super Channel> subscriber) {
-                doRetainChannel(address, subscriber);
-            }});
+        return Observable.unsafeCreate(subscriber -> doRetainChannel(address, subscriber));
     }
 
     @Override
     public Observable<Channel> retainChannel(final Func0<SocketAddress> addressProvider) {
-        return Observable.unsafeCreate(new Observable.OnSubscribe<Channel>() {
-            @Override
-            public void call(final Subscriber<? super Channel> subscriber) {
-                doRetainChannel(addressProvider.call(), subscriber);
-            }});
+        return Observable.unsafeCreate(subscriber -> doRetainChannel(addressProvider.call(), subscriber));
     }
 
     protected abstract Channel findActiveChannel(final SocketAddress address);
@@ -44,11 +35,7 @@ public abstract class AbstractChannelPool implements ChannelPool {
             if (eventLoop.inEventLoop()) {
                 reuseActiveChannelOrContinue(address, channel, subscriber);
             } else {
-                eventLoop.submit(new Runnable() {
-                    @Override
-                    public void run() {
-                        reuseActiveChannelOrContinue(address, channel, subscriber);
-                    }});
+                eventLoop.submit(() -> reuseActiveChannelOrContinue(address, channel, subscriber));
             }
         } else {
             //  no more channel can be reused
