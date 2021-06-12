@@ -50,16 +50,14 @@ public class DefaultEndpointSet implements EndpointSet {
 
     @Override
     public Func1<Interact, Interact> of(final TypedSPI spi) {
-        return new Func1<Interact, Interact>() {
-            @Override
-            public Interact call(final Interact interact) {
+        return interact -> {
                 final String[] uris = uris(spi.type());
                 if (uris.length == 0) {
                     LOG.warn("no valid endpoint for service [{}]", spi.type());
                     throw new RuntimeException("no valid endpoint for service [" + spi.type() + "]");
                 }
                 return interact.uri(selectURI(uris));
-            }};
+            };
     }
 
     private String selectURI(final String[] uris) {
