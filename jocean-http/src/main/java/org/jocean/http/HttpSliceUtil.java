@@ -75,9 +75,7 @@ public class HttpSliceUtil {
     }
     */
 
-    private final static Func1<HttpSlice, ByteBufSlice> _HS2BBS = new Func1<HttpSlice, ByteBufSlice>() {
-        @Override
-        public ByteBufSlice call(final HttpSlice slice) {
+    private final static Func1<HttpSlice, ByteBufSlice> _HS2BBS = slice -> {
             final List<DisposableWrapper<ByteBuf>> dwbs = new ArrayList<>();
             for (final Iterator<? extends DisposableWrapper<? extends HttpObject>> iter = slice.element().iterator(); iter.hasNext(); ) {
                 final DisposableWrapper<ByteBuf> dwb = RxNettys.dwc2dwb(iter.next());
@@ -99,8 +97,7 @@ public class HttpSliceUtil {
                 public void step() {
                     slice.step();
                 }};
-        }
-    };
+        };
 
     public static Func1<HttpSlice, ByteBufSlice> hs2bbs() {
         return _HS2BBS;
