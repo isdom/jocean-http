@@ -1,5 +1,7 @@
 package org.jocean.http;
 
+import org.jocean.http.client.HttpClient.HttpInitiator;
+
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponse;
 import rx.Observable;
@@ -26,6 +28,8 @@ public interface Interact {
     public Interact onrequest(final Action1<Object> action);
 
     public Interact onsending(final Action1<Object> action);
+
+    public Interact oninitiator(final Action1<HttpInitiator> action);
 
     public Interact feature(final Feature... features);
 

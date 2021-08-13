@@ -321,6 +321,7 @@ public class MessageUtil {
                 fullRequestWithoutBody(HttpVersion.HTTP_1_1, HttpMethod.GET));
 
         final AtomicReference<Action1<Object>> _onsendingRef = new AtomicReference<>();
+        final AtomicReference<Action1<HttpInitiator>> _oninitiatorRef = new AtomicReference<>();
 
         final List<String> _nvs = new ArrayList<>();
         final AtomicReference<URI> _uriRef = new AtomicReference<>();
@@ -449,17 +450,41 @@ public class MessageUtil {
                             try {
                                 prev.call(obj);
                             } catch (final Exception e) {
-                                LOG.warn("exception when invoke prev Action1:{}, detail:{}", prev, ExceptionUtils.exception2detail(e));
+                                LOG.warn("exception when invoke prev onsending Action1<Object>:{}, detail:{}", prev, ExceptionUtils.exception2detail(e));
                             }
                             try {
                                 action.call(obj);
                             } catch (final Exception e) {
-                                LOG.warn("exception when invoke next Action1:{}, detail:{}", action, ExceptionUtils.exception2detail(e));
+                                LOG.warn("exception when invoke next onsending Action1<Object>:{}, detail:{}", action, ExceptionUtils.exception2detail(e));
                             }
                         });
                 }
                 else {
                     _onsendingRef.set(action);
+                }
+                return this;
+            }
+
+            @Override
+            public Interact oninitiator(final Action1<HttpInitiator> action) {
+
+                final Action1<HttpInitiator> prev = _oninitiatorRef.get();
+                if (null != prev) {
+                    _oninitiatorRef.set(initiator -> {
+                            try {
+                                prev.call(initiator);
+                            } catch (final Exception e) {
+                                LOG.warn("exception when invoke prev oninitiator Action1<HttpInitiator>:{}, detail:{}", prev, ExceptionUtils.exception2detail(e));
+                            }
+                            try {
+                                action.call(initiator);
+                            } catch (final Exception e) {
+                                LOG.warn("exception when invoke next oninitiator Action1<HttpInitiator>:{}, detail:{}", action, ExceptionUtils.exception2detail(e));
+                            }
+                        });
+                }
+                else {
+                    _oninitiatorRef.set(action);
                 }
                 return this;
             }
@@ -521,6 +546,10 @@ public class MessageUtil {
                 if (null != _onsendingRef.get()) {
                     initiator.writeCtrl().sending().subscribe(_onsendingRef.get());
                 }
+                if (null != _oninitiatorRef.get()) {
+                    _oninitiatorRef.get().call(initiator);
+                }
+
                 return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator));
             }
 
@@ -551,7 +580,6 @@ public class MessageUtil {
                                 return defineInteraction(initiator).doOnUnsubscribe(initiator.closer());
                             });
             }
-
         };
     }
 
