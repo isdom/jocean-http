@@ -23,7 +23,7 @@ dependencies {
     
     compile 'javax.ws.rs:javax.ws.rs-api:2.1'
     compile "com.alibaba:fastjson:${fastjsonVersion}"
-    compile "com.fasterxml.jackson.core:jackson-databind:${jacksonVersionDatabind}"
+    compile "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
     compile "com.fasterxml.jackson.dataformat:jackson-dataformat-xml:${jacksonVersion}"
 	
 	testCompile 'junit:junit:4.13.2'
