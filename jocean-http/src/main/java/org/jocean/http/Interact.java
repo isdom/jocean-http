@@ -5,6 +5,7 @@ import org.jocean.http.client.HttpClient.HttpInitiator;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponse;
 import rx.Observable;
+import rx.Observable.Transformer;
 import rx.functions.Action1;
 
 public interface Interact {
@@ -24,6 +25,8 @@ public interface Interact {
     public Interact body(final Observable<? extends MessageBody> body);
 
     public Interact body(final Object bean, final ContentEncoder contentEncoder);
+
+    public Interact reqtransformer(final Transformer<Object, Object> transformer);
 
     public Interact onrequest(final Action1<Object> action);
 

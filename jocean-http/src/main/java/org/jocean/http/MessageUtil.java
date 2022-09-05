@@ -322,6 +322,7 @@ public class MessageUtil {
 
         final AtomicReference<Action1<Object>> _onsendingRef = new AtomicReference<>();
         final AtomicReference<Action1<HttpInitiator>> _oninitiatorRef = new AtomicReference<>();
+        final AtomicReference<Transformer<Object, Object>> _reqTransRef = new AtomicReference<>( req -> req);
 
         final List<String> _nvs = new ArrayList<>();
         final AtomicReference<URI> _uriRef = new AtomicReference<>();
@@ -550,7 +551,7 @@ public class MessageUtil {
                     _oninitiatorRef.get().call(initiator);
                 }
 
-                return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator));
+                return initiator.defineInteraction(hookDisposeBody(_obsreqRef.get(), initiator).compose(_reqTransRef.get()));
             }
 
             @Override
@@ -579,6 +580,13 @@ public class MessageUtil {
                                 checkAndFixContentLength(initiator);
                                 return defineInteraction(initiator).doOnUnsubscribe(initiator.closer());
                             });
+            }
+
+            @Override
+            public Interact reqtransformer(final Transformer<Object, Object> transformer) {
+                final Transformer<Object, Object> prev = _reqTransRef.get();
+                _reqTransRef.set(req -> req.compose(prev).compose(transformer) );
+                return this;
             }
         };
     }
