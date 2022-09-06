@@ -5,6 +5,7 @@ package org.jocean.rpc;
 
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
@@ -49,6 +50,7 @@ import org.jocean.rpc.annotation.OnResponse;
 import org.jocean.rpc.annotation.RpcResource;
 import org.jocean.rpc.annotation.RpcRetry;
 import org.jocean.rpc.annotation.RpcTimeout;
+import org.jocean.rpc.annotation.StatusCodeAware;
 import org.jocean.rpc.annotation.ToResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -328,9 +330,10 @@ public class RpcDelegater {
             LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(),
                     ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
 
-            return fmrs -> fmrs.compose(
-                    genToResponse(ictx, callMethod.getAnnotation(ToResponse.class), callMethod, (Class<?>)responseType))
-                    .compose(handleOnResponse(callMethod.getAnnotation(OnResponse.class)))
+            return fmrs -> fmrs.flatMap(fmr -> fmrs.compose(
+                        genToResponse(ictx, callMethod.getAnnotation(ToResponse.class), callMethod, (Class<?>)responseType))
+                        .compose(handleResponseByHttpResponse(fmr.message()))
+                    ).compose(handleOnResponse(callMethod.getAnnotation(OnResponse.class)))
                     ;
         } else if (responseType instanceof ParameterizedType) {
             if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
@@ -342,6 +345,29 @@ public class RpcDelegater {
         }
         LOG.error("unsupport {}.{}.{}'s return type: {}", ictx.builderOwnerName(), ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
         return fmrs -> Observable.error(new RuntimeException("Unknown Response Type"));
+    }
+
+    private static Transformer<Object, Object> handleResponseByHttpResponse(final HttpResponse httpResp) {
+        return objs -> objs.doOnNext(obj -> {
+            final Method[] methods = ReflectUtils.getAllMethodsOfClass(obj.getClass());
+            for (final Method m : methods) {
+                final HeaderParam headerParam = m.getAnnotation(HeaderParam.class);
+                if (headerParam != null && (m.getParameters() != null && m.getParameters().length == 1)) {
+                    final String value = httpResp.headers().get(headerParam.value());
+                    try {
+                        m.invoke(obj, value);
+                    } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+                        LOG.warn("exception when invoke header method:{}, detail: {}", m.getName(), ExceptionUtils.exception2detail(e));
+                    }
+                } else if (m.getAnnotation(StatusCodeAware.class) != null && (m.getParameters() != null && m.getParameters().length == 1)) {
+                    try {
+                        m.invoke(obj, httpResp.status().code());
+                    } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+                        LOG.warn("exception when invoke status method:{}, detail: {}", m.getName(), ExceptionUtils.exception2detail(e));
+                    }
+                }
+            }
+        });
     }
 
     private static Interact setupInteract(Interact interact, final Context ictx, final Method callMethod) {
