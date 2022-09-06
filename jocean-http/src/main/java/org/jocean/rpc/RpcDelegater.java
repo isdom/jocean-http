@@ -330,10 +330,10 @@ public class RpcDelegater {
             LOG.debug("{}.{}.{}'s response as {}", ictx.builderOwnerName(),
                     ictx.builderType.getSimpleName(), callMethod.getName(), responseType);
 
-            return fmrs -> fmrs.flatMap(fmr -> fmrs.compose(
+            return fmrs -> /* fmrs.flatMap(fmr -> */ fmrs.compose(
                         genToResponse(ictx, callMethod.getAnnotation(ToResponse.class), callMethod, (Class<?>)responseType))
-                        .compose(handleResponseByHttpResponse(fmr.message()))
-                    ).compose(handleOnResponse(callMethod.getAnnotation(OnResponse.class)))
+//                        .compose(handleResponseByHttpResponse(fmr.message())))
+                    .compose(handleOnResponse(callMethod.getAnnotation(OnResponse.class)))
                     ;
         } else if (responseType instanceof ParameterizedType) {
             if (FullMessage.class.isAssignableFrom((Class<?>)((ParameterizedType)responseType).getRawType())) {
