@@ -80,7 +80,7 @@ public class RpcDelegater {
         Builder<BUILDER> constParamCarriers(final AnnotatedElement... carriers);
         Builder<BUILDER> pathCarriers(final AnnotatedElement... carriers);
         Builder<BUILDER> owner(final Class<?> owner);
-        Builder<BUILDER> invoker(Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker);
+        Builder<BUILDER> emitter(Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> emitter);
         BUILDER build();
     }
 
@@ -108,9 +108,9 @@ public class RpcDelegater {
             }
 
             @Override
-            public Builder<BUILDER> invoker(
-                    final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker) {
-                ictx.invoker = invoker;
+            public Builder<BUILDER> emitter(
+                    final Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> emitter) {
+                ictx.emitter = emitter;
                 return this;
             }
 
@@ -130,7 +130,7 @@ public class RpcDelegater {
         AnnotatedElement[] pathCarriers;
 
         Class<?> builderOwner;
-        Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> invoker;
+        Func1<Transformer<Interact, ? extends Object>, Observable<? extends Object>> emitter;
 
         final Class<?> builderType;
 
@@ -239,7 +239,7 @@ public class RpcDelegater {
                         // Observable<XXX> call()
                         final Type responseType = ReflectUtils.getParameterizedTypeArgument(method.getGenericReturnType(), 0);
 
-                        return ictx.invoker.call(interact2obj(ictx, method, responseType));
+                        return ictx.emitter.call(interact2obj(ictx, method, responseType));
                     }
                     else if (isInteract2Any(method.getGenericReturnType())) {
                         // Transformer<Interact, XXX> call()
