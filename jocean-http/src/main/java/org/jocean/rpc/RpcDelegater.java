@@ -334,7 +334,7 @@ public class RpcDelegater {
                 final Observable<FullMessage<HttpResponse>> cachedFmrs = fmrs.cache();
                 return cachedFmrs.flatMap(fmr -> cachedFmrs.compose(
                         genToResponse(ictx, callMethod.getAnnotation(ToResponse.class), callMethod, (Class<?>)responseType))
-                        .compose(handleResponseByHttpResponse(fmr.message())))
+                        .compose(handleResponseByHttpResponse(fmr.message(), (Class<?>)responseType)))
                     .compose(handleOnResponse(callMethod.getAnnotation(OnResponse.class)));
             };
         } else if (responseType instanceof ParameterizedType) {
@@ -349,9 +349,9 @@ public class RpcDelegater {
         return fmrs -> Observable.error(new RuntimeException("Unknown Response Type"));
     }
 
-    private static Transformer<Object, Object> handleResponseByHttpResponse(final HttpResponse httpResp) {
+    private static Transformer<Object, Object> handleResponseByHttpResponse(final HttpResponse httpResp, final Class<?> responseType) {
         return objs -> objs.doOnNext(obj -> {
-            final Method[] methods = ReflectUtils.getAllMethodsOfClass(obj.getClass());
+            final Method[] methods = ReflectUtils.getAllMethodsOfClass(responseType);
             for (final Method m : methods) {
                 final HeaderParam headerParam = m.getAnnotation(HeaderParam.class);
                 if (headerParam != null && (m.getParameters() != null && m.getParameters().length == 1)) {
